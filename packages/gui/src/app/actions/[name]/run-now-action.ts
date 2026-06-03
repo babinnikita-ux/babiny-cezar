@@ -12,7 +12,18 @@ export interface RunNowResult {
   ok: boolean;
   error?: string;
   workflowRunId?: string;
+  /** True when we short-circuited to a recent identical run instead of launching a new one. */
+  deduped?: boolean;
 }
+
+/**
+ * Idempotency window for run-now: a second click against the same
+ * (action, target number, workspace) within this many ms is short-circuited to
+ * the existing run instead of launching a fresh agent pass. Guards against a
+ * user holding down "Run now" (or scripting it) racking up Anthropic spend and
+ * spamming duplicate comments on the same issue/PR.
+ */
+const RUN_NOW_DEDUPE_WINDOW_MS = 5 * 60 * 1000;
 
 /**
  * Real, synchronous "run this action against this issue or PR" — the
@@ -112,6 +123,27 @@ export async function runActionNow(actionId: string, number: number): Promise<Ru
   const repoSlug = `${workspace.repoOwner}/${workspace.repoName}`;
 
   const isPr = actionRow.target === 'pr';
+
+  // ── idempotency guard ────────────────────────────────────────────────────
+  // If an identical run-now (same action, same target, same workspace) already
+  // ran (or is still running) within the dedupe window, surface that run
+  // instead of launching another agent pass + posting a duplicate comment.
+  const dedupeSince = new Date(Date.now() - RUN_NOW_DEDUPE_WINDOW_MS).toISOString();
+  const { data: recentRun } = await supabase
+    .from('workflow_runs')
+    .select('id')
+    .eq('workspace_id', workspace.id)
+    .eq('workflow', 'single-action')
+    .eq(isPr ? 'pr_number' : 'issue_number', number)
+    .in('status', ['queued', 'running', 'succeeded'])
+    .eq('outcome->>action', actionRow.name)
+    .gte('created_at', dedupeSince)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (recentRun?.id) {
+    return { ok: true, workflowRunId: recentRun.id, deduped: true };
+  }
 
   // ── persistence ─────────────────────────────────────────────────────────
   const persister = await createWorkflowRunPersister(supabase, {
