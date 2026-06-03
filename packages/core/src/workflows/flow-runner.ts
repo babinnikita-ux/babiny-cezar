@@ -20,7 +20,7 @@ import { runWorkflow } from './workflow-engine.js';
 import {
   describeMarkerForPrompt,
   findMarkerComment,
-  upsertMarkerComment,
+  upsertMarkerCommentById,
   type PrLinkData,
 } from './pr-link-marker.js';
 
@@ -159,13 +159,23 @@ export async function runFlow(params: RunFlowParams): Promise<WorkflowRunResult<
   let lastUpsertedPr: { number: number; state: string } | null = existingMarker
     ? { number: existingMarker.data.prNumber, state: existingMarker.data.prState }
     : null;
+  // The marker comment id is stable for the lifetime of the run: we found it
+  // once above. Cache it (or `null` when absent) and reuse it across every
+  // step's upsert so we never re-list the issue's comments per step.
+  let cachedMarkerId: number | null = existingMarker?.id ?? null;
+  const cachedMarkerOpenedAt = existingMarker?.data.openedAt;
 
   function scheduleMarkerUpsert(data: PrLinkData): void {
     // Skip when nothing changed — avoids spamming updateComment on every step
     // that echoes the PR number forward.
     if (lastUpsertedPr && lastUpsertedPr.number === data.prNumber && lastUpsertedPr.state === data.prState) return;
     lastUpsertedPr = { number: data.prNumber, state: data.prState };
-    const p = upsertMarkerComment(params.github, params.issueNumber, data)
+    const p = upsertMarkerCommentById(params.github, params.issueNumber, data, cachedMarkerId, cachedMarkerOpenedAt)
+      .then((res) => {
+        // Remember the id of a freshly-posted marker so subsequent upserts in
+        // this run edit it in place instead of posting another comment.
+        if (res.id != null) cachedMarkerId = res.id;
+      })
       .catch((err: Error) => {
         params.onEvent(`[flow] pr-link marker upsert failed: ${err.message}`);
       })

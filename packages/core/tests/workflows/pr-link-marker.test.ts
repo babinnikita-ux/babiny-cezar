@@ -6,6 +6,7 @@ import {
   formatMarkerComment,
   parseMarkerComment,
   upsertMarkerComment,
+  upsertMarkerCommentById,
   type PrLinkGitHubGateway,
 } from '../../src/workflows/pr-link-marker.js';
 
@@ -184,6 +185,67 @@ describe('upsertMarkerComment', () => {
     });
     const parsed = parseMarkerComment(gh.comments[0].body);
     expect(parsed?.lastEventAt).toBe('2026-05-25T10:00:00Z');
+  });
+});
+
+describe('upsertMarkerCommentById', () => {
+  it('creates a new comment when existingId is null — without listing comments', async () => {
+    const gh = new FakeGateway();
+    let listCalls = 0;
+    const origList = gh.listIssueCommentsWithIds.bind(gh);
+    gh.listIssueCommentsWithIds = async (issue: number) => {
+      listCalls += 1;
+      return origList(issue);
+    };
+
+    const result = await upsertMarkerCommentById(
+      gh,
+      1704,
+      { prNumber: 2050, prUrl: 'https://example.test/pr/2050', prState: 'draft' },
+      null,
+    );
+    expect(result.created).toBe(true);
+    expect(result.id).toBe(1000);
+    expect(gh.comments).toHaveLength(1);
+    // The whole point of the id-based overload: no re-fetch of the comment list.
+    expect(listCalls).toBe(0);
+  });
+
+  it('edits in place when existingId is known — without listing comments', async () => {
+    const gh = new FakeGateway();
+    gh.comments.push({
+      id: 200,
+      author: 'cezar',
+      body: formatMarkerComment({
+        prNumber: 2050,
+        prUrl: 'https://example.test/pr/2050',
+        prState: 'draft',
+        openedAt: '2026-05-25T00:00:00Z',
+      }),
+      createdAt: '2026-05-25T00:00:00Z',
+    });
+    let listCalls = 0;
+    const origList = gh.listIssueCommentsWithIds.bind(gh);
+    gh.listIssueCommentsWithIds = async (issue: number) => {
+      listCalls += 1;
+      return origList(issue);
+    };
+
+    const result = await upsertMarkerCommentById(
+      gh,
+      1704,
+      { prNumber: 2050, prUrl: 'https://example.test/pr/2050', prState: 'changes-requested' },
+      200,
+      '2026-05-25T00:00:00Z',
+    );
+    expect(result.created).toBe(false);
+    expect(result.id).toBe(200);
+    expect(gh.comments).toHaveLength(1);
+    const updated = parseMarkerComment(gh.comments[0].body);
+    expect(updated?.prState).toBe('changes-requested');
+    // openedAt is preserved from the passed-in value, matching upsertMarkerComment.
+    expect(updated?.openedAt).toBe('2026-05-25T00:00:00Z');
+    expect(listCalls).toBe(0);
   });
 });
 

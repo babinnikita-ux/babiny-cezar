@@ -163,6 +163,37 @@ export async function upsertMarkerComment(
   return { id: typeof id === 'number' ? id : null, created: true };
 }
 
+/** Upsert the marker when the caller already knows the comment id (or that no
+ *  marker exists). Unlike `upsertMarkerComment`, this skips the
+ *  `listIssueCommentsWithIds` fetch entirely — the marker id is stable for the
+ *  lifetime of a run, so callers that found it once at run start can cache it
+ *  and reuse it across every step's upsert instead of re-listing all comments.
+ *
+ *  Pass `existingId: null` when no marker was found at run start. `existingOpenedAt`
+ *  preserves the original PR-creation time across in-place edits (the same
+ *  invariant `upsertMarkerComment` upholds via the refetched comment). */
+export async function upsertMarkerCommentById(
+  github: PrLinkGitHubGateway,
+  issueNumber: number,
+  data: PrLinkData,
+  existingId: number | null,
+  existingOpenedAt?: string,
+): Promise<{ id: number | null; created: boolean }> {
+  const now = new Date().toISOString();
+  const merged: PrLinkData = {
+    ...data,
+    openedAt: data.openedAt ?? existingOpenedAt ?? now,
+    lastEventAt: data.lastEventAt ?? now,
+  };
+  const body = formatMarkerComment(merged);
+  if (existingId != null) {
+    await github.updateComment(existingId, body);
+    return { id: existingId, created: false };
+  }
+  const id = await github.addComment(issueNumber, body);
+  return { id: typeof id === 'number' ? id : null, created: true };
+}
+
 /** Compact one-line description of a marker for templates / log messages. */
 export function describeMarkerForPrompt(data: PrLinkData): string {
   const activity = classifyActivity(data.prState);
