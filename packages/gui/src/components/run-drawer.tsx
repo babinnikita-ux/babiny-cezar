@@ -22,6 +22,9 @@ export function RunDrawer({ runId, actionLabel, onClose }: RunDrawerProps) {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [status, setStatus] = useState<'running' | 'done' | 'error'>('running');
   const bottomRef = useRef<HTMLDivElement>(null);
+  const logContainerRef = useRef<HTMLDivElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
+  const reloadTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -33,16 +36,65 @@ export function RunDrawer({ runId, actionLabel, onClose }: RunDrawerProps) {
       if (p.stage === 'done') setStatus('done');
       if (p.stage === 'error') setStatus('error');
       if (p.stage === 'done' || p.stage === 'error') {
-        setTimeout(() => window.location.reload(), 2000);
+        reloadTimeoutRef.current = setTimeout(() => window.location.reload(), 2000);
       }
     });
 
     channel.subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      if (reloadTimeoutRef.current) clearTimeout(reloadTimeoutRef.current);
+      supabase.removeChannel(channel);
+    };
   }, [runId]);
 
+  // Close on Escape and restore focus to the previously focused element on unmount.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const previouslyFocused = document.activeElement as HTMLElement | null;
+    drawerRef.current?.focus();
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+        return;
+      }
+      if (e.key === 'Tab') {
+        const drawer = drawerRef.current;
+        if (!drawer) return;
+        const focusable = drawer.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
+        );
+        if (focusable.length === 0) {
+          e.preventDefault();
+          drawer.focus();
+          return;
+        }
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        const active = document.activeElement;
+        if (e.shiftKey && (active === first || active === drawer)) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && active === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      previouslyFocused?.focus?.();
+    };
+  }, [onClose]);
+
+  // Only auto-scroll when the user is already pinned to the bottom of the log.
+  useEffect(() => {
+    const container = logContainerRef.current;
+    if (!container) return;
+    const pinned = container.scrollTop + container.clientHeight >= container.scrollHeight - 24;
+    if (pinned) bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs.length]);
 
   const lastProgress = [...logs].reverse().find((l) => l.total && l.current != null);
@@ -53,11 +105,18 @@ export function RunDrawer({ runId, actionLabel, onClose }: RunDrawerProps) {
       <div className="fixed inset-0 z-40 bg-black/40" onClick={onClose} />
 
       {/* Drawer */}
-      <div className="fixed inset-y-0 right-0 z-50 flex w-[420px] flex-col border-l border-border bg-bg shadow-2xl">
+      <div
+        ref={drawerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="run-drawer-title"
+        tabIndex={-1}
+        className="fixed inset-y-0 right-0 z-50 flex w-[420px] flex-col border-l border-border bg-bg shadow-2xl outline-none"
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <div>
-            <h2 className="text-sm font-semibold text-fg">{actionLabel}</h2>
+            <h2 id="run-drawer-title" className="text-sm font-semibold text-fg">{actionLabel}</h2>
             <div className="mt-0.5 flex items-center gap-2">
               <StatusIndicator status={status} />
               {lastProgress?.total && lastProgress.current != null && (
@@ -67,7 +126,7 @@ export function RunDrawer({ runId, actionLabel, onClose }: RunDrawerProps) {
               )}
             </div>
           </div>
-          <button onClick={onClose} className="rounded-md p-1 text-fg-subtle hover:bg-bg-subtle hover:text-fg">
+          <button onClick={onClose} aria-label="Close" className="rounded-md p-1 text-fg-subtle hover:bg-bg-subtle hover:text-fg">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M4 4l8 8M12 4l-8 8" />
             </svg>
@@ -90,7 +149,7 @@ export function RunDrawer({ runId, actionLabel, onClose }: RunDrawerProps) {
         )}
 
         {/* Log stream */}
-        <div className="flex-1 overflow-y-auto p-4">
+        <div ref={logContainerRef} className="flex-1 overflow-y-auto p-4">
           {logs.length === 0 && (
             <div className="py-8 text-center text-xs text-fg-subtle">Waiting for events...</div>
           )}
