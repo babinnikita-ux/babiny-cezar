@@ -10,7 +10,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/supabase/types';
 
-type WorkspaceRow = { id: string; repo_owner: string; repo_name: string };
+type WorkspaceRow = {
+  id: string;
+  repo_owner: string;
+  repo_name: string;
+  sync_mode: 'auto' | 'manual';
+  sync_interval_minutes: number;
+};
 
 export interface SyncSweepResult {
   enqueued: number;
@@ -23,7 +29,7 @@ export async function runSyncSweep(supabase: SupabaseClient<Database>): Promise<
 
   const { data: workspaces, error } = await supabase
     .from('workspaces')
-    .select('id, repo_owner, repo_name')
+    .select('id, repo_owner, repo_name, sync_mode, sync_interval_minutes')
     .limit(MAX_WORKSPACES_PER_TICK);
   if (error) {
     console.error('[sync-sweep] workspace query failed:', error.message);
@@ -43,6 +49,10 @@ export async function runSyncSweep(supabase: SupabaseClient<Database>): Promise<
 }
 
 async function sweepOne(ws: WorkspaceRow, supabase: SupabaseClient<Database>): Promise<number> {
+  // Manual-mode workspaces never auto-enqueue; they sync only via the header
+  // "sync now" control (which calls `syncAndDigest` directly, not this sweep).
+  if (ws.sync_mode === 'manual') return 0;
+
   // Fast-path dedupe: skip if an open sync job already exists for this
   // workspace. The partial unique index `jobs_sync_open_uniq` (migration 0037)
   // is the real guard — a lost race surfaces as a 23505 we swallow below.
@@ -54,6 +64,21 @@ async function sweepOne(ws: WorkspaceRow, supabase: SupabaseClient<Database>): P
     .in('status', ['queued', 'claimed', 'running'])
     .limit(1);
   if (open && open.length > 0) return 0;
+
+  // Interval gate: skip if the last sync finished less than the workspace's
+  // configured cadence ago. A sync in progress is already excluded by the
+  // open-job check above, so `finished_at` is the right anchor (fall back to
+  // `started_at`/`updated_at` for rows written before a sync first completed).
+  const intervalMs = Math.max(5, ws.sync_interval_minutes || 15) * 60_000;
+  const { data: status } = await supabase
+    .from('sync_status')
+    .select('started_at, finished_at, updated_at')
+    .eq('workspace_id', ws.id)
+    .maybeSingle();
+  if (status) {
+    const last = status.finished_at ?? status.started_at ?? status.updated_at;
+    if (last && Date.now() - new Date(last).getTime() < intervalMs) return 0;
+  }
 
   const { error } = await supabase.from('jobs').insert({
     workspace_id: ws.id,
