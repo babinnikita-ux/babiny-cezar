@@ -1,7 +1,8 @@
 import { SupabaseStoreAdapter } from '@/lib/adapters/supabase-store';
 import { loadWorkspaceConfig } from '@/lib/load-workspace-config';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, SyncCounts, SyncPhase, SyncStatusState } from '@/lib/supabase/types';
+import type { Database, SyncCounts, SyncErrorKind, SyncPhase, SyncStatusState } from '@/lib/supabase/types';
+import { classifySyncError } from './classify-sync-error';
 
 // ─────────────────────────────────────────────────────────────────────
 // Shared workspace-sync core — the four-phase "pull from GitHub" pipeline
@@ -27,6 +28,9 @@ export async function writeSyncStatus(
     message?: string | null;
     counts?: SyncCounts;
     error?: string | null;
+    /** Classification of the failure (migration 0041), written alongside
+     *  status='error' so the indicator can show a recovery CTA. */
+    error_kind?: SyncErrorKind | null;
     /** Flags the first full import (migration 0040) so the indicator shows a
      *  determinate progress bar. Threaded from `runSyncPhases` once phase 1
      *  has computed `fullSync`. */
@@ -169,6 +173,7 @@ export async function runSyncPhases({
       counts,
       initial,
       error: `Issue fetch failed: ${err instanceof Error ? err.message : String(err)}`,
+      error_kind: classifySyncError(err),
       finished_at: new Date().toISOString(),
     });
     return;
@@ -294,6 +299,7 @@ export async function runSyncPhases({
     counts,
     initial,
     error: null,
+    error_kind: null,
     finished_at: new Date().toISOString(),
   });
 }

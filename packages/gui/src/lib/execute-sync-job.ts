@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { buildSyncContext, runSyncPhases, writeSyncStatus } from './sync/run-workspace-sync';
+import { classifySyncError } from './sync/classify-sync-error';
 import { resolveWorkspaceToken } from './sync/resolve-workspace-token';
 import type { Database } from './supabase/types';
 
@@ -55,6 +56,8 @@ export async function executeSyncJob(
       status: 'error',
       phase: null,
       error: 'no github token available for workspace',
+      // No usable token ⇒ an auth-recovery case (Reconnect / reinstall the App).
+      error_kind: 'auth',
       finished_at: new Date().toISOString(),
     });
     await supabase
@@ -94,6 +97,7 @@ export async function executeSyncJob(
       status: 'error',
       phase: null,
       error: message,
+      error_kind: classifySyncError(err),
       finished_at: new Date().toISOString(),
     });
     await supabase

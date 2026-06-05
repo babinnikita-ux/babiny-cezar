@@ -34,6 +34,11 @@ export type WorkspaceLabelSource = 'ai-analyzed' | 'user-edited' | 'manual';
 // ─── Sync status (0029) ──────────────────────────────────────────────────
 export type SyncStatusState = 'idle' | 'syncing' | 'done' | 'error';
 export type SyncPhase = 'issues' | 'digests' | 'comments' | 'prs';
+/** Classification of a sync failure (migration 0041) — drives the indicator's
+ *  actionable error copy + recovery CTA. `auth` ⇒ expired/revoked token or an
+ *  uninstalled App (→ Reconnect); `rate_limit` is transient; `not_found` is a
+ *  repo-access problem; `unknown` falls back to the raw message. */
+export type SyncErrorKind = 'auth' | 'rate_limit' | 'not_found' | 'unknown';
 export interface SyncCounts {
   issuesFetched?: number;
   issuesCreated?: number;
@@ -228,6 +233,9 @@ export interface Database {
           /** { issuesFetched, issuesCreated, issuesUpdated, digestsCreated, digestsTotal, commentsFetched, prsUpdated } */
           counts: SyncCounts;
           error: string | null;
+          /** Classification of the last failure (migration 0041), set with
+           *  status='error' so the indicator can show a recovery CTA. */
+          error_kind: SyncErrorKind | null;
           /** True during the workspace's first full import (migration 0040) —
            *  flips the indicator to a determinate "Importing" bar. */
           initial: boolean;
@@ -242,6 +250,7 @@ export interface Database {
           message?: string | null;
           counts?: SyncCounts;
           error?: string | null;
+          error_kind?: SyncErrorKind | null;
           initial?: boolean;
           started_at?: string | null;
           finished_at?: string | null;

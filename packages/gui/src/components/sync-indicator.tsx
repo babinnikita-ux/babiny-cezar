@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { cn } from '@/components/ui/cn';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import { syncAndDigest } from '@/app/inbox/sync-action';
-import type { Database, SyncCounts, SyncPhase } from '@/lib/supabase/types';
+import type { Database, SyncCounts, SyncPhase, SyncErrorKind } from '@/lib/supabase/types';
 
 type SyncStatusRow = Database['public']['Tables']['sync_status']['Row'];
 
@@ -60,6 +60,9 @@ interface SyncIndicatorProps {
   readOnly: boolean;
   /** 'manual' workspaces don't auto-sync — the tooltip flags it. */
   syncMode: 'auto' | 'manual';
+  /** The reconcile cadence (minutes) — sets the staleness threshold
+   *  `max(2 × interval, 30)` for the amber "stale" state (spec §3). */
+  syncIntervalMinutes: number;
   /** Live = GitHub App installed + webhook secret set (updates arrive in real
    *  time); Polling = otherwise (falls back to the cron reconcile interval). */
   webhookHealth: 'live' | 'polling';
@@ -73,7 +76,7 @@ interface SyncIndicatorProps {
  * is clickable to trigger a "sync now", and shows a tooltip with the last-sync
  * time + status + counts on hover.
  */
-export function SyncIndicator({ workspaceId, initialStatus, readOnly, syncMode, webhookHealth, lastWebhookAt }: SyncIndicatorProps) {
+export function SyncIndicator({ workspaceId, initialStatus, readOnly, syncMode, syncIntervalMinutes, webhookHealth, lastWebhookAt }: SyncIndicatorProps) {
   const router = useRouter();
   const [status, setStatus] = useState<SyncStatusRow | null>(initialStatus);
   const [pending, startKickoff] = useTransition();
@@ -159,6 +162,27 @@ export function SyncIndicator({ workspaceId, initialStatus, readOnly, syncMode, 
     Boolean(lastSyncedAt) &&
     Date.now() - new Date(lastSyncedAt as string).getTime() < FRESH_SYNC_MS;
 
+  // ── Staleness (spec §3): amber when the last successful sync is older than
+  // max(2 × interval, 30 min) and nothing is in flight. Suppressed for manual
+  // workspaces — they're *expected* to be stale and carry their own tooltip
+  // line. Errors take precedence over stale (handled by the `!isError` guard).
+  const staleThresholdMs = Math.max(2 * syncIntervalMinutes, 30) * 60 * 1000;
+  const isStaleData =
+    !syncing &&
+    !isError &&
+    syncMode !== 'manual' &&
+    Boolean(lastSyncedAt) &&
+    Date.now() - new Date(lastSyncedAt as string).getTime() > staleThresholdMs;
+
+  // ── Actionable errors (spec §3): map the persisted `error_kind` to copy + an
+  // optional CTA. `rate_limit` is transient (amber, no CTA); `auth` is permanent
+  // (red, Reconnect); `not_found` is a repo-access problem; unknown/null fall
+  // back to the raw message.
+  const errorKind: SyncErrorKind | null = (status?.error_kind as SyncErrorKind | null) ?? null;
+  // `rate_limit` is transient — render it amber like stale, distinct from the
+  // red permanent-failure states (auth / not_found / unknown).
+  const isTransientError = isError && errorKind === 'rate_limit';
+
   function handleClick() {
     if (syncing || readOnly) return;
     setError(null);
@@ -172,21 +196,43 @@ export function SyncIndicator({ workspaceId, initialStatus, readOnly, syncMode, 
   }
 
   // ── Tooltip lines. ──
-  const tooltip = (() => {
+  // `cta` is an optional recovery action rendered as a real link below the
+  // lines (spec §3 — e.g. an `auth` failure → "Reconnect").
+  const { lines: tooltip, cta } = ((): { lines: string[]; cta: { label: string; href: string } | null } => {
     const lines: string[] = [];
     if (syncing) {
       if (importProgress) lines.push(importProgress.label);
       else if (status?.message) lines.push(status.message);
       else if (status?.phase) lines.push(`Syncing ${PHASE_LABEL[status.phase]}…`);
       else lines.push('Starting sync…');
-      return lines;
+      return { lines, cta: null };
     }
     if (isError) {
-      lines.push(error ?? status?.error ?? 'Sync failed');
-      return lines;
+      // Actionable copy keyed off the persisted classification. A live `error`
+      // from a just-failed kickoff has no kind yet, so fall back to the raw text.
+      switch (errorKind) {
+        case 'auth':
+          lines.push('GitHub access expired');
+          // Reconnect → the GitHub OAuth sign-in flow (signInWithGitHub), which
+          // re-mints the OAuth token the sync falls back to when the App token
+          // is unavailable.
+          return { lines, cta: { label: 'Reconnect', href: '/login' } };
+        case 'rate_limit':
+          lines.push('GitHub rate limit — will retry automatically');
+          return { lines, cta: null };
+        case 'not_found':
+          lines.push("Repo not accessible — check the GitHub App's repo access");
+          return { lines, cta: null };
+        default:
+          lines.push(error ?? status?.error ?? 'Sync failed');
+          return { lines, cta: null };
+      }
     }
     const rel = relativeTime(lastSyncedAt);
-    if (rel) lines.push(`Last synced ${rel}`);
+    // Stale (spec §3): amber warning when the last successful sync is too old.
+    if (isStaleData) {
+      lines.push(`Data may be stale — last synced ${rel ?? 'a while ago'}`);
+    } else if (rel) lines.push(`Last synced ${rel}`);
     else lines.push('Not synced yet');
     const counts = summarize(status?.counts);
     if (counts) lines.push(counts);
@@ -203,16 +249,22 @@ export function SyncIndicator({ workspaceId, initialStatus, readOnly, syncMode, 
     if (syncMode === 'manual') {
       lines.push(readOnly ? 'Auto-sync off' : 'Auto-sync off — click to sync');
     }
-    return lines;
+    return { lines, cta: null };
   })();
 
+  // Dot color: amber (tertiary) for transient errors + stale data; red for
+  // permanent failures; primary tints for syncing/fresh; outline otherwise.
   const dotColor = syncing
     ? 'bg-primary animate-pulse'
-    : isError
-      ? 'bg-error'
-      : isFresh
-        ? 'bg-primary/60'
-        : 'bg-outline';
+    : isTransientError
+      ? 'bg-tertiary'
+      : isError
+        ? 'bg-error'
+        : isStaleData
+          ? 'bg-tertiary'
+          : isFresh
+            ? 'bg-primary/60'
+            : 'bg-outline';
 
   const aria = syncing ? 'Syncing…' : isError ? 'Sync failed' : 'Sync now';
 
@@ -261,19 +313,43 @@ export function SyncIndicator({ workspaceId, initialStatus, readOnly, syncMode, 
         )}
       </button>
 
-      {/* Tooltip — appears on hover, right-aligned under the dot. */}
+      {/* Tooltip — appears on hover, right-aligned under the dot. When it carries
+       *  a CTA (e.g. Reconnect) it becomes interactive so the link is clickable. */}
       <div
         role="tooltip"
-        className="pointer-events-none absolute right-0 top-full z-20 mt-1 hidden w-max max-w-[260px] rounded-md border border-outline-variant bg-surface-container-high px-3 py-2 text-xs shadow-ambient group-hover:block"
+        className={cn(
+          'absolute right-0 top-full z-20 mt-1 hidden w-max max-w-[260px] rounded-md border border-outline-variant bg-surface-container-high px-3 py-2 text-xs shadow-ambient group-hover:block',
+          cta ? 'pointer-events-auto' : 'pointer-events-none',
+        )}
       >
         <div className="font-medium text-on-surface">
-          {syncing ? 'Syncing' : isError ? 'Sync failed' : readOnly ? 'Sync status' : 'Sync now'}
+          {syncing ? 'Syncing' : isError ? 'Sync failed' : isStaleData ? 'Data may be stale' : readOnly ? 'Sync status' : 'Sync now'}
         </div>
         {tooltip.map((line, i) => (
-          <div key={i} className={cn('mt-0.5', isError && i === 0 ? 'text-error' : 'text-on-surface-variant')}>
+          <div
+            key={i}
+            className={cn(
+              'mt-0.5',
+              i === 0 && isTransientError
+                ? 'text-tertiary'
+                : i === 0 && isError
+                  ? 'text-error'
+                  : i === 0 && isStaleData
+                    ? 'text-tertiary'
+                    : 'text-on-surface-variant',
+            )}
+          >
             {line}
           </div>
         ))}
+        {cta && (
+          <a
+            href={cta.href}
+            className="mt-1.5 inline-flex items-center rounded-md bg-primary-container px-2 py-1 text-xs font-medium text-primary-on-container hover:bg-primary-container/90"
+          >
+            {cta.label}
+          </a>
+        )}
       </div>
     </div>
   );
