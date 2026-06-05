@@ -1,7 +1,7 @@
 import { SupabaseStoreAdapter } from '@/lib/adapters/supabase-store';
 import { loadWorkspaceConfig } from '@/lib/load-workspace-config';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Database, SyncCounts, SyncErrorKind, SyncPhase, SyncStatusState } from '@/lib/supabase/types';
+import type { Database, DigestMode, SyncCounts, SyncErrorKind, SyncPhase, SyncStatusState } from '@/lib/supabase/types';
 import { classifySyncError } from './classify-sync-error';
 
 // ─────────────────────────────────────────────────────────────────────
@@ -53,10 +53,22 @@ export interface BuildSyncContextArgs {
   token: string;
 }
 
+/** The AI-digest cadence policy (spec §5), read from the workspace row in
+ *  `buildSyncContext` and threaded into `runSyncPhases` to gate phase 2. */
+export interface DigestPolicy {
+  mode: DigestMode;
+  intervalMinutes: number;
+  /** When the digest phase last actually ran (ISO), or null. The auto-mode
+   *  cadence gate compares this against `intervalMinutes`. */
+  lastDigestedAt: string | null;
+}
+
 export interface SyncContext {
   store: Awaited<ReturnType<(typeof import('@cezar/core'))['IssueStore']['fromPort']>>;
   github: InstanceType<(typeof import('@cezar/core'))['GitHubService']>;
   config: Awaited<ReturnType<typeof loadWorkspaceConfig>>;
+  /** Digest cadence + last-run marker for this workspace. */
+  digestPolicy: DigestPolicy;
 }
 
 /** Build the store / config / github trio used to run a workspace sync.
@@ -109,7 +121,21 @@ export async function buildSyncContext({
 
   const github = new core.GitHubService(config);
 
-  return { store, github, config };
+  // Read the digest cadence + last-run marker (migration 0042) so phase 2 can
+  // gate on it. One small indexed select; tolerate a missing row / pre-migration
+  // workspace by defaulting to the SQL defaults (auto / 60 / never-digested).
+  const { data: ws } = await supabase
+    .from('workspaces')
+    .select('digest_mode, digest_interval_minutes, last_digested_at')
+    .eq('id', workspaceId)
+    .maybeSingle();
+  const digestPolicy: DigestPolicy = {
+    mode: ws?.digest_mode ?? 'auto',
+    intervalMinutes: ws?.digest_interval_minutes ?? 60,
+    lastDigestedAt: ws?.last_digested_at ?? null,
+  };
+
+  return { store, github, config, digestPolicy };
 }
 
 export interface RunSyncPhasesArgs {
@@ -118,6 +144,36 @@ export interface RunSyncPhasesArgs {
   store: Awaited<ReturnType<(typeof import('@cezar/core'))['IssueStore']['fromPort']>>;
   github: InstanceType<(typeof import('@cezar/core'))['GitHubService']>;
   config: Awaited<ReturnType<typeof loadWorkspaceConfig>>;
+  /** Digest cadence policy (spec §5). Phase 2 runs only when this allows it;
+   *  defaults to always-on (auto / 0-interval) when omitted, preserving the
+   *  pre-§5 behavior for any caller that doesn't thread it. */
+  digestPolicy?: DigestPolicy;
+  /** Force the digest phase to run regardless of mode/cadence — used by the
+   *  on-demand "Generate digests now" action. The initial import forces digests
+   *  on its own (see `shouldRunDigests`), so this is for explicit user intent. */
+  forceDigests?: boolean;
+}
+
+/** Decide whether phase 2 (digests) should run this sync, per spec §5:
+ *   - `off`    → never.
+ *   - initial  → ALWAYS (a new workspace must not be empty), any mode but off.
+ *   - forced   → always (on-demand "Generate digests now"), any mode but off.
+ *   - `manual` → only when initial/forced (handled above) — i.e. not on cron.
+ *   - `auto`   → only when last_digested_at is null or older than the interval.
+ */
+export function shouldRunDigests(
+  policy: DigestPolicy | undefined,
+  opts: { initial: boolean; force: boolean },
+): boolean {
+  const mode = policy?.mode ?? 'auto';
+  if (mode === 'off') return false;
+  if (opts.initial || opts.force) return true;
+  if (mode === 'manual') return false;
+  // auto: cadence gate.
+  const last = policy?.lastDigestedAt;
+  if (!last) return true;
+  const intervalMs = Math.max(15, policy?.intervalMinutes ?? 60) * 60 * 1000;
+  return Date.now() - new Date(last).getTime() >= intervalMs;
 }
 
 /** The four serial sync phases, each writing its progress into `sync_status`.
@@ -129,6 +185,8 @@ export async function runSyncPhases({
   store,
   github,
   config,
+  digestPolicy,
+  forceDigests = false,
 }: RunSyncPhasesArgs): Promise<void> {
   const { LLMService } = await import('@cezar/core');
   const counts: SyncCounts = {};
@@ -197,8 +255,14 @@ export async function runSyncPhases({
   // ── 2. Generate digests for OPEN issues that don't have one yet ──
   // Scoped to open issues: a full backfill can pull in hundreds of historical
   // closed issues, and digesting those would be a large, low-value LLM spend.
+  //
+  // Digests are the only LLM cost in a sync (spec §5), so they run on their own
+  // cadence — gated by `digestPolicy`. The initial import always digests (so a
+  // new workspace isn't empty); `forceDigests` is the on-demand override. When
+  // the gate says "skip", phases 3/4 still run, so metadata stays fresh for free.
+  const runDigests = shouldRunDigests(digestPolicy, { initial, force: forceDigests });
   try {
-    const needDigest = store.getIssues({ state: 'open', hasDigest: false });
+    const needDigest = runDigests ? store.getIssues({ state: 'open', hasDigest: false }) : [];
     if (needDigest.length > 0) {
       // Seed the denominator BEFORE the LLM call so the first-import bar has a
       // total to measure against; the bar advances as `onProgress` fires.
@@ -236,6 +300,17 @@ export async function runSyncPhases({
       }
       counts.digestsCreated = results.size;
       await store.save();
+    }
+    // Stamp the cadence marker whenever the digest phase actually ran (even if
+    // it found nothing to digest) so the auto-mode gate advances. Skipped only
+    // when the gate suppressed the phase entirely. Best-effort — a marker write
+    // failing shouldn't fail the sync.
+    if (runDigests) {
+      const { error: stampErr } = await supabase
+        .from('workspaces')
+        .update({ last_digested_at: new Date().toISOString() })
+        .eq('id', workspaceId);
+      if (stampErr) console.warn('[sync] last_digested_at write failed:', stampErr.message);
     }
   } catch (err) {
     // Digest failure shouldn't abort the whole sync — comments + PR pull are

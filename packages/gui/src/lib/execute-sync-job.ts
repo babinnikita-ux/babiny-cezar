@@ -80,14 +80,17 @@ export async function executeSyncJob(
       error: null,
     });
 
-    const { store, github, config } = await buildSyncContext({
+    const { store, github, config, digestPolicy } = await buildSyncContext({
       supabase,
       workspaceId,
       repoOwner,
       repoName,
       token,
     });
-    await runSyncPhases({ supabase, workspaceId, store, github, config });
+    // Cron path: pass the digest policy but DON'T force — digests follow their
+    // own cadence (auto) / on-demand-only (manual) / off, except on the initial
+    // import which `runSyncPhases` always digests.
+    await runSyncPhases({ supabase, workspaceId, store, github, config, digestPolicy });
 
     await finishJob('done');
   } catch (err) {

@@ -31,6 +31,11 @@ export type LabelAnalysisStatus =
 export type WorkspaceLabelScope = 'issue' | 'pr' | 'both';
 export type WorkspaceLabelSource = 'ai-analyzed' | 'user-edited' | 'manual';
 
+/** Per-workspace AI-digest cadence (migration 0042 / spec §5). `auto` runs
+ *  digests on their own `digest_interval_minutes` cadence; `manual` only on the
+ *  initial import or the admin "Generate digests now" action; `off` never. */
+export type DigestMode = 'auto' | 'manual' | 'off';
+
 // ─── Sync status (0029) ──────────────────────────────────────────────────
 export type SyncStatusState = 'idle' | 'syncing' | 'done' | 'error';
 export type SyncPhase = 'issues' | 'digests' | 'comments' | 'prs';
@@ -160,11 +165,16 @@ export interface Database {
           sync_interval_minutes: number;
           last_webhook_received_at: string | null;
           last_webhook_event: string | null;
+          // §5 (migration 0042) — AI-digest cadence, decoupled from the
+          // metadata-sync cadence so "sync often" doesn't mean "spend often".
+          digest_mode: DigestMode;
+          digest_interval_minutes: number;
+          last_digested_at: string | null;
           auto_triage_action_id: string | null;
           created_at: string;
           updated_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['workspaces']['Row'], 'id' | 'created_at' | 'updated_at' | 'auto_triage_action_id' | 'action_auto_comment' | 'sync_mode' | 'sync_interval_minutes' | 'last_webhook_received_at' | 'last_webhook_event'> & {
+        Insert: Omit<Database['public']['Tables']['workspaces']['Row'], 'id' | 'created_at' | 'updated_at' | 'auto_triage_action_id' | 'action_auto_comment' | 'sync_mode' | 'sync_interval_minutes' | 'last_webhook_received_at' | 'last_webhook_event' | 'digest_mode' | 'digest_interval_minutes' | 'last_digested_at'> & {
           id?: string;
           auto_triage_action_id?: string | null;
           action_auto_comment?: boolean;
@@ -172,6 +182,9 @@ export interface Database {
           sync_interval_minutes?: number;
           last_webhook_received_at?: string | null;
           last_webhook_event?: string | null;
+          digest_mode?: DigestMode;
+          digest_interval_minutes?: number;
+          last_digested_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
