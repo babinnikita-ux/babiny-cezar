@@ -11,7 +11,8 @@ const MAX_WORKSPACES_PER_TICK = 10;
 // window) must not hold the whole tick hostage.
 const PER_WORKSPACE_TIMEOUT_MS = 20_000;
 // Bound how many PRs a single tick pulls into memory so a mega-repo with
-// thousands of open PRs can't OOM/timeout the cron.
+// thousands of PRs can't OOM/timeout the cron. We walk all states newest-
+// activity first, so recently closed/merged PRs land within this budget.
 const MAX_PRS_PER_TICK = 1_000;
 
 type Workspace = {
@@ -36,8 +37,9 @@ function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
  * The webhook receiver upserts on `pull_request` events in real time; this
  * cron is the backfill + missed-delivery safety net.
  *
- * Pulls open PRs via Octokit and upserts them into the `pull_requests` table.
- * Per-workspace gated by the same `auto_triage_enabled` flag — repos opted
+ * Pulls PRs (all states, newest-activity first) via Octokit and upserts them
+ * into the `pull_requests` table — so PRs closed/merged upstream stop showing
+ * as open. Per-workspace gated by the same `auto_triage_enabled` flag — repos opted
  * out of automated work still get a /prs page, so we sync regardless of that
  * flag and require only that a workspace exists.
  */
@@ -95,10 +97,10 @@ async function syncOne(
     github: { owner: ws.repo_owner, repo: ws.repo_name, token },
   } as never);
 
-  const openPrs = await github.listOpenPullRequests(MAX_PRS_PER_TICK);
+  const prs = await github.listPullRequests(MAX_PRS_PER_TICK);
 
-  if (openPrs.length > 0) {
-    const rows = openPrs.map((p) => ({
+  if (prs.length > 0) {
+    const rows = prs.map((p) => ({
       workspace_id: ws.id,
       number: p.number,
       title: p.title,
@@ -120,7 +122,7 @@ async function syncOne(
     if (upsertErr) throw new Error(`pull_requests upsert failed: ${upsertErr.message}`);
   }
 
-  return { workspaceId: ws.id, ok: true, prs: openPrs.length };
+  return { workspaceId: ws.id, ok: true, prs: prs.length };
 }
 
 // Picks a workable GitHub token for the workspace: walk admins, return the

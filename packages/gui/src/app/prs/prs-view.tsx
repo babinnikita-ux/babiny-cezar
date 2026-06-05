@@ -187,7 +187,7 @@ export function PrsView({ rows, repoLabel, fetchedAt, readOnly }: PrsViewProps) 
 
       {syncState?.ok && (
         <div className="mb-4 rounded-md border border-primary/30 bg-primary-container/20 px-4 py-2 text-sm text-primary">
-          Synced {syncState.count ?? 0} open PR{(syncState.count ?? 0) === 1 ? '' : 's'} from GitHub.
+          Synced {syncState.count ?? 0} PR{(syncState.count ?? 0) === 1 ? '' : 's'} from GitHub.
           {syncState.capped && (
             <> Page cap reached — the background sync will backfill the rest.</>
           )}
@@ -550,11 +550,14 @@ function BranchCell({ head, base }: { head: string | null; base: string | null }
   if (!head && !base) {
     return <span className="font-mono text-[13px] text-on-surface-variant">—</span>;
   }
+  // Each side caps its own width and truncates with an ellipsis — the table is
+  // auto-layout, so a `max-width` on the <td> alone is ignored and a long head
+  // ref would otherwise push into the labels column.
   return (
-    <span className="inline-flex items-center gap-1 truncate font-mono text-[12px] text-on-surface-variant" title={`${head ?? '?'} → ${base ?? '?'}`}>
-      <span className="truncate">{head ?? '?'}</span>
-      <span className="text-outline-variant">→</span>
-      <span className="truncate">{base ?? '?'}</span>
+    <span className="flex items-center gap-1 font-mono text-[12px] text-on-surface-variant" title={`${head ?? '?'} → ${base ?? '?'}`}>
+      <span className="max-w-[150px] truncate">{head ?? '?'}</span>
+      <span className="shrink-0 text-outline-variant">→</span>
+      <span className="max-w-[90px] truncate">{base ?? '?'}</span>
     </span>
   );
 }

@@ -265,7 +265,7 @@ async function runSync({ supabase, workspaceId, store, github, config, llm: LLMS
     console.warn('[syncAndDigest] comments pass failed:', err);
   }
 
-  // ── 4. Refresh open PRs into the pull_requests table ──
+  // ── 4. Refresh PRs (all states) into the pull_requests table ──
   try {
     await writeStatus(supabase, workspaceId, {
       status: 'syncing',
@@ -273,9 +273,12 @@ async function runSync({ supabase, workspaceId, store, github, config, llm: LLMS
       message: 'Refreshing pull requests…',
       counts,
     });
-    const openPrs = await github.listOpenPullRequests();
-    if (openPrs.length > 0) {
-      const rows = openPrs.map((p) => ({
+    // All states, newest-activity first, so PRs closed/merged upstream get
+    // their state corrected; cap the walk so a repo with thousands of historical
+    // PRs doesn't bloat this background pass.
+    const prs = await github.listPullRequests(500);
+    if (prs.length > 0) {
+      const rows = prs.map((p) => ({
         workspace_id: workspaceId,
         number: p.number,
         title: p.title,
@@ -294,7 +297,7 @@ async function runSync({ supabase, workspaceId, store, github, config, llm: LLMS
       const { error } = await supabase
         .from('pull_requests')
         .upsert(rows, { onConflict: 'workspace_id,number' });
-      if (!error) counts.prsUpdated = openPrs.length;
+      if (!error) counts.prsUpdated = prs.length;
     }
   } catch (err) {
     console.warn('[syncAndDigest] PR sync failed:', err);

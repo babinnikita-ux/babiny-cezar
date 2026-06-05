@@ -14,15 +14,16 @@ export interface SyncPrsResult {
 }
 
 // Hard cap on the GitHub round-trip from the interactive server action: 500
-// open PRs (~5 pages of 100). Busy repos can't block the route handler
+// PRs (~5 pages of 100). Busy repos can't block the route handler
 // indefinitely (or time the action out); the background `prs-sync` cron does
-// the uncapped walk. listOpenPullRequests stops fetching once the cap is hit.
+// the larger walk. listPullRequests stops fetching once the cap is hit.
 const MAX_SYNC_ITEMS = 500;
 
 /**
- * On-demand counterpart to the `prs-sync` cron — fetches open PRs from
- * GitHub and upserts them into `pull_requests` for the active workspace.
- * Prefers a GitHub App installation token (§3.9), falling back to the
+ * On-demand counterpart to the `prs-sync` cron — fetches PRs (all states,
+ * newest-activity first) from GitHub and upserts them into `pull_requests`
+ * for the active workspace, so PRs closed/merged upstream stop showing as
+ * open. Prefers a GitHub App installation token (§3.9), falling back to the
  * caller's per-user OAuth token. Admin-only (matches the skills sync).
  */
 export async function syncPullRequests(): Promise<SyncPrsResult> {
@@ -43,27 +44,27 @@ export async function syncPullRequests(): Promise<SyncPrsResult> {
   }
   if (!token) return { ok: false, error: 'No GitHub token — sign out and back in to sync' };
 
-  let openPrs: Awaited<ReturnType<InstanceType<typeof core.GitHubService>['listOpenPullRequests']>>;
+  let prs: Awaited<ReturnType<InstanceType<typeof core.GitHubService>['listPullRequests']>>;
   try {
     const github = new core.GitHubService({
       github: { owner: workspace.repoOwner, repo: workspace.repoName, token },
     } as never);
-    openPrs = await github.listOpenPullRequests(MAX_SYNC_ITEMS);
+    prs = await github.listPullRequests(MAX_SYNC_ITEMS);
   } catch (err) {
     return { ok: false, error: `GitHub fetch failed: ${err instanceof Error ? err.message : String(err)}` };
   }
 
   // Hitting the cap means more PRs exist than we walked — flag it so the UI
   // can tell the user the cron will backfill the remainder.
-  const capped = openPrs.length >= MAX_SYNC_ITEMS;
+  const capped = prs.length >= MAX_SYNC_ITEMS;
 
-  if (openPrs.length === 0) {
+  if (prs.length === 0) {
     revalidatePath('/prs');
     return { ok: true, count: 0 };
   }
 
   const supabase = createSupabaseAdminClient();
-  const rows = openPrs.map((p) => ({
+  const rows = prs.map((p) => ({
     workspace_id: workspace.id,
     number: p.number,
     title: p.title,
@@ -86,5 +87,5 @@ export async function syncPullRequests(): Promise<SyncPrsResult> {
   if (error) return { ok: false, error: `Upsert failed: ${error.message}` };
 
   revalidatePath('/prs');
-  return { ok: true, count: openPrs.length, capped };
+  return { ok: true, count: prs.length, capped };
 }
