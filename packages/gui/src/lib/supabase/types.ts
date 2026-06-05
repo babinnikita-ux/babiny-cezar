@@ -132,16 +132,20 @@ export interface Database {
           action_auto_comment: boolean;
           sync_mode: 'auto' | 'manual';
           sync_interval_minutes: number;
+          last_webhook_received_at: string | null;
+          last_webhook_event: string | null;
           auto_triage_action_id: string | null;
           created_at: string;
           updated_at: string;
         };
-        Insert: Omit<Database['public']['Tables']['workspaces']['Row'], 'id' | 'created_at' | 'updated_at' | 'auto_triage_action_id' | 'action_auto_comment' | 'sync_mode' | 'sync_interval_minutes'> & {
+        Insert: Omit<Database['public']['Tables']['workspaces']['Row'], 'id' | 'created_at' | 'updated_at' | 'auto_triage_action_id' | 'action_auto_comment' | 'sync_mode' | 'sync_interval_minutes' | 'last_webhook_received_at' | 'last_webhook_event'> & {
           id?: string;
           auto_triage_action_id?: string | null;
           action_auto_comment?: boolean;
           sync_mode?: 'auto' | 'manual';
           sync_interval_minutes?: number;
+          last_webhook_received_at?: string | null;
+          last_webhook_event?: string | null;
           created_at?: string;
           updated_at?: string;
         };

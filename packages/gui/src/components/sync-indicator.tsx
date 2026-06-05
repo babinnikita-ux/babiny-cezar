@@ -17,6 +17,10 @@ const STALE_SYNC_MS = 10 * 60 * 1000;
 /** Synced within this window → render a subtle "fresh" tint on the dot. */
 const FRESH_SYNC_MS = 5 * 60 * 1000;
 
+/** A webhook delivery within this window counts as "recent activity" — older
+ *  than this and a Live workspace's tooltip softens to "(no recent activity)". */
+const WEBHOOK_FRESH_MS = 24 * 60 * 60 * 1000;
+
 const PHASE_LABEL: Record<SyncPhase, string> = {
   issues: 'issues',
   digests: 'digests',
@@ -56,6 +60,11 @@ interface SyncIndicatorProps {
   readOnly: boolean;
   /** 'manual' workspaces don't auto-sync — the tooltip flags it. */
   syncMode: 'auto' | 'manual';
+  /** Live = GitHub App installed + webhook secret set (updates arrive in real
+   *  time); Polling = otherwise (falls back to the cron reconcile interval). */
+  webhookHealth: 'live' | 'polling';
+  /** Last matched webhook delivery — lets the Live line note "no recent activity". */
+  lastWebhookAt?: string | null;
 }
 
 /**
@@ -64,7 +73,7 @@ interface SyncIndicatorProps {
  * is clickable to trigger a "sync now", and shows a tooltip with the last-sync
  * time + status + counts on hover.
  */
-export function SyncIndicator({ workspaceId, initialStatus, readOnly, syncMode }: SyncIndicatorProps) {
+export function SyncIndicator({ workspaceId, initialStatus, readOnly, syncMode, webhookHealth, lastWebhookAt }: SyncIndicatorProps) {
   const router = useRouter();
   const [status, setStatus] = useState<SyncStatusRow | null>(initialStatus);
   const [pending, startKickoff] = useTransition();
@@ -149,6 +158,15 @@ export function SyncIndicator({ workspaceId, initialStatus, readOnly, syncMode }
     else lines.push('Not synced yet');
     const counts = summarize(status?.counts);
     if (counts) lines.push(counts);
+    // Live-vs-Polling: how the data is kept fresh (spec §1). Live = GitHub App
+    // installed + receiver active; quiet live repos still count as Live.
+    if (webhookHealth === 'live') {
+      const recent =
+        lastWebhookAt != null && Date.now() - new Date(lastWebhookAt).getTime() < WEBHOOK_FRESH_MS;
+      lines.push(recent ? '⚡ Live — updates arrive in real time' : '⚡ Live (no recent activity)');
+    } else {
+      lines.push('⏱ Polling — install the GitHub App for real-time updates');
+    }
     // Flag manual workspaces — the cron won't auto-sync; the user drives it.
     if (syncMode === 'manual') {
       lines.push(readOnly ? 'Auto-sync off' : 'Auto-sync off — click to sync');
