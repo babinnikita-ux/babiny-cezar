@@ -12,9 +12,10 @@ interface TopBarProps {
   workspaceId: string | null;
   readOnly: boolean;
   initialSyncStatus: SyncStatusRow | null;
+  syncMode: 'auto' | 'manual';
 }
 
-export function TopBar({ user, workspaceId, readOnly, initialSyncStatus }: TopBarProps) {
+export function TopBar({ user, workspaceId, readOnly, initialSyncStatus, syncMode }: TopBarProps) {
   const initials = useMemo(
     () =>
       (user.name || user.email || '?')
@@ -35,6 +36,7 @@ export function TopBar({ user, workspaceId, readOnly, initialSyncStatus }: TopBa
             workspaceId={workspaceId}
             readOnly={readOnly}
             initialStatus={initialSyncStatus}
+            syncMode={syncMode}
           />
         )}
 

@@ -54,6 +54,8 @@ interface SyncIndicatorProps {
   workspaceId: string;
   initialStatus: SyncStatusRow | null;
   readOnly: boolean;
+  /** 'manual' workspaces don't auto-sync — the tooltip flags it. */
+  syncMode: 'auto' | 'manual';
 }
 
 /**
@@ -62,7 +64,7 @@ interface SyncIndicatorProps {
  * is clickable to trigger a "sync now", and shows a tooltip with the last-sync
  * time + status + counts on hover.
  */
-export function SyncIndicator({ workspaceId, initialStatus, readOnly }: SyncIndicatorProps) {
+export function SyncIndicator({ workspaceId, initialStatus, readOnly, syncMode }: SyncIndicatorProps) {
   const router = useRouter();
   const [status, setStatus] = useState<SyncStatusRow | null>(initialStatus);
   const [pending, startKickoff] = useTransition();
@@ -147,6 +149,10 @@ export function SyncIndicator({ workspaceId, initialStatus, readOnly }: SyncIndi
     else lines.push('Not synced yet');
     const counts = summarize(status?.counts);
     if (counts) lines.push(counts);
+    // Flag manual workspaces — the cron won't auto-sync; the user drives it.
+    if (syncMode === 'manual') {
+      lines.push(readOnly ? 'Auto-sync off' : 'Auto-sync off — click to sync');
+    }
     return lines;
   })();
 

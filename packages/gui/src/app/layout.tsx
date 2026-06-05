@@ -32,17 +32,20 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     listWorkspaces(),
   ]);
 
-  // Initial sync_status for the active workspace so the header dot is correct
-  // on first paint; the client subscription keeps it live thereafter.
+  // Initial sync_status + sync_mode for the active workspace so the header dot
+  // is correct on first paint; the client subscription keeps the status live
+  // thereafter. sync_mode lets the indicator flag manual ("auto-sync off")
+  // workspaces.
   let initialSyncStatus: SyncStatusRow | null = null;
+  let syncMode: 'auto' | 'manual' = 'auto';
   if (workspace) {
     const supabase = createSupabaseAdminClient();
-    const { data } = await supabase
-      .from('sync_status')
-      .select('*')
-      .eq('workspace_id', workspace.id)
-      .maybeSingle<SyncStatusRow>();
-    initialSyncStatus = data ?? null;
+    const [{ data: status }, { data: ws }] = await Promise.all([
+      supabase.from('sync_status').select('*').eq('workspace_id', workspace.id).maybeSingle<SyncStatusRow>(),
+      supabase.from('workspaces').select('sync_mode').eq('id', workspace.id).maybeSingle<{ sync_mode: 'auto' | 'manual' }>(),
+    ]);
+    initialSyncStatus = status ?? null;
+    syncMode = ws?.sync_mode ?? 'auto';
   }
 
   return (
@@ -61,6 +64,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               workspaceId={workspace?.id ?? null}
               readOnly={workspace ? workspace.role !== 'admin' : true}
               initialSyncStatus={initialSyncStatus}
+              syncMode={syncMode}
             />
             <main className="flex-1">{children}</main>
           </div>
