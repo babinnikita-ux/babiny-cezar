@@ -4,6 +4,10 @@ import { Sidebar } from '@/components/sidebar';
 import { TopBar } from '@/components/topbar';
 import { getSessionUser } from '@/lib/auth';
 import { getActiveWorkspace, listWorkspaces } from '@/lib/workspace';
+import { createSupabaseAdminClient } from '@/lib/supabase/server';
+import type { Database } from '@/lib/supabase/types';
+
+type SyncStatusRow = Database['public']['Tables']['sync_status']['Row'];
 
 export const metadata: Metadata = {
   title: 'Cezar AI',
@@ -28,6 +32,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     listWorkspaces(),
   ]);
 
+  // Initial sync_status for the active workspace so the header dot is correct
+  // on first paint; the client subscription keeps it live thereafter.
+  let initialSyncStatus: SyncStatusRow | null = null;
+  if (workspace) {
+    const supabase = createSupabaseAdminClient();
+    const { data } = await supabase
+      .from('sync_status')
+      .select('*')
+      .eq('workspace_id', workspace.id)
+      .maybeSingle<SyncStatusRow>();
+    initialSyncStatus = data ?? null;
+  }
+
   return (
     <html lang="en" className="dark">
       <body className="bg-surface text-on-surface">
@@ -41,6 +58,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 name: user.name,
                 avatarUrl: user.avatarUrl,
               }}
+              workspaceId={workspace?.id ?? null}
+              readOnly={workspace ? workspace.role !== 'admin' : true}
+              initialSyncStatus={initialSyncStatus}
             />
             <main className="flex-1">{children}</main>
           </div>

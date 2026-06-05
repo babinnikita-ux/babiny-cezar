@@ -18,7 +18,7 @@ export type WorkflowBackend = 'anthropic-api' | 'claude-cli' | 'codex-cli';
 // Note: `@cezar/core` also exports a `WorkflowRunStatus` (the in-process engine
 // state). These are the *DB* string sets — kept local + named distinctly to
 // avoid confusing the two.
-export type JobKind = 'triage' | 'autofix' | 'ci-followup' | 'flow' | 'label-analysis';
+export type JobKind = 'triage' | 'autofix' | 'ci-followup' | 'flow' | 'label-analysis' | 'sync';
 
 export type LabelAnalysisStatus =
   | 'queued'
