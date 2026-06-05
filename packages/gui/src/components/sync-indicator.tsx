@@ -121,6 +121,37 @@ export function SyncIndicator({ workspaceId, initialStatus, readOnly, syncMode, 
   const syncing = (status?.status === 'syncing' && !isStale) || pending;
   const isError = !syncing && (Boolean(error) || status?.status === 'error');
 
+  // ── First-import (spec §2): a determinate "Importing" bar. ──
+  // `initial` flags the workspace's first full backfill; while it's syncing we
+  // surface real progress (n/total digested) instead of the subtle dot.
+  const isInitialImport = syncing && Boolean(status?.initial);
+  const importProgress = (() => {
+    if (!isInitialImport) return null;
+    const counts = status?.counts;
+    const digestsTotal = counts?.digestsTotal ?? 0;
+    const digestsCreated = counts?.digestsCreated ?? 0;
+    // Prefer digest progress (the slow phase); fall back to issue fetch during
+    // phase 1 before any digest total is known.
+    if (digestsTotal > 0) {
+      return {
+        fraction: Math.min(1, digestsCreated / digestsTotal),
+        label: `Importing — ${digestsCreated}/${digestsTotal} digested`,
+        indeterminate: false,
+      };
+    }
+    const issuesFetched = counts?.issuesFetched ?? 0;
+    const issuesCreated = counts?.issuesCreated ?? 0;
+    if (issuesFetched > 0) {
+      return {
+        fraction: Math.min(1, issuesCreated / issuesFetched),
+        label: `Importing — ${issuesCreated}/${issuesFetched} issues`,
+        indeterminate: false,
+      };
+    }
+    // No totals yet (very start of phase 1) — show an indeterminate bar.
+    return { fraction: 0, label: 'Importing your repo…', indeterminate: true };
+  })();
+
   const lastSyncedAt = status?.finished_at ?? (status?.status === 'done' ? status?.updated_at : null);
   const isFresh =
     !syncing &&
@@ -144,7 +175,8 @@ export function SyncIndicator({ workspaceId, initialStatus, readOnly, syncMode, 
   const tooltip = (() => {
     const lines: string[] = [];
     if (syncing) {
-      if (status?.message) lines.push(status.message);
+      if (importProgress) lines.push(importProgress.label);
+      else if (status?.message) lines.push(status.message);
       else if (status?.phase) lines.push(`Syncing ${PHASE_LABEL[status.phase]}…`);
       else lines.push('Starting sync…');
       return lines;
@@ -192,12 +224,41 @@ export function SyncIndicator({ workspaceId, initialStatus, readOnly, syncMode, 
         onClick={handleClick}
         aria-label={aria}
         className={cn(
-          'flex h-9 w-9 items-center justify-center rounded-md text-on-surface-variant transition-colors',
+          'flex h-9 items-center justify-center gap-2 rounded-md px-2 text-on-surface-variant transition-colors',
+          // Initial import gets extra width for the inline bar; otherwise stay
+          // a compact 9×9 dot button.
+          importProgress ? '' : 'w-9 px-0',
           readOnly ? 'cursor-default' : 'hover:bg-surface-container hover:text-on-surface',
           syncing && 'cursor-wait',
         )}
       >
-        <span className={cn('h-2 w-2 rounded-full transition-colors', dotColor)} aria-hidden />
+        <span className={cn('h-2 w-2 shrink-0 rounded-full transition-colors', dotColor)} aria-hidden />
+        {/* First-import (spec §2): a thin determinate bar + count, replacing the
+         *  bare pulsing dot so the slow onboarding import shows real progress. */}
+        {importProgress && (
+          <span className="flex items-center gap-1.5" aria-hidden>
+            <span className="h-1 w-16 overflow-hidden rounded-full bg-surface-container-highest">
+              <span
+                className={cn(
+                  'block h-full rounded-full bg-primary',
+                  importProgress.indeterminate
+                    ? 'w-1/3 animate-pulse'
+                    : 'transition-[width] duration-500',
+                )}
+                style={
+                  importProgress.indeterminate
+                    ? undefined
+                    : { width: `${Math.round(importProgress.fraction * 100)}%` }
+                }
+              />
+            </span>
+            <span className="whitespace-nowrap text-[10px] tabular-nums text-on-surface-variant">
+              {(status?.counts?.digestsTotal ?? 0) > 0
+                ? `${status?.counts?.digestsCreated ?? 0}/${status?.counts?.digestsTotal}`
+                : 'Importing'}
+            </span>
+          </span>
+        )}
       </button>
 
       {/* Tooltip — appears on hover, right-aligned under the dot. */}

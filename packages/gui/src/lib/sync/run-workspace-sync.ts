@@ -27,6 +27,10 @@ export async function writeSyncStatus(
     message?: string | null;
     counts?: SyncCounts;
     error?: string | null;
+    /** Flags the first full import (migration 0040) so the indicator shows a
+     *  determinate progress bar. Threaded from `runSyncPhases` once phase 1
+     *  has computed `fullSync`. */
+    initial?: boolean;
     started_at?: string | null;
     finished_at?: string | null;
   },
@@ -124,6 +128,10 @@ export async function runSyncPhases({
 }: RunSyncPhasesArgs): Promise<void> {
   const { LLMService } = await import('@cezar/core');
   const counts: SyncCounts = {};
+  // Whether this run is the workspace's first full (all-states) import. Set in
+  // phase 1 and threaded into every `sync_status` write from there on, so the
+  // indicator can switch to a determinate "Importing" bar.
+  let initial = false;
 
   // ── 1. Fetch issues ──
   // Do a full (all-states, incl. closed) fetch until a complete sync has
@@ -133,6 +141,7 @@ export async function runSyncPhases({
   try {
     const meta = store.getMeta();
     const fullSync = !meta.fullSyncedAt || !meta.lastSyncedAt;
+    initial = fullSync;
     const issues = fullSync
       ? await github.fetchAllIssues(true)
       : await github.fetchIssuesSince(meta.lastSyncedAt as string, true);
@@ -158,6 +167,7 @@ export async function runSyncPhases({
       status: 'error',
       phase: null,
       counts,
+      initial,
       error: `Issue fetch failed: ${err instanceof Error ? err.message : String(err)}`,
       finished_at: new Date().toISOString(),
     });
@@ -170,15 +180,37 @@ export async function runSyncPhases({
   try {
     const needDigest = store.getIssues({ state: 'open', hasDigest: false });
     if (needDigest.length > 0) {
+      // Seed the denominator BEFORE the LLM call so the first-import bar has a
+      // total to measure against; the bar advances as `onProgress` fires.
+      counts.digestsTotal = needDigest.length;
+      counts.digestsCreated = 0;
       await writeSyncStatus(supabase, workspaceId, {
         status: 'syncing',
         phase: 'digests',
-        message: `Digesting ${needDigest.length} issue${needDigest.length === 1 ? '' : 's'}…`,
+        message: `Digesting 0/${needDigest.length}…`,
         counts,
+        initial,
       });
       const service = new LLMService(config);
       const issueData = needDigest.map((i) => ({ number: i.number, title: i.title, body: i.body }));
-      const results = await service.generateDigests(issueData, config.sync.digestBatchSize);
+      // Wire the (previously-unused) per-batch progress callback to a throttled
+      // Realtime write — once per batch, never per-issue — so the import bar
+      // advances live without spamming `sync_status`.
+      const results = await service.generateDigests(
+        issueData,
+        config.sync.digestBatchSize,
+        (completed, total) => {
+          counts.digestsCreated = completed;
+          counts.digestsTotal = total;
+          void writeSyncStatus(supabase, workspaceId, {
+            status: 'syncing',
+            phase: 'digests',
+            message: `Digesting ${completed}/${total}…`,
+            counts,
+            initial,
+          });
+        },
+      );
       for (const [number, digest] of results) {
         store.setDigest(number, digest);
       }
@@ -202,6 +234,7 @@ export async function runSyncPhases({
         phase: 'comments',
         message: `Fetching comments for ${needComments.length} issue${needComments.length === 1 ? '' : 's'}…`,
         counts,
+        initial,
       });
       const commentMap = await github.fetchCommentsForIssues(needComments.map((i) => i.number));
       for (const [num, comments] of commentMap) {
@@ -221,6 +254,7 @@ export async function runSyncPhases({
       phase: 'prs',
       message: 'Refreshing pull requests…',
       counts,
+      initial,
     });
     // All states, newest-activity first, so PRs closed/merged upstream get
     // their state corrected; cap the walk so a repo with thousands of historical
@@ -258,6 +292,7 @@ export async function runSyncPhases({
     phase: null,
     message: summarize(counts),
     counts,
+    initial,
     error: null,
     finished_at: new Date().toISOString(),
   });

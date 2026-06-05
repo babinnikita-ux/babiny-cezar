@@ -39,6 +39,9 @@ export interface SyncCounts {
   issuesCreated?: number;
   issuesUpdated?: number;
   digestsCreated?: number;
+  /** Total issues slated for digesting this run (open + un-digested), captured
+   *  before the LLM call so the first-import bar has a denominator. */
+  digestsTotal?: number;
   commentsFetched?: number;
   prsUpdated?: number;
 }
@@ -222,9 +225,12 @@ export interface Database {
           status: SyncStatusState;
           phase: SyncPhase | null;
           message: string | null;
-          /** { issuesFetched, issuesCreated, issuesUpdated, digestsCreated, commentsFetched, prsUpdated } */
+          /** { issuesFetched, issuesCreated, issuesUpdated, digestsCreated, digestsTotal, commentsFetched, prsUpdated } */
           counts: SyncCounts;
           error: string | null;
+          /** True during the workspace's first full import (migration 0040) —
+           *  flips the indicator to a determinate "Importing" bar. */
+          initial: boolean;
           started_at: string | null;
           finished_at: string | null;
           updated_at: string;
@@ -236,6 +242,7 @@ export interface Database {
           message?: string | null;
           counts?: SyncCounts;
           error?: string | null;
+          initial?: boolean;
           started_at?: string | null;
           finished_at?: string | null;
           updated_at?: string;
