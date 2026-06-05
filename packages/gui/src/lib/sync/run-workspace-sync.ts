@@ -136,6 +136,9 @@ export async function runSyncPhases({
   // phase 1 and threaded into every `sync_status` write from there on, so the
   // indicator can switch to a determinate "Importing" bar.
   let initial = false;
+  // Mirror of `initial` (the first all-states import) used to guard the §4
+  // delta computation — on a full backfill every PR/issue would count as "new".
+  let fullSync = false;
 
   // ── 1. Fetch issues ──
   // Do a full (all-states, incl. closed) fetch until a complete sync has
@@ -144,7 +147,7 @@ export async function runSyncPhases({
   // first synced by the older open-only path, and bootstraps new workspaces.
   try {
     const meta = store.getMeta();
-    const fullSync = !meta.fullSyncedAt || !meta.lastSyncedAt;
+    fullSync = !meta.fullSyncedAt || !meta.lastSyncedAt;
     initial = fullSync;
     const issues = fullSync
       ? await github.fetchAllIssues(true)
@@ -152,10 +155,22 @@ export async function runSyncPhases({
     counts.issuesFetched = issues.length;
     counts.issuesCreated = 0;
     counts.issuesUpdated = 0;
+    // Per-run open↔closed deltas (spec §4) — only on incremental syncs; the
+    // initial import marks everything as "new" so close/reopen tallies are noise.
+    if (!fullSync) {
+      counts.issuesClosed = 0;
+      counts.issuesReopened = 0;
+    }
     for (const issue of issues) {
       const r = store.upsertIssue(issue);
       if (r.action === 'created') counts.issuesCreated += 1;
       if (r.action === 'updated') counts.issuesUpdated += 1;
+      // `upsertIssue` reports `stateChanged`; pair it with the incoming state to
+      // get the direction. Cheap — no extra read, the diff is already done here.
+      if (!fullSync && r.stateChanged) {
+        if (issue.state === 'closed') counts.issuesClosed! += 1;
+        else counts.issuesReopened! += 1;
+      }
     }
     const nowIso = new Date().toISOString();
     store.updateMeta({
@@ -266,6 +281,41 @@ export async function runSyncPhases({
     // PRs doesn't bloat this background pass.
     const prs = await github.listPullRequests(500);
     if (prs.length > 0) {
+      // Per-run PR deltas (spec §4) — diff the incoming set against the stored
+      // `(number, state)` BEFORE the upsert overwrites it. One indexed select
+      // (bounded by the 500-cap window). Skipped on the initial import, where
+      // every PR would register as "new". `RawPullRequest` carries no merge
+      // signal today, so merges fold into `prsClosed` and `prsMerged` is left
+      // unset (see report).
+      if (!fullSync) {
+        const numbers = prs.map((p) => p.number);
+        const { data: priorRows, error: priorErr } = await supabase
+          .from('pull_requests')
+          .select('number, state')
+          .eq('workspace_id', workspaceId)
+          .in('number', numbers);
+        if (!priorErr) {
+          const priorState = new Map<number, 'open' | 'closed'>(
+            (priorRows ?? []).map((r) => [r.number, r.state]),
+          );
+          let created = 0;
+          let closed = 0;
+          let reopened = 0;
+          for (const p of prs) {
+            const prev = priorState.get(p.number);
+            if (prev === undefined) {
+              created += 1;
+            } else if (prev === 'open' && p.state === 'closed') {
+              closed += 1; // includes merges — no merge flag available
+            } else if (prev === 'closed' && p.state === 'open') {
+              reopened += 1;
+            }
+          }
+          counts.prsCreated = created;
+          counts.prsClosed = closed;
+          counts.prsReopened = reopened;
+        }
+      }
       const rows = prs.map((p) => ({
         workspace_id: workspaceId,
         number: p.number,

@@ -49,6 +49,24 @@ export interface SyncCounts {
   digestsTotal?: number;
   commentsFetched?: number;
   prsUpdated?: number;
+  // ── Per-run PR deltas (spec §4) — computed from a pre-upsert state diff,
+  // so the "what changed" toast reflects *this* sync rather than cumulative
+  // totals. Skipped on the initial import (everything would be "new"). ──
+  /** PRs not previously present in the store. */
+  prsCreated?: number;
+  /** PRs that went open → closed this run. Merges fold in here when no merge
+   *  signal is available (`RawPullRequest` carries none today). */
+  prsClosed?: number;
+  /** PRs closed *as merged* this run. Unset while the fetch lacks a merge
+   *  signal — merges are counted under `prsClosed` instead. */
+  prsMerged?: number;
+  /** PRs that went closed → open this run. */
+  prsReopened?: number;
+  // ── Finer issue deltas (spec §4), split out of `issuesUpdated`. ──
+  /** Issues that went open → closed this run. */
+  issuesClosed?: number;
+  /** Issues that went closed → open this run. */
+  issuesReopened?: number;
 }
 
 // Shape of `workspace_label_analyses.result` once the executor finishes.

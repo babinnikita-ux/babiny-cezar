@@ -39,6 +39,25 @@ function summarize(counts: SyncCounts | null | undefined): string | null {
   return bits.length > 0 ? bits.join(' · ') : null;
 }
 
+/** Build the "what changed" delta string (spec §4) from the per-run `counts`,
+ *  e.g. "3 new issues · 1 reopened · 2 PRs closed · 1 PR opened". Returns null
+ *  when every delta is zero/absent so a no-op sync stays silent. PR merges fold
+ *  into `prsClosed` (no merge signal in the sync fetch today), so we render that
+ *  bucket as "closed". */
+function deltaSummary(counts: SyncCounts | null | undefined): string | null {
+  if (!counts) return null;
+  const bits: string[] = [];
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  if (counts.issuesCreated) bits.push(plural(counts.issuesCreated, 'new issue', 'new issues'));
+  if (counts.issuesClosed) bits.push(`${counts.issuesClosed} closed`);
+  if (counts.issuesReopened) bits.push(`${counts.issuesReopened} reopened`);
+  if (counts.prsCreated) bits.push(plural(counts.prsCreated, 'PR opened', 'PRs opened'));
+  if (counts.prsMerged) bits.push(plural(counts.prsMerged, 'PR merged', 'PRs merged'));
+  if (counts.prsClosed) bits.push(plural(counts.prsClosed, 'PR closed', 'PRs closed'));
+  if (counts.prsReopened) bits.push(plural(counts.prsReopened, 'PR reopened', 'PRs reopened'));
+  return bits.length > 0 ? bits.join(' · ') : null;
+}
+
 /** "5 minutes ago", "2 hours ago", etc. — coarse relative time. */
 function relativeTime(iso: string | null | undefined): string | null {
   if (!iso) return null;
@@ -83,6 +102,13 @@ export function SyncIndicator({ workspaceId, initialStatus, readOnly, syncMode, 
   const [error, setError] = useState<string | null>(null);
   // Refresh exactly once when a sync transitions to a terminal state.
   const wasSyncing = useRef(initialStatus?.status === 'syncing');
+  // ── "What changed" toast (spec §4). ──
+  // `userInitiated` remembers that the *most recent* run was started by this
+  // user's "sync now" click (set in `handleClick`), distinct from a background
+  // cron reconcile that merely flips the row over Realtime. We only toast for
+  // user-initiated runs so background syncs stay silent.
+  const userInitiated = useRef(false);
+  const [toast, setToast] = useState<string | null>(null);
 
   // ── Realtime: follow this workspace's sync_status row. ──
   useEffect(() => {
@@ -108,6 +134,14 @@ export function SyncIndicator({ workspaceId, initialStatus, readOnly, syncMode, 
           } else if (wasSyncing.current && (row.status === 'done' || row.status === 'error')) {
             // Sync just finished — pull the freshly-synced data into every page.
             wasSyncing.current = false;
+            // "What changed" toast (spec §4): only for a user-initiated run that
+            // completed (not background reconciles, not the §2 initial import —
+            // its progress bar already covers that). No deltas ⇒ "no changes".
+            if (userInitiated.current && row.status === 'done' && !row.initial) {
+              const deltas = deltaSummary(row.counts);
+              setToast(deltas ? `Synced — ${deltas}` : 'Synced — no changes');
+            }
+            userInitiated.current = false;
             router.refresh();
           }
         },
@@ -117,6 +151,13 @@ export function SyncIndicator({ workspaceId, initialStatus, readOnly, syncMode, 
       supabase.removeChannel(channel);
     };
   }, [workspaceId, router]);
+
+  // ── "What changed" toast auto-dismiss (spec §4): clears ~5s after it shows. ──
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const isStale =
     status?.status === 'syncing' &&
@@ -186,6 +227,9 @@ export function SyncIndicator({ workspaceId, initialStatus, readOnly, syncMode, 
   function handleClick() {
     if (syncing || readOnly) return;
     setError(null);
+    // Mark this run as user-initiated so the syncing→done transition fires the
+    // "what changed" toast (background reconciles leave this false).
+    userInitiated.current = true;
     startKickoff(async () => {
       const result = await syncAndDigest();
       if (!result.ok) {
@@ -351,6 +395,19 @@ export function SyncIndicator({ workspaceId, initialStatus, readOnly, syncMode, 
           </a>
         )}
       </div>
+
+      {/* "What changed" toast (spec §4) — a transient popover anchored under the
+       *  dot, shown only after a user-initiated "sync now" completes. Auto-
+       *  dismisses after ~5s; dismissable on click. */}
+      {toast && (
+        <div
+          role="status"
+          onClick={() => setToast(null)}
+          className="absolute right-0 top-full z-30 mt-1 w-max max-w-[280px] cursor-pointer rounded-md border border-outline-variant bg-surface-container-high px-3 py-2 text-xs text-on-surface shadow-ambient"
+        >
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
