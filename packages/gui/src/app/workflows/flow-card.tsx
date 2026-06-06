@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, useTransition, type KeyboardEvent } from 'react';
+import { cn } from '@/components/ui/cn';
 import {
   renderStepPreview,
   type FlowStep,
@@ -62,8 +63,8 @@ export function FlowCard(props: FlowCardProps) {
       }
     >
       {/* Name + pause toggle + flow actions */}
-      <div className="flex items-end gap-3">
-        <div className="flex-1">
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-[12rem] flex-1">
           <label className="block text-[11px] font-medium uppercase tracking-wide text-fg-muted">
             Name
           </label>
@@ -72,7 +73,7 @@ export function FlowCard(props: FlowCardProps) {
             value={flow.name}
             onChange={(e) => props.onNameChange(e.target.value)}
             disabled={!props.canWrite}
-            className="mt-1 w-full rounded-md border border-border bg-bg-subtle px-3 py-2 text-sm text-fg focus:border-accent/50 focus:outline-none"
+            className="mt-1 w-full rounded-md border border-border bg-bg-subtle px-3 py-2 text-base text-fg focus:border-accent/50 focus:outline-none lg:text-sm"
             placeholder="fix github issue"
           />
         </div>
@@ -155,7 +156,7 @@ export function FlowCard(props: FlowCardProps) {
           </p>
         ) : (
           <div className="space-y-2">
-            <div className="grid grid-cols-[auto_minmax(220px,1fr)_minmax(220px,2fr)_auto_auto] gap-3 px-1 text-[11px] font-medium uppercase tracking-wide text-fg-muted">
+            <div className="hidden grid-cols-[auto_minmax(220px,1fr)_minmax(220px,2fr)_auto_auto] gap-3 px-1 text-[11px] font-medium uppercase tracking-wide text-fg-muted lg:grid">
               <div>Step</div>
               <div>Skill</div>
               <div>Args template</div>
@@ -351,9 +352,9 @@ function StepRow(props: {
   );
 
   return (
-    <div className="rounded-md border border-border/60 bg-bg-subtle/40 p-2">
-      <div className="grid grid-cols-[auto_minmax(220px,1fr)_minmax(220px,2fr)_auto_auto] items-start gap-3">
-        <div className="rounded-md border border-border bg-bg-subtle px-3 py-2 text-sm text-fg-muted">
+    <div className="rounded-md border border-border/60 bg-bg-subtle/40 p-3 lg:p-2">
+      <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-[auto_minmax(220px,1fr)_minmax(220px,2fr)_auto_auto]">
+        <div className="w-fit rounded-md border border-border bg-bg-subtle px-3 py-2 text-sm text-fg-muted lg:w-auto">
           Step {idx + 1}
         </div>
         <div>
@@ -397,7 +398,7 @@ function StepRow(props: {
             </ul>
           )}
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-row flex-wrap gap-1 lg:flex-col">
           <IconButton
             disabled={!props.canWrite || idx === props.steps.length - 1}
             ariaLabel="Move step down"
@@ -426,7 +427,7 @@ function StepRow(props: {
             <PencilIcon />
           </IconButton>
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-row flex-wrap gap-1 lg:flex-col">
           <IconButton
             disabled={!props.canWrite}
             ariaLabel="Remove step"
@@ -501,7 +502,7 @@ function SkillPicker({
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
         placeholder="auto-fix-github"
-        className="w-full rounded-md border border-border bg-bg-subtle px-3 py-2 font-mono text-xs text-fg focus:border-accent/50 focus:outline-none"
+        className="w-full rounded-md border border-border bg-bg-subtle px-3 py-2 font-mono text-base text-fg focus:border-accent/50 focus:outline-none lg:text-xs"
       />
     );
   }
@@ -510,7 +511,7 @@ function SkillPicker({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       disabled={disabled}
-      className="w-full rounded-md border border-border bg-bg-subtle px-3 py-2 font-mono text-xs text-fg focus:border-accent/50 focus:outline-none"
+      className="w-full rounded-md border border-border bg-bg-subtle px-3 py-2 font-mono text-base text-fg focus:border-accent/50 focus:outline-none lg:text-xs"
     >
       <option value="">— pick a skill —</option>
       {!options.find((o) => o.name === value) && value && (
@@ -607,10 +608,10 @@ function ArgsTemplateInput({
         onBlur={() => window.setTimeout(() => setShowAutocomplete(false), 100)}
         disabled={disabled}
         placeholder="{{input}}"
-        className="w-full rounded-md border border-border bg-bg-subtle px-3 py-2 font-mono text-xs text-fg focus:border-accent/50 focus:outline-none"
+        className="w-full rounded-md border border-border bg-bg-subtle px-3 py-2 font-mono text-base text-fg focus:border-accent/50 focus:outline-none lg:text-xs"
       />
       {showAutocomplete && (
-        <div className="absolute left-0 top-full z-20 mt-1 w-full rounded-md border border-border bg-bg-elevated shadow-lg">
+        <div className="absolute left-0 top-full z-20 mt-1 w-full max-w-[calc(100vw-2rem)] rounded-md border border-border bg-bg-elevated shadow-lg">
           {TEMPLATE_VARS.map((v, i) => (
             <button
               key={v.name}
@@ -753,7 +754,7 @@ function TriggersPanel({
               </span>
             ))}
             {canWrite && (
-              <span className="inline-flex items-center gap-1">
+              <span className="flex w-full items-center gap-1 sm:inline-flex sm:w-auto">
                 <input
                   type="text"
                   value={draftLabel}
@@ -765,7 +766,7 @@ function TriggersPanel({
                     }
                   }}
                   placeholder="auto-fix"
-                  className="w-32 rounded-md border border-border bg-bg-subtle px-2 py-1 font-mono text-[11px] text-fg focus:border-accent/50 focus:outline-none"
+                  className="w-full rounded-md border border-border bg-bg-subtle px-2 py-1 font-mono text-base text-fg focus:border-accent/50 focus:outline-none sm:w-32 lg:text-[11px]"
                 />
                 <button
                   type="button"
@@ -928,16 +929,17 @@ function RunOnIssue({ onRun }: { onRun: (issue: number) => void }) {
   const [issueInput, setIssueInput] = useState('');
   const [running, startTransition] = useTransition();
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <label className="text-xs text-fg-muted">Run on issue</label>
       <span className="text-xs text-fg-muted">#</span>
       <input
         type="number"
+        inputMode="numeric"
         min={1}
         value={issueInput}
         onChange={(e) => setIssueInput(e.target.value)}
         placeholder="42"
-        className="w-20 rounded-md border border-border bg-bg-subtle px-2 py-1 text-xs text-fg"
+        className="w-20 rounded-md border border-border bg-bg-subtle px-2 py-1 text-base text-fg lg:text-xs"
       />
       <button
         disabled={running || !issueInput.trim()}
@@ -952,7 +954,7 @@ function RunOnIssue({ onRun }: { onRun: (issue: number) => void }) {
             setIssueInput('');
           });
         }}
-        className="rounded-md border border-accent/50 bg-accent/10 px-2.5 py-1 text-xs font-medium text-fg hover:bg-accent/20 disabled:opacity-50"
+        className="inline-flex min-h-11 flex-1 items-center justify-center rounded-md border border-accent/50 bg-accent/10 px-2.5 py-1 text-xs font-medium text-fg hover:bg-accent/20 disabled:opacity-50 sm:min-h-0 sm:flex-none"
       >
         {running ? 'Queueing…' : 'Run'}
       </button>
@@ -998,7 +1000,10 @@ function IconButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}
-      className={`rounded-md border px-2 py-1.5 disabled:opacity-30 ${cls}`}
+      className={cn(
+        'inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border px-2 py-1.5 disabled:opacity-30 lg:min-h-0 lg:min-w-0',
+        cls,
+      )}
     >
       {children}
     </button>

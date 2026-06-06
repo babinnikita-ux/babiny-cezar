@@ -15,6 +15,7 @@ import {
 } from './actions';
 import { FlowCard, type SkillOption } from './flow-card';
 import { FLOW_TEMPLATES, type FlowTemplate } from './templates';
+import { PageContainer } from '@/components/ui/page-container';
 
 interface Props {
   workspaceName: string;
@@ -146,11 +147,11 @@ export function WorkflowsClient({ workspaceName, workspaceRole, initialFlows, av
   const isDirty = dirty.size > 0 || pendingNew !== null;
 
   return (
-    <div className="px-8 py-6">
+    <PageContainer>
       <header className="mb-6 border-b border-border pb-5">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Workflows</h1>
+            <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">Workflows</h1>
             <p className="mt-1 text-sm text-fg-muted">
               Chain named skill steps. Args can use{' '}
               <code>{'{{input}}'}</code>,{' '}
@@ -259,7 +260,7 @@ export function WorkflowsClient({ workspaceName, workspaceRole, initialFlows, av
           </span>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }
 
