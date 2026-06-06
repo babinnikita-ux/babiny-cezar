@@ -18,6 +18,7 @@ import { FLOW_TEMPLATES, type FlowTemplate } from './templates';
 import { PageContainer } from '@/components/ui/page-container';
 import { Sheet } from '@/components/ui/sheet';
 import { cn } from '@/components/ui/cn';
+import { useIsMobile } from '@/lib/use-is-mobile';
 
 interface Props {
   workspaceName: string;
@@ -276,20 +277,15 @@ export function WorkflowsClient({ workspaceName, workspaceRole, initialFlows, av
 
 function NewFlowMenu({ onPick }: { onPick: (t: FlowTemplate) => void }) {
   const [open, setOpen] = useState(false);
-  // Coarse pointer (phone/tablet touch) → bottom Sheet; fine pointer → popover.
-  const [coarse, setCoarse] = useState(false);
-  useEffect(() => {
-    const mq = window.matchMedia('(pointer: coarse)');
-    const update = () => setCoarse(mq.matches);
-    update();
-    mq.addEventListener('change', update);
-    return () => mq.removeEventListener('change', update);
-  }, []);
+  // Narrow viewport (< lg) → bottom Sheet; desktop → anchored popover. Keyed on
+  // width, not pointer type, so touch laptops / DevTools touch-emulation still
+  // get the desktop dropdown.
+  const isMobile = useIsMobile();
 
   // Outside-click / escape only for the desktop popover (the Sheet handles its
   // own dismissal).
   useEffect(() => {
-    if (!open || coarse) return;
+    if (!open || isMobile) return;
     const onDoc = (e: MouseEvent) => {
       const t = e.target as HTMLElement;
       if (!t.closest('[data-newflow-menu]')) setOpen(false);
@@ -301,7 +297,7 @@ function NewFlowMenu({ onPick }: { onPick: (t: FlowTemplate) => void }) {
       document.removeEventListener('mousedown', onDoc);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open, coarse]);
+  }, [open, isMobile]);
 
   const pick = (t: FlowTemplate) => {
     onPick(t);
@@ -319,9 +315,10 @@ function NewFlowMenu({ onPick }: { onPick: (t: FlowTemplate) => void }) {
         <span aria-hidden className="text-fg-muted">▾</span>
       </button>
 
-      {/* Desktop popover — width-clamped so it never spills off-screen. */}
-      {open && !coarse && (
-        <div className="absolute right-0 top-full z-popover mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-border bg-bg-elevated shadow-ambient">
+      {/* Desktop popover — opens from the left (the button often wraps to the
+          left edge) and is width-clamped so it never spills off-screen. */}
+      {open && !isMobile && (
+        <div className="absolute left-0 top-full z-popover mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-border bg-bg-elevated shadow-ambient">
           <div className="border-b border-border px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
             Start from a template
           </div>
@@ -333,8 +330,8 @@ function NewFlowMenu({ onPick }: { onPick: (t: FlowTemplate) => void }) {
         </div>
       )}
 
-      {/* Phone/tablet — bottom sheet (full-width, no overflow, big targets). */}
-      <Sheet open={open && coarse} onClose={() => setOpen(false)} side="bottom" title="Start from a template">
+      {/* Narrow viewport — bottom sheet (full-width, no overflow, big targets). */}
+      <Sheet open={open && isMobile} onClose={() => setOpen(false)} side="bottom" title="Start from a template">
         <div className="px-2 py-2">
           {FLOW_TEMPLATES.map((t) => (
             <TemplateRow key={t.id} template={t} onPick={pick} large />
