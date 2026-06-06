@@ -179,7 +179,7 @@ describe('GitHubService', () => {
       const service = new GitHubService(makeConfig());
       // No longer the misleading "rate limit exceeded" — a 403 without any
       // rate-limit headers/message is a real permission problem.
-      await expect(service.fetchAllIssues()).rejects.toThrow(/permission missing/);
+      await expect(service.fetchAllIssues()).rejects.toThrow(/denied this action/);
     });
 
     it('reports a primary rate limit (x-ratelimit-remaining: 0) distinctly', async () => {
@@ -247,7 +247,7 @@ describe('GitHubService', () => {
       const { addLabels } = await labelMocks();
       addLabels.mockRejectedValue({ status: 403, response: { headers: {}, data: { message: 'Resource not accessible by integration' } } });
 
-      await expect(new GitHubService(makeConfig()).addLabel(7, 'priority-high')).rejects.toThrow(/permission missing/);
+      await expect(new GitHubService(makeConfig()).addLabel(7, 'priority-high')).rejects.toThrow(/GitHub App installation lacks permission/);
       // One real attempt — permission denials are fatal, not retried.
       expect(addLabels).toHaveBeenCalledTimes(1);
     });

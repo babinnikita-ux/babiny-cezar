@@ -1003,12 +1003,25 @@ export function toGitHubApiError(
     case 'auth':
       message = 'Invalid or expired GitHub token — re-authenticate (or reinstall the GitHub App).';
       break;
-    case 'permission':
-      message =
-        `GitHub denied this action (403): permission missing${detail}. ` +
-        `The token/GitHub App lacks write access for this operation on ${slug} — ` +
-        `grant "Issues: Read & write" (and "Pull requests" for PRs) and re-accept the install.`;
+    case 'permission': {
+      // Distinguish the two real causes of a write 403, because the fix differs:
+      //   - GitHub App token ("Resource not accessible by integration"): the App
+      //     installation lacks the permission — grant it and re-accept.
+      //   - User OAuth token / PAT: the *account* Cezar is acting as lacks the
+      //     repo role. Crucially, on GitHub a user with read access can COMMENT
+      //     but needs the Triage (or Write/Maintain/Admin) role to add/remove
+      //     LABELS — so "comment worked but labeling 403'd" is expected here and
+      //     is NOT a rate limit. Installing the GitHub App fixes it regardless of
+      //     who connected the workspace.
+      const isApp = /integration/i.test(classified.message);
+      message = isApp
+        ? `GitHub denied this action (403): the GitHub App installation lacks permission${detail}. ` +
+          `Grant "Issues: Read & write" (and "Pull requests: Read & write" for PRs) on ${slug} and re-accept the install.`
+        : `GitHub denied this action (403): the connected GitHub account lacks the repo role for it${detail}. ` +
+          `Commenting only needs read access, but adding/removing labels needs the Triage (or Write) role on ${slug} — ` +
+          `install the Cezar GitHub App (recommended), or give that account Triage+ access.`;
       break;
+    }
     case 'secondary-rate-limit':
       message =
         `GitHub secondary (anti-burst) rate limit hit${detail} — exhausted in-run retries. ` +

@@ -65,8 +65,22 @@ describe('toGitHubApiError', () => {
     );
     expect(err).toBeInstanceOf(GitHubApiError);
     expect(err.kind).toBe('permission');
-    expect(err.message).toMatch(/permission missing/);
+    expect(err.message).toMatch(/denied this action/);
     expect(err.message).not.toMatch(/rate limit/i);
+  });
+
+  it('an App-token 403 ("integration") blames the App installation', () => {
+    const raw = ghError({ status: 403, message: 'Resource not accessible by integration' });
+    const err = toGitHubApiError(raw, classifyGitHubError(raw), { owner: 'o', repo: 'r' });
+    expect(err.message).toMatch(/GitHub App installation lacks permission/);
+  });
+
+  it('a user-token 403 (no "integration") points at the missing Triage role', () => {
+    // A read-access user can comment but not label — exactly the contributor case.
+    const raw = ghError({ status: 403, message: 'Must have triage permission' });
+    const err = toGitHubApiError(raw, classifyGitHubError(raw), { owner: 'o', repo: 'r' });
+    expect(err.message).toMatch(/Triage/);
+    expect(err.message).toMatch(/install the Cezar GitHub App/);
   });
 
   it('preserves the classified kind + status for callers', () => {
