@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { cn } from '@/components/ui/cn';
 import {
   RefreshIcon,
@@ -12,6 +13,17 @@ import {
   ChevronRightIcon,
   MoreVerticalIcon,
 } from '@/components/icons';
+import { PageContainer } from '@/components/ui/page-container';
+import { FilterBar, type FilterChip } from '@/components/ui/filter-bar';
+import {
+  ResponsiveListContainer,
+  EntityCard,
+  MetaRow,
+  MetaItem,
+  CardActions,
+} from '@/components/ui/data-card-list';
+import { ActionSheet, type ActionSheetItem } from '@/components/ui/action-sheet';
+import { RowMenuPortal } from '@/components/row-menu-portal';
 import { refreshRepoSkills } from './skills-action';
 
 export interface SkillRow {
@@ -104,6 +116,23 @@ export function SkillsView({ rows, overridesCount, commitSha, fetchedAt, readOnl
     triggerFilter !== 'all' ||
     statusFilter !== 'all';
 
+  // Secondary (non-search) filter count for the phone "Filters · N" badge.
+  const activeFilterCount =
+    (sourceFilter !== 'all' ? 1 : 0) +
+    (modeFilter !== 'all' ? 1 : 0) +
+    (triggerFilter !== 'all' ? 1 : 0) +
+    (statusFilter !== 'all' ? 1 : 0);
+
+  const filterChips: FilterChip[] = [];
+  if (sourceFilter !== 'all')
+    filterChips.push({ key: 'source', label: `Source: ${sourceFilter}`, onClear: () => { setSourceFilter('all'); setPage(1); } });
+  if (modeFilter !== 'all')
+    filterChips.push({ key: 'mode', label: `Mode: ${modeFilter}`, onClear: () => { setModeFilter('all'); setPage(1); } });
+  if (triggerFilter !== 'all')
+    filterChips.push({ key: 'trigger', label: `Trigger: ${triggerFilter}`, onClear: () => { setTriggerFilter('all'); setPage(1); } });
+  if (statusFilter !== 'all')
+    filterChips.push({ key: 'status', label: `Status: ${statusFilter}`, onClear: () => { setStatusFilter('all'); setPage(1); } });
+
   function handleRefresh() {
     setRefreshState(null);
     startRefresh(async () => {
@@ -131,7 +160,7 @@ export function SkillsView({ rows, overridesCount, commitSha, fetchedAt, readOnl
   }
 
   return (
-    <div className="px-6 py-6">
+    <PageContainer>
       {/* Page header */}
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -185,92 +214,104 @@ export function SkillsView({ rows, overridesCount, commitSha, fetchedAt, readOnl
       </div>
 
       {/* Filter bar */}
-      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-outline-variant bg-surface-container-low p-3">
-        <label className="relative flex min-w-[220px] flex-1 items-center">
-          <SearchIcon className="absolute left-3 h-4 w-4 text-on-surface-variant" aria-hidden />
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Search by name, description, or stage…"
-            className="h-9 w-full rounded-md border border-outline-variant bg-surface pl-9 pr-3 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:shadow-focus-primary focus:outline-none"
-          />
-        </label>
-
-        <FilterSelect
-          label="Source"
-          value={sourceFilter}
-          onChange={(v) => {
-            setSourceFilter(v as SourceFilter);
-            setPage(1);
-          }}
-          options={[
-            { value: 'all', label: 'All sources' },
-            { value: 'override', label: 'Override' },
-            { value: 'repo', label: 'Repo' },
-            { value: 'built-in', label: 'Built-in' },
-          ]}
+      <div className="mb-4 rounded-lg border border-outline-variant bg-surface-container-low p-3">
+        <FilterBar
+          activeCount={activeFilterCount}
+          chips={filterChips}
+          search={
+            <label className="relative flex w-full items-center">
+              <SearchIcon className="absolute left-3 h-4 w-4 text-on-surface-variant" aria-hidden />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search by name, description, or stage…"
+                className="h-9 w-full rounded-md border border-outline-variant bg-surface pl-9 pr-3 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:shadow-focus-primary focus:outline-none"
+              />
+            </label>
+          }
+          filters={
+            <>
+              <FilterSelect
+                label="Source"
+                value={sourceFilter}
+                onChange={(v) => {
+                  setSourceFilter(v as SourceFilter);
+                  setPage(1);
+                }}
+                options={[
+                  { value: 'all', label: 'All sources' },
+                  { value: 'override', label: 'Override' },
+                  { value: 'repo', label: 'Repo' },
+                  { value: 'built-in', label: 'Built-in' },
+                ]}
+              />
+              <FilterSelect
+                label="Mode"
+                value={modeFilter}
+                onChange={(v) => {
+                  setModeFilter(v as ModeFilter);
+                  setPage(1);
+                }}
+                options={[
+                  { value: 'all', label: 'All modes' },
+                  { value: 'framed', label: 'Framed' },
+                  { value: 'inline', label: 'Inline' },
+                ]}
+              />
+              <FilterSelect
+                label="Trigger"
+                value={triggerFilter}
+                onChange={(v) => {
+                  setTriggerFilter(v as TriggerFilter);
+                  setPage(1);
+                }}
+                options={[
+                  { value: 'all', label: 'All triggers' },
+                  { value: 'on-sync', label: 'On-sync' },
+                  { value: 'cron', label: 'Cron' },
+                  { value: 'manual', label: 'Manual' },
+                ]}
+              />
+              <FilterSelect
+                label="Status"
+                value={statusFilter}
+                onChange={(v) => {
+                  setStatusFilter(v as StatusFilter);
+                  setPage(1);
+                }}
+                options={[
+                  { value: 'all', label: 'All statuses' },
+                  { value: 'enabled', label: 'Enabled' },
+                  { value: 'disabled', label: 'Disabled' },
+                ]}
+              />
+            </>
+          }
+          trailing={
+            filtersActive ? (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="h-9 rounded-md border border-outline-variant bg-surface px-3 text-sm text-on-surface-variant transition-colors hover:border-primary hover:text-on-surface"
+              >
+                Clear filters
+              </button>
+            ) : undefined
+          }
         />
-        <FilterSelect
-          label="Mode"
-          value={modeFilter}
-          onChange={(v) => {
-            setModeFilter(v as ModeFilter);
-            setPage(1);
-          }}
-          options={[
-            { value: 'all', label: 'All modes' },
-            { value: 'framed', label: 'Framed' },
-            { value: 'inline', label: 'Inline' },
-          ]}
-        />
-        <FilterSelect
-          label="Trigger"
-          value={triggerFilter}
-          onChange={(v) => {
-            setTriggerFilter(v as TriggerFilter);
-            setPage(1);
-          }}
-          options={[
-            { value: 'all', label: 'All triggers' },
-            { value: 'on-sync', label: 'On-sync' },
-            { value: 'cron', label: 'Cron' },
-            { value: 'manual', label: 'Manual' },
-          ]}
-        />
-        <FilterSelect
-          label="Status"
-          value={statusFilter}
-          onChange={(v) => {
-            setStatusFilter(v as StatusFilter);
-            setPage(1);
-          }}
-          options={[
-            { value: 'all', label: 'All statuses' },
-            { value: 'enabled', label: 'Enabled' },
-            { value: 'disabled', label: 'Disabled' },
-          ]}
-        />
-
-        {filtersActive && (
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="h-9 rounded-md border border-outline-variant bg-surface px-3 text-sm text-on-surface-variant transition-colors hover:border-primary hover:text-on-surface"
-          >
-            Clear filters
-          </button>
-        )}
       </div>
 
-      {/* Skills table */}
-      <div className="overflow-hidden rounded-lg border border-outline-variant bg-surface-container-low">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead>
+      {/* Skills table / cards */}
+      <ResponsiveListContainer
+        table={
+          <div className="overflow-hidden rounded-lg border border-outline-variant bg-surface-container-low">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
               <tr className="bg-surface-container">
                 <SortableTh sortKey="name"    sortDir={sortDir} active={sortKey === 'name'}    onClick={handleSort}>NAME</SortableTh>
                 <SortableTh sortKey="source"  sortDir={sortDir} active={sortKey === 'source'}  onClick={handleSort}>SOURCE</SortableTh>
@@ -313,54 +354,90 @@ export function SkillsView({ rows, overridesCount, commitSha, fetchedAt, readOnl
                     )}
                   </td>
                 </tr>
-              ) : (
-                pageRows.map((row) => <SkillTableRow key={row.name} row={row} />)
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Footer / pagination */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-outline-variant bg-surface-container-low px-6 py-4 text-sm text-on-surface-variant">
-          <div className="flex flex-wrap items-center gap-3">
-            <span>
-              Showing {pageRows.length === 0 ? 0 : (page - 1) * pageSize + 1}
-              {pageRows.length > 0 && <>–{(page - 1) * pageSize + pageRows.length}</>} of {totalFiltered}
-              {filtersActive && <> filtered (of {totalSkills})</>} skill{totalFiltered === 1 ? '' : 's'}
-            </span>
-            <span className="hidden h-4 w-px bg-outline-variant sm:inline-block" aria-hidden />
-            <label className="flex items-center gap-2">
-              <span className="font-display text-[11px] font-semibold uppercase tracking-[0.05em] text-on-surface-variant">
-                Per page
-              </span>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value) as PageSize);
-                  setPage(1);
-                }}
-                className="h-8 rounded-md border border-outline-variant bg-surface px-2 text-sm text-on-surface focus:border-primary focus:outline-none"
-              >
-                {PAGE_SIZE_OPTIONS.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {commitSha && (
-              <span className="hidden lg:inline">
-                · <code className="font-mono text-on-surface">{commitSha.slice(0, 7)}</code>
-              </span>
-            )}
-            {fetchedAt && (
-              <span className="hidden xl:inline">· refreshed {new Date(fetchedAt).toLocaleString()}</span>
-            )}
+                  ) : (
+                    pageRows.map((row) => <SkillTableRow key={row.name} row={row} />)
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-          {totalPages > 1 && (
-            <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+        }
+        cards={
+          pageRows.length === 0 ? (
+            <div className="rounded-lg border border-outline-variant bg-surface-container-low px-4 py-12 text-center text-sm text-on-surface-variant">
+              {totalSkills === 0 ? (
+                <>
+                  No skills found in <code className="font-mono text-on-surface">.ai/skills/</code>.{' '}
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      onClick={handleRefresh}
+                      className="underline underline-offset-2 hover:text-on-surface"
+                    >
+                      Sync from repo
+                    </button>
+                  )}{' '}
+                  once your repo has skill manifests.
+                </>
+              ) : (
+                <>
+                  No skills match these filters.{' '}
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="underline underline-offset-2 hover:text-on-surface"
+                  >
+                    Clear filters
+                  </button>
+                </>
+              )}
+            </div>
+          ) : (
+            pageRows.map((row) => <SkillCard key={row.name} row={row} />)
+          )
+        }
+      />
+
+      {/* Footer / pagination */}
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-outline-variant bg-surface-container-low px-4 py-3 text-sm text-on-surface-variant sm:px-6 sm:py-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <span>
+            Showing {pageRows.length === 0 ? 0 : (page - 1) * pageSize + 1}
+            {pageRows.length > 0 && <>–{(page - 1) * pageSize + pageRows.length}</>} of {totalFiltered}
+            {filtersActive && <> filtered (of {totalSkills})</>} skill{totalFiltered === 1 ? '' : 's'}
+          </span>
+          <span className="hidden h-4 w-px bg-outline-variant sm:inline-block" aria-hidden />
+          <label className="flex items-center gap-2">
+            <span className="font-display text-[11px] font-semibold uppercase tracking-[0.05em] text-on-surface-variant">
+              Per page
+            </span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value) as PageSize);
+                setPage(1);
+              }}
+              className="h-8 rounded-md border border-outline-variant bg-surface px-2 text-sm text-on-surface focus:border-primary focus:outline-none"
+            >
+              {PAGE_SIZE_OPTIONS.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+          {commitSha && (
+            <span className="hidden lg:inline">
+              · <code className="font-mono text-on-surface">{commitSha.slice(0, 7)}</code>
+            </span>
+          )}
+          {fetchedAt && (
+            <span className="hidden xl:inline">· refreshed {new Date(fetchedAt).toLocaleString()}</span>
           )}
         </div>
+        {totalPages > 1 && (
+          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+        )}
       </div>
 
       {/* Info callout cards */}
@@ -388,7 +465,7 @@ export function SkillsView({ rows, overridesCount, commitSha, fetchedAt, readOnl
           }
         />
       </div>
-    </div>
+    </PageContainer>
   );
 }
 
@@ -474,7 +551,7 @@ function FilterSelect<T extends string>({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value as T)}
-        className="h-9 min-w-[7.5rem] rounded-md border border-outline-variant bg-surface px-2 text-sm text-on-surface focus:border-primary focus:outline-none"
+        className="h-9 w-full rounded-md border border-outline-variant bg-surface px-2 text-sm text-on-surface focus:border-primary focus:outline-none sm:w-auto sm:min-w-[7.5rem]"
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>
@@ -529,16 +606,165 @@ function SkillTableRow({ row }: { row: SkillRow }) {
       </td>
       <td className="px-6 py-4 align-middle">
         <div className="flex items-center justify-end pr-2">
-          <button
-            type="button"
-            aria-label={`${row.name} actions`}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
-          >
-            <MoreVerticalIcon className="h-4 w-4" />
-          </button>
+          <SkillRowMenu name={row.name} />
         </div>
       </td>
     </tr>
+  );
+}
+
+/**
+ * Row actions for a skill. Today the menu only exposes "Open details" + "Copy
+ * name" — the skills list has no per-skill server mutations yet (overrides live
+ * on the detail page). On desktop it renders a portal popover; on coarse
+ * pointers it opens a bottom ActionSheet (spec §7 / P4). Trigger ≥44px on touch.
+ */
+function SkillRowMenu({ name }: { name: string }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [coarse, setCoarse] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const popoverRef = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(pointer: coarse)');
+    const update = () => setCoarse(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
+  useEffect(() => {
+    if (!open || coarse) return;
+    function onDocClick(e: MouseEvent) {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (popoverRef.current?.contains(target)) return;
+      if (triggerRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    }
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open, coarse]);
+
+  const href = `/skills/${encodeURIComponent(name)}`;
+  const doCopyName = () => {
+    void navigator.clipboard.writeText(name).then(
+      () => undefined,
+      () => alert('Could not copy to clipboard'),
+    );
+  };
+
+  const sheetItems: ActionSheetItem[] = [
+    { label: 'Open details', onSelect: () => router.push(href) },
+    { label: 'Copy name', onSelect: doCopyName },
+  ];
+
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        aria-label={`${name} actions`}
+        onClick={() => setOpen((v) => !v)}
+        className="flex min-h-11 min-w-11 items-center justify-center rounded-md text-on-surface-variant hover:bg-surface-container hover:text-on-surface lg:h-7 lg:w-7 lg:min-h-0 lg:min-w-0"
+      >
+        <MoreVerticalIcon className="h-4 w-4" />
+      </button>
+      {coarse ? (
+        <ActionSheet open={open} onClose={() => setOpen(false)} items={sheetItems} title={name} />
+      ) : (
+        <RowMenuPortal
+          open={open}
+          triggerRef={triggerRef}
+          popoverRef={popoverRef}
+          onClose={() => setOpen(false)}
+          id={menuId}
+          ariaLabel={`${name} actions menu`}
+        >
+          <Link
+            href={href}
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="block w-full px-3 py-2 text-left text-sm text-on-surface transition-colors hover:bg-surface-container focus:bg-surface-container focus:outline-none"
+          >
+            Open details
+          </Link>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              doCopyName();
+            }}
+            className="block w-full px-3 py-2 text-left text-sm text-on-surface transition-colors hover:bg-surface-container focus:bg-surface-container focus:outline-none"
+          >
+            Copy name
+          </button>
+        </RowMenuPortal>
+      )}
+    </>
+  );
+}
+
+function SkillCard({ row }: { row: SkillRow }) {
+  const href = `/skills/${encodeURIComponent(row.name)}`;
+  return (
+    <EntityCard
+      title={
+        <Link href={href} className="flex flex-wrap items-center gap-2 text-on-surface hover:text-primary">
+          {row.source === 'override' && <span className="text-tertiary" aria-hidden>*</span>}
+          <span className="font-medium">{row.name}</span>
+        </Link>
+      }
+      badge={
+        <span className="inline-flex items-center gap-1.5 text-on-surface">
+          <StatusDotIcon className="h-2.5 w-2.5" tone={row.status === 'enabled' ? 'enabled' : 'disabled'} />
+          <span className="font-mono text-xs">{row.status}</span>
+        </span>
+      }
+      actions={
+        <CardActions>
+          <SkillRowMenu name={row.name} />
+        </CardActions>
+      }
+    >
+      {row.description && (
+        <div className="text-xs text-on-surface-variant">{row.description}</div>
+      )}
+      <MetaRow>
+        <MetaItem label="Source">
+          <SourceBadge source={row.source} />
+        </MetaItem>
+        <MetaItem label="Mode">
+          <span className="font-mono text-xs">{row.mode}</span>
+        </MetaItem>
+      </MetaRow>
+      <MetaRow>
+        <MetaItem label="Trigger">
+          <span className="font-mono text-xs">{row.trigger}</span>
+        </MetaItem>
+        <MetaItem label="Last run">
+          <span className="font-mono text-xs">{formatLastRun(row.lastRunIso)}</span>
+        </MetaItem>
+      </MetaRow>
+    </EntityCard>
   );
 }
 
@@ -604,29 +830,45 @@ function Pagination({
 }) {
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
   return (
-    <div className="flex items-center gap-1">
-      <PagerButton onClick={() => onChange(Math.max(1, page - 1))} disabled={page === 1} aria-label="Previous page">
-        <ChevronLeftIcon className="h-4 w-4" />
-      </PagerButton>
-      {pages.map((p) => (
-        <button
-          key={p}
-          type="button"
-          onClick={() => onChange(p)}
-          className={cn(
-            'h-8 min-w-[2rem] rounded-md border px-2 text-sm transition-colors',
-            p === page
-              ? 'border-primary/40 bg-surface-container text-on-surface'
-              : 'border-outline-variant bg-surface-container-low text-on-surface-variant hover:border-primary hover:text-on-surface',
-          )}
-        >
-          {p}
-        </button>
-      ))}
-      <PagerButton onClick={() => onChange(Math.min(totalPages, page + 1))} disabled={page === totalPages} aria-label="Next page">
-        <ChevronRightIcon className="h-4 w-4" />
-      </PagerButton>
-    </div>
+    <>
+      {/* Compact phone variant: Prev · "N / M" · Next. */}
+      <div className="flex items-center gap-2 sm:hidden">
+        <PagerButton onClick={() => onChange(Math.max(1, page - 1))} disabled={page === 1} aria-label="Previous page">
+          <ChevronLeftIcon className="h-4 w-4" />
+        </PagerButton>
+        <span className="text-sm tabular-nums text-on-surface-variant">
+          {page} / {totalPages}
+        </span>
+        <PagerButton onClick={() => onChange(Math.min(totalPages, page + 1))} disabled={page === totalPages} aria-label="Next page">
+          <ChevronRightIcon className="h-4 w-4" />
+        </PagerButton>
+      </div>
+
+      {/* Full numeric variant: sm+. */}
+      <div className="hidden items-center gap-1 sm:flex">
+        <PagerButton onClick={() => onChange(Math.max(1, page - 1))} disabled={page === 1} aria-label="Previous page">
+          <ChevronLeftIcon className="h-4 w-4" />
+        </PagerButton>
+        {pages.map((p) => (
+          <button
+            key={p}
+            type="button"
+            onClick={() => onChange(p)}
+            className={cn(
+              'h-8 min-w-[2rem] rounded-md border px-2 text-sm transition-colors',
+              p === page
+                ? 'border-primary/40 bg-surface-container text-on-surface'
+                : 'border-outline-variant bg-surface-container-low text-on-surface-variant hover:border-primary hover:text-on-surface',
+            )}
+          >
+            {p}
+          </button>
+        ))}
+        <PagerButton onClick={() => onChange(Math.min(totalPages, page + 1))} disabled={page === totalPages} aria-label="Next page">
+          <ChevronRightIcon className="h-4 w-4" />
+        </PagerButton>
+      </div>
+    </>
   );
 }
 
@@ -641,7 +883,7 @@ function PagerButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex h-8 w-8 items-center justify-center rounded-md border border-outline-variant bg-surface-container-low text-on-surface-variant transition-colors hover:border-primary hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-40"
+      className="flex min-h-11 min-w-11 items-center justify-center rounded-md border border-outline-variant bg-surface-container-low text-on-surface-variant transition-colors hover:border-primary hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-40 lg:h-8 lg:w-8 lg:min-h-0 lg:min-w-0"
       {...rest}
     >
       {children}

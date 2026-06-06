@@ -13,6 +13,10 @@ import {
   StatusDotIcon,
 } from '@/components/icons';
 import { RowMenuPortal } from '@/components/row-menu-portal';
+import { PageContainer } from '@/components/ui/page-container';
+import { FilterBar } from '@/components/ui/filter-bar';
+import { ActionSheet, type ActionSheetItem } from '@/components/ui/action-sheet';
+import { useToast } from '@/components/ui/use-toast';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
 import type {
   DecisionItem,
@@ -123,6 +127,7 @@ export function InboxView({
   actionNames,
 }: InboxViewProps) {
   const router = useRouter();
+  const { toast } = useToast();
   const [, startTransition] = useTransition();
   const [items, setItems] = useState<InboxItem[]>(initialItems);
 
@@ -187,7 +192,6 @@ export function InboxView({
   }, [skillFilters, skillFilter]);
   const [typeFilter, setTypeFilter] = useState<(typeof TYPE_FILTERS)[number]>(TYPE_FILTERS[0]);
   const [syncedAt, setSyncedAt] = useState<number>(initialSyncedAt);
-  const [toast, setToast] = useState<string | null>(null);
 
   // The sync now runs in the background (see the global sync indicator); when
   // it finishes it triggers a server refresh, which re-supplies a fresh
@@ -279,12 +283,12 @@ export function InboxView({
       });
       startTransition(async () => {
         const result = await acceptDecision(findingId);
-        if (!result.ok) setToast(`Accept failed: ${result.error ?? 'unknown'}`);
-        else setToast('Accepted finding');
+        if (!result.ok) toast(`Accept failed: ${result.error ?? 'unknown'}`, { tone: 'error' });
+        else toast('Accepted finding', { tone: 'success' });
         router.refresh();
       });
     },
-    [router],
+    [router, toast],
   );
 
   const dismissOne = useCallback(
@@ -297,12 +301,12 @@ export function InboxView({
       });
       startTransition(async () => {
         const result = await dismissDecision(findingId);
-        if (!result.ok) setToast(`Dismiss failed: ${result.error ?? 'unknown'}`);
-        else setToast('Dismissed finding');
+        if (!result.ok) toast(`Dismiss failed: ${result.error ?? 'unknown'}`, { tone: 'error' });
+        else toast('Dismissed finding');
         router.refresh();
       });
     },
-    [router],
+    [router, toast],
   );
 
   const snoozeOne = useCallback(
@@ -317,12 +321,12 @@ export function InboxView({
       });
       startTransition(async () => {
         const result = await snoozeDecision(findingId, hours);
-        if (!result.ok) setToast(`Snooze failed: ${result.error ?? 'unknown'}`);
-        else setToast(`Snoozed for ${hours}h`);
+        if (!result.ok) toast(`Snooze failed: ${result.error ?? 'unknown'}`, { tone: 'error' });
+        else toast(`Snoozed for ${hours}h`);
         router.refresh();
       });
     },
-    [router],
+    [router, toast],
   );
 
   // Single-row items (PR / paused / failed) — the buttons today are no-op
@@ -331,9 +335,9 @@ export function InboxView({
   const removeItem = useCallback(
     (itemId: string, verb: string) => {
       setItems((prev) => prev.filter((it) => it.id !== itemId));
-      setToast(verb);
+      toast(verb);
     },
-    [],
+    [toast],
   );
 
   const bulkAccept = useCallback(() => {
@@ -345,13 +349,13 @@ export function InboxView({
       const result = await acceptDecisions(ids);
       if (!result.ok) {
         const failed = result.results?.filter((r) => !r.ok).length ?? ids.length;
-        setToast(`${ids.length - failed}/${ids.length} accepted · ${failed} failed`);
+        toast(`${ids.length - failed}/${ids.length} accepted · ${failed} failed`, { tone: 'error' });
       } else {
-        setToast(`Accepted ${ids.length} finding${ids.length === 1 ? '' : 's'}`);
+        toast(`Accepted ${ids.length} finding${ids.length === 1 ? '' : 's'}`, { tone: 'success' });
       }
       router.refresh();
     });
-  }, [selectedFindings, router]);
+  }, [selectedFindings, router, toast]);
 
   const bulkDismiss = useCallback(() => {
     const ids = Array.from(selectedFindings);
@@ -368,11 +372,11 @@ export function InboxView({
     setSelectedFindings(new Set());
     startTransition(async () => {
       const result = await dismissDecisions(ids);
-      if (!result.ok) setToast(`Dismiss failed: ${result.error ?? 'unknown'}`);
-      else setToast(`Dismissed ${ids.length} finding${ids.length === 1 ? '' : 's'}`);
+      if (!result.ok) toast(`Dismiss failed: ${result.error ?? 'unknown'}`, { tone: 'error' });
+      else toast(`Dismissed ${ids.length} finding${ids.length === 1 ? '' : 's'}`);
       router.refresh();
     });
-  }, [selectedFindings, router]);
+  }, [selectedFindings, router, toast]);
 
   // ── keyboard: Cmd+A / Ctrl+A selects all visible findings ──
   useEffect(() => {
@@ -390,34 +394,69 @@ export function InboxView({
     return () => window.removeEventListener('keydown', onKey);
   }, [selectAllVisible, clearSelection]);
 
-  // ── toast auto-dismiss ──
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 1800);
-    return () => clearTimeout(t);
-  }, [toast]);
-
   const pendingTotal = counts.decisions;
   const hasAny = visibleItems.length > 0;
   const allFilteredOut = !hasAny && items.length > 0;
 
+  // Active secondary-filter count → badge on the phone "Filters" button. The
+  // confidence default is "> 80%" (index 2), so only count it when changed.
+  const activeFilterCount =
+    (skillFilter.id !== 'all' ? 1 : 0) +
+    (confidenceFilter.id !== CONFIDENCE_FILTERS[2].id ? 1 : 0) +
+    (typeFilter.id !== 'all' ? 1 : 0);
+
+  const filterControls = (
+    <>
+      <FilterDropdown
+        label="Skill"
+        value={skillFilter.label}
+        options={skillFilters}
+        selectedId={skillFilter.id}
+        onSelect={(opt) => setSkillFilter(opt)}
+      />
+      <FilterDropdown
+        label="Confidence"
+        value={confidenceFilter.label}
+        options={CONFIDENCE_FILTERS.map((c) => ({ id: c.id, label: c.label }))}
+        selectedId={confidenceFilter.id}
+        onSelect={(opt) => {
+          const found = CONFIDENCE_FILTERS.find((c) => c.id === opt.id);
+          if (found) setConfidenceFilter(found);
+        }}
+      />
+      <FilterDropdown
+        label="Type"
+        value={typeFilter.label}
+        options={TYPE_FILTERS.map((t) => ({ id: t.id, label: t.label }))}
+        selectedId={typeFilter.id}
+        onSelect={(opt) => {
+          const found = TYPE_FILTERS.find((t) => t.id === opt.id);
+          if (found) setTypeFilter(found);
+        }}
+      />
+    </>
+  );
+
   return (
-    <div className="relative mx-auto max-w-[1080px] px-8 py-6 pb-32">
+    <PageContainer
+      max="max-w-[1080px]"
+      className="relative pb-[calc(8rem+env(safe-area-inset-bottom))]"
+    >
       {/* ── HEADER ── */}
       <header className="mb-6">
         <div className="flex items-start justify-between gap-6">
           <div>
-            <h1 className="font-display text-[28px] font-semibold leading-tight tracking-tight text-on-surface">
+            <h1 className="font-display text-xl font-semibold leading-tight tracking-tight text-on-surface sm:text-2xl lg:text-[28px]">
               Inbox
             </h1>
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-on-surface-variant">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 font-mono text-[12px] text-primary">
+            <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-on-surface-variant sm:flex sm:flex-wrap sm:items-center sm:gap-x-4 sm:gap-y-1.5">
+              <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 font-mono text-[12px] text-primary">
                 {pendingTotal} pending decisions
               </span>
               <Metric value={counts.prs} label="PRs to review" tone={counts.prs > 0 ? 'accent' : 'muted'} />
               <Metric value={counts.paused} label="paused" tone={counts.paused > 0 ? 'warn' : 'muted'} />
               <Metric value={counts.failed} label="failed" tone={counts.failed > 0 ? 'danger' : 'muted'} />
-              <span className="text-xs text-outline">
+              <span className="col-span-2 text-xs text-outline sm:col-span-1">
                 Queue synced <RelativeTime ts={syncedAt} />
               </span>
             </div>
@@ -426,39 +465,18 @@ export function InboxView({
       </header>
 
       {/* ── FILTER ROW ── */}
-      <div className="mb-5 flex flex-wrap items-center gap-2 border-b border-outline-variant pb-4">
-        <FilterDropdown
-          label="Skill"
-          value={skillFilter.label}
-          options={skillFilters}
-          selectedId={skillFilter.id}
-          onSelect={(opt) => setSkillFilter(opt)}
+      <div className="mb-5 border-b border-outline-variant pb-4">
+        <FilterBar
+          filters={filterControls}
+          activeCount={activeFilterCount}
+          trailing={
+            <div className="hidden items-center gap-1.5 text-xs text-outline md:flex">
+              <Kbd>⌘</Kbd>
+              <Kbd>A</Kbd>
+              <span>to select all visible</span>
+            </div>
+          }
         />
-        <FilterDropdown
-          label="Confidence"
-          value={confidenceFilter.label}
-          options={CONFIDENCE_FILTERS.map((c) => ({ id: c.id, label: c.label }))}
-          selectedId={confidenceFilter.id}
-          onSelect={(opt) => {
-            const found = CONFIDENCE_FILTERS.find((c) => c.id === opt.id);
-            if (found) setConfidenceFilter(found);
-          }}
-        />
-        <FilterDropdown
-          label="Type"
-          value={typeFilter.label}
-          options={TYPE_FILTERS.map((t) => ({ id: t.id, label: t.label }))}
-          selectedId={typeFilter.id}
-          onSelect={(opt) => {
-            const found = TYPE_FILTERS.find((t) => t.id === opt.id);
-            if (found) setTypeFilter(found);
-          }}
-        />
-        <div className="ml-auto hidden items-center gap-1.5 text-xs text-outline md:flex">
-          <Kbd>⌘</Kbd>
-          <Kbd>A</Kbd>
-          <span>to select all visible</span>
-        </div>
       </div>
 
       {/* ── FEED ── */}
@@ -510,9 +528,12 @@ export function InboxView({
       )}
 
       {/* ── BULK ACTION BAR ── */}
+      {/* Sits above the BottomTabBar on phone (bottom = bar height + safe area)
+          and at the desktop bottom-6 on sm+. z-sticky keeps it above page
+          content while staying below the nav drawer / sheets / toasts. */}
       {selectedFindings.size > 0 && (
-        <div className="fixed inset-x-0 bottom-6 z-30 flex justify-center px-4">
-          <div className="flex items-center gap-3 rounded-xl border border-primary/40 bg-surface-container-high px-5 py-3 shadow-ambient">
+        <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-sticky flex justify-center px-4 sm:bottom-6">
+          <div className="flex w-full max-w-[480px] flex-wrap items-center gap-2 rounded-xl border border-primary/40 bg-surface-container-high px-4 py-3 shadow-ambient sm:w-auto sm:max-w-none sm:flex-nowrap sm:gap-3 sm:px-5">
             <div className="flex items-center gap-2 text-sm">
               <span className="font-mono text-primary">{selectedFindings.size}</span>
               <span className="text-on-surface-variant">selected</span>
@@ -524,40 +545,33 @@ export function InboxView({
                 Deselect all
               </button>
             </div>
-            <div className="mx-2 h-5 w-px bg-outline-variant" />
+            <div className="mx-2 hidden h-5 w-px bg-outline-variant sm:block" />
             <button
               type="button"
               onClick={bulkAccept}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-on hover:bg-primary-container"
+              className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-on hover:bg-primary-container sm:min-h-0 sm:flex-none"
             >
               <CheckIcon className="h-3.5 w-3.5" />
               Accept all
             </button>
             <button
               type="button"
-              onClick={() => setToast('Re-label sent to triage')}
-              className="rounded-md border border-outline-variant px-3 py-1.5 text-xs text-on-surface-variant hover:border-outline hover:text-on-surface"
+              onClick={() => toast('Re-label sent to triage')}
+              className="min-h-11 flex-1 rounded-md border border-outline-variant px-3 py-1.5 text-xs text-on-surface-variant hover:border-outline hover:text-on-surface sm:min-h-0 sm:flex-none"
             >
               Re-label
             </button>
             <button
               type="button"
               onClick={bulkDismiss}
-              className="rounded-md border border-outline-variant px-3 py-1.5 text-xs text-on-surface-variant hover:border-error/40 hover:text-error"
+              className="min-h-11 flex-1 rounded-md border border-outline-variant px-3 py-1.5 text-xs text-on-surface-variant hover:border-error/40 hover:text-error sm:min-h-0 sm:flex-none"
             >
               Dismiss
             </button>
           </div>
         </div>
       )}
-
-      {/* ── TOAST ── */}
-      {toast && (
-        <div className="pointer-events-none fixed bottom-24 left-1/2 z-40 -translate-x-1/2 rounded-md border border-outline-variant bg-surface-container-high px-3 py-1.5 text-xs text-on-surface shadow-ambient">
-          {toast}
-        </div>
-      )}
-    </div>
+    </PageContainer>
   );
 }
 
@@ -648,47 +662,60 @@ function FindingRow({
   return (
     <div
       className={cn(
-        'group/row flex items-center gap-3 px-4 py-3 transition-colors',
+        // Phone: two-line stack (skill+body, then confidence+actions). lg+:
+        // restore the original single horizontal row.
+        'group/row flex items-start gap-3 px-4 py-3 transition-colors lg:items-center',
         selected ? 'bg-primary/[0.06]' : 'hover:bg-surface-container/60',
       )}
     >
       <Checkbox checked={selected} onChange={onToggle} ariaLabel={`Select ${finding.skill} finding`} />
-      <div className="flex items-center gap-2 shrink-0">
-        <SparkleSmallIcon className={cn('h-3.5 w-3.5', style.tag)} />
-        <span className={cn('font-mono text-[10.5px] font-semibold uppercase tracking-wider', style.tag)}>
-          {finding.skill}
-        </span>
-      </div>
-      <div className="flex-1 truncate text-sm text-on-surface-variant">
-        <FindingBodyText finding={finding} />
-      </div>
-      <span
-        className={cn(
-          'shrink-0 rounded border px-1.5 py-0.5 font-mono text-[10.5px] font-semibold tracking-wider',
-          style.pill,
-        )}
-      >
-        {finding.confidence}%
-      </span>
-      <div className="flex items-center gap-1 shrink-0 opacity-70 transition-opacity group-hover/row:opacity-100">
-        <button
-          type="button"
-          onClick={onAccept}
-          className="inline-flex items-center gap-1 rounded-md border border-outline-variant bg-surface-container px-2 py-1 text-xs text-on-surface-variant hover:border-emerald-400/40 hover:text-emerald-300"
-          aria-label="Accept finding"
-        >
-          <CheckIcon className="h-3 w-3" />
-          Accept
-        </button>
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="inline-flex items-center justify-center rounded-md border border-outline-variant bg-surface-container px-2 py-1 text-xs text-outline hover:border-error/40 hover:text-error"
-          aria-label="Dismiss finding"
-        >
-          ✕
-        </button>
-        <FindingRowMenu onSnooze={onSnooze} />
+      {/* Content column: line 1 = skill tag + body; line 2 = confidence + actions.
+          On lg+ the children flow back into the parent's single row. */}
+      <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
+        {/* Line 1 */}
+        <div className="flex min-w-0 items-start gap-2 lg:flex-1 lg:items-center">
+          <div className="flex shrink-0 items-center gap-2 pt-0.5 lg:pt-0">
+            <SparkleSmallIcon className={cn('h-3.5 w-3.5', style.tag)} />
+            <span className={cn('font-mono text-[11px] font-semibold uppercase tracking-wider lg:text-[10.5px]', style.tag)}>
+              {finding.skill}
+            </span>
+          </div>
+          <div className="min-w-0 flex-1 truncate text-sm text-on-surface-variant">
+            <FindingBodyText finding={finding} />
+          </div>
+        </div>
+        {/* Line 2 (inline on lg+): confidence pill + actions. */}
+        <div className="flex items-center gap-2 lg:gap-1">
+          <span
+            className={cn(
+              'shrink-0 rounded border px-1.5 py-0.5 font-mono text-[11px] font-semibold tracking-wider lg:text-[10.5px]',
+              style.pill,
+            )}
+          >
+            {finding.confidence}%
+          </span>
+          {/* Actions: always visible/tappable on touch; hover-reveal only at lg+. */}
+          <div className="ml-auto flex shrink-0 items-center gap-1 transition-opacity lg:opacity-70 lg:group-hover/row:opacity-100">
+            <button
+              type="button"
+              onClick={onAccept}
+              className="inline-flex min-h-11 items-center gap-1 rounded-md border border-outline-variant bg-surface-container px-2.5 py-1 text-xs text-on-surface-variant hover:border-emerald-400/40 hover:text-emerald-300 lg:min-h-0"
+              aria-label="Accept finding"
+            >
+              <CheckIcon className="h-3 w-3" />
+              Accept
+            </button>
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md border border-outline-variant bg-surface-container px-2.5 py-1 text-xs text-outline hover:border-error/40 hover:text-error lg:min-h-0 lg:min-w-0"
+              aria-label="Dismiss finding"
+            >
+              ✕
+            </button>
+            <FindingRowMenu onSnooze={onSnooze} />
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -699,12 +726,24 @@ function FindingRow({
 // menu items without re-wiring the trigger or portal positioning.
 function FindingRowMenu({ onSnooze }: { onSnooze: () => void }) {
   const [open, setOpen] = useState(false);
+  const [coarse, setCoarse] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
 
+  // Coarse pointer (touch) → open a bottom ActionSheet instead of the 224px
+  // portal popover anchored to a tiny kebab (matches issue/pr row menus).
   useEffect(() => {
-    if (!open) return;
+    if (typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(pointer: coarse)');
+    const update = () => setCoarse(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
+  useEffect(() => {
+    if (!open || coarse) return;
     function onDocClick(e: MouseEvent) {
       const target = e.target as Node | null;
       if (!target) return;
@@ -725,7 +764,12 @@ function FindingRowMenu({ onSnooze }: { onSnooze: () => void }) {
       document.removeEventListener('mousedown', onDocClick);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open]);
+  }, [open, coarse]);
+
+  const sheetItems = useMemo<ActionSheetItem[]>(
+    () => [{ label: 'Snooze 24h', onSelect: onSnooze }],
+    [onSnooze],
+  );
 
   return (
     <>
@@ -737,30 +781,39 @@ function FindingRowMenu({ onSnooze }: { onSnooze: () => void }) {
         aria-controls={menuId}
         aria-label="Finding actions"
         onClick={() => setOpen((v) => !v)}
-        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-outline hover:bg-surface-container hover:text-on-surface-variant"
+        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md text-outline hover:bg-surface-container hover:text-on-surface-variant lg:h-7 lg:w-7 lg:min-h-0 lg:min-w-0"
       >
         <MoreVerticalIcon className="h-4 w-4" />
       </button>
-      <RowMenuPortal
-        open={open}
-        triggerRef={triggerRef}
-        popoverRef={popoverRef}
-        onClose={() => setOpen(false)}
-        id={menuId}
-        ariaLabel="Finding actions menu"
-      >
-        <button
-          type="button"
-          role="menuitem"
-          onClick={() => {
-            setOpen(false);
-            onSnooze();
-          }}
-          className="block w-full px-3 py-2 text-left text-sm text-on-surface transition-colors hover:bg-surface-container focus:bg-surface-container focus:outline-none"
+      {coarse ? (
+        <ActionSheet
+          open={open}
+          onClose={() => setOpen(false)}
+          items={sheetItems}
+          title="Finding actions"
+        />
+      ) : (
+        <RowMenuPortal
+          open={open}
+          triggerRef={triggerRef}
+          popoverRef={popoverRef}
+          onClose={() => setOpen(false)}
+          id={menuId}
+          ariaLabel="Finding actions menu"
         >
-          Snooze 24h
-        </button>
-      </RowMenuPortal>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onSnooze();
+            }}
+            className="block w-full px-3 py-2 text-left text-sm text-on-surface transition-colors hover:bg-surface-container focus:bg-surface-container focus:outline-none"
+          >
+            Snooze 24h
+          </button>
+        </RowMenuPortal>
+      )}
     </>
   );
 }
@@ -951,8 +1004,11 @@ function Checkbox({
       aria-checked={indeterminate ? 'mixed' : checked}
       aria-label={ariaLabel}
       onClick={onChange}
+      // Visual box stays 16px; a ≥44px touch target is added via the `before`
+      // overlay on phone (reset to the box itself on lg+ so desktop is unchanged).
       className={cn(
-        'flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors',
+        'relative flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors',
+        "before:absolute before:left-1/2 before:top-1/2 before:h-11 before:w-11 before:-translate-x-1/2 before:-translate-y-1/2 before:content-[''] lg:before:hidden",
         checked || indeterminate
           ? 'border-primary bg-primary text-primary-on'
           : 'border-outline-variant bg-transparent hover:border-outline',

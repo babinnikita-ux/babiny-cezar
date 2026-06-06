@@ -12,6 +12,15 @@ import {
   ChevronRightIcon,
 } from '@/components/icons';
 import { ActionRowMenu } from '@/components/action-row-menu';
+import { PageContainer } from '@/components/ui/page-container';
+import { FilterBar, type FilterChip } from '@/components/ui/filter-bar';
+import {
+  ResponsiveListContainer,
+  EntityCard,
+  MetaRow,
+  MetaItem,
+  CardActions,
+} from '@/components/ui/data-card-list';
 import { seedDefaultsForCurrentWorkspace } from './actions-page-actions';
 
 export interface ActionRow {
@@ -114,6 +123,23 @@ export function ActionsView({ rows, readOnly, autoTriageActionId }: ActionsViewP
     triggerFilter !== 'all' ||
     statusFilter !== 'all';
 
+  // Secondary (non-search) filter count for the phone "Filters · N" badge.
+  const activeFilterCount =
+    (kindFilter !== 'all' ? 1 : 0) +
+    (targetFilter !== 'all' ? 1 : 0) +
+    (triggerFilter !== 'all' ? 1 : 0) +
+    (statusFilter !== 'all' ? 1 : 0);
+
+  const filterChips: FilterChip[] = [];
+  if (targetFilter !== 'all')
+    filterChips.push({ key: 'target', label: `Target: ${targetFilter}`, onClear: () => { setTargetFilter('all'); setPage(1); } });
+  if (kindFilter !== 'all')
+    filterChips.push({ key: 'kind', label: `Kind: ${kindFilter}`, onClear: () => { setKindFilter('all'); setPage(1); } });
+  if (triggerFilter !== 'all')
+    filterChips.push({ key: 'trigger', label: `Trigger: ${triggerFilter}`, onClear: () => { setTriggerFilter('all'); setPage(1); } });
+  if (statusFilter !== 'all')
+    filterChips.push({ key: 'status', label: `Status: ${statusFilter}`, onClear: () => { setStatusFilter('all'); setPage(1); } });
+
   function handleSeed() {
     setSeedState(null);
     startSeed(async () => {
@@ -141,7 +167,7 @@ export function ActionsView({ rows, readOnly, autoTriageActionId }: ActionsViewP
   }
 
   return (
-    <div className="px-6 py-6">
+    <PageContainer>
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-[24px] font-semibold leading-tight tracking-tight text-on-surface">Actions</h1>
@@ -191,88 +217,100 @@ export function ActionsView({ rows, readOnly, autoTriageActionId }: ActionsViewP
         <StatCard label="USER" value={String(userCount)} tone="default" />
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-outline-variant bg-surface-container-low p-3">
-        <label className="relative flex min-w-[220px] flex-1 items-center">
-          <SearchIcon className="absolute left-3 h-4 w-4 text-on-surface-variant" aria-hidden />
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
-            placeholder="Search by name, description, or trigger…"
-            className="h-9 w-full rounded-md border border-outline-variant bg-surface pl-9 pr-3 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:shadow-focus-primary focus:outline-none"
-          />
-        </label>
-
-        <FilterSelect
-          label="Target"
-          value={targetFilter}
-          onChange={(v) => {
-            setTargetFilter(v as TargetFilter);
-            setPage(1);
-          }}
-          options={[
-            { value: 'all', label: 'All targets' },
-            { value: 'issue', label: 'Issue' },
-            { value: 'pr', label: 'PR' },
-          ]}
+      <div className="mb-4 rounded-lg border border-outline-variant bg-surface-container-low p-3">
+        <FilterBar
+          activeCount={activeFilterCount}
+          chips={filterChips}
+          search={
+            <label className="relative flex w-full items-center">
+              <SearchIcon className="absolute left-3 h-4 w-4 text-on-surface-variant" aria-hidden />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search by name, description, or trigger…"
+                className="h-9 w-full rounded-md border border-outline-variant bg-surface pl-9 pr-3 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:shadow-focus-primary focus:outline-none"
+              />
+            </label>
+          }
+          filters={
+            <>
+              <FilterSelect
+                label="Target"
+                value={targetFilter}
+                onChange={(v) => {
+                  setTargetFilter(v as TargetFilter);
+                  setPage(1);
+                }}
+                options={[
+                  { value: 'all', label: 'All targets' },
+                  { value: 'issue', label: 'Issue' },
+                  { value: 'pr', label: 'PR' },
+                ]}
+              />
+              <FilterSelect
+                label="Kind"
+                value={kindFilter}
+                onChange={(v) => {
+                  setKindFilter(v as KindFilter);
+                  setPage(1);
+                }}
+                options={[
+                  { value: 'all', label: 'All kinds' },
+                  { value: 'built-in', label: 'Built-in' },
+                  { value: 'user', label: 'User' },
+                ]}
+              />
+              <FilterSelect
+                label="Trigger"
+                value={triggerFilter}
+                onChange={(v) => {
+                  setTriggerFilter(v as TriggerFilter);
+                  setPage(1);
+                }}
+                options={[
+                  { value: 'all', label: 'All triggers' },
+                  ...distinctTriggers.map((t) => ({ value: t, label: t })),
+                ]}
+              />
+              <FilterSelect
+                label="Status"
+                value={statusFilter}
+                onChange={(v) => {
+                  setStatusFilter(v as StatusFilter);
+                  setPage(1);
+                }}
+                options={[
+                  { value: 'all', label: 'All statuses' },
+                  { value: 'enabled', label: 'Enabled' },
+                  { value: 'disabled', label: 'Disabled' },
+                ]}
+              />
+            </>
+          }
+          trailing={
+            filtersActive ? (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="h-9 rounded-md border border-outline-variant bg-surface px-3 text-sm text-on-surface-variant transition-colors hover:border-primary hover:text-on-surface"
+              >
+                Clear filters
+              </button>
+            ) : undefined
+          }
         />
-        <FilterSelect
-          label="Kind"
-          value={kindFilter}
-          onChange={(v) => {
-            setKindFilter(v as KindFilter);
-            setPage(1);
-          }}
-          options={[
-            { value: 'all', label: 'All kinds' },
-            { value: 'built-in', label: 'Built-in' },
-            { value: 'user', label: 'User' },
-          ]}
-        />
-        <FilterSelect
-          label="Trigger"
-          value={triggerFilter}
-          onChange={(v) => {
-            setTriggerFilter(v as TriggerFilter);
-            setPage(1);
-          }}
-          options={[
-            { value: 'all', label: 'All triggers' },
-            ...distinctTriggers.map((t) => ({ value: t, label: t })),
-          ]}
-        />
-        <FilterSelect
-          label="Status"
-          value={statusFilter}
-          onChange={(v) => {
-            setStatusFilter(v as StatusFilter);
-            setPage(1);
-          }}
-          options={[
-            { value: 'all', label: 'All statuses' },
-            { value: 'enabled', label: 'Enabled' },
-            { value: 'disabled', label: 'Disabled' },
-          ]}
-        />
-
-        {filtersActive && (
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="h-9 rounded-md border border-outline-variant bg-surface px-3 text-sm text-on-surface-variant transition-colors hover:border-primary hover:text-on-surface"
-          >
-            Clear filters
-          </button>
-        )}
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-outline-variant bg-surface-container-low">
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead>
+      <ResponsiveListContainer
+        table={
+          <div className="overflow-hidden rounded-lg border border-outline-variant bg-surface-container-low">
+            <div className="overflow-x-auto">
+              <table className="min-w-full text-sm">
+                <thead>
               <tr className="bg-surface-container">
                 <SortableTh sortKey="name"      sortDir={sortDir} active={sortKey === 'name'}      onClick={handleSort}>NAME</SortableTh>
                 <SortableTh sortKey="kind"      sortDir={sortDir} active={sortKey === 'kind'}      onClick={handleSort}>KIND</SortableTh>
@@ -316,52 +354,95 @@ export function ActionsView({ rows, readOnly, autoTriageActionId }: ActionsViewP
                     )}
                   </td>
                 </tr>
-              ) : (
-                pageRows.map((row) => (
-                  <ActionTableRow
-                    key={row.name}
-                    row={row}
-                    isAutoTriage={row.id === autoTriageActionId}
-                    readOnly={readOnly}
-                  />
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-outline-variant bg-surface-container-low px-6 py-4 text-sm text-on-surface-variant">
-          <div className="flex flex-wrap items-center gap-3">
-            <span>
-              Showing {pageRows.length === 0 ? 0 : (page - 1) * pageSize + 1}
-              {pageRows.length > 0 && <>–{(page - 1) * pageSize + pageRows.length}</>} of {totalFiltered}
-              {filtersActive && <> filtered (of {totalActions})</>} action{totalFiltered === 1 ? '' : 's'}
-            </span>
-            <span className="hidden h-4 w-px bg-outline-variant sm:inline-block" aria-hidden />
-            <label className="flex items-center gap-2">
-              <span className="font-display text-[11px] font-semibold uppercase tracking-[0.05em] text-on-surface-variant">
-                Per page
-              </span>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value) as PageSize);
-                  setPage(1);
-                }}
-                className="h-8 rounded-md border border-outline-variant bg-surface px-2 text-sm text-on-surface focus:border-primary focus:outline-none"
-              >
-                {PAGE_SIZE_OPTIONS.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-            </label>
+                  ) : (
+                    pageRows.map((row) => (
+                      <ActionTableRow
+                        key={row.name}
+                        row={row}
+                        isAutoTriage={row.id === autoTriageActionId}
+                        readOnly={readOnly}
+                      />
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-          {totalPages > 1 && (
-            <Pagination page={page} totalPages={totalPages} onChange={setPage} />
-          )}
+        }
+        cards={
+          pageRows.length === 0 ? (
+            <div className="rounded-lg border border-outline-variant bg-surface-container-low px-4 py-12 text-center text-sm text-on-surface-variant">
+              {totalActions === 0 ? (
+                <>
+                  No actions in this workspace yet.{' '}
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      onClick={handleSeed}
+                      className="underline underline-offset-2 hover:text-on-surface"
+                    >
+                      Sync defaults
+                    </button>
+                  )}{' '}
+                  to seed the built-in catalog.
+                </>
+              ) : (
+                <>
+                  No actions match these filters.{' '}
+                  <button
+                    type="button"
+                    onClick={resetFilters}
+                    className="underline underline-offset-2 hover:text-on-surface"
+                  >
+                    Clear filters
+                  </button>
+                </>
+              )}
+            </div>
+          ) : (
+            pageRows.map((row) => (
+              <ActionCard
+                key={row.name}
+                row={row}
+                isAutoTriage={row.id === autoTriageActionId}
+                readOnly={readOnly}
+              />
+            ))
+          )
+        }
+      />
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-outline-variant bg-surface-container-low px-4 py-3 text-sm text-on-surface-variant sm:px-6 sm:py-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <span>
+            Showing {pageRows.length === 0 ? 0 : (page - 1) * pageSize + 1}
+            {pageRows.length > 0 && <>–{(page - 1) * pageSize + pageRows.length}</>} of {totalFiltered}
+            {filtersActive && <> filtered (of {totalActions})</>} action{totalFiltered === 1 ? '' : 's'}
+          </span>
+          <span className="hidden h-4 w-px bg-outline-variant sm:inline-block" aria-hidden />
+          <label className="flex items-center gap-2">
+            <span className="font-display text-[11px] font-semibold uppercase tracking-[0.05em] text-on-surface-variant">
+              Per page
+            </span>
+            <select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value) as PageSize);
+                setPage(1);
+              }}
+              className="h-8 rounded-md border border-outline-variant bg-surface px-2 text-sm text-on-surface focus:border-primary focus:outline-none"
+            >
+              {PAGE_SIZE_OPTIONS.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
+        {totalPages > 1 && (
+          <Pagination page={page} totalPages={totalPages} onChange={setPage} />
+        )}
       </div>
 
       <div className="mt-6 grid gap-4 md:grid-cols-2">
@@ -387,7 +468,7 @@ export function ActionsView({ rows, readOnly, autoTriageActionId }: ActionsViewP
           }
         />
       </div>
-    </div>
+    </PageContainer>
   );
 }
 
@@ -473,7 +554,7 @@ function FilterSelect<T extends string>({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value as T)}
-        className="h-9 min-w-[7.5rem] rounded-md border border-outline-variant bg-surface px-2 text-sm text-on-surface focus:border-primary focus:outline-none"
+        className="h-9 w-full rounded-md border border-outline-variant bg-surface px-2 text-sm text-on-surface focus:border-primary focus:outline-none sm:w-auto sm:min-w-[7.5rem]"
       >
         {options.map((opt) => (
           <option key={opt.value} value={opt.value}>
@@ -581,6 +662,86 @@ function ActionTableRow({
   );
 }
 
+function ActionCard({
+  row,
+  isAutoTriage,
+  readOnly,
+}: {
+  row: ActionRow;
+  isAutoTriage: boolean;
+  readOnly: boolean;
+}) {
+  const href = `/actions/${encodeURIComponent(row.name)}`;
+  // Optimistic mirror of the row's status so the kebab toggle updates the badge
+  // before the server round-trip + `router.refresh()` completes.
+  const [enabled, setEnabled] = useState(row.status === 'enabled');
+  useEffect(() => {
+    setEnabled(row.status === 'enabled');
+  }, [row.status]);
+
+  return (
+    <EntityCard
+      title={
+        <Link href={href} className="flex flex-wrap items-center gap-2 text-on-surface hover:text-primary">
+          {row.hasBuiltinShadow && <span className="text-tertiary" aria-hidden>*</span>}
+          <span className="font-medium">{row.name}</span>
+          {isAutoTriage && (
+            <span className="inline-flex items-center rounded-md border border-primary/40 bg-primary-container/20 px-1.5 py-0.5 font-display text-[11px] font-semibold uppercase tracking-[0.05em] text-primary">
+              Auto-triage
+            </span>
+          )}
+        </Link>
+      }
+      badge={
+        <span className="inline-flex items-center gap-1.5 text-on-surface">
+          <StatusDotIcon className="h-2.5 w-2.5" tone={enabled ? 'enabled' : 'disabled'} />
+          <span className="font-mono text-xs">{enabled ? 'enabled' : 'disabled'}</span>
+        </span>
+      }
+      actions={
+        <CardActions>
+          <ActionRowMenu
+            id={row.id}
+            name={row.name}
+            kind={row.kind}
+            target={row.target}
+            enabled={enabled}
+            isAutoTriage={isAutoTriage}
+            hasUserOverride={row.hasUserOverride}
+            readOnly={readOnly}
+            onEnabledChange={setEnabled}
+          />
+        </CardActions>
+      }
+    >
+      {row.description && (
+        <div className="text-xs text-on-surface-variant">{row.description}</div>
+      )}
+      <MetaRow>
+        <MetaItem label="Kind">
+          <KindBadge kind={row.kind} />
+        </MetaItem>
+        <MetaItem label="Target">
+          <span className="font-mono text-xs">{row.target}</span>
+        </MetaItem>
+      </MetaRow>
+      <MetaRow>
+        <MetaItem label="Triggers">
+          <TriggersChips triggers={row.triggers} />
+        </MetaItem>
+        <MetaItem label="Effects">
+          <span className="font-mono text-xs">
+            {row.effectsDeclared === null ? 'agent tools' : `${row.effectsDeclared} declared`}
+          </span>
+        </MetaItem>
+        <MetaItem label="Updated">
+          <span className="font-mono text-xs">{formatRelative(row.updatedAt)}</span>
+        </MetaItem>
+      </MetaRow>
+    </EntityCard>
+  );
+}
+
 function KindBadge({ kind }: { kind: ActionRow['kind'] }) {
   const classes =
     kind === 'user'
@@ -664,29 +825,45 @@ function Pagination({
 }) {
   const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
   return (
-    <div className="flex items-center gap-1">
-      <PagerButton onClick={() => onChange(Math.max(1, page - 1))} disabled={page === 1} aria-label="Previous page">
-        <ChevronLeftIcon className="h-4 w-4" />
-      </PagerButton>
-      {pages.map((p) => (
-        <button
-          key={p}
-          type="button"
-          onClick={() => onChange(p)}
-          className={cn(
-            'h-8 min-w-[2rem] rounded-md border px-2 text-sm transition-colors',
-            p === page
-              ? 'border-primary/40 bg-surface-container text-on-surface'
-              : 'border-outline-variant bg-surface-container-low text-on-surface-variant hover:border-primary hover:text-on-surface',
-          )}
-        >
-          {p}
-        </button>
-      ))}
-      <PagerButton onClick={() => onChange(Math.min(totalPages, page + 1))} disabled={page === totalPages} aria-label="Next page">
-        <ChevronRightIcon className="h-4 w-4" />
-      </PagerButton>
-    </div>
+    <>
+      {/* Compact phone variant: Prev · "N / M" · Next. */}
+      <div className="flex items-center gap-2 sm:hidden">
+        <PagerButton onClick={() => onChange(Math.max(1, page - 1))} disabled={page === 1} aria-label="Previous page">
+          <ChevronLeftIcon className="h-4 w-4" />
+        </PagerButton>
+        <span className="text-sm tabular-nums text-on-surface-variant">
+          {page} / {totalPages}
+        </span>
+        <PagerButton onClick={() => onChange(Math.min(totalPages, page + 1))} disabled={page === totalPages} aria-label="Next page">
+          <ChevronRightIcon className="h-4 w-4" />
+        </PagerButton>
+      </div>
+
+      {/* Full numeric variant: sm+. */}
+      <div className="hidden items-center gap-1 sm:flex">
+        <PagerButton onClick={() => onChange(Math.max(1, page - 1))} disabled={page === 1} aria-label="Previous page">
+          <ChevronLeftIcon className="h-4 w-4" />
+        </PagerButton>
+        {pages.map((p) => (
+          <button
+            key={p}
+            type="button"
+            onClick={() => onChange(p)}
+            className={cn(
+              'h-8 min-w-[2rem] rounded-md border px-2 text-sm transition-colors',
+              p === page
+                ? 'border-primary/40 bg-surface-container text-on-surface'
+                : 'border-outline-variant bg-surface-container-low text-on-surface-variant hover:border-primary hover:text-on-surface',
+            )}
+          >
+            {p}
+          </button>
+        ))}
+        <PagerButton onClick={() => onChange(Math.min(totalPages, page + 1))} disabled={page === totalPages} aria-label="Next page">
+          <ChevronRightIcon className="h-4 w-4" />
+        </PagerButton>
+      </div>
+    </>
   );
 }
 
@@ -701,7 +878,7 @@ function PagerButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="flex h-8 w-8 items-center justify-center rounded-md border border-outline-variant bg-surface-container-low text-on-surface-variant transition-colors hover:border-primary hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-40"
+      className="flex min-h-11 min-w-11 items-center justify-center rounded-md border border-outline-variant bg-surface-container-low text-on-surface-variant transition-colors hover:border-primary hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-40 lg:h-8 lg:w-8 lg:min-h-0 lg:min-w-0"
       {...rest}
     >
       {children}
