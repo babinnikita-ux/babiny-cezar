@@ -212,7 +212,7 @@ export function FlowCard(props: FlowCardProps) {
 
 // ─── Pause toggle ───────────────────────────────────────────────────────────
 
-function PauseToggle({ paused, onChange }: { paused: boolean; onChange: (v: boolean) => void }) {
+export function PauseToggle({ paused, onChange }: { paused: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
       type="button"
@@ -296,13 +296,13 @@ function StopChainInput({
 
 // ─── Helpers (formatting + history dots) ────────────────────────────────────
 
-function formatTokens(n: number): string {
+export function formatTokens(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`;
   return String(n);
 }
 
-function historyDotClass(status: string): string {
+export function historyDotClass(status: string): string {
   if (status === 'succeeded') return 'bg-emerald-500/70';
   if (status === 'failed') return 'bg-rose-500/70';
   if (status === 'running') return 'bg-amber-400/80';
@@ -827,7 +827,7 @@ function TriggersPanel({
   );
 }
 
-function describeTriggers(triggers: FlowTrigger[]): string {
+export function describeTriggers(triggers: FlowTrigger[]): string {
   const parts: string[] = [];
   if (triggers.some((t) => t.kind === 'issue.opened')) parts.push('issue opened');
   const labels = triggers
@@ -1003,7 +1003,7 @@ function RunOnIssue({ onRun }: { onRun: (issue: number) => void }) {
 
 // ─── Small UI primitives ───────────────────────────────────────────────────
 
-function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status }: { status: string }) {
   const cls =
     status === 'succeeded' ? 'text-emerald-400 bg-emerald-500/15'
     : status === 'failed' ? 'text-rose-400 bg-rose-500/15'
