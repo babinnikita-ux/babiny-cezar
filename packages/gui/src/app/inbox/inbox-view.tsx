@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation';
 import { cn } from '@/components/ui/cn';
 import {
   CheckIcon,
-  ChevronDownIcon,
   MoreVerticalIcon,
   PlayIcon,
   RotateLeftIcon,
@@ -14,7 +13,7 @@ import {
 } from '@/components/icons';
 import { RowMenuPortal } from '@/components/row-menu-portal';
 import { PageContainer } from '@/components/ui/page-container';
-import { FilterBar } from '@/components/ui/filter-bar';
+import { FilterBar, type FilterControl } from '@/components/ui/filter-bar';
 import { ActionSheet, type ActionSheetItem } from '@/components/ui/action-sheet';
 import { useToast } from '@/components/ui/use-toast';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
@@ -398,44 +397,49 @@ export function InboxView({
   const hasAny = visibleItems.length > 0;
   const allFilteredOut = !hasAny && items.length > 0;
 
-  // Active secondary-filter count → badge on the phone "Filters" button. The
-  // confidence default is "> 80%" (index 2), so only count it when changed.
-  const activeFilterCount =
-    (skillFilter.id !== 'all' ? 1 : 0) +
-    (confidenceFilter.id !== CONFIDENCE_FILTERS[2].id ? 1 : 0) +
-    (typeFilter.id !== 'all' ? 1 : 0);
+  // Reset all inbox filters to their defaults. The confidence default is
+  // "> 80%" (index 2); skill + type default to "all".
+  function resetFilters() {
+    setSkillFilter(ALL_SKILLS_OPTION);
+    setConfidenceFilter(CONFIDENCE_FILTERS[2]);
+    setTypeFilter(TYPE_FILTERS[0]);
+  }
 
-  const filterControls = (
-    <>
-      <FilterDropdown
-        label="Skill"
-        value={skillFilter.label}
-        options={skillFilters}
-        selectedId={skillFilter.id}
-        onSelect={(opt) => setSkillFilter(opt)}
-      />
-      <FilterDropdown
-        label="Confidence"
-        value={confidenceFilter.label}
-        options={CONFIDENCE_FILTERS.map((c) => ({ id: c.id, label: c.label }))}
-        selectedId={confidenceFilter.id}
-        onSelect={(opt) => {
-          const found = CONFIDENCE_FILTERS.find((c) => c.id === opt.id);
-          if (found) setConfidenceFilter(found);
-        }}
-      />
-      <FilterDropdown
-        label="Type"
-        value={typeFilter.label}
-        options={TYPE_FILTERS.map((t) => ({ id: t.id, label: t.label }))}
-        selectedId={typeFilter.id}
-        onSelect={(opt) => {
-          const found = TYPE_FILTERS.find((t) => t.id === opt.id);
-          if (found) setTypeFilter(found);
-        }}
-      />
-    </>
-  );
+  const filterControls: FilterControl[] = [
+    {
+      id: 'skill',
+      label: 'Skill',
+      value: skillFilter.id,
+      defaultValue: 'all',
+      options: skillFilters.map((s) => ({ value: s.id, label: s.label })),
+      onChange: (v) => {
+        const found = skillFilters.find((s) => s.id === v);
+        if (found) setSkillFilter(found);
+      },
+    },
+    {
+      id: 'confidence',
+      label: 'Confidence',
+      value: confidenceFilter.id,
+      defaultValue: CONFIDENCE_FILTERS[2].id,
+      options: CONFIDENCE_FILTERS.map((c) => ({ value: c.id, label: c.label })),
+      onChange: (v) => {
+        const found = CONFIDENCE_FILTERS.find((c) => c.id === v);
+        if (found) setConfidenceFilter(found);
+      },
+    },
+    {
+      id: 'type',
+      label: 'Type',
+      value: typeFilter.id,
+      defaultValue: 'all',
+      options: TYPE_FILTERS.map((t) => ({ value: t.id, label: t.label })),
+      onChange: (v) => {
+        const found = TYPE_FILTERS.find((t) => t.id === v);
+        if (found) setTypeFilter(found);
+      },
+    },
+  ];
 
   return (
     <PageContainer
@@ -465,18 +469,13 @@ export function InboxView({
       </header>
 
       {/* ── FILTER ROW ── */}
-      <div className="mb-5 border-b border-outline-variant pb-4">
-        <FilterBar
-          filters={filterControls}
-          activeCount={activeFilterCount}
-          trailing={
-            <div className="hidden items-center gap-1.5 text-xs text-outline md:flex">
-              <Kbd>⌘</Kbd>
-              <Kbd>A</Kbd>
-              <span>to select all visible</span>
-            </div>
-          }
-        />
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-outline-variant pb-4">
+        <FilterBar filters={filterControls} onClearAll={resetFilters} className="flex-1" />
+        <div className="hidden items-center gap-1.5 text-xs text-outline md:flex">
+          <Kbd>⌘</Kbd>
+          <Kbd>A</Kbd>
+          <span>to select all visible</span>
+        </div>
       </div>
 
       {/* ── FEED ── */}
@@ -1051,64 +1050,6 @@ function Kbd({ children }: { children: React.ReactNode }) {
     <kbd className="inline-flex h-5 min-w-[20px] items-center justify-center rounded border border-outline-variant bg-surface-container px-1 font-mono text-[10.5px] text-on-surface-variant">
       {children}
     </kbd>
-  );
-}
-
-function FilterDropdown<T extends { id: string; label: string }>({
-  label,
-  value,
-  options,
-  selectedId,
-  onSelect,
-}: {
-  label: string;
-  value: string;
-  options: readonly T[];
-  selectedId: string;
-  onSelect: (opt: T) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
-        className={cn(
-          'inline-flex items-center gap-2 rounded-md border border-outline-variant bg-surface-container-low px-3 py-1.5 text-xs transition-colors',
-          'hover:border-outline',
-          open && 'border-primary/40 bg-surface-container',
-        )}
-      >
-        <span className="text-outline">{label}:</span>
-        <span className="text-on-surface">{value}</span>
-        <ChevronDownIcon className={cn('h-3 w-3 text-outline transition-transform', open && 'rotate-180')} />
-      </button>
-      {open && (
-        <div className="absolute left-0 top-full z-20 mt-1 min-w-[180px] rounded-md border border-outline-variant bg-surface-container-high py-1 shadow-ambient">
-          {options.map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                onSelect(opt);
-                setOpen(false);
-              }}
-              className={cn(
-                'flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors',
-                opt.id === selectedId
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-on-surface-variant hover:bg-surface-container hover:text-on-surface',
-              )}
-            >
-              <CheckIcon className={cn('h-3 w-3', opt.id === selectedId ? 'opacity-100' : 'opacity-0')} />
-              {opt.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
 

@@ -14,7 +14,7 @@ import {
   MoreVerticalIcon,
 } from '@/components/icons';
 import { PageContainer } from '@/components/ui/page-container';
-import { FilterBar, type FilterChip } from '@/components/ui/filter-bar';
+import { FilterBar } from '@/components/ui/filter-bar';
 import {
   ResponsiveListContainer,
   EntityCard,
@@ -116,23 +116,6 @@ export function SkillsView({ rows, overridesCount, commitSha, fetchedAt, readOnl
     triggerFilter !== 'all' ||
     statusFilter !== 'all';
 
-  // Secondary (non-search) filter count for the phone "Filters · N" badge.
-  const activeFilterCount =
-    (sourceFilter !== 'all' ? 1 : 0) +
-    (modeFilter !== 'all' ? 1 : 0) +
-    (triggerFilter !== 'all' ? 1 : 0) +
-    (statusFilter !== 'all' ? 1 : 0);
-
-  const filterChips: FilterChip[] = [];
-  if (sourceFilter !== 'all')
-    filterChips.push({ key: 'source', label: `Source: ${sourceFilter}`, onClear: () => { setSourceFilter('all'); setPage(1); } });
-  if (modeFilter !== 'all')
-    filterChips.push({ key: 'mode', label: `Mode: ${modeFilter}`, onClear: () => { setModeFilter('all'); setPage(1); } });
-  if (triggerFilter !== 'all')
-    filterChips.push({ key: 'trigger', label: `Trigger: ${triggerFilter}`, onClear: () => { setTriggerFilter('all'); setPage(1); } });
-  if (statusFilter !== 'all')
-    filterChips.push({ key: 'status', label: `Status: ${statusFilter}`, onClear: () => { setStatusFilter('all'); setPage(1); } });
-
   function handleRefresh() {
     setRefreshState(null);
     startRefresh(async () => {
@@ -216,8 +199,6 @@ export function SkillsView({ rows, overridesCount, commitSha, fetchedAt, readOnl
       {/* Filter bar */}
       <div className="mb-4 rounded-lg border border-outline-variant bg-surface-container-low p-3">
         <FilterBar
-          activeCount={activeFilterCount}
-          chips={filterChips}
           search={
             <label className="relative flex w-full items-center">
               <SearchIcon className="absolute left-3 h-4 w-4 text-on-surface-variant" aria-hidden />
@@ -233,75 +214,71 @@ export function SkillsView({ rows, overridesCount, commitSha, fetchedAt, readOnl
               />
             </label>
           }
-          filters={
-            <>
-              <FilterSelect
-                label="Source"
-                value={sourceFilter}
-                onChange={(v) => {
-                  setSourceFilter(v as SourceFilter);
-                  setPage(1);
-                }}
-                options={[
-                  { value: 'all', label: 'All sources' },
-                  { value: 'override', label: 'Override' },
-                  { value: 'repo', label: 'Repo' },
-                  { value: 'built-in', label: 'Built-in' },
-                ]}
-              />
-              <FilterSelect
-                label="Mode"
-                value={modeFilter}
-                onChange={(v) => {
-                  setModeFilter(v as ModeFilter);
-                  setPage(1);
-                }}
-                options={[
-                  { value: 'all', label: 'All modes' },
-                  { value: 'framed', label: 'Framed' },
-                  { value: 'inline', label: 'Inline' },
-                ]}
-              />
-              <FilterSelect
-                label="Trigger"
-                value={triggerFilter}
-                onChange={(v) => {
-                  setTriggerFilter(v as TriggerFilter);
-                  setPage(1);
-                }}
-                options={[
-                  { value: 'all', label: 'All triggers' },
-                  { value: 'on-sync', label: 'On-sync' },
-                  { value: 'cron', label: 'Cron' },
-                  { value: 'manual', label: 'Manual' },
-                ]}
-              />
-              <FilterSelect
-                label="Status"
-                value={statusFilter}
-                onChange={(v) => {
-                  setStatusFilter(v as StatusFilter);
-                  setPage(1);
-                }}
-                options={[
-                  { value: 'all', label: 'All statuses' },
-                  { value: 'enabled', label: 'Enabled' },
-                  { value: 'disabled', label: 'Disabled' },
-                ]}
-              />
-            </>
-          }
-          trailing={
-            filtersActive ? (
-              <button
-                type="button"
-                onClick={resetFilters}
-                className="h-9 rounded-md border border-outline-variant bg-surface px-3 text-sm text-on-surface-variant transition-colors hover:border-primary hover:text-on-surface"
-              >
-                Clear filters
-              </button>
-            ) : undefined
-          }
+          filters={[
+            {
+              id: 'source',
+              label: 'Source',
+              value: sourceFilter,
+              defaultValue: 'all',
+              onChange: (v) => {
+                setSourceFilter(v as SourceFilter);
+                setPage(1);
+              },
+              options: [
+                { value: 'all', label: 'All sources' },
+                { value: 'override', label: 'Override' },
+                { value: 'repo', label: 'Repo' },
+                { value: 'built-in', label: 'Built-in' },
+              ],
+            },
+            {
+              id: 'mode',
+              label: 'Mode',
+              value: modeFilter,
+              defaultValue: 'all',
+              onChange: (v) => {
+                setModeFilter(v as ModeFilter);
+                setPage(1);
+              },
+              options: [
+                { value: 'all', label: 'All modes' },
+                { value: 'framed', label: 'Framed' },
+                { value: 'inline', label: 'Inline' },
+              ],
+            },
+            {
+              id: 'trigger',
+              label: 'Trigger',
+              value: triggerFilter,
+              defaultValue: 'all',
+              onChange: (v) => {
+                setTriggerFilter(v as TriggerFilter);
+                setPage(1);
+              },
+              options: [
+                { value: 'all', label: 'All triggers' },
+                { value: 'on-sync', label: 'On-sync' },
+                { value: 'cron', label: 'Cron' },
+                { value: 'manual', label: 'Manual' },
+              ],
+            },
+            {
+              id: 'status',
+              label: 'Status',
+              value: statusFilter,
+              defaultValue: 'all',
+              onChange: (v) => {
+                setStatusFilter(v as StatusFilter);
+                setPage(1);
+              },
+              options: [
+                { value: 'all', label: 'All statuses' },
+                { value: 'enabled', label: 'Enabled' },
+                { value: 'disabled', label: 'Disabled' },
+              ],
+            },
+          ]}
+          onClearAll={resetFilters}
         />
       </div>
 
@@ -529,37 +506,6 @@ function SortIndicator({ active, dir }: { active: boolean; dir: SortDir }) {
       <span className={cn(active && dir === 'asc' ? 'text-primary' : 'text-outline-variant')}>▲</span>
       <span className={cn(active && dir === 'desc' ? 'text-primary' : 'text-outline-variant')}>▼</span>
     </span>
-  );
-}
-
-function FilterSelect<T extends string>({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: T;
-  onChange: (value: T) => void;
-  options: { value: T; label: string }[];
-}) {
-  return (
-    <label className="flex items-center gap-2">
-      <span className="font-display text-[11px] font-semibold uppercase tracking-[0.05em] text-on-surface-variant">
-        {label}
-      </span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as T)}
-        className="h-9 w-full rounded-md border border-outline-variant bg-surface px-2 text-sm text-on-surface focus:border-primary focus:outline-none sm:w-auto sm:min-w-[7.5rem]"
-      >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
-    </label>
   );
 }
 

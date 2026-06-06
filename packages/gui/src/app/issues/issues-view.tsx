@@ -167,13 +167,6 @@ export function IssuesView({
     typeFilter !== 'all' ||
     runStatusFilter !== 'all';
 
-  // Count of active secondary filters (excludes search) → phone "Filters" badge.
-  const activeFilterCount =
-    (stateFilter !== 'all' ? 1 : 0) +
-    (priorityFilter !== 'all' ? 1 : 0) +
-    (typeFilter !== 'all' ? 1 : 0) +
-    (runStatusFilter !== 'all' ? 1 : 0);
-
   function handleSort(key: SortKey) {
     if (key === sortKey) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -217,7 +210,6 @@ export function IssuesView({
 
       <div className="mb-4 rounded-lg border border-outline-variant bg-surface-container-low p-3">
         <FilterBar
-          activeCount={activeFilterCount}
           search={
             <label className="relative flex w-full items-center">
               <SearchIcon className="absolute left-3 h-4 w-4 text-on-surface-variant" aria-hidden />
@@ -234,83 +226,79 @@ export function IssuesView({
               />
             </label>
           }
-          filters={
-            <>
-              <FilterSelect
-                label="State"
-                value={stateFilter}
-                onChange={(v) => {
-                  setStateFilter(v as StateFilter);
-                  setPage(1);
-                }}
-                options={[
-                  { value: 'all', label: 'All states' },
-                  { value: 'open', label: 'Open' },
-                  { value: 'closed', label: 'Closed' },
-                ]}
-              />
-              <FilterSelect
-                label="Priority"
-                value={priorityFilter}
-                onChange={(v) => {
-                  setPriorityFilter(v as PriorityFilter);
-                  setPage(1);
-                }}
-                options={[
-                  { value: 'all', label: 'All priorities' },
-                  { value: 'critical', label: 'Critical' },
-                  { value: 'high', label: 'High' },
-                  { value: 'medium', label: 'Medium' },
-                  { value: 'low', label: 'Low' },
-                  { value: 'unset', label: 'Unset' },
-                ]}
-              />
-              <FilterSelect
-                label="Type"
-                value={typeFilter}
-                onChange={(v) => {
-                  setTypeFilter(v as TypeFilter);
-                  setPage(1);
-                }}
-                options={[
-                  { value: 'all', label: 'All types' },
-                  { value: 'bug', label: 'Bug' },
-                  { value: 'feature', label: 'Feature' },
-                  { value: 'question', label: 'Question' },
-                  { value: 'other', label: 'Other' },
-                  { value: 'unset', label: 'Unset' },
-                ]}
-              />
-              <FilterSelect
-                label="Run status"
-                value={runStatusFilter}
-                onChange={(v) => {
-                  setRunStatusFilter(v as RunStatusFilter);
-                  setPage(1);
-                }}
-                options={[
-                  { value: 'all', label: 'All' },
-                  { value: 'has-runs', label: 'Has any run' },
-                  { value: 'running', label: 'Running' },
-                  { value: 'enqueued', label: 'Enqueued' },
-                  { value: 'succeeded', label: 'Succeeded' },
-                  { value: 'failed', label: 'Failed' },
-                  { value: 'none', label: 'No runs' },
-                ]}
-              />
-            </>
-          }
-          trailing={
-            filtersActive ? (
-              <button
-                type="button"
-                onClick={resetFilters}
-                className="h-9 w-full rounded-md border border-outline-variant bg-surface px-3 text-sm text-on-surface-variant transition-colors hover:border-primary hover:text-on-surface sm:w-auto"
-              >
-                Clear filters
-              </button>
-            ) : undefined
-          }
+          filters={[
+            {
+              id: 'state',
+              label: 'State',
+              value: stateFilter,
+              defaultValue: 'all',
+              onChange: (v) => {
+                setStateFilter(v as StateFilter);
+                setPage(1);
+              },
+              options: [
+                { value: 'all', label: 'All states' },
+                { value: 'open', label: 'Open' },
+                { value: 'closed', label: 'Closed' },
+              ],
+            },
+            {
+              id: 'priority',
+              label: 'Priority',
+              value: priorityFilter,
+              defaultValue: 'all',
+              onChange: (v) => {
+                setPriorityFilter(v as PriorityFilter);
+                setPage(1);
+              },
+              options: [
+                { value: 'all', label: 'All priorities' },
+                { value: 'critical', label: 'Critical' },
+                { value: 'high', label: 'High' },
+                { value: 'medium', label: 'Medium' },
+                { value: 'low', label: 'Low' },
+                { value: 'unset', label: 'Unset' },
+              ],
+            },
+            {
+              id: 'type',
+              label: 'Type',
+              value: typeFilter,
+              defaultValue: 'all',
+              onChange: (v) => {
+                setTypeFilter(v as TypeFilter);
+                setPage(1);
+              },
+              options: [
+                { value: 'all', label: 'All types' },
+                { value: 'bug', label: 'Bug' },
+                { value: 'feature', label: 'Feature' },
+                { value: 'question', label: 'Question' },
+                { value: 'other', label: 'Other' },
+                { value: 'unset', label: 'Unset' },
+              ],
+            },
+            {
+              id: 'runStatus',
+              label: 'Run status',
+              value: runStatusFilter,
+              defaultValue: 'all',
+              onChange: (v) => {
+                setRunStatusFilter(v as RunStatusFilter);
+                setPage(1);
+              },
+              options: [
+                { value: 'all', label: 'All' },
+                { value: 'has-runs', label: 'Has any run' },
+                { value: 'running', label: 'Running' },
+                { value: 'enqueued', label: 'Enqueued' },
+                { value: 'succeeded', label: 'Succeeded' },
+                { value: 'failed', label: 'Failed' },
+                { value: 'none', label: 'No runs' },
+              ],
+            },
+          ]}
+          onClearAll={resetFilters}
         />
       </div>
 
@@ -481,37 +469,6 @@ function SortIndicator({ active, dir }: { active: boolean; dir: SortDir }) {
       <span className={cn(active && dir === 'asc' ? 'text-primary' : 'text-outline-variant')}>▲</span>
       <span className={cn(active && dir === 'desc' ? 'text-primary' : 'text-outline-variant')}>▼</span>
     </span>
-  );
-}
-
-function FilterSelect<T extends string>({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: T;
-  onChange: (value: T) => void;
-  options: { value: T; label: string }[];
-}) {
-  return (
-    <label className="flex items-center gap-2">
-      <span className="font-display text-[11px] font-semibold uppercase tracking-[0.05em] text-on-surface-variant">
-        {label}
-      </span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as T)}
-        className="h-9 rounded-md border border-outline-variant bg-surface px-2 text-base text-on-surface focus:border-primary focus:outline-none sm:min-w-[7.5rem] sm:text-sm"
-      >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
-    </label>
   );
 }
 
