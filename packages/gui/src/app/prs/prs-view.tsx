@@ -37,9 +37,7 @@ interface PrsViewProps {
   readOnly: boolean;
 }
 
-type StateFilter = 'all' | 'open' | 'closed';
-type DraftFilter = 'all' | 'draft' | 'ready';
-type RunStatusFilter = 'all' | 'has-runs' | 'running' | 'enqueued' | 'succeeded' | 'failed' | 'none';
+type RunStatusFilter = 'has-runs' | 'running' | 'enqueued' | 'succeeded' | 'failed' | 'none';
 
 type SortKey = 'runStatus' | 'number' | 'title' | 'state' | 'author' | 'prUpdatedAt';
 type SortDir = 'asc' | 'desc';
@@ -71,34 +69,35 @@ function topStatus(runs: ActionRunSummary[]): RunStatus | 'none' {
   return best;
 }
 
+/** Per-value run-status predicate, preserving each option's original meaning. */
+function matchesRunStatus(r: PrRow, value: RunStatusFilter): boolean {
+  const top = topStatus(r.actionRuns);
+  if (value === 'has-runs') return r.actionRuns.length > 0;
+  if (value === 'none') return r.actionRuns.length === 0;
+  if (value === 'enqueued') return top === 'queued';
+  return top === value;
+}
+
 export function PrsView({ rows, repoLabel, fetchedAt, readOnly }: PrsViewProps) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(10);
   const [search, setSearch] = useState('');
-  const [stateFilter, setStateFilter] = useState<StateFilter>('all');
-  const [draftFilter, setDraftFilter] = useState<DraftFilter>('all');
-  const [runStatusFilter, setRunStatusFilter] = useState<RunStatusFilter>('all');
+  const [stateFilter, setStateFilter] = useState<string[]>([]);
+  const [draftFilter, setDraftFilter] = useState<string[]>([]);
+  const [runStatusFilter, setRunStatusFilter] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<SortKey>('number');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
-      if (stateFilter !== 'all' && r.state !== stateFilter) return false;
-      if (draftFilter !== 'all') {
-        if (draftFilter === 'draft' ? !r.draft : r.draft) return false;
+      if (stateFilter.length > 0 && !stateFilter.includes(r.state)) return false;
+      if (draftFilter.length > 0) {
+        const draftValue = r.draft ? 'draft' : 'ready';
+        if (!draftFilter.includes(draftValue)) return false;
       }
-      if (runStatusFilter !== 'all') {
-        const top = topStatus(r.actionRuns);
-        if (runStatusFilter === 'has-runs') {
-          if (r.actionRuns.length === 0) return false;
-        } else if (runStatusFilter === 'enqueued') {
-          if (top !== 'queued') return false;
-        } else if (runStatusFilter === 'none') {
-          if (r.actionRuns.length > 0) return false;
-        } else if (top !== runStatusFilter) {
-          return false;
-        }
+      if (runStatusFilter.length > 0) {
+        if (!runStatusFilter.some((v) => matchesRunStatus(r, v as RunStatusFilter))) return false;
       }
       if (q.length > 0) {
         const hay = `${r.number} ${r.title} ${r.author} ${r.headRef ?? ''} ${r.baseRef ?? ''} ${r.labels.join(' ')}`.toLowerCase();
@@ -136,9 +135,9 @@ export function PrsView({ rows, repoLabel, fetchedAt, readOnly }: PrsViewProps) 
 
   const filtersActive =
     search.trim().length > 0 ||
-    stateFilter !== 'all' ||
-    draftFilter !== 'all' ||
-    runStatusFilter !== 'all';
+    stateFilter.length > 0 ||
+    draftFilter.length > 0 ||
+    runStatusFilter.length > 0;
 
   function handleSort(key: SortKey) {
     if (key === sortKey) {
@@ -151,9 +150,9 @@ export function PrsView({ rows, repoLabel, fetchedAt, readOnly }: PrsViewProps) 
 
   function resetFilters() {
     setSearch('');
-    setStateFilter('all');
-    setDraftFilter('all');
-    setRunStatusFilter('all');
+    setStateFilter([]);
+    setDraftFilter([]);
+    setRunStatusFilter([]);
     setPage(1);
   }
 
@@ -202,14 +201,12 @@ export function PrsView({ rows, repoLabel, fetchedAt, readOnly }: PrsViewProps) 
             {
               id: 'state',
               label: 'State',
-              value: stateFilter,
-              defaultValue: 'all',
+              values: stateFilter,
               onChange: (v) => {
-                setStateFilter(v as StateFilter);
+                setStateFilter(v);
                 setPage(1);
               },
               options: [
-                { value: 'all', label: 'All states' },
                 { value: 'open', label: 'Open' },
                 { value: 'closed', label: 'Closed' },
               ],
@@ -217,14 +214,12 @@ export function PrsView({ rows, repoLabel, fetchedAt, readOnly }: PrsViewProps) 
             {
               id: 'draft',
               label: 'Draft',
-              value: draftFilter,
-              defaultValue: 'all',
+              values: draftFilter,
               onChange: (v) => {
-                setDraftFilter(v as DraftFilter);
+                setDraftFilter(v);
                 setPage(1);
               },
               options: [
-                { value: 'all', label: 'All' },
                 { value: 'draft', label: 'Draft' },
                 { value: 'ready', label: 'Ready' },
               ],
@@ -232,14 +227,12 @@ export function PrsView({ rows, repoLabel, fetchedAt, readOnly }: PrsViewProps) 
             {
               id: 'runStatus',
               label: 'Run status',
-              value: runStatusFilter,
-              defaultValue: 'all',
+              values: runStatusFilter,
               onChange: (v) => {
-                setRunStatusFilter(v as RunStatusFilter);
+                setRunStatusFilter(v);
                 setPage(1);
               },
               options: [
-                { value: 'all', label: 'All' },
                 { value: 'has-runs', label: 'Has any run' },
                 { value: 'running', label: 'Running' },
                 { value: 'enqueued', label: 'Enqueued' },

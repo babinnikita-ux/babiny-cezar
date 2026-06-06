@@ -46,11 +46,6 @@ interface SkillsViewProps {
   readOnly: boolean;
 }
 
-type SourceFilter = 'all' | SkillRow['source'];
-type ModeFilter = 'all' | SkillRow['mode'];
-type TriggerFilter = 'all' | SkillRow['trigger'];
-type StatusFilter = 'all' | SkillRow['status'];
-
 type SortKey = 'name' | 'source' | 'mode' | 'trigger' | 'status' | 'lastRun';
 type SortDir = 'asc' | 'desc';
 
@@ -61,10 +56,10 @@ export function SkillsView({ rows, overridesCount, commitSha, fetchedAt, readOnl
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(10);
   const [search, setSearch] = useState('');
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
-  const [modeFilter, setModeFilter] = useState<ModeFilter>('all');
-  const [triggerFilter, setTriggerFilter] = useState<TriggerFilter>('all');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [sourceFilter, setSourceFilter] = useState<string[]>([]);
+  const [modeFilter, setModeFilter] = useState<string[]>([]);
+  const [triggerFilter, setTriggerFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [refreshState, setRefreshState] = useState<{ ok?: boolean; error?: string; count?: number } | null>(null);
@@ -73,10 +68,10 @@ export function SkillsView({ rows, overridesCount, commitSha, fetchedAt, readOnl
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
-      if (sourceFilter !== 'all' && r.source !== sourceFilter) return false;
-      if (modeFilter !== 'all' && r.mode !== modeFilter) return false;
-      if (triggerFilter !== 'all' && r.trigger !== triggerFilter) return false;
-      if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+      if (sourceFilter.length > 0 && !sourceFilter.includes(r.source)) return false;
+      if (modeFilter.length > 0 && !modeFilter.includes(r.mode)) return false;
+      if (triggerFilter.length > 0 && !triggerFilter.includes(r.trigger)) return false;
+      if (statusFilter.length > 0 && !statusFilter.includes(r.status)) return false;
       if (q.length > 0) {
         const hay = `${r.name} ${r.description ?? ''} ${r.stages.join(' ')}`.toLowerCase();
         if (!hay.includes(q)) return false;
@@ -111,10 +106,10 @@ export function SkillsView({ rows, overridesCount, commitSha, fetchedAt, readOnl
 
   const filtersActive =
     search.trim().length > 0 ||
-    sourceFilter !== 'all' ||
-    modeFilter !== 'all' ||
-    triggerFilter !== 'all' ||
-    statusFilter !== 'all';
+    sourceFilter.length > 0 ||
+    modeFilter.length > 0 ||
+    triggerFilter.length > 0 ||
+    statusFilter.length > 0;
 
   function handleRefresh() {
     setRefreshState(null);
@@ -135,10 +130,10 @@ export function SkillsView({ rows, overridesCount, commitSha, fetchedAt, readOnl
 
   function resetFilters() {
     setSearch('');
-    setSourceFilter('all');
-    setModeFilter('all');
-    setTriggerFilter('all');
-    setStatusFilter('all');
+    setSourceFilter([]);
+    setModeFilter([]);
+    setTriggerFilter([]);
+    setStatusFilter([]);
     setPage(1);
   }
 
@@ -218,14 +213,12 @@ export function SkillsView({ rows, overridesCount, commitSha, fetchedAt, readOnl
             {
               id: 'source',
               label: 'Source',
-              value: sourceFilter,
-              defaultValue: 'all',
+              values: sourceFilter,
               onChange: (v) => {
-                setSourceFilter(v as SourceFilter);
+                setSourceFilter(v);
                 setPage(1);
               },
               options: [
-                { value: 'all', label: 'All sources' },
                 { value: 'override', label: 'Override' },
                 { value: 'repo', label: 'Repo' },
                 { value: 'built-in', label: 'Built-in' },
@@ -234,14 +227,12 @@ export function SkillsView({ rows, overridesCount, commitSha, fetchedAt, readOnl
             {
               id: 'mode',
               label: 'Mode',
-              value: modeFilter,
-              defaultValue: 'all',
+              values: modeFilter,
               onChange: (v) => {
-                setModeFilter(v as ModeFilter);
+                setModeFilter(v);
                 setPage(1);
               },
               options: [
-                { value: 'all', label: 'All modes' },
                 { value: 'framed', label: 'Framed' },
                 { value: 'inline', label: 'Inline' },
               ],
@@ -249,14 +240,12 @@ export function SkillsView({ rows, overridesCount, commitSha, fetchedAt, readOnl
             {
               id: 'trigger',
               label: 'Trigger',
-              value: triggerFilter,
-              defaultValue: 'all',
+              values: triggerFilter,
               onChange: (v) => {
-                setTriggerFilter(v as TriggerFilter);
+                setTriggerFilter(v);
                 setPage(1);
               },
               options: [
-                { value: 'all', label: 'All triggers' },
                 { value: 'on-sync', label: 'On-sync' },
                 { value: 'cron', label: 'Cron' },
                 { value: 'manual', label: 'Manual' },
@@ -265,14 +254,12 @@ export function SkillsView({ rows, overridesCount, commitSha, fetchedAt, readOnl
             {
               id: 'status',
               label: 'Status',
-              value: statusFilter,
-              defaultValue: 'all',
+              values: statusFilter,
               onChange: (v) => {
-                setStatusFilter(v as StatusFilter);
+                setStatusFilter(v);
                 setPage(1);
               },
               options: [
-                { value: 'all', label: 'All statuses' },
                 { value: 'enabled', label: 'Enabled' },
                 { value: 'disabled', label: 'Disabled' },
               ],

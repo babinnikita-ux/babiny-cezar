@@ -42,10 +42,7 @@ interface IssuesViewProps {
   readOnly: boolean;
 }
 
-type StateFilter = 'all' | 'open' | 'closed';
-type PriorityFilter = 'all' | NonNullable<IssueRow['priority']> | 'unset';
-type TypeFilter = 'all' | NonNullable<IssueRow['issueType']> | 'unset';
-type RunStatusFilter = 'all' | 'has-runs' | 'running' | 'enqueued' | 'succeeded' | 'failed' | 'none';
+type RunStatusFilter = 'has-runs' | 'running' | 'enqueued' | 'succeeded' | 'failed' | 'none';
 
 type SortKey = 'runStatus' | 'number' | 'title' | 'state' | 'priority' | 'comments';
 type SortDir = 'asc' | 'desc';
@@ -88,6 +85,16 @@ function topStatus(runs: ActionRunSummary[]): RunStatus | 'none' {
   return best;
 }
 
+/** Whether a single run-status filter value applies to a row. Each value's
+ *  meaning matches the legacy single-select predicate exactly. */
+function matchesRunStatus(row: IssueRow, value: RunStatusFilter): boolean {
+  const top = topStatus(row.actionRuns);
+  if (value === 'has-runs') return row.actionRuns.length > 0;
+  if (value === 'none') return row.actionRuns.length === 0;
+  if (value === 'enqueued') return top === 'queued';
+  return top === value;
+}
+
 export function IssuesView({
   rows,
   repoLabel,
@@ -97,34 +104,30 @@ export function IssuesView({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(10);
   const [search, setSearch] = useState('');
-  const [stateFilter, setStateFilter] = useState<StateFilter>('all');
-  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>('all');
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
-  const [runStatusFilter, setRunStatusFilter] = useState<RunStatusFilter>('all');
+  const [stateFilters, setStateFilters] = useState<string[]>([]);
+  const [priorityFilters, setPriorityFilters] = useState<string[]>([]);
+  const [typeFilters, setTypeFilters] = useState<string[]>([]);
+  const [runStatusFilters, setRunStatusFilters] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<SortKey>('number');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
-      if (stateFilter !== 'all' && r.state !== stateFilter) return false;
-      if (priorityFilter !== 'all') {
-        if (priorityFilter === 'unset' ? r.priority !== null : r.priority !== priorityFilter) return false;
+      if (stateFilters.length > 0 && !stateFilters.includes(r.state)) return false;
+      if (priorityFilters.length > 0) {
+        const key = r.priority ?? 'unset';
+        if (!priorityFilters.includes(key)) return false;
       }
-      if (typeFilter !== 'all') {
-        if (typeFilter === 'unset' ? r.issueType !== null : r.issueType !== typeFilter) return false;
+      if (typeFilters.length > 0) {
+        const key = r.issueType ?? 'unset';
+        if (!typeFilters.includes(key)) return false;
       }
-      if (runStatusFilter !== 'all') {
-        const top = topStatus(r.actionRuns);
-        if (runStatusFilter === 'has-runs') {
-          if (r.actionRuns.length === 0) return false;
-        } else if (runStatusFilter === 'enqueued') {
-          if (top !== 'queued') return false;
-        } else if (runStatusFilter === 'none') {
-          if (r.actionRuns.length > 0) return false;
-        } else if (top !== runStatusFilter) {
-          return false;
-        }
+      if (
+        runStatusFilters.length > 0 &&
+        !runStatusFilters.some((v) => matchesRunStatus(r, v as RunStatusFilter))
+      ) {
+        return false;
       }
       if (q.length > 0) {
         const hay = `${r.number} ${r.title} ${r.labels.join(' ')}`.toLowerCase();
@@ -132,7 +135,7 @@ export function IssuesView({
       }
       return true;
     });
-  }, [rows, search, stateFilter, priorityFilter, typeFilter, runStatusFilter]);
+  }, [rows, search, stateFilters, priorityFilters, typeFilters, runStatusFilters]);
 
   const sorted = useMemo(() => {
     const out = [...filtered];
@@ -162,10 +165,10 @@ export function IssuesView({
 
   const filtersActive =
     search.trim().length > 0 ||
-    stateFilter !== 'all' ||
-    priorityFilter !== 'all' ||
-    typeFilter !== 'all' ||
-    runStatusFilter !== 'all';
+    stateFilters.length > 0 ||
+    priorityFilters.length > 0 ||
+    typeFilters.length > 0 ||
+    runStatusFilters.length > 0;
 
   function handleSort(key: SortKey) {
     if (key === sortKey) {
@@ -178,10 +181,10 @@ export function IssuesView({
 
   function resetFilters() {
     setSearch('');
-    setStateFilter('all');
-    setPriorityFilter('all');
-    setTypeFilter('all');
-    setRunStatusFilter('all');
+    setStateFilters([]);
+    setPriorityFilters([]);
+    setTypeFilters([]);
+    setRunStatusFilters([]);
     setPage(1);
   }
 
@@ -230,14 +233,12 @@ export function IssuesView({
             {
               id: 'state',
               label: 'State',
-              value: stateFilter,
-              defaultValue: 'all',
+              values: stateFilters,
               onChange: (v) => {
-                setStateFilter(v as StateFilter);
+                setStateFilters(v);
                 setPage(1);
               },
               options: [
-                { value: 'all', label: 'All states' },
                 { value: 'open', label: 'Open' },
                 { value: 'closed', label: 'Closed' },
               ],
@@ -245,14 +246,12 @@ export function IssuesView({
             {
               id: 'priority',
               label: 'Priority',
-              value: priorityFilter,
-              defaultValue: 'all',
+              values: priorityFilters,
               onChange: (v) => {
-                setPriorityFilter(v as PriorityFilter);
+                setPriorityFilters(v);
                 setPage(1);
               },
               options: [
-                { value: 'all', label: 'All priorities' },
                 { value: 'critical', label: 'Critical' },
                 { value: 'high', label: 'High' },
                 { value: 'medium', label: 'Medium' },
@@ -263,14 +262,12 @@ export function IssuesView({
             {
               id: 'type',
               label: 'Type',
-              value: typeFilter,
-              defaultValue: 'all',
+              values: typeFilters,
               onChange: (v) => {
-                setTypeFilter(v as TypeFilter);
+                setTypeFilters(v);
                 setPage(1);
               },
               options: [
-                { value: 'all', label: 'All types' },
                 { value: 'bug', label: 'Bug' },
                 { value: 'feature', label: 'Feature' },
                 { value: 'question', label: 'Question' },
@@ -281,14 +278,12 @@ export function IssuesView({
             {
               id: 'runStatus',
               label: 'Run status',
-              value: runStatusFilter,
-              defaultValue: 'all',
+              values: runStatusFilters,
               onChange: (v) => {
-                setRunStatusFilter(v as RunStatusFilter);
+                setRunStatusFilters(v);
                 setPage(1);
               },
               options: [
-                { value: 'all', label: 'All' },
                 { value: 'has-runs', label: 'Has any run' },
                 { value: 'running', label: 'Running' },
                 { value: 'enqueued', label: 'Enqueued' },

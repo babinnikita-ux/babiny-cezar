@@ -13,7 +13,7 @@ import {
 } from '@/components/icons';
 import { RowMenuPortal } from '@/components/row-menu-portal';
 import { PageContainer } from '@/components/ui/page-container';
-import { FilterBar, type FilterControl } from '@/components/ui/filter-bar';
+import { FilterBar, type FilterControl, type FilterOption } from '@/components/ui/filter-bar';
 import { ActionSheet, type ActionSheetItem } from '@/components/ui/action-sheet';
 import { useToast } from '@/components/ui/use-toast';
 import { createSupabaseBrowserClient } from '@/lib/supabase/browser';
@@ -77,20 +77,28 @@ const SKILL_STYLE: Record<SkillTag, { tag: string; pill: string; dot: string }> 
   },
 };
 
-const CONFIDENCE_FILTERS = [
-  { id: 'all', label: 'All', threshold: 0 },
-  { id: '90', label: '> 90%', threshold: 90 },
-  { id: '80', label: '> 80%', threshold: 80 },
-  { id: '70', label: '> 70%', threshold: 70 },
-] as const;
+// ─────────────────────────────────────────────────────────────────────
+// Confidence: re-modeled from the old single ">threshold" dropdown into
+// discrete multi-select BANDS, using the legacy 70/80/90 thresholds as the
+// band boundaries. A finding matches if its confidence falls in ANY selected
+// band (OR within the dimension); an empty selection means "all" (no filter).
+// ─────────────────────────────────────────────────────────────────────
+type ConfidenceBand = { id: string; label: string; min: number; max: number };
+const CONFIDENCE_BANDS: ConfidenceBand[] = [
+  { id: 'high', label: 'High (> 90%)', min: 90, max: Infinity },
+  { id: 'medium', label: 'Medium (80–90%)', min: 80, max: 90 },
+  { id: 'standard', label: 'Standard (70–80%)', min: 70, max: 80 },
+  { id: 'low', label: 'Low (< 70%)', min: 0, max: 70 },
+];
 
-interface SkillFilterOption {
-  /** Action name (or 'all'). Compared against `Finding.actionName`. */
-  id: string;
-  label: string;
+// True if `confidence` is in any of the selected bands. `[]` = no filter.
+function matchesConfidenceBands(confidence: number, selected: string[]): boolean {
+  if (selected.length === 0) return true;
+  return selected.some((id) => {
+    const band = CONFIDENCE_BANDS.find((b) => b.id === id);
+    return band ? confidence >= band.min && confidence < band.max : false;
+  });
 }
-
-const ALL_SKILLS_OPTION: SkillFilterOption = { id: 'all', label: 'All skills' };
 
 // Humanize an action name like 'log-analyzer' → 'Log analyzer'. The action
 // name is the canonical identifier; the label is purely presentational.
@@ -100,8 +108,8 @@ function humanizeActionName(name: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
+// Type filter options (no "all" pseudo-option — empty selection = all).
 const TYPE_FILTERS = [
-  { id: 'all', label: 'All types' },
   { id: 'decision', label: 'Pending decisions' },
   { id: 'pr', label: 'PRs to review' },
   { id: 'paused', label: 'Paused runs' },
@@ -166,30 +174,26 @@ export function InboxView({
     };
   }, [workspaceId, router]);
 
-  // Build the dynamic skill filter list from real action names. The
-  // 'all' option is always present; the rest mirrors whatever the loader
-  // surfaced from the actions table.
-  const skillFilters = useMemo<SkillFilterOption[]>(() => {
-    return [
-      ALL_SKILLS_OPTION,
-      ...actionNames.map((a) => ({ id: a.name, label: humanizeActionName(a.name) })),
-    ];
+  // Build the dynamic skill filter option list from real action names —
+  // mirrors whatever the loader surfaced from the actions table. No "all"
+  // pseudo-option: an empty selection already means "all".
+  const skillOptions = useMemo<FilterOption[]>(() => {
+    return actionNames.map((a) => ({ value: a.name, label: humanizeActionName(a.name) }));
   }, [actionNames]);
 
   const [selectedFindings, setSelectedFindings] = useState<Set<string>>(new Set());
-  const [confidenceFilter, setConfidenceFilter] = useState<(typeof CONFIDENCE_FILTERS)[number]>(
-    CONFIDENCE_FILTERS[2], // > 80%
-  );
-  const [skillFilter, setSkillFilter] = useState<SkillFilterOption>(ALL_SKILLS_OPTION);
-  // Fall back to "All skills" if the filtered-on action vanishes from the
-  // server response (e.g. all its pending decisions got drained).
+  // Multi-select filter state — `[]` on any dimension means "no filter".
+  const [confidenceFilter, setConfidenceFilter] = useState<string[]>([]);
+  const [skillFilter, setSkillFilter] = useState<string[]>([]);
+  // Drop any selected skill whose action vanishes from the server response
+  // (e.g. all its pending decisions got drained).
   useEffect(() => {
-    if (skillFilter.id === 'all') return;
-    if (!skillFilters.some((s) => s.id === skillFilter.id)) {
-      setSkillFilter(ALL_SKILLS_OPTION);
-    }
-  }, [skillFilters, skillFilter]);
-  const [typeFilter, setTypeFilter] = useState<(typeof TYPE_FILTERS)[number]>(TYPE_FILTERS[0]);
+    setSkillFilter((prev) => {
+      const next = prev.filter((id) => skillOptions.some((s) => s.value === id));
+      return next.length === prev.length ? prev : next;
+    });
+  }, [skillOptions]);
+  const [typeFilter, setTypeFilter] = useState<string[]>([]);
   const [syncedAt, setSyncedAt] = useState<number>(initialSyncedAt);
 
   // The sync now runs in the background (see the global sync indicator); when
@@ -217,13 +221,14 @@ export function InboxView({
   const visibleItems = useMemo(() => {
     return items
       .map((it) => {
-        if (typeFilter.id !== 'all' && it.kind !== typeFilter.id) return null;
+        // OR within a dimension, AND across. `[]` = no filter on that axis.
+        if (typeFilter.length > 0 && !typeFilter.includes(it.kind)) return null;
         if (it.kind !== 'decision') return it;
         // Filter findings within decisions. `skill` is visual-only;
         // the filter axis is the canonical `actionName`.
         const filtered = it.findings.filter((f) => {
-          if (f.confidence < confidenceFilter.threshold) return false;
-          if (skillFilter.id !== 'all' && f.actionName !== skillFilter.id) return false;
+          if (!matchesConfidenceBands(f.confidence, confidenceFilter)) return false;
+          if (skillFilter.length > 0 && !skillFilter.includes(f.actionName)) return false;
           return true;
         });
         if (filtered.length === 0) return null;
@@ -397,47 +402,34 @@ export function InboxView({
   const hasAny = visibleItems.length > 0;
   const allFilteredOut = !hasAny && items.length > 0;
 
-  // Reset all inbox filters to their defaults. The confidence default is
-  // "> 80%" (index 2); skill + type default to "all".
+  // Reset every inbox filter to "no filter" (empty selection = match all).
   function resetFilters() {
-    setSkillFilter(ALL_SKILLS_OPTION);
-    setConfidenceFilter(CONFIDENCE_FILTERS[2]);
-    setTypeFilter(TYPE_FILTERS[0]);
+    setSkillFilter([]);
+    setConfidenceFilter([]);
+    setTypeFilter([]);
   }
 
   const filterControls: FilterControl[] = [
     {
       id: 'skill',
       label: 'Skill',
-      value: skillFilter.id,
-      defaultValue: 'all',
-      options: skillFilters.map((s) => ({ value: s.id, label: s.label })),
-      onChange: (v) => {
-        const found = skillFilters.find((s) => s.id === v);
-        if (found) setSkillFilter(found);
-      },
+      values: skillFilter,
+      options: skillOptions,
+      onChange: setSkillFilter,
     },
     {
       id: 'confidence',
       label: 'Confidence',
-      value: confidenceFilter.id,
-      defaultValue: CONFIDENCE_FILTERS[2].id,
-      options: CONFIDENCE_FILTERS.map((c) => ({ value: c.id, label: c.label })),
-      onChange: (v) => {
-        const found = CONFIDENCE_FILTERS.find((c) => c.id === v);
-        if (found) setConfidenceFilter(found);
-      },
+      values: confidenceFilter,
+      options: CONFIDENCE_BANDS.map((b) => ({ value: b.id, label: b.label })),
+      onChange: setConfidenceFilter,
     },
     {
       id: 'type',
       label: 'Type',
-      value: typeFilter.id,
-      defaultValue: 'all',
+      values: typeFilter,
       options: TYPE_FILTERS.map((t) => ({ value: t.id, label: t.label })),
-      onChange: (v) => {
-        const found = TYPE_FILTERS.find((t) => t.id === v);
-        if (found) setTypeFilter(found);
-      },
+      onChange: setTypeFilter,
     },
   ];
 
@@ -480,11 +472,7 @@ export function InboxView({
 
       {/* ── FEED ── */}
       {!hasAny ? (
-        <EmptyState filteredOut={allFilteredOut} onClear={() => {
-          setConfidenceFilter(CONFIDENCE_FILTERS[0]);
-          setSkillFilter(ALL_SKILLS_OPTION);
-          setTypeFilter(TYPE_FILTERS[0]);
-        }} />
+        <EmptyState filteredOut={allFilteredOut} onClear={resetFilters} />
       ) : (
         <div className="flex flex-col gap-3">
           {visibleItems.map((it) => {

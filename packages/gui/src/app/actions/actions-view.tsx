@@ -47,11 +47,6 @@ interface ActionsViewProps {
   autoTriageActionId: string | null;
 }
 
-type KindFilter = 'all' | ActionRow['kind'];
-type TargetFilter = 'all' | ActionRow['target'];
-type StatusFilter = 'all' | ActionRow['status'];
-type TriggerFilter = 'all' | string;
-
 type SortKey = 'name' | 'kind' | 'target' | 'triggers' | 'effects' | 'status' | 'updatedAt';
 type SortDir = 'asc' | 'desc';
 
@@ -62,10 +57,10 @@ export function ActionsView({ rows, readOnly, autoTriageActionId }: ActionsViewP
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<PageSize>(10);
   const [search, setSearch] = useState('');
-  const [kindFilter, setKindFilter] = useState<KindFilter>('all');
-  const [targetFilter, setTargetFilter] = useState<TargetFilter>('all');
-  const [triggerFilter, setTriggerFilter] = useState<TriggerFilter>('all');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [kindFilter, setKindFilter] = useState<string[]>([]);
+  const [targetFilter, setTargetFilter] = useState<string[]>([]);
+  const [triggerFilter, setTriggerFilter] = useState<string[]>([]);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
   const [seedState, setSeedState] = useState<{ ok?: boolean; error?: string } | null>(null);
@@ -80,10 +75,10 @@ export function ActionsView({ rows, readOnly, autoTriageActionId }: ActionsViewP
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
-      if (kindFilter !== 'all' && r.kind !== kindFilter) return false;
-      if (targetFilter !== 'all' && r.target !== targetFilter) return false;
-      if (statusFilter !== 'all' && r.status !== statusFilter) return false;
-      if (triggerFilter !== 'all' && !r.triggers.includes(triggerFilter)) return false;
+      if (kindFilter.length > 0 && !kindFilter.includes(r.kind)) return false;
+      if (targetFilter.length > 0 && !targetFilter.includes(r.target)) return false;
+      if (statusFilter.length > 0 && !statusFilter.includes(r.status)) return false;
+      if (triggerFilter.length > 0 && !triggerFilter.some((t) => r.triggers.includes(t))) return false;
       if (q.length > 0) {
         const hay = `${r.name} ${r.description ?? ''} ${r.triggers.join(' ')}`.toLowerCase();
         if (!hay.includes(q)) return false;
@@ -118,10 +113,10 @@ export function ActionsView({ rows, readOnly, autoTriageActionId }: ActionsViewP
 
   const filtersActive =
     search.trim().length > 0 ||
-    kindFilter !== 'all' ||
-    targetFilter !== 'all' ||
-    triggerFilter !== 'all' ||
-    statusFilter !== 'all';
+    kindFilter.length > 0 ||
+    targetFilter.length > 0 ||
+    triggerFilter.length > 0 ||
+    statusFilter.length > 0;
 
   function handleSeed() {
     setSeedState(null);
@@ -142,10 +137,10 @@ export function ActionsView({ rows, readOnly, autoTriageActionId }: ActionsViewP
 
   function resetFilters() {
     setSearch('');
-    setKindFilter('all');
-    setTargetFilter('all');
-    setTriggerFilter('all');
-    setStatusFilter('all');
+    setKindFilter([]);
+    setTargetFilter([]);
+    setTriggerFilter([]);
+    setStatusFilter([]);
     setPage(1);
   }
 
@@ -221,14 +216,12 @@ export function ActionsView({ rows, readOnly, autoTriageActionId }: ActionsViewP
             {
               id: 'target',
               label: 'Target',
-              value: targetFilter,
-              defaultValue: 'all',
+              values: targetFilter,
               onChange: (v) => {
-                setTargetFilter(v as TargetFilter);
+                setTargetFilter(v);
                 setPage(1);
               },
               options: [
-                { value: 'all', label: 'All targets' },
                 { value: 'issue', label: 'Issue' },
                 { value: 'pr', label: 'PR' },
               ],
@@ -236,14 +229,12 @@ export function ActionsView({ rows, readOnly, autoTriageActionId }: ActionsViewP
             {
               id: 'kind',
               label: 'Kind',
-              value: kindFilter,
-              defaultValue: 'all',
+              values: kindFilter,
               onChange: (v) => {
-                setKindFilter(v as KindFilter);
+                setKindFilter(v);
                 setPage(1);
               },
               options: [
-                { value: 'all', label: 'All kinds' },
                 { value: 'built-in', label: 'Built-in' },
                 { value: 'user', label: 'User' },
               ],
@@ -251,28 +242,22 @@ export function ActionsView({ rows, readOnly, autoTriageActionId }: ActionsViewP
             {
               id: 'trigger',
               label: 'Trigger',
-              value: triggerFilter,
-              defaultValue: 'all',
+              values: triggerFilter,
               onChange: (v) => {
-                setTriggerFilter(v as TriggerFilter);
+                setTriggerFilter(v);
                 setPage(1);
               },
-              options: [
-                { value: 'all', label: 'All triggers' },
-                ...distinctTriggers.map((t) => ({ value: t, label: t })),
-              ],
+              options: distinctTriggers.map((t) => ({ value: t, label: t })),
             },
             {
               id: 'status',
               label: 'Status',
-              value: statusFilter,
-              defaultValue: 'all',
+              values: statusFilter,
               onChange: (v) => {
-                setStatusFilter(v as StatusFilter);
+                setStatusFilter(v);
                 setPage(1);
               },
               options: [
-                { value: 'all', label: 'All statuses' },
                 { value: 'enabled', label: 'Enabled' },
                 { value: 'disabled', label: 'Disabled' },
               ],
