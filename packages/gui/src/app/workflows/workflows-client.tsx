@@ -16,6 +16,8 @@ import {
 import { FlowCard, type SkillOption } from './flow-card';
 import { FLOW_TEMPLATES, type FlowTemplate } from './templates';
 import { PageContainer } from '@/components/ui/page-container';
+import { Sheet } from '@/components/ui/sheet';
+import { cn } from '@/components/ui/cn';
 
 interface Props {
   workspaceName: string;
@@ -266,9 +268,20 @@ export function WorkflowsClient({ workspaceName, workspaceRole, initialFlows, av
 
 function NewFlowMenu({ onPick }: { onPick: (t: FlowTemplate) => void }) {
   const [open, setOpen] = useState(false);
-  // Close when clicking outside or hitting escape.
+  // Coarse pointer (phone/tablet touch) → bottom Sheet; fine pointer → popover.
+  const [coarse, setCoarse] = useState(false);
   useEffect(() => {
-    if (!open) return;
+    const mq = window.matchMedia('(pointer: coarse)');
+    const update = () => setCoarse(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
+  // Outside-click / escape only for the desktop popover (the Sheet handles its
+  // own dismissal).
+  useEffect(() => {
+    if (!open || coarse) return;
     const onDoc = (e: MouseEvent) => {
       const t = e.target as HTMLElement;
       if (!t.closest('[data-newflow-menu]')) setOpen(false);
@@ -280,38 +293,84 @@ function NewFlowMenu({ onPick }: { onPick: (t: FlowTemplate) => void }) {
       document.removeEventListener('mousedown', onDoc);
       document.removeEventListener('keydown', onKey);
     };
-  }, [open]);
+  }, [open, coarse]);
+
+  const pick = (t: FlowTemplate) => {
+    onPick(t);
+    setOpen(false);
+  };
 
   return (
     <div className="relative" data-newflow-menu>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="rounded-md border border-accent/50 bg-accent/10 px-3 py-1.5 text-sm font-medium text-fg hover:bg-accent/20"
+        aria-expanded={open}
+        className="inline-flex items-center gap-1.5 rounded-md border border-accent/50 bg-accent/10 px-3 py-1.5 text-sm font-medium text-fg transition-colors hover:bg-accent/20"
       >
-        + Flow ▾
+        <span className="text-base leading-none">+</span> Flow
+        <span aria-hidden className="text-fg-muted">▾</span>
       </button>
-      {open && (
-        <div className="absolute right-0 top-full z-30 mt-1 w-80 rounded-md border border-border bg-bg-elevated shadow-xl">
-          <div className="border-b border-border px-3 py-2 text-[11px] uppercase tracking-wide text-fg-muted">
+
+      {/* Desktop popover — width-clamped so it never spills off-screen. */}
+      {open && !coarse && (
+        <div className="absolute right-0 top-full z-popover mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-border bg-bg-elevated shadow-ambient">
+          <div className="border-b border-border px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
             Start from a template
           </div>
-          {FLOW_TEMPLATES.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => {
-                onPick(t);
-                setOpen(false);
-              }}
-              className="block w-full border-b border-border/50 px-3 py-2 text-left last:border-b-0 hover:bg-bg-subtle"
-            >
-              <div className="text-sm font-medium text-fg">{t.label}</div>
-              <div className="text-[11px] text-fg-muted leading-snug">{t.description}</div>
-            </button>
-          ))}
+          <div className="p-1">
+            {FLOW_TEMPLATES.map((t) => (
+              <TemplateRow key={t.id} template={t} onPick={pick} />
+            ))}
+          </div>
         </div>
       )}
+
+      {/* Phone/tablet — bottom sheet (full-width, no overflow, big targets). */}
+      <Sheet open={open && coarse} onClose={() => setOpen(false)} side="bottom" title="Start from a template">
+        <div className="px-2 py-2">
+          {FLOW_TEMPLATES.map((t) => (
+            <TemplateRow key={t.id} template={t} onPick={pick} large />
+          ))}
+        </div>
+      </Sheet>
     </div>
+  );
+}
+
+function TemplateRow({
+  template,
+  onPick,
+  large,
+}: {
+  template: FlowTemplate;
+  onPick: (t: FlowTemplate) => void;
+  large?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onPick(template)}
+      className={cn(
+        'flex w-full items-start gap-3 rounded-md text-left transition-colors hover:bg-bg-subtle',
+        large ? 'min-h-12 px-3 py-3' : 'px-2.5 py-2',
+      )}
+    >
+      <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-accent/40 bg-accent/10 text-accent">
+        <PlayIcon />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-fg">{template.label}</span>
+        <span className="block text-[11px] leading-snug text-fg-muted">{template.description}</span>
+      </span>
+    </button>
+  );
+}
+
+function PlayIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M8 5v14l11-7z" />
+    </svg>
   );
 }
 
