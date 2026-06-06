@@ -1,6 +1,8 @@
 # Spec: Full Mobile Support for the Cezar GUI
 
-**Status:** Draft (spec only — no implementation)
+**Status:** Implemented on branch `feat/mobile-support` (Phases 0–6). Built mobile-first; desktop (`lg+`) preserved by breakpoint, no runtime `mobileShell` flag (see note below). `yarn typecheck` + `yarn build` green. Remaining: real-device/screen-reader QA, the deferred items in §10, and the design sign-off in §10.
+
+> **Implementation deviations from this spec:** (1) No runtime `mobileShell` feature flag — desktop is preserved by construction via `lg:` breakpoints, which is lower-risk than dual code paths. (2) Swipe-to-dismiss on sheets deferred (backdrop/Esc/close only). (3) Runners latency `title=` tooltip left hover-only (low value). (4) Sub-11px uppercase micro-labels left as a design idiom pending design review. (5) Four low-traffic fallback/error page wrappers keep `px-6` rather than `PageContainer` to avoid a desktop padding delta. (6) Skills row "kebab" (previously a dead no-op) became a functional 2-item menu.
 **Scope:** `packages/gui` (Next.js 15 + Tailwind cockpit)
 **Target:** Phones (≥360px) and tablets (≥768px) in portrait and landscape, in addition to existing desktop.
 **Author:** _spec mode_
