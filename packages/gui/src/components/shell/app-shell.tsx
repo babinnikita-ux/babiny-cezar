@@ -6,6 +6,7 @@ import { TopBar } from '../topbar';
 import { MobileTopBar } from './mobile-topbar';
 import { MobileNavDrawer } from './mobile-nav-drawer';
 import { BottomTabBar } from './bottom-tab-bar';
+import { Toaster } from '../ui/toaster';
 import type { SessionUser } from '@/lib/auth';
 import type { ActiveWorkspace, WorkspaceListItem } from '@/lib/workspace';
 import type { Database } from '@/lib/supabase/types';
@@ -58,6 +59,7 @@ export function AppShell({
   const workspaceLabel = workspace ? `${workspace.repoOwner}/${workspace.repoName}` : null;
 
   return (
+    <Toaster>
     <div className="flex min-h-screen min-h-dvh">
       <Sidebar user={user} workspace={workspace} workspaces={workspaces} />
 
@@ -103,5 +105,6 @@ export function AppShell({
 
       <BottomTabBar onOpenNav={openNav} />
     </div>
+    </Toaster>
   );
 }
