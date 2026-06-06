@@ -198,6 +198,14 @@ export function WorkflowsClient({ workspaceName, workspaceRole, initialFlows, av
             onRemoveStep={(idx) =>
               updateFlow(flow.id, (f) => ({ ...f, steps: f.steps.filter((_, i) => i !== idx) }))
             }
+            onMoveStepUp={(idx) =>
+              updateFlow(flow.id, (f) => {
+                if (idx <= 0) return f;
+                const next = [...f.steps];
+                [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+                return { ...f, steps: next };
+              })
+            }
             onMoveStepDown={(idx) =>
               updateFlow(flow.id, (f) => {
                 if (idx >= f.steps.length - 1) return f;
