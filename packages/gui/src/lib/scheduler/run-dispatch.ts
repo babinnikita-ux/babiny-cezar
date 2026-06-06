@@ -6,6 +6,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { CiFollowupInput } from '@cezar/core';
 import { executeWorkflowJob } from '@/lib/execute-workflow-job';
+import { executeActionJob } from '@/lib/execute-action-job';
 import { executeLabelAnalysisJob } from '@/lib/execute-label-analysis-job';
 import { executeSyncJob } from '@/lib/execute-sync-job';
 import type { Database } from '@/lib/supabase/types';
@@ -99,7 +100,33 @@ export async function runDispatch(supabase: SupabaseClient<Database>): Promise<D
       flowId?: string;
       flowInput?: string;
       analysisId?: string;
+      actionId?: string;
+      runId?: string;
     };
+
+    // Manual "run action on issue/PR" — not a multi-step workflow_run; it runs
+    // a single action against its target and binds to the workflow_runs row
+    // that enqueueActionRun pre-created.
+    if (job.kind === 'action') {
+      const number = job.pr_number ?? job.issue_number;
+      if (!payload.actionId || !payload.runId || number == null) {
+        console.error(`[dispatch] action job ${job.id} missing payload.actionId/runId or target number`);
+        await supabase
+          .from('jobs')
+          .update({ status: 'failed', claim_expires_at: null, updated_at: new Date().toISOString() })
+          .eq('id', job.id);
+        continue;
+      }
+      void executeActionJob(supabase, {
+        workspaceId: job.workspace_id,
+        jobId: job.id,
+        runId: payload.runId,
+        actionId: payload.actionId,
+        number,
+      }).catch((err) => failStuckJob(supabase, job.id, err));
+      dispatched += 1;
+      continue;
+    }
 
     // Label analysis is not a workflow_run — it has no per-issue target and
     // no agent steps, so it routes to its own executor and writes only to
