@@ -33,8 +33,8 @@ export interface CliRunOptions {
 }
 
 /**
- * Load the merged action catalog: the 15 built-in defaults (mirrored from the
- * SQL seed) plus any user-defined actions found at `<repoRoot>/.ai/actions/**\/*.md`.
+ * Load the merged action catalog: the built-in defaults plus any user-defined
+ * actions found at `<repoRoot>/.ai/actions/**\/*.md`.
  * Markdown frontmatter mirrors the SQL columns one-for-one.
  */
 export async function loadActionCatalog(repoRoot: string = process.cwd()): Promise<ActionDef[]> {

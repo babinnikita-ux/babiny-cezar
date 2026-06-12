@@ -67,7 +67,7 @@ const labelSet: EffectDef<{ labels: string[] }> = {
 const comment: EffectDef<{ body: string }> = {
   name: 'comment',
   description:
-    "Post a comment on the target. Use sparingly — keep tone professional, do not spam. Returns the new comment id.",
+    "Post a comment on the target. Keep it short and direct — state the point, no filler. Use sparingly, do not spam. Returns the new comment id.",
   schema: z.object({ body: z.string().min(1) }),
   async execute({ body }, { github, targetNumber }) {
     const commentId = await github.addComment(targetNumber, body);
