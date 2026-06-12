@@ -66,16 +66,17 @@ export type ConfidenceConfig = AutoConfidenceConfig | HitlConfidenceConfig;
  */
 export const DEFAULT_AUTO_ACCEPT_ABOVE = 80;
 
+/**
+ * Triggers that can actually fire today (Phase 4 — trigger honesty). The
+ * webhook derives the `on-issue-*` values from the GitHub `issues` event
+ * action; `manual` is the "run now" path. Re-add entries (e.g. `on-cron`,
+ * `on-pr-opened`) only when a real firing path ships.
+ */
 export type ActionTrigger =
   | 'manual'
   | 'on-issue-opened'
   | 'on-issue-edited'
-  | 'on-issue-reopened'
-  | 'on-pr-opened'
-  | 'on-pr-edited'
-  | 'on-comment'
-  | 'on-check-failed'
-  | 'on-cron';
+  | 'on-issue-reopened';
 
 /** Output of a successful action run. */
 export interface ActionRunResult {

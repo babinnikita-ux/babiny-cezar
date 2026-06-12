@@ -81,6 +81,8 @@ function rowToAction(row: ActionRow): ActionDef {
     skillRefs: asStringArray(row.skill_refs),
     contextRefs: asStringArray(row.context_refs),
     target: row.target,
+    // Deliberately lenient cast: DB rows may still carry retired trigger
+    // strings (e.g. 'on-cron') — they simply never match a fired trigger.
     triggers: asStringArray(row.triggers) as ActionTrigger[],
     effects: row.effects == null ? null : (asStringArray(row.effects) as EffectName[]),
     outputSchema:

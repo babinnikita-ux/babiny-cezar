@@ -59,16 +59,13 @@ interface Props {
   readOnly: boolean;
 }
 
+// Only triggers with a real firing path (Phase 4 — trigger honesty). Existing
+// rows carrying retired trigger strings keep working; they just never fire.
 const ALL_TRIGGERS = [
   'manual',
   'on-issue-opened',
   'on-issue-edited',
   'on-issue-reopened',
-  'on-pr-opened',
-  'on-pr-edited',
-  'on-comment',
-  'on-check-failed',
-  'on-cron',
 ] as const;
 
 const ALL_EFFECTS = [
