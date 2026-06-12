@@ -70,6 +70,7 @@ export async function runTriagePass(opts: TriagePassOptions): Promise<TriagePass
     github: opts.github,
     targetNumber: opts.issueNumber,
     supabase: opts.supabase,
+    workspaceId: opts.workspaceId,
   };
 
   const autoTriage = await loadAutoTriageAction(opts.supabase, opts.workspaceId).catch((err) => {

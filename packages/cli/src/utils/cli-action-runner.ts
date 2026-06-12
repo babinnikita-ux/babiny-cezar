@@ -36,7 +36,10 @@ export interface CliRunOptions {
 /**
  * Load the merged action catalog: the built-in defaults plus any user-defined
  * actions found at `<repoRoot>/.ai/actions/**\/*.md`.
- * Markdown frontmatter mirrors the SQL columns one-for-one.
+ * Markdown frontmatter mirrors the SQL columns one-for-one. The optional
+ * `suggested-flow` key maps to `suggestedFlowId` — parsed but inert locally
+ * (the CLI has no job queue; the suggest-workflow effect degrades to a
+ * "not supported in this environment" summary).
  */
 export async function loadActionCatalog(repoRoot: string = process.cwd()): Promise<ActionDef[]> {
   const userActions = await discoverUserActions(resolve(repoRoot, '.ai/actions'));
@@ -106,6 +109,10 @@ function parseActionMarkdown(raw: string, fallbackName: string): ActionDef | nul
     effects,
     outputSchema: null,
     enabled: fm.enabled === false ? false : true,
+    suggestedFlowId:
+      typeof fm['suggested-flow'] === 'string' && fm['suggested-flow'].trim()
+        ? fm['suggested-flow'].trim()
+        : null,
   };
 }
 

@@ -27,11 +27,16 @@ duplicates. Nothing else.
    scan it using the `dedupe-heuristics` rules. On a confident match, call
    `link-duplicate` pointing at the lower-numbered original. Never close.
    If the section is absent, skip this step.
+5. If you added a `bug` label, found no duplicate, and a `suggest-workflow`
+   tool is available, call it once with a one-line reason. It surfaces as a
+   "Run workflow" suggestion for the user — it does not run anything by
+   itself. If the tool is absent, skip this step.
 
 ## Effects you may call
 
 - `label.add` — `bug` or `feature` only.
 - `link-duplicate` — confident knowledge-base matches only.
+- `suggest-workflow` — only when exposed; bug labelled, no duplicate; once.
 
 ## Effects you must NOT call
 

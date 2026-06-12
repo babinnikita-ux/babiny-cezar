@@ -10,6 +10,7 @@ export type {
   AutoConfidenceConfig,
   HitlConfidenceConfig,
   ConfidenceConfig,
+  EffectRoutingMode,
 } from './action.js';
 export type {
   ActionTarget,

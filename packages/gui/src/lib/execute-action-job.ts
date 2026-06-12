@@ -60,7 +60,7 @@ export async function executeActionJob(
 
     const { data: actionRow } = await supabase
       .from('actions')
-      .select('id, name, kind, description, system_prompt, skill_refs, context_refs, target, triggers, effects, output_schema, enabled')
+      .select('id, name, kind, description, system_prompt, skill_refs, context_refs, target, triggers, effects, output_schema, enabled, effect_routing, suggested_flow_id')
       .eq('id', actionId)
       .eq('workspace_id', workspaceId)
       .maybeSingle();
@@ -188,6 +188,9 @@ export async function executeActionJob(
           ? (actionRow.output_schema as Record<string, unknown>)
           : null,
       enabled: actionRow.enabled,
+      effectRouting: parseEffectRouting(actionRow.effect_routing),
+      suggestedFlowId:
+        typeof actionRow.suggested_flow_id === 'string' ? actionRow.suggested_flow_id : null,
     };
 
     const startedAt = new Date().toISOString();
@@ -202,7 +205,7 @@ export async function executeActionJob(
       const skills = await core.discoverBuiltinSkills();
       const result = await core.runAction(action, target, {
         skills,
-        effectCtx: { github, targetNumber: number, supabase },
+        effectCtx: { github, targetNumber: number, supabase, workspaceId },
         autoComment: { enabled: autoCommentEnabled, triggeredBy: 'manual · run now' },
         // Always passed — the runner only invokes providers for refs the
         // action declares via `contextRefs`. For PR targets the `open-issues`
@@ -269,6 +272,25 @@ export async function executeActionJob(
     await persister.fail(message).catch(() => {});
     await finishJob('failed').catch(() => {});
   }
+}
+
+/**
+ * Defensive map of the `effect_routing` jsonb column onto
+ * `ActionDef.effectRouting` — keeps only entries with a valid routing mode.
+ */
+function parseEffectRouting(
+  value: unknown,
+): import('@cezar/core').ActionDef['effectRouting'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const out: NonNullable<import('@cezar/core').ActionDef['effectRouting']> = {};
+  let any = false;
+  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+    if (v === 'auto' || v === 'always-defer') {
+      out[k as import('@cezar/core').EffectName] = v;
+      any = true;
+    }
+  }
+  return any ? out : undefined;
 }
 
 /**

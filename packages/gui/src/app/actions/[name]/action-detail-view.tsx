@@ -52,6 +52,10 @@ export interface ActionDetail {
   model: ActionModel;
   acceptanceMode: AcceptanceMode;
   confidenceConfig: ConfidenceConfig;
+  /** Workflow this action may suggest via the suggest-workflow effect; null = tool not exposed. */
+  suggestedFlowId: string | null;
+  /** The workspace's workflows (`flows` rows) for the suggested-workflow dropdown. */
+  availableFlows: Array<{ id: string; name: string }>;
 }
 
 interface Props {
@@ -101,6 +105,7 @@ export function ActionDetailView({ action, readOnly }: Props) {
   const [model, setModel] = useState<ActionModel>(action.model);
   const [acceptanceMode, setAcceptanceMode] = useState<AcceptanceMode>(action.acceptanceMode);
   const [confidenceConfig, setConfidenceConfig] = useState<ConfidenceConfig>(action.confidenceConfig);
+  const [suggestedFlowId, setSuggestedFlowId] = useState<string | null>(action.suggestedFlowId);
   const [promptDirty, setPromptDirty] = useState(false);
   const [metaDirty, setMetaDirty] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>('idle');
@@ -131,6 +136,7 @@ export function ActionDetailView({ action, readOnly }: Props) {
     setModel(action.model);
     setAcceptanceMode(action.acceptanceMode);
     setConfidenceConfig(action.confidenceConfig);
+    setSuggestedFlowId(action.suggestedFlowId);
     setPromptDirty(false);
     setMetaDirty(false);
     setSaveState('idle');
@@ -150,6 +156,7 @@ export function ActionDetailView({ action, readOnly }: Props) {
     action.model,
     action.acceptanceMode,
     action.confidenceConfig,
+    action.suggestedFlowId,
   ]);
 
   // Lazy skill suggestion fetch — only when the user opens the autocomplete.
@@ -202,6 +209,7 @@ export function ActionDetailView({ action, readOnly }: Props) {
       model,
       acceptanceMode,
       confidenceConfig,
+      suggestedFlowId,
     }),
     [
       description,
@@ -215,6 +223,7 @@ export function ActionDetailView({ action, readOnly }: Props) {
       model,
       acceptanceMode,
       confidenceConfig,
+      suggestedFlowId,
     ],
   );
 
@@ -247,6 +256,7 @@ export function ActionDetailView({ action, readOnly }: Props) {
     setModel(action.model);
     setAcceptanceMode(action.acceptanceMode);
     setConfidenceConfig(action.confidenceConfig);
+    setSuggestedFlowId(action.suggestedFlowId);
     setPromptDirty(false);
     setMetaDirty(false);
   }
@@ -633,6 +643,26 @@ export function ActionDetailView({ action, readOnly }: Props) {
               The agent picks effects from the full vocabulary at runtime.
             </p>
           )}
+
+          <Field label="Suggested workflow">
+            <Select
+              value={suggestedFlowId ?? ''}
+              onChange={(v) => {
+                setSuggestedFlowId(v === '' ? null : v);
+                setMetaDirty(true);
+              }}
+              disabled={readOnly}
+              options={[
+                { value: '', label: '— none —' },
+                ...action.availableFlows.map((f) => ({ value: f.id, label: f.name })),
+              ]}
+            />
+            <p className="mt-1.5 text-xs text-on-surface-variant">
+              When set, the agent can suggest running this workflow on the target
+              (surfaces as a &quot;Run workflow&quot; item in the inbox). None = the
+              suggest-workflow tool is not exposed.
+            </p>
+          </Field>
 
           <Field label="Status">
             <div className="flex gap-2">

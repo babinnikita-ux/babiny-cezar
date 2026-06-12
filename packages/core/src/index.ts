@@ -163,6 +163,7 @@ export {
   type AutoConfidenceConfig,
   type HitlConfidenceConfig,
   type ConfidenceConfig,
+  type EffectRoutingMode,
   type DeferredEffect,
   type DeferSink,
   type OpenIssueKbEntry,

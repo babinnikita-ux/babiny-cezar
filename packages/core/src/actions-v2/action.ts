@@ -40,7 +40,20 @@ export interface ActionDef {
   acceptanceMode?: AcceptanceMode;
   /** Thresholds the runner uses to route per-effect confidence. */
   confidenceConfig?: ConfidenceConfig;
+  /** Per-effect routing override, checked BEFORE the confidence thresholds:
+   *  'always-defer' sends the effect to the review inbox regardless of
+   *  confidence (dropped when no defer sink is wired); 'auto' applies it
+   *  unconditionally. Absent entries fall through to the confidence logic
+   *  (with a built-in default of 'always-defer' for `suggest-workflow`). */
+  effectRouting?: Partial<Record<EffectName, EffectRoutingMode>>;
+  /** The workflow (`flows` row id) this action may suggest running on its
+   *  target via the `suggest-workflow` effect. null/absent = the
+   *  suggest-workflow tool is not exposed to the model at all. */
+  suggestedFlowId?: string | null;
 }
+
+/** Routing override values for `ActionDef.effectRouting`. */
+export type EffectRoutingMode = 'auto' | 'always-defer';
 
 export type AcceptanceMode = 'auto' | 'human-in-the-loop';
 
