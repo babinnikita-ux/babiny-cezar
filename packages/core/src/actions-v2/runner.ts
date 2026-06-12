@@ -86,6 +86,14 @@ export interface RunActionDeps {
    * *which* names to use and *when*.
    */
   labels?: WorkspaceLabel[];
+  /**
+   * Resolver map for the action's `contextRefs`. Each provider returns a
+   * complete, pre-formatted markdown section (e.g. starting with
+   * `## Open-issue knowledge base`) appended to the user message, or '' to
+   * skip. A missing provider for a declared ref is silently skipped; a
+   * throwing provider is logged and skipped — the action still runs.
+   */
+  contextProviders?: Record<string, () => Promise<string>>;
 }
 
 /**
@@ -120,7 +128,20 @@ export async function runAction(
     .filter((s) => s && s.length > 0)
     .join('\n\n---\n\n');
 
-  const userMessage = formatTarget(target);
+  let userMessage = formatTarget(target);
+  for (const ref of action.contextRefs ?? []) {
+    const provider = deps.contextProviders?.[ref];
+    if (!provider) continue;
+    try {
+      const section = (await provider()).trim();
+      if (section.length > 0) userMessage = `${userMessage}\n\n${section}`;
+    } catch (err) {
+      console.error(
+        `[actions] context provider "${ref}" failed (action "${action.name}"):`,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
   const model = action.model ?? deps.model ?? DEFAULT_MODEL;
 
   const result = action.effects && action.effects.length > 0

@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { loadWorkspaceConfig } from './load-workspace-config';
+import { buildOpenIssuesContextProviders } from './open-issues-context';
 import { createWorkflowRunPersister } from './persist-workflow-run';
 import type { Database } from './supabase/types';
 
@@ -59,7 +60,7 @@ export async function executeActionJob(
 
     const { data: actionRow } = await supabase
       .from('actions')
-      .select('id, name, kind, description, system_prompt, skill_refs, target, triggers, effects, output_schema, enabled')
+      .select('id, name, kind, description, system_prompt, skill_refs, context_refs, target, triggers, effects, output_schema, enabled')
       .eq('id', actionId)
       .eq('workspace_id', workspaceId)
       .maybeSingle();
@@ -169,6 +170,9 @@ export async function executeActionJob(
       skillRefs: Array.isArray(actionRow.skill_refs)
         ? (actionRow.skill_refs as unknown[]).filter((s): s is string => typeof s === 'string')
         : [],
+      contextRefs: Array.isArray(actionRow.context_refs)
+        ? (actionRow.context_refs as unknown[]).filter((s): s is string => typeof s === 'string')
+        : [],
       target: actionRow.target as 'issue' | 'pr',
       triggers: Array.isArray(actionRow.triggers)
         ? ((actionRow.triggers as unknown[]).filter((s): s is string => typeof s === 'string') as import('@cezar/core').ActionTrigger[])
@@ -200,6 +204,10 @@ export async function executeActionJob(
         skills,
         effectCtx: { github, targetNumber: number, supabase },
         autoComment: { enabled: autoCommentEnabled, triggeredBy: 'manual · run now' },
+        // Always passed — the runner only invokes providers for refs the
+        // action declares via `contextRefs`. For PR targets the `open-issues`
+        // provider still returns issues, which is what dedupe-style actions want.
+        contextProviders: buildOpenIssuesContextProviders(supabase, workspaceId, number),
       });
       summary = result.text?.slice(0, 500);
       effectsApplied = result.effectsApplied;

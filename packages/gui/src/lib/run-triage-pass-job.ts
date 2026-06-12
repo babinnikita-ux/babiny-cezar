@@ -8,6 +8,7 @@ import type {
   TriagePassDeferSink,
   WorkspaceLabel,
 } from '@cezar/core';
+import { buildOpenIssuesContextProviders } from './open-issues-context';
 import type { WorkflowRunPersister } from './persist-workflow-run';
 import type { Database } from './supabase/types';
 
@@ -106,6 +107,7 @@ export async function runTriagePassJob(params: RunTriagePassJobParams): Promise<
       },
       deferSink,
       labels,
+      contextProviders: buildOpenIssuesContextProviders(supabase, workspaceId, issueNumber),
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

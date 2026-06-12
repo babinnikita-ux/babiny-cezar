@@ -20,6 +20,7 @@ interface ActionRow {
   description: string | null;
   system_prompt: string;
   skill_refs: unknown;
+  context_refs: unknown;
   target: 'issue' | 'pr';
   triggers: unknown;
   effects: unknown;
@@ -30,8 +31,10 @@ interface ActionRow {
   confidence_config: unknown;
 }
 
+// `context_refs` is added by migration 0044 (Phase 3 of the actions cleanup) —
+// it ships in the same release as this loader change.
 const ACTION_COLUMNS =
-  'id, workspace_id, name, kind, description, system_prompt, skill_refs, target, triggers, effects, output_schema, enabled, model, acceptance_mode, confidence_config';
+  'id, workspace_id, name, kind, description, system_prompt, skill_refs, context_refs, target, triggers, effects, output_schema, enabled, model, acceptance_mode, confidence_config';
 
 interface QueryResult<T> {
   data: T | null;
@@ -76,6 +79,7 @@ function rowToAction(row: ActionRow): ActionDef {
     description: row.description,
     systemPrompt: row.system_prompt,
     skillRefs: asStringArray(row.skill_refs),
+    contextRefs: asStringArray(row.context_refs),
     target: row.target,
     triggers: asStringArray(row.triggers) as ActionTrigger[],
     effects: row.effects == null ? null : (asStringArray(row.effects) as EffectName[]),

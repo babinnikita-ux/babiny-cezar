@@ -373,6 +373,9 @@ export interface Database {
           description: string | null;
           system_prompt: string;
           skill_refs: Json;
+          // Added by migration 0044 (actions-cleanup Phase 3) — ships in the
+          // same release as the code that selects it.
+          context_refs: Json;
           target: 'issue' | 'pr';
           triggers: Json;
           effects: Json | null;
@@ -388,7 +391,7 @@ export interface Database {
           confidence_config: Json;
         };
         Insert: Omit<Database['public']['Tables']['actions']['Row'],
-          'id' | 'kind' | 'description' | 'system_prompt' | 'skill_refs' | 'triggers' |
+          'id' | 'kind' | 'description' | 'system_prompt' | 'skill_refs' | 'context_refs' | 'triggers' |
           'effects' | 'output_schema' | 'enabled' | 'replaces_built_in' | 'created_at' | 'updated_at' |
           'created_by' | 'updated_by' | 'model' | 'acceptance_mode' | 'confidence_config'
         > & {
@@ -397,6 +400,7 @@ export interface Database {
           description?: string | null;
           system_prompt?: string;
           skill_refs?: Json;
+          context_refs?: Json;
           triggers?: Json;
           effects?: Json | null;
           output_schema?: Json | null;

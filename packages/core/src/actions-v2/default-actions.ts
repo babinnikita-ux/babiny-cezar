@@ -23,6 +23,7 @@ export const DEFAULT_ACTIONS: ActionDef[] = [
     systemPrompt:
       'You are running the first triage pass on an issue. Follow the auto-triage playbook in your reference skills. Do two things: (a) classify the issue and add ONLY a `bug` or `feature` label via label.add — questions, docs, and anything else get no label; (b) when the user message contains an "Open-issue knowledge base" section, compare the issue against it and call link-duplicate on a confident match — never close. If the section is absent, skip the duplicate check. Never comment, close, or assign. Include `_confidence` (integer 0-100) on every effect tool call. Calibrate: >=90 only when the evidence is unambiguous; 60-89 for plausible but contestable calls; below 60 do not call the tool at all.',
     skillRefs: ['auto-triage-playbook', 'bug-classification', 'dedupe-heuristics'],
+    contextRefs: ['open-issues'],
     target: 'issue',
     triggers: ['on-issue-opened', 'on-issue-reopened', 'manual'],
     effects: null,

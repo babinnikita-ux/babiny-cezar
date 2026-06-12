@@ -29,6 +29,10 @@ export interface ActionDef {
   effects: EffectName[] | null;
   outputSchema: Record<string, unknown> | null;
   enabled: boolean;
+  /** Named context sections the runner injects into the user message — each
+   *  ref resolves against `RunActionDeps.contextProviders` (e.g. 'open-issues'
+   *  → the open-issue knowledge base). Unresolvable refs are skipped. */
+  contextRefs?: string[];
   /** LLM model the runner uses. Falls back to runner default when null. */
   model?: string | null;
   /** Acceptance routing. Defaults to 'auto' (apply every effect regardless of
