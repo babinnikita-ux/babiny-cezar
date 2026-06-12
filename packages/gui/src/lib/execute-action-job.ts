@@ -211,6 +211,33 @@ export async function executeActionJob(
         // action declares via `contextRefs`. For PR targets the `open-issues`
         // provider still returns issues, which is what dedupe-style actions want.
         contextProviders: buildOpenIssuesContextProviders(supabase, workspaceId, number),
+        // Mirror the triage path's deferSink (execute-workflow-job.ts):
+        // without it, always-defer effects (workflow suggestions) and
+        // mid-confidence HITL effects from a manual "run now" are silently
+        // dropped instead of landing in the inbox. Each deferral is also
+        // surfaced as a 'tool-call' event via the effectsApplied loop below,
+        // same as the triage path.
+        deferSink: async ({ call, confidence, summary }) => {
+          const { error } = await supabase.from('pending_decisions').insert({
+            workspace_id: workspaceId,
+            action_id: action.id,
+            workflow_run_id: runId,
+            target_kind: target.kind,
+            issue_number: target.kind === 'issue' ? target.number : null,
+            pr_number: target.kind === 'pr' ? target.number : null,
+            target_title: target.title,
+            effect: call.effect,
+            effect_args: (call.args ?? {}) as Database['public']['Tables']['pending_decisions']['Insert']['effect_args'],
+            summary,
+            confidence,
+          });
+          // 23505 = unique_violation against the pending-decisions dedup
+          // index: a pending decision for this (action, target, effect, args)
+          // already exists — intended dedup behaviour, not a failure.
+          if (error && error.code !== '23505') {
+            console.error('[action-job] pending_decisions insert failed:', error.message);
+          }
+        },
       });
       summary = result.text?.slice(0, 500);
       effectsApplied = result.effectsApplied;

@@ -277,3 +277,40 @@ acceptance = dispatch, with no changes to the accept flow.
 - A real cron trigger path (would resurrect stale/done-detector etc. — separate feature).
 - PR-target actions (plumbing exists; no seeded PR action yet).
 - Migrating the GUI actions page UX.
+
+## Status
+
+All 6 phases implemented on `feat/actions-cleanup`:
+
+| Phase | Commit |
+|---|---|
+| Plan | `67f9bc0` docs: add actions cleanup plan (15 built-ins → 2 + workflow suggestions) |
+| 1 — catalog consolidation | `3d28fdc` feat(actions): consolidate built-in catalog to 2 actions (auto-triage + security) |
+| 2 — KB injection | `6f49b7f` feat(actions): declarative contextRefs + open-issues knowledge base injection |
+| 3 — seeding unification | `6ac246e` feat(gui): seed built-in actions from the TS catalog; retire SQL seed fn |
+| 4 — trigger honesty | `ce1f9a5` feat(actions): plumb real triage triggers; trim trigger enum to what fires |
+| 5 — workflow suggestions | `bb0507a` feat(actions): workflow suggestions via suggest-workflow effect + inbox |
+| 6 — tests + verification | (this change) catalog-drift + loader tests; manual run-now deferSink fix |
+
+Phase 6 also fixed a functional gap: `execute-action-job.ts` (manual "run
+now") ran actions without a `deferSink`, so always-defer effects (workflow
+suggestions) and mid-confidence HITL effects were silently dropped instead of
+landing in the inbox. It now writes `pending_decisions` rows the same way the
+triage dispatch path does.
+
+Note: `packages/gui` has no test infrastructure (no vitest/test script), so
+the Phase 6 seed-helper test was skipped rather than bolting a runner onto the
+Next.js workspace; `seedDefaultActions` remains covered by manual verification.
+
+**Remaining manual steps:**
+
+1. Apply migration `0044_consolidate_default_actions.sql` to the Supabase
+   project (adds `context_refs` / `effect_routing` / `suggested_flow_id`,
+   deletes retired built-in rows, syncs the 2 kept rows, drops
+   `seed_default_actions`).
+2. Per workspace: configure a suggested workflow on the `auto-triage` action
+   (the action editor's workflow dropdown — saved via the override-by-copy
+   pattern) to enable "Run workflow" inbox suggestions; with none configured
+   the `suggest-workflow` tool is simply not exposed.
+3. Run the Phase 6 manual verification checklist above against a fresh
+   workspace.
