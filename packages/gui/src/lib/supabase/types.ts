@@ -389,11 +389,16 @@ export interface Database {
           model: string;
           acceptance_mode: 'auto' | 'human-in-the-loop';
           confidence_config: Json;
+          // Added by migration 0044 — Phase 5 schema (per-effect routing
+          // override + the configured suggest-workflow target).
+          effect_routing: Json;
+          suggested_flow_id: string | null;
         };
         Insert: Omit<Database['public']['Tables']['actions']['Row'],
           'id' | 'kind' | 'description' | 'system_prompt' | 'skill_refs' | 'context_refs' | 'triggers' |
           'effects' | 'output_schema' | 'enabled' | 'replaces_built_in' | 'created_at' | 'updated_at' |
-          'created_by' | 'updated_by' | 'model' | 'acceptance_mode' | 'confidence_config'
+          'created_by' | 'updated_by' | 'model' | 'acceptance_mode' | 'confidence_config' |
+          'effect_routing' | 'suggested_flow_id'
         > & {
           id?: string;
           kind?: 'built-in' | 'user';
@@ -413,6 +418,8 @@ export interface Database {
           model?: string;
           acceptance_mode?: 'auto' | 'human-in-the-loop';
           confidence_config?: Json;
+          effect_routing?: Json;
+          suggested_flow_id?: string | null;
         };
         Update: Partial<Database['public']['Tables']['actions']['Insert']>;
       };

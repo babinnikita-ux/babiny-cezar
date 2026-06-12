@@ -5,9 +5,9 @@ import type { ActionDef } from './action.js';
  * + duplicate detection in one pass) and `security`.
  *
  * The CLI consumes this catalog directly because it has no Supabase client.
- * The SaaS path currently seeds from
- * `packages/gui/supabase/migrations/0014_seed_default_actions.sql`; Phase 3
- * of the actions cleanup makes this file the single seed source.
+ * The SaaS path seeds from it too — `packages/gui/src/lib/seed-default-actions.ts`
+ * upserts these specs into the `actions` table (the SQL seed function was
+ * retired in migration 0044). This file is the single seed source.
  *
  * `id` and `workspaceId` are intentionally blank — the CLI never persists
  * Action rows, and the runner treats `ActionDef` as a pure spec.
