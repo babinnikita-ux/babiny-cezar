@@ -1071,6 +1071,7 @@ export interface Database {
           revoked_at?: string | null;
         };
         Update: Partial<Database['public']['Tables']['runner_join_tokens']['Insert']>;
+        Relationships: [];
       };
       pending_decisions: {
         Row: {
@@ -1210,7 +1211,12 @@ export interface Database {
         Returns: Database['public']['Tables']['jobs']['Row'][];
       };
       claim_next_job_for_runner: {
-        Args: { p_runner_id: string; p_backends: string[]; p_limit?: number };
+        Args: {
+          p_runner_id: string;
+          p_backends: string[];
+          p_limit?: number;
+          p_lease_seconds?: number;
+        };
         Returns: Database['public']['Tables']['jobs']['Row'][];
       };
       enqueue_autofix_if_not_open: {
