@@ -29,7 +29,8 @@ export async function detectBackends(): Promise<BackendCheck[]> {
       backend: 'claude-cli',
       binary: 'claude',
       loginCmd: 'claude login',
-      versionRegex: /^(?:claude(?:\s+code)?\s+version\s+\d+\.\d+|\d+\.\d+\.\d+\s*\(claude\s+code\))/i,
+      versionRegex:
+        /^(?:claude(?:\s+code)?\s+version\s+\d+\.\d+|\d+\.\d+\.\d+\s*\(claude\s+code\))/i,
     },
     // The Codex CLI prints e.g. `codex-cli 0.132.0` (or `codex 0.4.2` on older releases).
     {
