@@ -30,9 +30,9 @@ Usage:
                                  identifies the runner; re-registering the
                                  same name re-keys it (default: hostname;
                                  or CEZAR_RUNNER_NAME)
-      --token <runner-token>     pre-issued runner token (or
-                                 CEZAR_RUNNER_TOKEN) — skips registration,
-                                 for already-registered legacy runners
+      --token <runner-token>     DEPRECATED, removed in v0.3.0: pre-issued
+                                 runner token (or CEZAR_RUNNER_TOKEN) — skips
+                                 registration; migrate to --join-token
       --backends <csv>           backends to advertise (default: anthropic-api
                                  for --kind cloud; auto-detected for
                                  self-hosted)
@@ -144,6 +144,11 @@ async function main(): Promise<void> {
     // 2. else the credential persisted by a previous registration,
     // 3. else register with the join token and persist the result.
     let token = explicitToken;
+    if (explicitToken) {
+      console.warn(
+        '[cezar-runner] --token / CEZAR_RUNNER_TOKEN is deprecated and will be removed in v0.3.0 — mint a join token in Settings → Runners and use --join-token / CEZAR_RUNNER_JOIN_TOKEN.',
+      );
+    }
     const stateDir = defaultStateDir();
     if (!token) {
       const saved = await readCredentials(stateDir, url);

@@ -87,7 +87,10 @@ database was reset) the daemon automatically re-registers with the join token.
 
 A runner registered before the join-token flow keeps working: pass its
 pre-issued token via `--token` / `CEZAR_RUNNER_TOKEN` and registration is
-skipped entirely.
+skipped entirely. **Deprecated — `--token` / `CEZAR_RUNNER_TOKEN` will be
+removed in v0.3.0**; re-register through a join token before upgrading (this
+also gives the runner an owner, without which it only receives
+system-initiated jobs).
 
 In the Docker compose stack, set `CEZAR_RUNNER_JOIN_TOKEN` in `.env` — the
 `runner` service self-registers as `compose-runner` on first boot and keeps

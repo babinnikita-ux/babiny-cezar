@@ -119,7 +119,8 @@ services:
       # resulting credential in the runner-home volume.
       CEZAR_RUNNER_JOIN_TOKEN: ${CEZAR_RUNNER_JOIN_TOKEN:-}
       CEZAR_RUNNER_NAME: ${CEZAR_RUNNER_NAME:-compose-runner}
-      # Legacy pre-issued runner token; leave empty when using the join token.
+      # DEPRECATED — removed in v0.3.0. Legacy pre-issued runner token;
+      # migrate to CEZAR_RUNNER_JOIN_TOKEN and leave this empty.
       CEZAR_RUNNER_TOKEN: ${CEZAR_RUNNER_TOKEN:-}
       # The default URL is plain http over the private compose network, which
       # the runner's TLS guard would otherwise refuse (it protects the bearer
