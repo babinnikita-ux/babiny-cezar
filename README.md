@@ -141,7 +141,7 @@ yarn db:start
 
 # 2. seed env from the local-dev example; everything but ANTHROPIC_API_KEY
 #    is pre-filled for the local Supabase stack
-cp packages/gui/.env.local.example packages/gui/.env.local
+cp packages/gui/.env.example packages/gui/.env.local
 # then edit packages/gui/.env.local and replace `sk-ant-REPLACE-ME` with
 # your Anthropic key. GitHub App vars are optional for local-only use.
 
