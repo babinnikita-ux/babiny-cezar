@@ -21,7 +21,8 @@
     "build": "tsc",
     "dev": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.0",

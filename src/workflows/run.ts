@@ -37,7 +37,8 @@ interface ActiveRun {
   currentStepId?: string;
   idleTimer?: NodeJS.Timeout;
   autosaveTimer?: NodeJS.Timeout;
-  /** Running counter for persisted agent screenshots (`screenshot-<n>.png`). */
+  /** Running counter for persisted images — agent screenshots
+   *  (`screenshot-<n>.png`) and user-pasted ones (`pasted-<n>.png`). */
   imageSeq?: number;
 }
 
@@ -215,11 +216,15 @@ export class RunManager {
       .map((b) => b.text)
       .join('\n');
     const imageCount = content.filter((b) => b.type === 'image').length;
+    // `images` is additive next to the legacy `imageCount` (kept for old
+    // transcripts and readers — BACKWARD_COMPATIBILITY.md surface #2).
+    const images = this.persistUserImages(runId, state, content);
     this.store.appendEvent(runId, {
       type: 'user-message',
       stepId: state.currentStepId,
       text,
       imageCount,
+      ...(images.length ? { images } : {}),
     });
 
     const delivered = state.session.sendMessage(content);
@@ -628,11 +633,20 @@ export class RunManager {
       userPrompt += `\n\nA verification command failed after the previous attempt. Fix the cause. Failing output:\n\n${checkFailure}`;
     }
     if (images?.length) {
-      emit({
-        type: 'note',
-        stepId: step.id,
-        message: `${images.length} screenshot${images.length > 1 ? 's' : ''} attached to the task`,
-      });
+      // Task screenshots render in the thread like agent ones, marked as the
+      // user's (spec: issue #345). Falls back to the old text note when none
+      // could be persisted, so the attachment is never silently invisible.
+      const saved = this.persistUserImages(runId, state, images);
+      for (const file of saved) {
+        emit({ type: 'image', stepId: step.id, origin: 'user', ...file });
+      }
+      if (!saved.length) {
+        emit({
+          type: 'note',
+          stepId: step.id,
+          message: `${images.length} screenshot${images.length > 1 ? 's' : ''} attached to the task`,
+        });
+      }
     }
 
     const sessionId = randomUUID();
@@ -758,6 +772,7 @@ export class RunManager {
     state: ActiveRun,
     mediaType: string,
     data: string,
+    prefix = 'screenshot',
   ): { name: string; url: string } | null {
     try {
       const ext =
@@ -767,7 +782,7 @@ export class RunManager {
         : /gif/.test(mediaType) ? 'gif'
         : 'img';
       state.imageSeq = (state.imageSeq ?? 0) + 1;
-      const name = `screenshot-${state.imageSeq}.${ext}`;
+      const name = `${prefix}-${state.imageSeq}.${ext}`;
       const dir = join(this.dataDir, 'runs', `${runId}-images`);
       mkdirSync(dir, { recursive: true });
       writeFileSync(join(dir, name), Buffer.from(data, 'base64'));
@@ -775,6 +790,24 @@ export class RunManager {
     } catch {
       return null;
     }
+  }
+
+  /** Persist the image blocks of a user message (pasted/attached screenshots)
+   *  as `pasted-<n>.<ext>` files so the thread can render them like agent
+   *  screenshots. Same guarantee as `persistImage`: only `{name, url}` ever
+   *  reaches the NDJSON log, never the base64 bytes. */
+  private persistUserImages(
+    runId: string,
+    state: ActiveRun,
+    blocks: ContentBlock[],
+  ): { name: string; url: string }[] {
+    const saved: { name: string; url: string }[] = [];
+    for (const block of blocks) {
+      if (block.type !== 'image') continue;
+      const file = this.persistImage(runId, state, block.source.media_type, block.source.data, 'pasted');
+      if (file) saved.push(file);
+    }
+    return saved;
   }
 
   private armIdleTimer(runId: string, state: ActiveRun): void {

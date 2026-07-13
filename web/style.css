@@ -994,7 +994,10 @@ main { flex: 1; min-width: 0; display: flex; min-height: 0; background: var(--bg
   max-height: 260px;
 }
 
-.ev.user { display: flex; justify-content: flex-end; margin: 12px 0; }
+.ev.user { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; margin: 12px 0; }
+/* Pasted/attached screenshots inside a user message (issue #345) */
+.ev.user .bubble-imgs { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; max-width: 75%; }
+.ev.user .bubble-imgs .img-card { max-width: 260px; }
 .ev.user .bubble {
   max-width: 75%;
   padding: 10px 15px;
@@ -1007,6 +1010,10 @@ main { flex: 1; min-width: 0; display: flex; min-height: 0; background: var(--bg
 }
 
 .ev.image-ev { margin: 11px 0; }
+/* Task-start screenshot pasted by the user (`image` event, origin: 'user') —
+   right-aligned so it reads as "sent by me", like the user bubble. */
+.ev.image-ev.user-img { display: flex; justify-content: flex-end; }
+.ev.image-ev.user-img .img-card { max-width: 260px; }
 .img-card {
   display: inline-block;
   border: 1px solid var(--line2);

@@ -2013,6 +2013,21 @@ function appendToStreak(inner, el) {
   }
 }
 
+/** Lightboxed image card — agent screenshots, and (spec: issue #345) the
+ *  user's own pasted/attached screenshots in `image` and `user-message`
+ *  events. Every interpolated value goes through esc(). */
+function imgCardHtml(url, name) {
+  return `
+        <div class="img-card" data-lightbox="${esc(url)}" data-name="${esc(name)}" title="Click to zoom">
+          <img src="${esc(url)}" alt="${esc(name)}" loading="lazy">
+          <div class="img-foot">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="1.8" stroke-linejoin="round"><path d="M4 5h16v14H4z"/><path d="M4 15l5-5 4 4 3-3 4 4"/><circle cx="9.5" cy="9.5" r="1.1"/></svg>
+            <span class="nm">${esc(name)}</span>
+            <span class="zm">click to zoom</span>
+          </div>
+        </div>`;
+}
+
 function appendLog(evt) {
   const inner = $('#log-inner');
   const log = $('#log');
@@ -2058,16 +2073,10 @@ function appendLog(evt) {
       break;
     }
     case 'image':
-      el.className = 'ev image-ev';
-      el.innerHTML = `
-        <div class="img-card" data-lightbox="${esc(evt.url)}" data-name="${esc(evt.name)}" title="Click to zoom">
-          <img src="${esc(evt.url)}" alt="${esc(evt.name)}" loading="lazy">
-          <div class="img-foot">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--text3)" stroke-width="1.8" stroke-linejoin="round"><path d="M4 5h16v14H4z"/><path d="M4 15l5-5 4 4 3-3 4 4"/><circle cx="9.5" cy="9.5" r="1.1"/></svg>
-            <span class="nm">${esc(evt.name)}</span>
-            <span class="zm">click to zoom</span>
-          </div>
-        </div>`;
+      // `origin: 'user'` marks a pasted/attached screenshot — same card,
+      // aligned/styled as the user's own content. Absent on old transcripts.
+      el.className = `ev image-ev${evt.origin === 'user' ? ' user-img' : ''}`;
+      el.innerHTML = imgCardHtml(evt.url, evt.name);
       break;
     case 'step-start':
       el.className = 'ev step';
@@ -2087,8 +2096,15 @@ function appendLog(evt) {
       break;
     case 'user-message': {
       el.className = 'ev user';
-      const imgs = evt.imageCount > 0 ? ` [${evt.imageCount} image${evt.imageCount > 1 ? 's' : ''}]` : '';
-      el.innerHTML = `<div class="bubble">${esc(`${evt.text ?? ''}${imgs}`)}</div>`;
+      // New transcripts carry `images: [{name, url}]`; old ones only
+      // `imageCount`, which keeps rendering as the text placeholder.
+      const files = Array.isArray(evt.images) ? evt.images.filter((f) => f && f.url && f.name) : [];
+      const imgs = !files.length && evt.imageCount > 0 ? ` [${evt.imageCount} image${evt.imageCount > 1 ? 's' : ''}]` : '';
+      const thumbs = files.length
+        ? `<div class="bubble-imgs">${files.map((f) => imgCardHtml(f.url, f.name)).join('')}</div>`
+        : '';
+      const text = `${evt.text ?? ''}${imgs}`;
+      el.innerHTML = `${thumbs}${text.trim() ? `<div class="bubble">${esc(text)}</div>` : ''}`;
       break;
     }
     case 'error':
