@@ -6,20 +6,29 @@ import {
   GitBranchIcon,
   GitPullRequestIcon,
   InboxIcon,
-  MessageSquareTextIcon,
   PaletteIcon,
   ScaleIcon,
   SettingsIcon,
   SparklesIcon,
   WorkflowIcon,
 } from 'lucide-react'
+import { Suspense, lazy } from 'react'
 import { Route, Routes } from 'react-router'
 
 import { GithubIcon } from './components/icons'
 import { NewTaskRoute } from './routes/new-task'
 import { NotFoundRoute } from './routes/not-found'
 import { Placeholder } from './routes/placeholder'
+import { ThreadLoading } from './routes/task-thread/thread-loading'
 import { TasksOverviewRoute } from './routes/tasks-overview'
+
+/** Lazy ON PURPOSE: the thread view carries the markdown stack (Streamdown + remark/rehype,
+ *  ~140 KB gz) — as a static import it would sit in the main bundle every visitor pays for
+ *  before any route renders. The Suspense fallback is the same loading state the route itself
+ *  shows while fetching, so the split is invisible to the user. */
+const TaskThreadRoute = lazy(() =>
+  import('./routes/task-thread/task-thread').then((m) => ({ default: m.TaskThreadRoute })),
+)
 
 /** The route map from the spec's "Routing — every surface is a URL" section.
  *
@@ -37,7 +46,14 @@ export function AppRoutes() {
       <Route path="/" element={<TasksOverviewRoute />} />
       <Route path="/new" element={<NewTaskRoute />} />
 
-      <Route path="/tasks/:id" element={<Placeholder route="task-thread" title="Thread" icon={<MessageSquareTextIcon />} />} />
+      <Route
+        path="/tasks/:id"
+        element={
+          <Suspense fallback={<ThreadLoading />}>
+            <TaskThreadRoute />
+          </Suspense>
+        }
+      />
       <Route path="/tasks/:id/changes" element={<Placeholder route="task-changes" title="Changes" icon={<FileDiffIcon />} />} />
       <Route path="/tasks/:id/files" element={<Placeholder route="task-files" title="Files" icon={<FolderTreeIcon />} />} />
       <Route path="/compare/:groupId" element={<Placeholder route="compare" title="Compare variants" icon={<ScaleIcon />} />} />

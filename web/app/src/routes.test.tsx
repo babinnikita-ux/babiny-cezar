@@ -44,7 +44,8 @@ describe('route map', () => {
   const cases: Array<[url: string, route: string, title: string]> = [
     ['/', 'tasks', 'Tasks'],
     ['/new', 'new', 'New task'],
-    ['/tasks/abc123', 'task-thread', 'Thread'],
+    // The real thread view (Step R3.1): with fetch never answering it is honestly loading.
+    ['/tasks/abc123', 'task-thread', 'Loading task…'],
     ['/tasks/abc123/changes', 'task-changes', 'Changes'],
     ['/tasks/abc123/files', 'task-files', 'Files'],
     ['/compare/grp-1', 'compare', 'Compare variants'],
@@ -72,7 +73,8 @@ describe('route map', () => {
   // The tab lives in the path, so /tasks/:id/changes must not fall back to the thread.
   it('a task tab deep link renders the tab, not the thread', () => {
     renderAt('/tasks/abc123/changes')
-    expect(screen.queryByRole('heading', { name: 'Thread' })).toBeNull()
+    expect(document.querySelector('[data-route="task-thread"]')).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Loading task…' })).toBeNull()
   })
 
   const unknown = ['/nope-404', '/tasks', '/settings/nope', '/tasks/abc123/nope', '/compare']

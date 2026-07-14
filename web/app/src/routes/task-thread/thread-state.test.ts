@@ -1,0 +1,278 @@
+import { describe, expect, it } from 'vitest'
+
+import type { RunEvent } from '@/api/types'
+import type { UiMessageItem, UiToolItem } from '@/protocol/ui-events'
+
+import bashAndScreenshot from '../../../../../src/core/__fixtures__/claude/bash-and-screenshot.expected.json'
+import failedAndDenied from '../../../../../src/core/__fixtures__/claude/failed-and-denied.expected.json'
+import textTurn from '../../../../../src/core/__fixtures__/claude/text-turn.expected.json'
+import thinkingEditWriteTodo from '../../../../../src/core/__fixtures__/claude/thinking-edit-write-todo.expected.json'
+import { reduceThread, threadFooter, type ThreadEntry } from './thread-state'
+
+/**
+ * The reducer, table-driven against REAL event sequences:
+ *  - the golden claude fixtures (`src/core/__fixtures__/claude/*.expected.json`) — the exact v2
+ *    streams the R2 mappers are pinned to;
+ *  - verbatim lines from actual NDJSON transcripts (a pre-v2 run and an R2 dry-run mixed file),
+ *    because the v1 fallback and the mixed-file dedup rule are claims about what is really on
+ *    disk, not about invented shapes.
+ */
+
+/** Golden fixtures are `UiEvent[]` — stamp the wire's seq/ts on them, as the store does. */
+const asRunEvents = (events: object[]): RunEvent[] =>
+  events.map((event, index) => ({ seq: index + 1, ts: '2026-07-14T12:00:00.000Z', ...event }) as RunEvent)
+
+/** One stamped v1/v2 line, for hand-built sequences. */
+const line = (seq: number, type: string, rest: Record<string, unknown> = {}): RunEvent =>
+  ({ seq, ts: '2026-07-14T12:00:00.000Z', type, ...rest }) as RunEvent
+
+const kinds = (items: ThreadEntry[]) => items.map((item) => item.kind)
+
+describe('reduceThread — golden v2 fixtures', () => {
+  it('text-turn: one turn, one assistant message, completion recorded', () => {
+    const { turns, sessionEnded } = reduceThread(asRunEvents(textTurn))
+    expect(turns).toHaveLength(1)
+    expect(turns[0]!.turnId).toBe('turn_1')
+    expect(kinds(turns[0]!.items)).toEqual(['message'])
+    const message = turns[0]!.items[0] as UiMessageItem
+    expect(message.role).toBe('assistant')
+    expect(message.text).toBe("I'll fix the bug.")
+    expect(turns[0]!.completed).toEqual({ stopReason: 'end_turn', costUsd: 0.0021 })
+    expect(turns[0]!.userMessage).toBeUndefined() // the initial prompt is the run's task, not an event
+    expect(sessionEnded).toBeUndefined()
+  })
+
+  it('thinking-edit-write-todo: reasoning + message + tools in order, plan snapshot on the turn', () => {
+    const { turns } = reduceThread(asRunEvents(thinkingEditWriteTodo))
+    expect(turns).toHaveLength(1)
+    expect(kinds(turns[0]!.items)).toEqual(['reasoning', 'message', 'tool', 'tool', 'tool'])
+    const [edit, write, todo] = turns[0]!.items.filter((i): i is UiToolItem => i.kind === 'tool')
+    expect(edit!.title).toBe('Edit /repo/src/middleware.ts')
+    expect(edit!.status).toBe('completed')
+    expect(write!.diffs?.[0]?.oldText).toBeNull() // new file
+    expect(todo!.toolKind).toBe('plan')
+    expect(turns[0]!.planEntries).toHaveLength(3)
+    expect(turns[0]!.planEntries?.[0]).toMatchObject({ status: 'completed' })
+  })
+
+  it('bash-and-screenshot: started→completed folds to ONE item per id; base64 v2 image is not rendered', () => {
+    const { turns } = reduceThread(asRunEvents(bashAndScreenshot))
+    expect(turns).toHaveLength(1)
+    // 2 messages + 2 tools — and NO image entry: the v2 `image` event carries raw base64 with
+    // no served URL, so there is nothing honest to render from it.
+    expect(kinds(turns[0]!.items)).toEqual(['message', 'tool', 'tool', 'message'])
+    const bash = turns[0]!.items[1] as UiToolItem
+    expect(bash.status).toBe('completed')
+    expect(bash.output).toContain('src/example.ts')
+  })
+
+  it('failed-and-denied: failed status survives; a completed-without-started item still lands', () => {
+    const { turns } = reduceThread(asRunEvents(failedAndDenied))
+    const tools = turns[0]!.items.filter((i): i is UiToolItem => i.kind === 'tool')
+    expect(tools.map((t) => t.status)).toEqual(['failed', 'declined'])
+    expect(tools[0]!.error).toBeTruthy()
+  })
+})
+
+describe('reduceThread — v1-only fallback (pre-v2 transcripts)', () => {
+  // Verbatim shapes from a real pre-R2 transcript (.ai/cezar/runs/2d012907….ndjson), trimmed.
+  const v1Only: RunEvent[] = [
+    line(1, 'lifecycle', { message: 'run started — workflow "quick-task" (runner: claude)' }),
+    line(2, 'note', { message: 'worktree ready — branch cez/2d012907 (base main)' }),
+    line(3, 'step-start', { stepId: 'task', name: 'Do the task', kind: 'agent', iteration: 1 }),
+    line(4, 'token-usage', { tokensUsed: 8993, stepId: 'task' }),
+    line(5, 'text', { text: "Hi! I'm Claude Code, working in your **cezar** project.", stepId: 'task' }),
+    line(7, 'tool-call', {
+      id: 'toolu_01WJ',
+      tool: 'Bash',
+      input: { command: 'cat README.md | head -40', description: 'Read README' },
+      stepId: 'task',
+    }),
+    line(9, 'tool-result', { toolCallId: 'toolu_01WJ', result: '# cezar ⚡\n\nParallel coding agents…', stepId: 'task' }),
+    line(10, 'user-message', { text: 'Now summarize it.', imageCount: 0, stepId: 'task' }),
+    line(11, 'text', { text: 'It orchestrates coding agents in worktrees.', stepId: 'task' }),
+    line(12, 'error', { message: 'claude exited with code 1' }),
+  ]
+
+  it('synthesizes turns and items from v1 lines alone — nothing invented, 2-state tool status', () => {
+    const { turns } = reduceThread(v1Only)
+    expect(turns).toHaveLength(2)
+
+    // Turn 1: dim lines, the assistant text, the completed tool.
+    expect(kinds(turns[0]!.items)).toEqual(['note', 'note', 'message', 'tool'])
+    const tool = turns[0]!.items[3] as UiToolItem
+    expect(tool.id).toBe('toolu_01WJ')
+    expect(tool.title).toBe('Ran cat README.md | head -40') // via the shared toolDisplay model
+    expect(tool.status).toBe('completed') // v1 has no failure signal — none is invented
+    expect(tool.output).toContain('# cezar ⚡')
+
+    // Turn 2: opened by the user-message, then the reply and the danger line.
+    expect(turns[1]!.userMessage).toEqual({ text: 'Now summarize it.', imageCount: 0 })
+    expect(kinds(turns[1]!.items)).toEqual(['message', 'note'])
+    expect(turns[1]!.items[1]).toMatchObject({ tone: 'danger', text: 'claude exited with code 1' })
+  })
+
+  it('a tool with no result stays honestly running', () => {
+    const { turns } = reduceThread(v1Only.slice(0, 6)) // everything up to (not including) the tool-result
+    const tool = turns[0]!.items.at(-1) as UiToolItem
+    expect(tool.status).toBe('running')
+    expect(tool.output).toBeUndefined()
+  })
+})
+
+describe('reduceThread — mixed v1+v2 files (the dedup rule)', () => {
+  // Verbatim from an R2 dry-run transcript (CEZ_DRY_RUN=1, seq/ts as persisted): the v2 items
+  // land FIRST, their v1 `text` twin one line later — the order the rule is grounded in.
+  const md = '## Markdown fixture\n```ts\nconst answer: number = 42;\n```'
+  const mixed: RunEvent[] = [
+    line(1, 'lifecycle', { message: 'run started — workflow "quick-task" (runner: claude)' }),
+    line(2, 'note', { message: 'worktree ready — branch cez/01ec2e8c (base main)' }),
+    line(3, 'step-start', { stepId: 'task', name: 'Do the task', kind: 'agent', iteration: 1 }),
+    line(4, 'session.started', { sessionId: 'b3440f00', backend: 'claude', stepId: 'task' }),
+    line(5, 'turn.started', { turnId: 'turn_1', stepId: 'task' }),
+    line(6, 'item.started', { item: { kind: 'message', id: 'item_1', role: 'assistant', text: md }, stepId: 'task' }),
+    line(7, 'item.completed', { item: { kind: 'message', id: 'item_1', role: 'assistant', text: md }, stepId: 'task' }),
+    line(8, 'text', { text: md, stepId: 'task' }), // the v1 twin of item_1
+    line(10, 'turn.completed', { turnId: 'turn_1', stopReason: 'end_turn', costUsd: 0.001, stepId: 'task' }),
+    line(15, 'user-message', { text: 'Thanks — now list the components.', imageCount: 0, stepId: 'task' }),
+    line(16, 'turn.started', { turnId: 'turn_2', stepId: 'task' }),
+    line(17, 'item.started', { item: { kind: 'message', id: 'item_2', role: 'assistant', text: 'Follow-up #1 received.' }, stepId: 'task' }),
+    line(18, 'item.completed', { item: { kind: 'message', id: 'item_2', role: 'assistant', text: 'Follow-up #1 received.' }, stepId: 'task' }),
+    line(19, 'text', { text: 'Follow-up #1 received.', stepId: 'task' }), // the v1 twin of item_2
+    line(21, 'turn.completed', { turnId: 'turn_2', stopReason: 'end_turn', stepId: 'task' }),
+    line(26, 'lifecycle', { message: 'session closed by user' }),
+    line(28, 'session.ended', { reason: 'end_turn', stepId: 'task' }),
+  ]
+
+  it('v2 wins per turn: each message renders once, notes and user bubbles still render', () => {
+    const { turns, sessionEnded } = reduceThread(mixed)
+    expect(turns).toHaveLength(2)
+
+    // Turn 1 wears the v2 id and holds the two dim lines + exactly ONE copy of the message.
+    expect(turns[0]!.turnId).toBe('turn_1')
+    expect(kinds(turns[0]!.items)).toEqual(['note', 'note', 'message'])
+    expect((turns[0]!.items[2] as UiMessageItem).id).toBe('item_1')
+
+    // Turn 2: the v1 user-message opened it, the v2 turn.started attached to it (no phantom
+    // extra turn), and the v1 text twin was dropped.
+    expect(turns[1]!.turnId).toBe('turn_2')
+    expect(turns[1]!.userMessage?.text).toBe('Thanks — now list the components.')
+    expect(kinds(turns[1]!.items)).toEqual(['message', 'note'])
+
+    expect(sessionEnded).toEqual({ reason: 'end_turn' })
+  })
+
+  it('the drop also works when a v1 line slips in BEFORE its v2 twin', () => {
+    const reordered = [...mixed]
+    // Swap the v1 text (index 7) ahead of the two item events (indices 5,6).
+    const [started, completed, v1text] = [reordered[5]!, reordered[6]!, reordered[7]!]
+    reordered[5] = v1text
+    reordered[6] = started
+    reordered[7] = completed
+    const { turns } = reduceThread(reordered)
+    expect(kinds(turns[0]!.items)).toEqual(['note', 'note', 'message'])
+    expect((turns[0]!.items[2] as UiMessageItem).id).toBe('item_1')
+  })
+
+  it('v1 tool lines are skipped in a v2-covered turn, matched by the shared toolu id', () => {
+    const withTools: RunEvent[] = [
+      line(1, 'turn.started', { turnId: 'turn_1' }),
+      line(2, 'item.started', {
+        item: { kind: 'tool', id: 'toolu_A', name: 'Bash', toolKind: 'execute', title: 'Ran npm test', status: 'running' },
+      }),
+      line(3, 'tool-call', { id: 'toolu_A', tool: 'Bash', input: { command: 'npm test' } }), // v1 twin
+      line(4, 'item.completed', {
+        item: { kind: 'tool', id: 'toolu_A', name: 'Bash', toolKind: 'execute', title: 'Ran npm test', status: 'completed', output: 'ok' },
+      }),
+      line(5, 'tool-result', { toolCallId: 'toolu_A', result: 'ok' }), // v1 twin
+    ]
+    const { turns } = reduceThread(withTools)
+    expect(kinds(turns[0]!.items)).toEqual(['tool'])
+    expect((turns[0]!.items[0] as UiToolItem).status).toBe('completed')
+  })
+})
+
+describe('reduceThread — live-stream mechanics', () => {
+  it('item.delta appends to the right field; a later snapshot replaces the accumulation', () => {
+    const events: RunEvent[] = [
+      line(1, 'turn.started', { turnId: 'turn_1' }),
+      line(2, 'item.started', { item: { kind: 'message', id: 'm1', role: 'assistant', text: '' } }),
+      line(3, 'item.delta', { itemId: 'm1', field: 'text', delta: 'Hel' }),
+      line(4, 'item.delta', { itemId: 'm1', field: 'text', delta: 'lo' }),
+      line(5, 'item.started', { item: { kind: 'tool', id: 't1', name: 'Bash', toolKind: 'execute', title: 'Ran x', status: 'running' } }),
+      line(6, 'item.delta', { itemId: 't1', field: 'output', delta: 'line 1\n' }),
+      line(7, 'item.delta', { itemId: 't1', field: 'output', delta: 'line 2' }),
+      line(8, 'item.completed', { item: { kind: 'message', id: 'm1', role: 'assistant', text: 'Hello!' } }),
+    ]
+    const { turns } = reduceThread(events)
+    const [message, tool] = turns[0]!.items as [UiMessageItem, UiToolItem]
+    expect(message.text).toBe('Hello!') // snapshot wins over the delta accumulation
+    expect(tool.output).toBe('line 1\nline 2')
+    expect(tool.status).toBe('running')
+  })
+
+  it('does not mutate the input events (deltas land on clones)', () => {
+    const started = line(2, 'item.started', { item: { kind: 'message', id: 'm1', role: 'assistant', text: '' } })
+    reduceThread([line(1, 'turn.started', { turnId: 't' }), started, line(3, 'item.delta', { itemId: 'm1', field: 'text', delta: 'x' })])
+    expect((started.item as { text: string }).text).toBe('')
+  })
+
+  it('strips a trailing CEZ:DONE from assistant messages — v2 carries it raw', () => {
+    const events: RunEvent[] = [
+      line(1, 'turn.started', { turnId: 'turn_1' }),
+      line(2, 'item.completed', { item: { kind: 'message', id: 'm1', role: 'assistant', text: 'All done.\n\nCEZ:DONE' } }),
+    ]
+    const { turns } = reduceThread(events)
+    expect((turns[0]!.items[0] as UiMessageItem).text).toBe('All done.')
+  })
+
+  it('a malformed line costs itself, not the fold', () => {
+    const events: RunEvent[] = [
+      line(1, 'item.delta', { itemId: 'ghost', field: 'text', delta: 'x' }), // delta before any item
+      line(2, 'item.started', { item: null }), // broken payload
+      line(3, 'tool-result', { toolCallId: 'nobody', result: 'orphan' }),
+      line(4, 'text', { text: 'still here' }),
+    ]
+    const { turns } = reduceThread(events)
+    expect(kinds(turns[0]!.items)).toEqual(['message'])
+  })
+
+  it('a failed step surfaces as a danger line; a passing one stays out of the thread', () => {
+    const { turns } = reduceThread([
+      line(1, 'step-end', { stepId: 'task', status: 'done' }),
+      line(2, 'step-end', { stepId: 'check', status: 'failed', error: 'tests failed' }),
+    ])
+    expect(turns[0]!.items).toEqual([
+      { kind: 'note', id: 'v1:2', text: 'step check failed — tests failed', tone: 'danger' },
+    ])
+  })
+
+  it('renders v1 image lines (served URL) and skips everything without one', () => {
+    const { turns } = reduceThread([
+      line(1, 'image', { name: 'shot.png', url: '/api/runs/r1/images/shot.png' }),
+      line(2, 'image', { mediaType: 'image/png', data: 'aGk=' }), // v2 shape: raw base64, no URL
+    ])
+    expect(turns[0]!.items).toEqual([
+      { kind: 'image', id: 'v1:1', url: '/api/runs/r1/images/shot.png', name: 'shot.png' },
+    ])
+  })
+})
+
+describe('threadFooter', () => {
+  const cases = [
+    ['waiting', undefined, { state: 'waiting' }],
+    ['done', undefined, { state: 'closed', tone: 'dim', label: 'Session closed' }],
+    ['cancelled', undefined, { state: 'closed', tone: 'dim', label: 'Session closed' }],
+    ['review', undefined, { state: 'closed', tone: 'dim', label: 'Session closed — waiting for your review' }],
+    ['failed', 'checks failed', { state: 'closed', tone: 'danger', label: 'Session failed — checks failed' }],
+    ['failed', undefined, { state: 'closed', tone: 'danger', label: 'Session failed' }],
+    ['running', undefined, null],
+    ['queued', undefined, null],
+  ] as const
+
+  for (const [status, error, expected] of cases) {
+    it(`${status}${error ? ` (${error})` : ''} → ${expected ? expected.state : 'nothing'}`, () => {
+      expect(threadFooter(status, error)).toEqual(expected)
+    })
+  }
+})

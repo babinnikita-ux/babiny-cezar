@@ -17,6 +17,11 @@
  */
 @import "tw-animate-css";
 
+/* Streamdown (the thread's markdown renderer) styles itself with Tailwind utility classes that
+ * live in node_modules — without this @source Tailwind would purge them and every code block /
+ * table / blockquote would render unstyled (diff-highlight-tech.md §4, the documented gotcha). */
+@source "../../../../node_modules/streamdown/dist/*.js";
+
 /* ---------- self-hosted fonts (no CDN: the cockpit must work offline) ----------
  * Variable woff2 subsets vendored from @fontsource-variable/{inter,jetbrains-mono} v5.2.8
  * (SIL OFL 1.1 — see the LICENSE files next to the binaries). Latin + latin-ext only;
@@ -301,4 +306,53 @@
   ::-webkit-scrollbar-track {
     background: transparent;
   }
+}
+
+/* ---------- thread markdown (mockup `.msg-assist`) ----------
+ * Chat-scale typography for assistant messages. Streamdown ships document-scale utility
+ * classes on its elements (text-2xl headings, prose paddings); these rules are deliberately
+ * UNLAYERED so they outrank Tailwind's `utilities` layer — inside `@layer base` they would
+ * silently lose the cascade and replies would render page-sized. `em`-based so the whole
+ * scale keys off the message's own font size. */
+
+.thread-markdown {
+  line-height: 1.6;
+}
+.thread-markdown :is(h1, h2, h3, h4, h5, h6) {
+  margin: 0.9em 0 0.35em;
+  font-size: 1.05em;
+  font-weight: 600;
+}
+.thread-markdown h1 {
+  font-size: 1.25em;
+}
+.thread-markdown h2 {
+  font-size: 1.15em;
+}
+.thread-markdown :is(p, ul, ol, table, blockquote) {
+  margin: 0.45em 0;
+}
+.thread-markdown :is(ul, ol) {
+  padding-left: 1.4em;
+}
+.thread-markdown ul {
+  list-style: disc;
+}
+.thread-markdown ol {
+  list-style: decimal;
+}
+.thread-markdown blockquote {
+  border-left: 2px solid var(--border);
+  padding-left: 0.9em;
+  color: var(--muted-foreground);
+}
+.thread-markdown [data-streamdown='inline-code'] {
+  border-radius: 5px;
+  background: var(--muted);
+  padding: 1.5px 5px;
+  font-size: 0.9em;
+}
+.thread-markdown [data-streamdown='code-block'] pre {
+  font-size: 12px;
+  line-height: 1.55;
 }

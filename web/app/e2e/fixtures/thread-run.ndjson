@@ -1,0 +1,30 @@
+{"type":"lifecycle","message":"run started — workflow \"quick-task\" (runner: claude)","seq":1,"ts":"2026-07-14T19:42:53.488Z"}
+{"type":"note","message":"worktree ready — branch cez/01ec2e8c (base main)","seq":2,"ts":"2026-07-14T19:42:53.523Z"}
+{"type":"step-start","stepId":"task","name":"Do the task","kind":"agent","iteration":1,"seq":3,"ts":"2026-07-14T19:42:53.613Z"}
+{"type":"session.started","sessionId":"b3440f00-e348-45bb-a582-7b1f6e6ea137","backend":"claude","stepId":"task","seq":4,"ts":"2026-07-14T19:42:53.653Z"}
+{"type":"turn.started","turnId":"turn_1","stepId":"task","seq":5,"ts":"2026-07-14T19:42:53.653Z"}
+{"type":"item.started","item":{"kind":"message","id":"item_1","role":"assistant","text":"## Markdown fixture\nThis paragraph is soft-wrapped\nacross two source lines.\n\n| Column | Align | Result |\n|:-------|:-----:|-------:|\n| left `code` | *center* | **42** |\n| ~~old~~ new | mid | $1.50 |\n\n- top item with *emphasis*\n  - nested child with `code`\n    - [x] deep done task\n  - [ ] nested todo\n- second top\n\n> quoted intro\n> - quoted list item\n\n```ts\nconst answer: number = 42;\n```\nLiteral guards: snake_case_name, 2*3 and <script>alert(1)</script>."},"stepId":"task","seq":6,"ts":"2026-07-14T19:42:53.907Z"}
+{"type":"item.completed","item":{"kind":"message","id":"item_1","role":"assistant","text":"## Markdown fixture\nThis paragraph is soft-wrapped\nacross two source lines.\n\n| Column | Align | Result |\n|:-------|:-----:|-------:|\n| left `code` | *center* | **42** |\n| ~~old~~ new | mid | $1.50 |\n\n- top item with *emphasis*\n  - nested child with `code`\n    - [x] deep done task\n  - [ ] nested todo\n- second top\n\n> quoted intro\n> - quoted list item\n\n```ts\nconst answer: number = 42;\n```\nLiteral guards: snake_case_name, 2*3 and <script>alert(1)</script>."},"stepId":"task","seq":7,"ts":"2026-07-14T19:42:53.907Z"}
+{"type":"text","text":"## Markdown fixture\nThis paragraph is soft-wrapped\nacross two source lines.\n\n| Column | Align | Result |\n|:-------|:-----:|-------:|\n| left `code` | *center* | **42** |\n| ~~old~~ new | mid | $1.50 |\n\n- top item with *emphasis*\n  - nested child with `code`\n    - [x] deep done task\n  - [ ] nested todo\n- second top\n\n> quoted intro\n> - quoted list item\n\n```ts\nconst answer: number = 42;\n```\nLiteral guards: snake_case_name, 2*3 and <script>alert(1)</script>.","stepId":"task","seq":8,"ts":"2026-07-14T19:42:53.907Z"}
+{"type":"token-usage","tokensUsed":300,"stepId":"task","seq":9,"ts":"2026-07-14T19:42:53.907Z"}
+{"type":"turn.completed","turnId":"turn_1","stopReason":"end_turn","usage":{"input":100,"output":200,"total":300},"costUsd":0.001,"stepId":"task","seq":10,"ts":"2026-07-14T19:42:54.007Z"}
+{"type":"usage.updated","usage":{"input":100,"output":200,"total":300},"costUsd":0.001,"stepId":"task","seq":11,"ts":"2026-07-14T19:42:54.007Z"}
+{"type":"token-usage","tokensUsed":600,"stepId":"task","seq":12,"ts":"2026-07-14T19:42:54.007Z"}
+{"type":"cost","usd":0.001,"stepId":"task","seq":13,"ts":"2026-07-14T19:42:54.008Z"}
+{"type":"turn-end","stepId":"task","seq":14,"ts":"2026-07-14T19:42:54.008Z"}
+{"type":"user-message","stepId":"task","text":"Thanks — now list the three main components as bullets.","imageCount":0,"seq":15,"ts":"2026-07-14T19:42:54.128Z"}
+{"type":"turn.started","turnId":"turn_2","stepId":"task","seq":16,"ts":"2026-07-14T19:42:54.128Z"}
+{"type":"item.started","item":{"kind":"message","id":"item_2","role":"assistant","text":"Follow-up #1 received: \"Thanks — now list the three main components as bullets.\". Applied (dry run)."},"stepId":"task","seq":17,"ts":"2026-07-14T19:42:54.380Z"}
+{"type":"item.completed","item":{"kind":"message","id":"item_2","role":"assistant","text":"Follow-up #1 received: \"Thanks — now list the three main components as bullets.\". Applied (dry run)."},"stepId":"task","seq":18,"ts":"2026-07-14T19:42:54.380Z"}
+{"type":"text","text":"Follow-up #1 received: \"Thanks — now list the three main components as bullets.\". Applied (dry run).","stepId":"task","seq":19,"ts":"2026-07-14T19:42:54.380Z"}
+{"type":"token-usage","tokensUsed":860,"stepId":"task","seq":20,"ts":"2026-07-14T19:42:54.380Z"}
+{"type":"turn.completed","turnId":"turn_2","stopReason":"end_turn","usage":{"input":200,"output":60,"total":260},"costUsd":0.0051,"stepId":"task","seq":21,"ts":"2026-07-14T19:42:54.530Z"}
+{"type":"usage.updated","usage":{"input":200,"output":60,"total":260},"costUsd":0.0051,"stepId":"task","seq":22,"ts":"2026-07-14T19:42:54.531Z"}
+{"type":"token-usage","tokensUsed":1120,"stepId":"task","seq":23,"ts":"2026-07-14T19:42:54.531Z"}
+{"type":"cost","usd":0.0051,"stepId":"task","seq":24,"ts":"2026-07-14T19:42:54.531Z"}
+{"type":"turn-end","stepId":"task","seq":25,"ts":"2026-07-14T19:42:54.531Z"}
+{"type":"lifecycle","message":"session closed by user","seq":26,"ts":"2026-07-14T19:42:54.723Z"}
+{"type":"done","stepId":"task","seq":27,"ts":"2026-07-14T19:42:54.731Z"}
+{"type":"session.ended","reason":"end_turn","stepId":"task","seq":28,"ts":"2026-07-14T19:42:54.731Z"}
+{"type":"step-end","stepId":"task","status":"done","seq":29,"ts":"2026-07-14T19:42:54.731Z"}
+{"type":"lifecycle","message":"run finished","seq":30,"ts":"2026-07-14T19:42:54.746Z"}
