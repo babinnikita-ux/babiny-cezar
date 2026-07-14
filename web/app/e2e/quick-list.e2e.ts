@@ -262,22 +262,24 @@ describe('task quick-list', () => {
   })
 
   it('expands the variant group into per-variant rows, and collapses it again', () => {
-    expect(browser.count('[data-run-id="fix-var-a"]')).toBe(0)
+    // Scoped to the quick-list's rows: the Tasks table (Step 3.4) legitimately lists each
+    // variant as its own row, so a bare data-run-id would match the table too.
+    expect(browser.count(`${ROW}[data-run-id="fix-var-a"]`)).toBe(0)
 
     browser.click(TILE)
-    browser.waitForFunction(`document.querySelector('[data-run-id="fix-var-a"]') !== null`)
+    browser.waitForFunction(`document.querySelector('${ROW}[data-run-id="fix-var-a"]') !== null`)
     // What actually differs between A and B — the backend and the spend.
-    expect(textOf('[data-run-id="fix-var-a"]')).toBe('Aclaude · 96.2k')
-    expect(textOf('[data-run-id="fix-var-b"]')).toBe('Bcodex · 41.8k')
+    expect(textOf(`${ROW}[data-run-id="fix-var-a"]`)).toBe('Aclaude · 96.2k')
+    expect(textOf(`${ROW}[data-run-id="fix-var-b"]`)).toBe('Bcodex · 41.8k')
     // Each variant is still its own deep link.
-    expect(browser.evaluate(`document.querySelector('[data-run-id="fix-var-b"] a').getAttribute('href')`)).toBe(
-      '/tasks/fix-var-b'
-    )
+    expect(
+      browser.evaluate(`document.querySelector('${ROW}[data-run-id="fix-var-b"] a').getAttribute('href')`)
+    ).toBe('/tasks/fix-var-b')
 
     browser.screenshot(`${artifactsDir}/quick-list-expanded.png`)
 
     browser.click(TILE)
-    browser.waitForFunction(`document.querySelector('[data-run-id="fix-var-a"]') === null`)
+    browser.waitForFunction(`document.querySelector('${ROW}[data-run-id="fix-var-a"]') === null`)
   })
 
   it('lights the row for the task the route has open', () => {
@@ -306,6 +308,121 @@ describe('task quick-list', () => {
 
     browser.click('[data-slot="view-tab"][data-view="active"]')
     browser.waitForFunction(`document.querySelector('[data-run-id="fix-review-pr"]') !== null`)
+  })
+})
+
+/**
+ * The Tasks table overview (Step 3.4) — the same fixture server, through the real `/` home.
+ *
+ * Same deliberate limitation as above: every fixture status is terminal, so the live/queued
+ * columns cannot be exercised here (a serve boot recovers non-terminal runs). Those are covered
+ * by the jsdom suite (`src/routes/tasks-overview.test.tsx`), which drives the components with
+ * queued/running records and a stubbed usage stream directly.
+ */
+describe('tasks table overview', () => {
+  const TABLE_ROW = '[data-slot="task-table-row"]'
+
+  beforeAll(() => {
+    browser.setViewport(1440, 900)
+    browser.goto(`${baseUrl}/`)
+    browser.waitForFunction(`document.querySelectorAll('${TABLE_ROW}').length > 0`)
+  })
+
+  it('is the home: the table renders every active fixture run with its status', () => {
+    const rows = browser.evaluate(`[...document.querySelectorAll('${TABLE_ROW}')].map((tr) => ({
+      id: tr.dataset.runId,
+      status: tr.querySelector('[data-slot="pill"]').textContent,
+    }))`) as Array<{ id: string; status: string }>
+
+    expect(Object.fromEntries(rows.map((r) => [r.id, r.status]))).toEqual({
+      'fix-review-pr': 'needs review',
+      'fix-var-a': 'needs review',
+      'fix-var-b': 'needs review',
+      'fix-done': 'done',
+      'fix-failed': 'failed',
+    })
+    // Needs-you first, history after — the sidebar's order, because it is the sidebar's sort.
+    expect(rows.slice(0, 3).map((r) => r.id).sort()).toEqual(['fix-review-pr', 'fix-var-a', 'fix-var-b'])
+    expect(rows.slice(3).map((r) => r.id)).toEqual(['fix-done', 'fix-failed'])
+
+    // A spot check across the columns: tokens formatted, the PR chip numbered and pointed out.
+    const reviewRow = browser.evaluate(`(() => {
+      const tr = document.querySelector('${TABLE_ROW}[data-run-id="fix-review-pr"]')
+      const pr = tr.querySelector('[data-slot="pr-chip"]')
+      return { text: tr.textContent, prHref: pr.href, prTarget: pr.target }
+    })()`) as { text: string; prHref: string; prTarget: string }
+    expect(reviewRow.text).toContain('128.4k')
+    expect(reviewRow.prHref).toBe('https://github.com/open-mercato/cezar/pull/396')
+    expect(reviewRow.prTarget).toBe('_blank')
+
+    browser.screenshot(`${artifactsDir}/tasks-table.png`)
+  })
+
+  it('offers the compare strip for the finished variant group', () => {
+    expect(browser.text('[data-slot="compare-strip"]')).toContain('Add skills autocomplete to composer')
+    expect(
+      browser.evaluate(
+        `document.querySelector('[data-slot="compare-strip"] a[href^="/compare/"]').getAttribute('href')`
+      )
+    ).toBe('/compare/fix-group-1')
+  })
+
+  it('flips both the table and the sidebar from the header tabs — one shared state', () => {
+    browser.click('[data-slot="overview-tab"][data-view="archived"]')
+    browser.waitForFunction(`document.querySelector('${TABLE_ROW}[data-run-id="fix-archived"]') !== null`)
+    expect(browser.count(TABLE_ROW)).toBe(1)
+    // The sidebar followed without being touched.
+    expect(
+      browser.evaluate(
+        `document.querySelector('[data-slot="view-tab"][data-view="archived"]').getAttribute('aria-pressed')`
+      )
+    ).toBe('true')
+    expect(browser.count('[data-slot="task-row"][data-run-id="fix-review-pr"]')).toBe(0)
+
+    // And back, this time from the sidebar: the table follows.
+    browser.click('[data-slot="view-tab"][data-view="active"]')
+    browser.waitForFunction(`document.querySelector('${TABLE_ROW}[data-run-id="fix-review-pr"]') !== null`)
+    expect(
+      browser.evaluate(
+        `document.querySelector('[data-slot="overview-tab"][data-view="active"]').getAttribute('aria-pressed')`
+      )
+    ).toBe('true')
+    expect(browser.count(`${TABLE_ROW}[data-run-id="fix-archived"]`)).toBe(0)
+  })
+
+  it('opens the task from a row click', () => {
+    browser.click(`${TABLE_ROW}[data-run-id="fix-done"]`)
+    browser.waitForFunction(`location.pathname === '/tasks/fix-done'`)
+    expect(browser.url()).toContain('/tasks/fix-done')
+    browser.goto(`${baseUrl}/`)
+    browser.waitForFunction(`document.querySelectorAll('${TABLE_ROW}').length > 0`)
+  })
+
+  it('reflows to cards plus a New-task FAB at phone width, with no horizontal overflow', () => {
+    browser.setViewport(390, 844)
+    browser.goto(`${baseUrl}/`)
+    browser.waitForFunction(`document.querySelectorAll('[data-slot="task-card"]').length > 0`)
+
+    expect(browser.count('[data-slot="task-card"]')).toBe(5)
+    expect(browser.isVisible('[data-slot="new-task-fab"]')).toBe(true)
+    expect(
+      browser.evaluate(`document.querySelector('[data-slot="new-task-fab"]').getAttribute('href')`)
+    ).toBe('/new')
+    // The table is the desktop framing — at phone width the cards replace it, not join it.
+    expect(
+      browser.evaluate(`getComputedStyle(document.querySelector('[data-slot="tasks-table"]')).display`)
+    ).toBe('none')
+    // Nothing forces the page wider than the phone.
+    expect(browser.evaluate(`document.documentElement.scrollWidth <= window.innerWidth`)).toBe(true)
+    expect(
+      browser.evaluate(`(() => {
+        const main = document.querySelector('[data-slot="main"]')
+        return main.scrollWidth <= main.clientWidth
+      })()`)
+    ).toBe(true)
+
+    browser.screenshot(`${artifactsDir}/tasks-cards-mobile.png`)
+    browser.setViewport(1440, 900)
   })
 })
 

@@ -9,6 +9,7 @@ import { StatusDot } from '@/components/status-dot'
 import { deriveAttention } from '@/lib/attention'
 import { compactTokens, shortAge } from '@/lib/format'
 import { groupRuns, listCounts, type ListView, type QuickListRow } from '@/lib/task-groups'
+import { useNow } from '@/lib/use-now'
 import { cn } from '@/lib/utils'
 
 /**
@@ -274,17 +275,6 @@ function variantLabel(run: RunRecord): string {
   const parts: string[] = [run.runner ?? 'claude']
   if (run.tokensUsed > 0) parts.push(compactTokens(run.tokensUsed))
   return parts.join(' · ')
-}
-
-/** Re-render on a slow tick so the ages stay true. 30s: finer than the coarsest unit a row can
- *  show ('1m'), and cheap enough that a sidebar of rows costs nothing between SSE updates. */
-function useNow(intervalMs: number): number {
-  const [now, setNow] = React.useState(() => Date.now())
-  React.useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), intervalMs)
-    return () => clearInterval(timer)
-  }, [intervalMs])
-  return now
 }
 
 /**

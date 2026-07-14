@@ -25,7 +25,7 @@
 | 3 | 3.1 | Typed API client for /api/* | done | 4de5ac4 |
 | 3 | 3.2 | SSE hooks with reconcile doctrine (global stream) | done | 079ac28 |
 | 3 | 3.3 | deriveAttention + task quick-list (groups, variants, status dots) | done | e503571 |
-| 3 | 3.4 | Tasks table view (the overview home) | todo | — |
+| 3 | 3.4 | Tasks table view (the overview home) | done | pending |
 | 4 | 4.1 | CenteredState template + empty states | todo | — |
 | 4 | 4.2 | Tools dropdown (installed tools, versions, setup links, cog) | todo | — |
 | 4 | 4.3 | ⌘K command palette | todo | — |

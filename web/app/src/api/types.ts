@@ -300,6 +300,11 @@ export interface CancelResponse {
   cancelled: boolean
 }
 
+/** `POST /api/runs/archive-finished` — how many runs the sweep archived. */
+export interface ArchiveFinishedResponse {
+  archived: number
+}
+
 export interface DeleteRunResponse {
   deleted: boolean
 }

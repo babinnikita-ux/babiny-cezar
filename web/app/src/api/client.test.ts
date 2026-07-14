@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   ApiError,
+  archiveFinished,
   archiveRun,
   cancelRun,
   continueRun,
@@ -112,6 +113,12 @@ describe('request shapes', () => {
       path: '/api/runs/run-1/archive',
       method: 'POST',
       body: { archived: false },
+    },
+    {
+      name: 'archiveFinished',
+      call: () => archiveFinished(),
+      path: '/api/runs/archive-finished',
+      method: 'POST',
     },
     { name: 'finishRun', call: () => finishRun('run-1'), path: '/api/runs/run-1/finish', method: 'POST' },
     {

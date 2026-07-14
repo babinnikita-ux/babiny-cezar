@@ -1,18 +1,35 @@
+import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { createQueryClient } from './api/query-client'
+import { ListViewProvider } from './components/list-view'
 import { AppRoutes } from './routes'
 
-// Explicit rather than relying on RTL's auto-cleanup, which only runs when vitest `globals` is on.
-afterEach(cleanup)
+// The `/` overview fetches `/api/runs` on mount. A never-answering fetch keeps every route
+// honestly in its loading state — this file is about the URL map, not about data.
+beforeEach(() => {
+  vi.stubGlobal('fetch', vi.fn(() => new Promise<never>(() => {})))
+})
 
-/** Cold-load the router at a URL, exactly as a pasted deep link would. */
+// Explicit rather than relying on RTL's auto-cleanup, which only runs when vitest `globals` is on.
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
+
+/** Cold-load the router at a URL, exactly as a pasted deep link would — under the same providers
+ *  the app shell supplies (the overview at `/` needs the query cache and the shared list view). */
 function renderAt(entry: string) {
   render(
-    <MemoryRouter initialEntries={[entry]}>
-      <AppRoutes />
-    </MemoryRouter>,
+    <QueryClientProvider client={createQueryClient()}>
+      <MemoryRouter initialEntries={[entry]}>
+        <ListViewProvider>
+          <AppRoutes />
+        </ListViewProvider>
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
 }
 

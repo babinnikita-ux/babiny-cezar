@@ -1,5 +1,6 @@
 import type {
   ApiRun,
+  ArchiveFinishedResponse,
   CancelResponse,
   ContinueResponse,
   CreateRunInput,
@@ -213,6 +214,12 @@ export function cancelRun(id: string): Promise<CancelResponse> {
 /** Archives by default; pass `false` to bring a run back into the live list. */
 export function archiveRun(id: string, archived = true): Promise<RunRecord> {
   return mutate<RunRecord>('POST', runPath(id, '/archive'), { archived })
+}
+
+/** Sweep every finished (done/failed/cancelled) active run into the archive in one call —
+ *  the Tasks header's "Archive finished" button. */
+export function archiveFinished(): Promise<ArchiveFinishedResponse> {
+  return mutate<ArchiveFinishedResponse>('POST', '/api/runs/archive-finished')
 }
 
 /** Close a waiting session gracefully — the run completes as done. 409 when nothing is open. */

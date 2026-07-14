@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router'
 import { NewTaskRoute } from './routes/new-task'
 import { Placeholder } from './routes/placeholder'
+import { TasksOverviewRoute } from './routes/tasks-overview'
 
 /** The route map from the spec's "Routing — every surface is a URL" section.
  *
@@ -8,13 +9,14 @@ import { Placeholder } from './routes/placeholder'
  *  every non-/api GET (src/server/static-ui.ts `resolveGetRequest`), so each of
  *  these cold-loads and survives a refresh.
  *
- *  Every element is a placeholder for now — Step 2.1 is the URL contract; the
- *  views land in R3–R6. Keep the paths stable: they are what teammates paste.
+ *  `/` is the real Tasks overview (Step 3.4); the remaining elements are
+ *  placeholders until their views land in R3–R6. Keep the paths stable: they
+ *  are what teammates paste.
  */
 export function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<Placeholder route="tasks" title="Tasks" />} />
+      <Route path="/" element={<TasksOverviewRoute />} />
       <Route path="/new" element={<NewTaskRoute />} />
 
       <Route path="/tasks/:id" element={<Placeholder route="task-thread" title="Thread" />} />
