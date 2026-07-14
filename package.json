@@ -10,7 +10,11 @@
   },
   "files": [
     "dist",
-    "web",
+    "web/index.html",
+    "web/app.js",
+    "web/style.css",
+    "web/open-mercato.svg",
+    "web/dist",
     "scripts",
     "README.md"
   ],
@@ -18,7 +22,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run build:web",
     "build:web": "vite build --config web/app/vite.config.ts",
     "dev": "tsx src/index.ts",
     "dev:web": "vite --config web/app/vite.config.ts",

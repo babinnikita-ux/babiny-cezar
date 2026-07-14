@@ -16,7 +16,7 @@
 | 1 | 1.2 | Tailwind v4 + design tokens + self-hosted fonts | done | pending |
 | 1 | 1.3 | shadcn/ui primitives and the cn() utility | done | pending |
 | 1 | 1.4 | vitest projects (server + web) and npm test in the validation gate | done | pending |
-| 1 | 1.5 | Hono serves web/dist with legacy fallback and ?legacy=1 | todo | — |
+| 1 | 1.5 | Hono serves web/dist with legacy fallback and ?legacy=1 | done | pending |
 | 1 | 1.6 | Agent-browser provider setup + first UI smoke test | done | pending |
 | 2 | 2.1 | react-router route map + server SPA catch-all | todo | — |
 | 2 | 2.2 | Theme system (pre-paint, light/dark/system) | todo | — |

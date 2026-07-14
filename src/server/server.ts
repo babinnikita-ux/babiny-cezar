@@ -35,6 +35,7 @@ import { fetchGithub } from './github.js';
 import { ensureLaunchKey } from './launch-key.js';
 import { openInTerminal } from './open-in-terminal.js';
 import { createDraftPr } from './pr.js';
+import { ASSET_CACHE_CONTROL, assetContentType, resolveIndexHtml } from './static-ui.js';
 
 export interface ServerDeps {
   repoRoot: string;
@@ -145,15 +146,51 @@ export function createApp(deps: ServerDeps): Hono {
 
   // ---- static GUI ----------------------------------------------------------
   const webDir = resolveWebDir();
+  const distDir = join(webDir, 'dist');
+  const HTML_TYPE = 'text/html; charset=utf-8';
   const staticFile = (name: string, type: string) => (): Response => {
     // Read per request — the files are tiny and this keeps dev iteration live.
     const body = readFileSync(join(webDir, name));
     return new Response(body, { headers: { 'content-type': type } });
   };
-  app.get('/', staticFile('index.html', 'text/html; charset=utf-8'));
+
+  // `/` serves the React cockpit built to web/dist, and falls back to the
+  // legacy vanilla UI when that build is absent — an `npx cezar-cli` user must
+  // never have to build anything, and neither must a fresh dev checkout.
+  // `?legacy=1` forces the old UI either way (the escape hatch until R7).
+  let hintLogged = false;
+  app.get('/', (c) => {
+    const distIndex = join(distDir, 'index.html');
+    // existsSync per request, like the reads above: `npm run build:web` in a
+    // running cockpit takes effect on the next reload, no restart.
+    const { target, hint } = resolveIndexHtml({
+      distExists: existsSync(distIndex),
+      legacyRequested: c.req.query('legacy') === '1',
+    });
+    if (hint && !hintLogged) {
+      hintLogged = true;
+      console.log('cezar: serving the legacy UI — run `npm run build:web` to use the new cockpit');
+    }
+    const file = target === 'dist' ? distIndex : join(webDir, 'index.html');
+    return new Response(readFileSync(file), { headers: { 'content-type': HTML_TYPE } });
+  });
+
+  // Hashed bundles/fonts of the built app. Vite fingerprints every name, so
+  // the bytes behind a URL never change — cache them hard. `basename` pins
+  // reads inside the assets dir.
+  app.get('/assets/:file', (c) => {
+    const file = basename(c.req.param('file'));
+    const path = join(distDir, 'assets', file);
+    if (!existsSync(path)) return c.json({ error: 'not found' }, 404);
+    return new Response(readFileSync(path), {
+      headers: { 'content-type': assetContentType(file), 'cache-control': ASSET_CACHE_CONTROL },
+    });
+  });
+
   // Deep-link target for the bookmarklets (spec 011) — same SPA, the query
   // string (`?skill=…&ref=…&auto=…&key=…`) is handled by web/app.js init().
-  app.get('/new', staticFile('index.html', 'text/html; charset=utf-8'));
+  app.get('/new', staticFile('index.html', HTML_TYPE));
+  // The legacy page's own assets — unchanged, so ?legacy=1 keeps working.
   app.get('/app.js', staticFile('app.js', 'text/javascript; charset=utf-8'));
   app.get('/style.css', staticFile('style.css', 'text/css; charset=utf-8'));
   app.get('/open-mercato.svg', staticFile('open-mercato.svg', 'image/svg+xml'));
