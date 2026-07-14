@@ -29,6 +29,47 @@ export function resolveIndexHtml(opts: { distExists: boolean; legacyRequested: b
   };
 }
 
+/** `passthrough` = not the SPA's to answer: `/api/*` keeps its JSON/SSE behavior
+ *  and its own 404s, and the files with dedicated static routes keep being
+ *  served by them. */
+export type GetTarget = IndexTarget | 'passthrough';
+
+export interface GetResolution {
+  target: GetTarget;
+  hint: boolean;
+}
+
+/** Paths owned by routes registered before the catch-all: the built app's
+ *  hashed bundles and the legacy page's own assets (which `?legacy=1` needs). */
+function isStaticAsset(path: string): boolean {
+  return (
+    path.startsWith('/assets/') ||
+    path === '/app.js' ||
+    path === '/style.css' ||
+    path === '/open-mercato.svg'
+  );
+}
+
+/** Decide what any GET gets, so every route in the spec's map (`/tasks/:id/changes`,
+ *  `/settings/skills`, …) cold-loads and survives a refresh — that is what makes a
+ *  cockpit URL pasteable.
+ *
+ *  Unknown paths deliberately resolve to the shell, not a 404: react-router owns
+ *  the 404 (it is the only side that knows the route map). Everything the server
+ *  itself owns — `/api/*` and the static files above — passes through untouched.
+ */
+export function resolveGetRequest(opts: {
+  path: string;
+  distExists: boolean;
+  legacyRequested: boolean;
+}): GetResolution {
+  const { path, distExists, legacyRequested } = opts;
+  if (path === '/api' || path.startsWith('/api/') || isStaticAsset(path)) {
+    return { target: 'passthrough', hint: false };
+  }
+  return resolveIndexHtml({ distExists, legacyRequested });
+}
+
 const ASSET_TYPES: Record<string, string> = {
   js: 'text/javascript; charset=utf-8',
   css: 'text/css; charset=utf-8',

@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { serve, type ServerType } from '@hono/node-server';
 import { streamSSE } from 'hono/streaming';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
@@ -35,7 +35,7 @@ import { fetchGithub } from './github.js';
 import { ensureLaunchKey } from './launch-key.js';
 import { openInTerminal } from './open-in-terminal.js';
 import { createDraftPr } from './pr.js';
-import { ASSET_CACHE_CONTROL, assetContentType, resolveIndexHtml } from './static-ui.js';
+import { ASSET_CACHE_CONTROL, assetContentType, resolveGetRequest } from './static-ui.js';
 
 export interface ServerDeps {
   repoRoot: string;
@@ -154,26 +154,24 @@ export function createApp(deps: ServerDeps): Hono {
     return new Response(body, { headers: { 'content-type': type } });
   };
 
-  // `/` serves the React cockpit built to web/dist, and falls back to the
-  // legacy vanilla UI when that build is absent — an `npx cezar-cli` user must
-  // never have to build anything, and neither must a fresh dev checkout.
-  // `?legacy=1` forces the old UI either way (the escape hatch until R7).
   let hintLogged = false;
-  app.get('/', (c) => {
+  const serveShell = (c: Context): Response | undefined => {
     const distIndex = join(distDir, 'index.html');
-    // existsSync per request, like the reads above: `npm run build:web` in a
+    // existsSync per request, like the reads below: `npm run build:web` in a
     // running cockpit takes effect on the next reload, no restart.
-    const { target, hint } = resolveIndexHtml({
+    const { target, hint } = resolveGetRequest({
+      path: c.req.path,
       distExists: existsSync(distIndex),
       legacyRequested: c.req.query('legacy') === '1',
     });
+    if (target === 'passthrough') return undefined;
     if (hint && !hintLogged) {
       hintLogged = true;
       console.log('cezar: serving the legacy UI — run `npm run build:web` to use the new cockpit');
     }
     const file = target === 'dist' ? distIndex : join(webDir, 'index.html');
     return new Response(readFileSync(file), { headers: { 'content-type': HTML_TYPE } });
-  });
+  };
 
   // Hashed bundles/fonts of the built app. Vite fingerprints every name, so
   // the bytes behind a URL never change — cache them hard. `basename` pins
@@ -187,9 +185,6 @@ export function createApp(deps: ServerDeps): Hono {
     });
   });
 
-  // Deep-link target for the bookmarklets (spec 011) — same SPA, the query
-  // string (`?skill=…&ref=…&auto=…&key=…`) is handled by web/app.js init().
-  app.get('/new', staticFile('index.html', HTML_TYPE));
   // The legacy page's own assets — unchanged, so ?legacy=1 keeps working.
   app.get('/app.js', staticFile('app.js', 'text/javascript; charset=utf-8'));
   app.get('/style.css', staticFile('style.css', 'text/css; charset=utf-8'));
@@ -867,6 +862,16 @@ export function createApp(deps: ServerDeps): Hono {
       return c.text(`(git show failed: ${err instanceof Error ? err.message : String(err)})`);
     }
   });
+
+  // ---- SPA catch-all -------------------------------------------------------
+  // Last, so every route above still wins. Any other GET gets the cockpit shell:
+  // react-router owns the route map, including the 404, so `/tasks/:id/changes`
+  // cold-loads and survives a refresh instead of 404ing. `/api/*` and the static
+  // files above resolve to `passthrough` and fall through to Hono's own 404 —
+  // an unknown API path must never answer with HTML.
+  // Without a web/dist build this serves the legacy page, so `npx cezar-cli`
+  // stays zero-config; `?legacy=1` forces it either way (the R7 escape hatch).
+  app.get('*', (c) => serveShell(c) ?? c.notFound());
 
   return app;
 }

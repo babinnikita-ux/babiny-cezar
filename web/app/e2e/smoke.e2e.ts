@@ -10,9 +10,9 @@ import { AgentBrowser, readTestEnv } from './agent-browser'
  * right routes and actually render. Feature coverage belongs in the steps that add features;
  * this file must stay fast and boring so a checkpoint failure always means something real.
  *
- * The app shell at `/` is still the Step 1.1/1.2 placeholder, so the assertions here are
- * limited to what honestly exists today: React mounts into #root, and the Tailwind theme
- * resolves its color from the `--background` design token.
+ * The app shell at `/` is still a placeholder (Step 2.1 landed the route map, not the views),
+ * so the assertions here are limited to what honestly exists today: React mounts into #root
+ * on the `/` route, and the Tailwind theme resolves its color from the `--background` token.
  */
 
 const artifactsDir = resolve(import.meta.dirname, '../../../.ai/qa/artifacts_e2e')
@@ -37,7 +37,8 @@ describe('cockpit shell routing', () => {
     // React actually mounted — an empty #root would mean the bundle failed to execute,
     // which is the failure a "200 OK" curl check would happily miss.
     expect(browser.evaluate('document.getElementById("root")?.childElementCount ?? 0')).toBeGreaterThan(0)
-    expect(browser.text('#root h1')).toBe('cezar')
+    // `/` resolves to the tasks overview route (spec's route map).
+    expect(browser.text('#root h1')).toBe('Tasks')
 
     // The token-driven background reaches the DOM: compare the shell's computed color against
     // the value `--background` resolves to, rather than a hardcoded rgb() — this stays true

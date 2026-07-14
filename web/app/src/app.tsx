@@ -1,13 +1,16 @@
-// Placeholder shell. The real sidebar/router shell lands in Step 2.3; this only exists to prove the
-// design tokens from src/styles/index.css reach the DOM. Colors come from tokens — never raw hex.
+import { BrowserRouter } from 'react-router'
+import { AppRoutes } from './routes'
+
+/** Real URLs, no basename: the cockpit is always mounted at the origin root, and the server
+ *  serves index.html for every non-/api GET (src/server/static-ui.ts), so a deep link like
+ *  `/tasks/:id/changes` cold-loads and survives a refresh.
+ *
+ *  The shell chrome (sidebar, 100dvh grid) lands in Step 2.3 and will wrap <AppRoutes /> here.
+ */
 export function App() {
   return (
-    <main className="flex h-full flex-col items-center justify-center gap-2 bg-background px-6 text-center text-foreground">
-      <h1 className="text-2xl font-semibold">cezar</h1>
-      <p className="text-sm text-muted-foreground">
-        The redesigned cockpit is being assembled. The current UI is available at{' '}
-        <code className="rounded-sm bg-muted px-1.5 py-0.5 font-mono text-[12.5px]">?legacy=1</code>.
-      </p>
-    </main>
+    <BrowserRouter>
+      <AppRoutes />
+    </BrowserRouter>
   )
 }
