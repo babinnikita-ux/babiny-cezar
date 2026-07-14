@@ -29,7 +29,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "sh .ai/scripts/e2e.sh",
-    "typecheck": "tsc --noEmit -p tsconfig.test.json",
+    "typecheck": "npm run typecheck:server && npm run typecheck:web",
+    "typecheck:server": "tsc --noEmit -p tsconfig.test.json",
     "typecheck:web": "tsc --noEmit -p web/app/tsconfig.json",
     "prepublishOnly": "npm run build"
   },
