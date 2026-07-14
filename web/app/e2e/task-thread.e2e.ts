@@ -188,18 +188,106 @@ describe('task thread', () => {
     expect(footer.text).toBe('Session closed')
   })
 
-  it('renders the transcript tool calls as cards with the computed titles and statuses', () => {
+  it('renders the transcript tool calls as cards — and the TodoWrite cards not at all (#382)', () => {
     const cards = browser.evaluate(`[...document.querySelectorAll('[data-slot="tool-card"]')].map((el) => ({
       status: el.dataset.status,
       kind: el.dataset.kind,
       title: el.querySelector('[data-slot="collapsible-trigger"]').textContent,
     }))`) as Array<{ status: string; kind: string; title: string }>
-    expect(cards).toHaveLength(2)
+    // Bash + Screenshot + the check-step card. The transcript ALSO carries two TodoWrite
+    // tool items — the plan dock is their surface, so no plan-kind card may render.
+    expect(cards).toHaveLength(3)
     expect(cards[0]).toMatchObject({ status: 'completed', kind: 'execute' })
     expect(cards[0]!.title).toContain('Ran')
     expect(cards[0]!.title).toContain('git status --short')
     expect(cards[1]).toMatchObject({ status: 'completed', kind: 'other' })
     expect(cards[1]!.title).toContain('Screenshot')
+    expect(cards[2]).toMatchObject({ status: 'completed', kind: 'execute' })
+    expect(browser.count('[data-slot="tool-card"][data-kind="plan"]')).toBe(0)
+  })
+
+  it('the check step renders as a command card with the pass pill and its output', () => {
+    const card = browser.evaluate(`(() => {
+      const el = [...document.querySelectorAll('[data-slot="tool-card"]')].at(-1)
+      return {
+        kind: el.dataset.kind,
+        status: el.dataset.status,
+        title: el.querySelector('[data-slot="collapsible-trigger"]').textContent,
+        exit: el.querySelector('[data-slot="tool-exit"]')?.textContent,
+      }
+    })()`) as { kind: string; status: string; title: string; exit?: string }
+    expect(card.kind).toBe('execute')
+    expect(card.status).toBe('completed')
+    expect(card.title).toContain('Ran')
+    expect(card.title).toContain('npm test')
+    expect(card.exit).toBe('0') // exit code 0 → the success-tinted pill
+
+    // Expands to the mono output block, like any execute card.
+    browser.evaluate(`[...document.querySelectorAll('[data-slot="tool-card"]')].at(-1)
+      .querySelector('[data-slot="collapsible-trigger"]').click()`)
+    browser.waitForFunction(
+      `[...document.querySelectorAll('[data-slot="tool-card"]')].at(-1).querySelector('[data-slot="tool-output"] pre') !== null`,
+    )
+    expect(
+      browser.evaluate(
+        `[...document.querySelectorAll('[data-slot="tool-card"]')].at(-1).querySelector('[data-slot="tool-output"] pre').textContent`,
+      ),
+    ).toContain('72 passed')
+
+    // Fold it back — the closed-by-default spec below counts open execute outputs.
+    browser.evaluate(`[...document.querySelectorAll('[data-slot="tool-card"]')].at(-1)
+      .querySelector('[data-slot="collapsible-trigger"]').click()`)
+    browser.waitForFunction(
+      `[...document.querySelectorAll('[data-slot="tool-card"]')].at(-1).querySelector('[data-slot="tool-output"]') === null`,
+    )
+  })
+
+  it('the step rail maps the record steps to checklist rows over the progress bar', () => {
+    const rail = browser.evaluate(`(() => {
+      const rows = [...document.querySelectorAll('[data-slot="step-row"]')]
+      return {
+        rows: rows.map((el) => ({ visual: el.dataset.visual, text: el.textContent })),
+        bar: document.querySelector('[data-slot="step-progress"] > div').style.width,
+      }
+    })()`) as { rows: Array<{ visual: string; text: string }>; bar: string }
+    expect(rail.rows).toHaveLength(2)
+    expect(rail.rows[0]).toMatchObject({ visual: 'done' })
+    expect(rail.rows[0]!.text).toContain('Do the task')
+    expect(rail.rows[0]!.text).toContain('agent · step 1 of 2')
+    expect(rail.rows[1]).toMatchObject({ visual: 'done' })
+    expect(rail.rows[1]!.text).toContain('Verify')
+    expect(rail.rows[1]!.text).toContain('check · step 2 of 2')
+    expect(rail.bar).toBe('100%') // both steps terminal — (1 + 1) / 2
+  })
+
+  it('the plan dock shows the LATEST snapshot (2/4), expanded on desktop, mirrored in the header', () => {
+    expect(browser.evaluate(`document.querySelector('[data-slot="plan-dock"]').dataset.state`)).toBe('open')
+    expect(browser.evaluate(`document.querySelector('[data-slot="plan-count"]').textContent`)).toBe('· 2/4')
+    expect(browser.evaluate(`document.querySelector('[data-slot="plan-mirror"]').textContent`)).toBe('Plan 2/4')
+
+    // The turn-2 snapshot won (turn 1 said 0/4 with "Read README and docs" in progress).
+    const items = browser.evaluate(`[...document.querySelectorAll('[data-slot="plan-item"]')].map((el) => ({
+      status: el.dataset.status,
+      text: el.textContent,
+    }))`) as Array<{ status: string; text: string }>
+    expect(items.map((i) => i.status)).toEqual(['completed', 'completed', 'in_progress', 'pending'])
+    expect(items[2]!.text).toContain('Summarize cockpit features')
+    expect(items[2]!.text).toContain('in progress')
+
+    // It sits in the dock region above the composer area, not in the thread flow.
+    expect(browser.evaluate(`document.querySelector('[data-slot="thread-dock"] [data-slot="plan-dock"]') !== null`)).toBe(true)
+  })
+
+  it('collapsing the dock folds it to the odometer + the activeForm of the current item', () => {
+    browser.click('[data-slot="plan-dock"] button')
+    browser.waitForFunction(`document.querySelector('[data-slot="plan-dock"]').dataset.state === 'collapsed'`)
+    expect(browser.count('[data-slot="plan-list"]')).toBe(0)
+    expect(browser.evaluate(`document.querySelector('[data-slot="plan-current"]').textContent`)).toBe(
+      '— Summarizing cockpit features',
+    )
+    // Re-expand so the desktop screenshot below captures the full checklist.
+    browser.click('[data-slot="plan-dock"] button')
+    browser.waitForFunction(`document.querySelector('[data-slot="plan-dock"]').dataset.state === 'open'`)
   })
 
   it('a card is closed by default and expands to its mono output (the #381 behavior)', () => {
@@ -250,6 +338,10 @@ describe('task thread', () => {
         return main.scrollWidth <= main.clientWidth
       })()`),
     ).toBe(true)
+
+    // Phone default: the dock collapses to the odometer (the mockup's mobile reflow).
+    expect(browser.evaluate(`document.querySelector('[data-slot="plan-dock"]').dataset.state`)).toBe('collapsed')
+    expect(browser.evaluate(`document.querySelector('[data-slot="plan-count"]').textContent`)).toBe('· 2/4')
 
     browser.screenshot(`${artifactsDir}/thread-mobile.png`)
     browser.setViewport(1440, 900)

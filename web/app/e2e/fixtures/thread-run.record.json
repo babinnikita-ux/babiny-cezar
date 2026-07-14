@@ -20,6 +20,16 @@
       "sessionId": "40169e05-629f-4d7c-853c-8a2a197255e4",
       "costUsd": 0.0352,
       "finishedAt": "2026-07-14T20:28:17.155Z"
+    },
+    {
+      "id": "verify",
+      "name": "Verify",
+      "kind": "check",
+      "status": "done",
+      "iterations": 1,
+      "tokensUsed": 0,
+      "startedAt": "2026-07-14T20:28:17.160Z",
+      "finishedAt": "2026-07-14T20:28:17.411Z"
     }
   ],
   "workflowDef": {
@@ -31,6 +41,11 @@
         "id": "task",
         "name": "Do the task",
         "prompt": "{{task}}"
+      },
+      {
+        "id": "verify",
+        "name": "Verify",
+        "command": "npm test"
       }
     ]
   },

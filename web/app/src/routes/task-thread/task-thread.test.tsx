@@ -117,6 +117,66 @@ describe('ThreadView', () => {
     render(<ThreadView run={run('running')} thread={reduceThread([])} />)
     expect(document.querySelector('[data-slot="thread-empty"]')?.textContent).toBe('No session events yet.')
   })
+
+  it('no plan → no dock, no header mirror; steps present → the rail renders in the header', () => {
+    render(
+      <ThreadView
+        run={run('running', {
+          steps: [
+            { id: 'task', name: 'Do the task', kind: 'agent', status: 'running', iterations: 1, tokensUsed: 0 },
+            { id: 'verify', name: 'Verify', kind: 'check', status: 'pending', iterations: 1, tokensUsed: 0 },
+          ],
+        })}
+        thread={reduceThread(EVENTS)}
+      />,
+    )
+    expect(document.querySelector('[data-slot="plan-dock"]')).toBeNull()
+    expect(document.querySelector('[data-slot="plan-mirror"]')).toBeNull()
+    const rows = [...document.querySelectorAll('[data-slot="step-row"]')]
+    expect(rows.map((row) => row.getAttribute('data-visual'))).toEqual(['active', 'pending'])
+    expect(rows[0]!.textContent).toContain('Do the task')
+  })
+
+  it('a plan in the stream → the dock above the composer area + the compact header mirror', () => {
+    const withPlan: RunEvent[] = [
+      ...EVENTS,
+      line(8, 'plan.updated', {
+        entries: [
+          { content: 'Read the docs', status: 'completed' },
+          { content: 'Summarize', status: 'in_progress', activeForm: 'Summarizing' },
+          { content: 'Reply', status: 'pending' },
+        ],
+      }),
+    ]
+    render(<ThreadView run={run('running')} thread={reduceThread(withPlan)} />)
+    expect(document.querySelector('[data-slot="plan-dock"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot="plan-count"]')?.textContent).toBe('· 1/3')
+    expect(document.querySelector('[data-slot="plan-mirror"]')?.textContent).toBe('Plan 1/3')
+    // No steps on this run — the rail knows to stay away.
+    expect(document.querySelector('[data-slot="step-rail"]')).toBeNull()
+  })
+
+  it('plan-kind tool cards stay out of the thread — the dock is their surface (#382)', () => {
+    const todoInput = {
+      todos: [
+        { content: 'Read the docs', status: 'completed', activeForm: 'Reading the docs' },
+        { content: 'Summarize', status: 'in_progress', activeForm: 'Summarizing' },
+      ],
+    }
+    const events: RunEvent[] = [
+      line(1, 'turn.started', { turnId: 'turn_1' }),
+      line(2, 'item.started', {
+        item: { kind: 'tool', id: 'toolu_todo', name: 'TodoWrite', toolKind: 'plan', title: 'Update plan', status: 'running', input: todoInput },
+      }),
+      line(3, 'plan.updated', { entries: todoInput.todos }),
+      line(4, 'item.completed', {
+        item: { kind: 'tool', id: 'toolu_todo', name: 'TodoWrite', toolKind: 'plan', title: 'Update plan', status: 'completed', input: todoInput },
+      }),
+    ]
+    render(<ThreadView run={run('running')} thread={reduceThread(events)} />)
+    expect(document.querySelector('[data-slot="tool-card"]')).toBeNull()
+    expect(document.querySelector('[data-slot="plan-dock"]')).not.toBeNull()
+  })
 })
 
 /** Route-level: loading and 404 — driven through the real fetch boundary. jsdom has no

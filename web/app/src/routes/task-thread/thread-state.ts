@@ -1,5 +1,5 @@
 import type { RunEvent, RunStatus } from '@/api/types'
-import type { PlanEntry, StopReason, UiItem, UiToolItem } from '@/protocol/ui-events'
+import type { PlanEntry, PlanStatus, StopReason, UiItem, UiToolItem } from '@/protocol/ui-events'
 import { toolDisplay } from '@/protocol/tool-display'
 
 /**
@@ -12,7 +12,8 @@ import { toolDisplay } from '@/protocol/tool-display'
  *
  *  - Lines with NO v2 counterpart always render: `user-message` (the engine writes user turns
  *    as v1 only), `note`/`lifecycle` (dim lines), `error` (danger), `image` (persisted URL —
- *    the v2 `image` twin carries raw base64 and never reaches the file).
+ *    the v2 `image` twin carries raw base64 and never reaches the file), `check-output`
+ *    (check steps spawn no agent session, so v1 is all there is).
  *  - Item-ish lines (`text`, `tool-call`, `tool-result`) are a FALLBACK for old runs recorded
  *    before the v2 emitters existed. THE MIXED-FILE DEDUP RULE: within a turn, v2 wins — once
  *    any `item.*` event has been seen in the current turn, v1 item-ish lines are skipped, and
@@ -71,6 +72,20 @@ export type ThreadFooter =
   | { state: 'waiting' }
   | { state: 'closed'; label: string; tone: 'dim' | 'danger' }
   | null
+
+/**
+ * The plan the dock shows: the LATEST snapshot across all turns (full-replacement semantics —
+ * every `plan.updated` supersedes everything before it, including one from an earlier turn).
+ * An empty latest snapshot is returned as-is: it replaced the plan with nothing, which is not
+ * the same as never having had one.
+ */
+export function latestPlanEntries(state: ThreadState): PlanEntry[] | undefined {
+  for (let i = state.turns.length - 1; i >= 0; i -= 1) {
+    const entries = state.turns[i]!.planEntries
+    if (entries !== undefined) return entries
+  }
+  return undefined
+}
 
 export function threadFooter(status: RunStatus, error?: string): ThreadFooter {
   switch (status) {
@@ -136,6 +151,28 @@ function resultText(value: unknown): string {
 
 const isUiItem = (entry: ThreadEntry): entry is UiItem =>
   entry.kind === 'message' || entry.kind === 'reasoning' || entry.kind === 'tool'
+
+const PLAN_STATUSES: ReadonlySet<string> = new Set<PlanStatus>(['pending', 'in_progress', 'completed'])
+
+/**
+ * Pre-v2 transcripts carry the plan only as TodoWrite input (`{todos: [{content, status,
+ * activeForm}]}` — the documented Claude wire shape). Recovered so old runs get the dock too;
+ * v2-covered turns never need this (their mappers emit `plan.updated`). All-or-nothing: one
+ * malformed entry means the input is not the shape we claim to understand.
+ */
+function planFromTodos(input: unknown): PlanEntry[] | undefined {
+  if (!isRecord(input) || !Array.isArray(input.todos)) return undefined
+  const entries: PlanEntry[] = []
+  for (const todo of input.todos) {
+    if (!isRecord(todo) || typeof todo.content !== 'string') return undefined
+    entries.push({
+      content: todo.content,
+      status: PLAN_STATUSES.has(todo.status as string) ? (todo.status as PlanStatus) : 'pending',
+      ...(typeof todo.activeForm === 'string' ? { activeForm: todo.activeForm } : {}),
+    })
+  }
+  return entries
+}
 
 export function reduceThread(events: RunEvent[]): ThreadState {
   const turns: DraftTurn[] = []
@@ -258,6 +295,11 @@ export function reduceThread(events: RunEvent[]): ThreadState {
         if (turn.v2Items) break
         const name = str(event.tool) ?? 'Tool'
         const display = toolDisplay(name, event.input)
+        if (display.toolKind === 'plan') {
+          // v1-only fallback: the dock's data lives in the TodoWrite input on old transcripts.
+          const plan = planFromTodos(event.input)
+          if (plan !== undefined) turn.planEntries = plan
+        }
         const item: UiToolItem = {
           kind: 'tool',
           id: str(event.id) ?? `v1:${event.seq}`,
@@ -320,6 +362,26 @@ export function reduceThread(events: RunEvent[]): ThreadState {
           origin: 'meta',
           entry: { kind: 'note', id: `v1:${event.seq}`, text: `step ${str(event.stepId) ?? '?'} failed${suffix}`, tone: 'danger' },
         })
+        break
+      }
+      case 'check-output': {
+        // A check step's command run (`src/workflows/run.ts` — v1-only: check steps spawn no
+        // agent session, so no v2 twin exists). Rendered as an execute tool card so the
+        // pass/fail verdict rides the exit-code pill; origin `meta` because it is not an
+        // agent item and must survive the mixed-file dedup.
+        const command = str(event.command) ?? 'check'
+        const exitCode = typeof event.exitCode === 'number' ? event.exitCode : -1
+        const item: UiToolItem = {
+          kind: 'tool',
+          id: `v1:${event.seq}`,
+          name: 'check',
+          toolKind: 'execute',
+          title: `Ran ${command}`,
+          status: exitCode === 0 ? 'completed' : 'failed',
+          output: str(event.text) ?? '',
+          exitCode,
+        }
+        currentTurn().entries.push({ origin: 'meta', entry: item })
         break
       }
       case 'image': {

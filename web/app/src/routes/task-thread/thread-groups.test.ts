@@ -166,10 +166,29 @@ describe('groupThreadItems — sub-agent nesting (golden subagent-task fixture)'
     expect(blocks[0]).toMatchObject({ kind: 'entry', id: 'm1' })
   })
 
-  it('the golden edit/write/todo turn keeps every card visible (no grouping applies)', () => {
+  it('the golden edit/write/todo turn: edit and write stay visible, the TodoWrite card does not', () => {
     const { turns } = reduceThread(asRunEvents(thinkingEditWriteTodo))
+    // The reducer still carries the plan tool item (5 entries) — grouping hides it (#382):
+    // the plan dock is its surface, so the thread shows only the edit/write cards.
+    expect(turns[0]!.items.filter((i) => i.kind === 'tool')).toHaveLength(3)
     const blocks = groupThreadItems(turns[0]!.items)
-    expect(shape(blocks)).toEqual(['entry', 'entry', 'tool-card', 'tool-card', 'tool-card'])
+    expect(shape(blocks)).toEqual(['entry', 'entry', 'tool-card', 'tool-card'])
+    const cards = blocks.filter((b) => b.kind === 'tool-card')
+    expect(cards.map((b) => (b.kind === 'tool-card' ? b.item.toolKind : ''))).toEqual(['edit', 'edit'])
+  })
+
+  it('plan-kind tools are dropped everywhere — top level and inside children lists', () => {
+    const blocks = groupThreadItems([
+      tool('planner', 'plan', 'completed', { name: 'TodoWrite', title: 'Update plan' }),
+      tool('parent', 'task', 'running', { name: 'Task', title: 'Task: audit' }),
+      tool('nested-plan', 'plan', 'completed', { name: 'TodoWrite', title: 'Update plan', parentItemId: 'parent' }),
+      tool('nested-bash', 'execute', 'completed', { parentItemId: 'parent' }),
+    ])
+    expect(shape(blocks)).toEqual(['tool-card'])
+    const card = blocks[0]!
+    if (card.kind !== 'tool-card') throw new Error('expected a tool card')
+    expect(card.item.id).toBe('parent')
+    expect(card.children.map((child) => child.id)).toEqual(['nested-bash'])
   })
 })
 

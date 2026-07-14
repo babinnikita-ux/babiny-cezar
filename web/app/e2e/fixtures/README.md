@@ -1,6 +1,7 @@
 # e2e fixtures
 
-`thread-run.ndjson` is a REAL transcript, not an authored one: the verbatim NDJSON a
+`thread-run.ndjson` is a REAL transcript with one documented synthetic extension (see the
+last section): the base is the verbatim NDJSON a
 CEZ_DRY_RUN=1 cezar (this branch, R2 protocol emitters active) persisted for a quick-task run
 that received one follow-up message and was then finished. It is the documented mixed-file
 state — v1 lines (`lifecycle`, `note`, `text`, `tool-call`, `user-message`, …) and protocol-v2
@@ -24,4 +25,22 @@ To regenerate: build, boot `CEZ_DRY_RUN=1 node dist/index.js serve --repo <tmp-g
 POST a run whose task has no `mock:` marker, POST one `/messages` reply containing `mock:md`
 once it waits, POST `/finish` (twice: the mock's turn 1 touches `notes.md`, so the run parks
 at `review` first — the second finish accepts it), then copy `<tmp>/.ai/cezar/runs/<id>.ndjson`,
-`<id>-images/` and the `runs.json` entry here.
+`<id>-images/` and the `runs.json` entry here. Then re-apply the synthetic extension below.
+
+## Synthetic extension (R3 Step 1.3 — plan dock, step rail, check-step cards)
+
+The mock claude (`scripts/mock-claude.mjs`) emits no `TodoWrite`, and `quick-task` has no
+check step, so the dry run cannot record those surfaces. The transcript therefore carries
+HAND-APPENDED lines (seqs renumbered), each faithful to a documented wire shape rather than
+invented:
+
+- Two `TodoWrite` sequences (`item.started` → `plan.updated` → v1 `tool-call` twin →
+  `item.completed` → v1 `tool-result` twin), one per turn, shaped exactly like the golden
+  `src/core/__fixtures__/claude/thinking-edit-write-todo.*` pair (the R2 mapper's pinned
+  output, including the mapper's item-then-plan emission order). The second snapshot
+  supersedes the first — the latest-plan-wins path the dock asserts.
+- A `verify` check step after the agent step: `step-start` (kind `check`) → the `$ npm test`
+  note → `check-output` → `step-end`, the exact emission sequence of
+  `src/workflows/run.ts` `runCheckStep()`. `thread-run.record.json` carries the matching
+  `verify` entry in `steps` and `workflowDef` (which therefore no longer equals the stock
+  built-in `quick-task` definition).

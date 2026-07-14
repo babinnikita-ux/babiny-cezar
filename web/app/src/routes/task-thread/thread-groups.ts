@@ -4,7 +4,8 @@ import type { ThreadEntry } from './thread-state'
 
 /**
  * Pure display grouping over one turn's reduced entries (spec §"Task thread"; the opencode
- * `groupParts()` consensus). Three passes, in this order:
+ * `groupParts()` consensus). A pre-filter (plan-kind tools are the plan dock's, never the
+ * thread's — #382), then three passes, in this order:
  *
  *  1. **Sub-agent nesting** — entries whose `parentItemId` names a tool item in the same turn
  *     move under that tool's card (one level; an orphaned parent id renders at top level).
@@ -92,7 +93,12 @@ export function splitToolTitle(title: string): { verb: string; detail?: string }
   return { verb: title }
 }
 
-export function groupThreadItems(entries: ThreadEntry[]): ThreadBlock[] {
+export function groupThreadItems(allEntries: ThreadEntry[]): ThreadBlock[] {
+  // Pass 0 — plan-kind tools (TodoWrite / todoList / todowrite) never render in the thread:
+  // the plan dock is their surface (#382); a card here would only duplicate the checklist as
+  // raw input JSON. Filtering the flat list drops them from children lists too.
+  const entries = allEntries.filter((entry) => !(entry.kind === 'tool' && entry.toolKind === 'plan'))
+
   // Pass 1 — nesting. Children keep stream order; only tool items can be parents.
   const toolIds = new Set(entries.filter(isTool).map((item) => item.id))
   const childrenOf = new Map<string, ThreadEntry[]>()

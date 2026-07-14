@@ -7,7 +7,7 @@ import bashAndScreenshot from '../../../../../src/core/__fixtures__/claude/bash-
 import failedAndDenied from '../../../../../src/core/__fixtures__/claude/failed-and-denied.expected.json'
 import textTurn from '../../../../../src/core/__fixtures__/claude/text-turn.expected.json'
 import thinkingEditWriteTodo from '../../../../../src/core/__fixtures__/claude/thinking-edit-write-todo.expected.json'
-import { reduceThread, threadFooter, type ThreadEntry } from './thread-state'
+import { latestPlanEntries, reduceThread, threadFooter, type ThreadEntry } from './thread-state'
 
 /**
  * The reducer, table-driven against REAL event sequences:
@@ -255,6 +255,106 @@ describe('reduceThread — live-stream mechanics', () => {
     expect(turns[0]!.items).toEqual([
       { kind: 'image', id: 'v1:1', url: '/api/runs/r1/images/shot.png', name: 'shot.png' },
     ])
+  })
+})
+
+describe('latestPlanEntries — the dock takes the newest snapshot across turns', () => {
+  const plan = (content: string, status: 'pending' | 'in_progress' | 'completed') => ({ content, status })
+
+  it('latest wins across turns (full-replacement semantics)', () => {
+    const state = reduceThread([
+      line(1, 'turn.started', { turnId: 'turn_1' }),
+      line(2, 'plan.updated', { entries: [plan('a', 'in_progress'), plan('b', 'pending')] }),
+      line(3, 'user-message', { text: 'go on', imageCount: 0 }),
+      line(4, 'turn.started', { turnId: 'turn_2' }),
+      line(5, 'plan.updated', { entries: [plan('a', 'completed'), plan('b', 'in_progress')] }),
+    ])
+    expect(state.turns).toHaveLength(2)
+    expect(latestPlanEntries(state)).toEqual([plan('a', 'completed'), plan('b', 'in_progress')])
+  })
+
+  it('within one turn the later snapshot replaces the earlier one', () => {
+    const state = reduceThread([
+      line(1, 'turn.started', { turnId: 'turn_1' }),
+      line(2, 'plan.updated', { entries: [plan('a', 'pending')] }),
+      line(3, 'plan.updated', { entries: [plan('a', 'in_progress'), plan('b', 'pending')] }),
+    ])
+    expect(latestPlanEntries(state)).toEqual([plan('a', 'in_progress'), plan('b', 'pending')])
+  })
+
+  it('an emptied latest snapshot still wins (it replaced the plan with nothing)', () => {
+    const state = reduceThread([
+      line(1, 'turn.started', { turnId: 'turn_1' }),
+      line(2, 'plan.updated', { entries: [plan('a', 'pending')] }),
+      line(3, 'user-message', { text: 'scrap it', imageCount: 0 }),
+      line(4, 'plan.updated', { entries: [] }),
+    ])
+    expect(latestPlanEntries(state)).toEqual([])
+  })
+
+  it('no plan.updated anywhere → undefined (the dock stays hidden)', () => {
+    expect(latestPlanEntries(reduceThread([line(1, 'text', { text: 'hi' })]))).toBeUndefined()
+  })
+
+  it('v1-only fallback: a TodoWrite tool-call input yields the plan for old transcripts', () => {
+    const todos = [
+      { content: 'Patch middleware redirect', status: 'completed', activeForm: 'Patching middleware redirect' },
+      { content: 'Run tests', status: 'in_progress', activeForm: 'Running tests' },
+    ]
+    const state = reduceThread([
+      line(1, 'tool-call', { id: 'toolu_01EF', tool: 'TodoWrite', input: { todos }, stepId: 'task' }),
+    ])
+    expect(latestPlanEntries(state)).toEqual(todos)
+    // The plan-kind tool item itself is still synthesized — hiding it is the grouping's job.
+    expect((state.turns[0]!.items[0] as UiToolItem).toolKind).toBe('plan')
+  })
+
+  it('v1 fallback is all-or-nothing: a malformed todos array yields no plan', () => {
+    const state = reduceThread([
+      line(1, 'tool-call', { id: 't1', tool: 'TodoWrite', input: { todos: [{ status: 'pending' }] } }), // no content
+      line(2, 'tool-call', { id: 't2', tool: 'TodoWrite', input: { notTodos: true } }),
+    ])
+    expect(latestPlanEntries(state)).toBeUndefined()
+  })
+})
+
+describe('reduceThread — check-output (check steps, v1-only by nature)', () => {
+  it('a passing check becomes a completed execute card with the exit code and output', () => {
+    // Verbatim shape from src/workflows/run.ts runCheckStep().
+    const { turns } = reduceThread([
+      line(1, 'note', { message: '$ npm test', stepId: 'verify' }),
+      line(2, 'check-output', { stepId: 'verify', command: 'npm test', text: '72 passing (1.2s)', exitCode: 0 }),
+    ])
+    expect(kinds(turns[0]!.items)).toEqual(['note', 'tool'])
+    expect(turns[0]!.items[1]).toEqual({
+      kind: 'tool',
+      id: 'v1:2',
+      name: 'check',
+      toolKind: 'execute',
+      title: 'Ran npm test',
+      status: 'completed',
+      output: '72 passing (1.2s)',
+      exitCode: 0,
+    })
+  })
+
+  it('a failing check is a failed card; a spawn failure (exitCode -1) too', () => {
+    const { turns } = reduceThread([
+      line(1, 'check-output', { stepId: 'verify', command: 'npm test', text: '1 failing', exitCode: 2 }),
+      line(2, 'check-output', { stepId: 'verify', command: 'nope', text: 'failed to spawn: ENOENT', exitCode: -1 }),
+    ])
+    const [failed, spawn] = turns[0]!.items as [UiToolItem, UiToolItem]
+    expect(failed).toMatchObject({ status: 'failed', exitCode: 2, output: '1 failing' })
+    expect(spawn).toMatchObject({ status: 'failed', exitCode: -1 })
+  })
+
+  it('survives inside a v2-covered turn (it is meta, not an agent item twin)', () => {
+    const { turns } = reduceThread([
+      line(1, 'turn.started', { turnId: 'turn_1' }),
+      line(2, 'item.completed', { item: { kind: 'message', id: 'm1', role: 'assistant', text: 'done' } }),
+      line(3, 'check-output', { stepId: 'verify', command: 'npm test', text: 'ok', exitCode: 0 }),
+    ])
+    expect(kinds(turns[0]!.items)).toEqual(['message', 'tool'])
   })
 })
 

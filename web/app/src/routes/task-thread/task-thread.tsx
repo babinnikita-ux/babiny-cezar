@@ -24,9 +24,11 @@ import {
   ToolStreak,
   UserBubble,
 } from './thread-items'
+import { PlanDock, planCounts } from './plan-dock'
+import { StepRail } from './step-rail'
 import { groupThreadItems, type ThreadBlock } from './thread-groups'
 import { ThreadLoading } from './thread-loading'
-import { reduceThread, threadFooter, type ThreadEntry, type ThreadState } from './thread-state'
+import { latestPlanEntries, reduceThread, threadFooter, type ThreadEntry, type ThreadState } from './thread-state'
 
 /**
  * `/tasks/:id` — the Session tab (spec, "Task thread"). Step 1.1 scope: turns with user
@@ -77,17 +79,38 @@ export function TaskThreadRoute() {
 export function ThreadView({ run, thread }: { run: ApiRun; thread: ThreadState }) {
   const attention = deriveAttention(run)
   const footer = threadFooter(run.status, run.error)
+  // The dock's data: the latest plan snapshot across turns (full replacement — an emptied
+  // plan hides the dock and the header mirror alike).
+  const plan = latestPlanEntries(thread)
+  const planTally = plan !== undefined && plan.length > 0 ? planCounts(plan) : undefined
 
   return (
     <div data-route="task-thread" className="flex min-h-full flex-col">
       {/* Slim interim header — Step 1.4 replaces it with the full run header (meta, tabs,
-          action bar). Title + status only, so the footer state below has its context. */}
+          action bar). Title + status + the workflow step rail, so the thread below has its
+          context (the rail stays pinned like the mockup's fixed header region). */}
       <header className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 py-3 backdrop-blur md:px-6">
-        <div className="mx-auto flex w-full max-w-[820px] items-center gap-3">
-          <h1 className="min-w-0 truncate text-[15px] font-semibold">{runTitle(run)}</h1>
-          <Pill dot={attention.tone} pulse={attention.pulse} className="ml-auto shrink-0">
-            {attention.label}
-          </Pill>
+        <div className="mx-auto w-full max-w-[820px]">
+          <div className="flex items-center gap-3">
+            <h1 className="min-w-0 truncate text-[15px] font-semibold">{runTitle(run)}</h1>
+            <span className="ml-auto flex shrink-0 items-center gap-2.5">
+              {planTally ? (
+                // The plan dock's compact mirror (spec: "mirrored as a compact progress line
+                // in the run header").
+                <span data-slot="plan-mirror" className="text-[11px] text-soft-foreground tabular-nums">
+                  Plan {planTally.done}/{planTally.total}
+                </span>
+              ) : null}
+              <Pill dot={attention.tone} pulse={attention.pulse}>
+                {attention.label}
+              </Pill>
+            </span>
+          </div>
+          {run.steps.length > 0 ? (
+            <div className="mt-2.5">
+              <StepRail steps={run.steps} />
+            </div>
+          ) : null}
         </div>
       </header>
 
@@ -135,6 +158,20 @@ export function ThreadView({ run, thread }: { run: ApiRun; thread: ThreadState }
           </div>
         ) : null}
       </div>
+
+      {/* The dock region (mockup `.dock`): pinned above where the composer lands in Phase 2.
+          Only the plan dock lives here for now — absent plan, absent dock. */}
+      {plan !== undefined && plan.length > 0 ? (
+        <div
+          data-slot="thread-dock"
+          className="sticky bottom-0 z-10 bg-background px-4 pt-1.5 pb-3 max-md:border-t max-md:border-border md:px-6 md:pb-4"
+        >
+          <div className="mx-auto w-full max-w-[820px]">
+            {/* Keyed by run id: the collapse default re-derives per task (see PlanDock). */}
+            <PlanDock key={run.id} runId={run.id} entries={plan} />
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }
