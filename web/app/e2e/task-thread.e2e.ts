@@ -1,18 +1,20 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { AgentBrowser } from './agent-browser'
+import record from './fixtures/thread-run.record.json'
 
 /**
- * The task thread (`/tasks/:id`, R3 Step 1.1) in a real browser, against a real cezar serving
- * a run whose transcript is a REAL NDJSON file — `fixtures/thread-run.ndjson`, the verbatim
- * output of an R2 dry run (see fixtures/README.md). The server replays it over the per-run SSE
- * stream exactly as it would for any finished run, so what this spec sees is the full pipe:
- * store → SSE replay → reducer → thread view → Streamdown → the lazy Shiki singleton.
+ * The task thread (`/tasks/:id`, R3 Steps 1.1 + 1.2) in a real browser, against a real cezar
+ * serving a run whose transcript is a REAL NDJSON file — `fixtures/thread-run.ndjson`, the
+ * verbatim output of an R2 dry run (see fixtures/README.md), tool items and all. The server
+ * replays it over the per-run SSE stream exactly as it would for any finished run, so what
+ * this spec sees is the full pipe: store → SSE replay → reducer → grouping → tool cards →
+ * Streamdown → the lazy Shiki singleton.
  *
  * Same boot-own-server doctrine as quick-list.e2e.ts: the run store reads `runs.json` once at
  * startup, so the fixture must exist before boot; a terminal (`done`) status keeps `recover()`
@@ -23,32 +25,11 @@ const artifactsDir = resolve(import.meta.dirname, '../../../.ai/qa/artifacts_e2e
 const repoRoot = resolve(import.meta.dirname, '../../..')
 const sessionId = `e2e-thread-${process.pid}`
 
-/** The run record for the committed transcript — `RunRecord`, the store's zod-checked shape. */
-const RUN = {
-  id: 'fix-thread',
-  title: 'Summarize what this project does. mock:md',
-  titleSummary: 'Explain what cezar does',
-  workflow: 'quick-task',
-  task: 'Summarize what this project does. mock:md',
-  runner: 'claude',
-  status: 'done',
-  createdAt: '2026-07-14T19:42:53.000Z',
-  startedAt: '2026-07-14T19:42:53.400Z',
-  finishedAt: '2026-07-14T19:42:54.800Z',
-  tokensUsed: 1120,
-  costUsd: 0.0061,
-  archived: false,
-  steps: [
-    {
-      id: 'task',
-      name: 'Do the task',
-      kind: 'agent',
-      status: 'done',
-      iterations: 1,
-      tokensUsed: 1120,
-    },
-  ],
-}
+/** The recorded run (`fixtures/thread-run.record.json`, the store's own zod-checked shape),
+ *  with the one legitimate user edit a run can carry: a PATCHed title summary — so the header
+ *  assertions cover the edited-title path rather than echoing the raw auto-summary. */
+const RUN = { ...record, titleSummary: 'Explain what cezar does' }
+const RUN_ID: string = RUN.id
 
 function freePort(): Promise<number> {
   return new Promise((done, fail) => {
@@ -85,7 +66,13 @@ beforeAll(async () => {
   writeFileSync(join(dataRoot, '.ai/cezar/runs.json'), JSON.stringify([RUN], null, 2), 'utf8')
   copyFileSync(
     resolve(import.meta.dirname, 'fixtures/thread-run.ndjson'),
-    join(dataRoot, '.ai/cezar/runs', 'fix-thread.ndjson'),
+    join(dataRoot, '.ai/cezar/runs', `${RUN_ID}.ndjson`),
+  )
+  // The agent screenshot the transcript's `image` line points at (served by the run itself).
+  cpSync(
+    resolve(import.meta.dirname, 'fixtures/thread-run-images'),
+    join(dataRoot, '.ai/cezar/runs', `${RUN_ID}-images`),
+    { recursive: true },
   )
 
   const port = await freePort()
@@ -99,7 +86,7 @@ beforeAll(async () => {
 
   browser = AgentBrowser.open(sessionId)
   browser.setViewport(1440, 900)
-  browser.goto(`${baseUrl}/tasks/fix-thread`)
+  browser.goto(`${baseUrl}/tasks/${RUN_ID}`)
   // The thread is async twice over (lazy route chunk, then the SSE replay) — wait for content.
   browser.waitForFunction(`document.querySelectorAll('[data-slot="user-bubble"]').length >= 2`)
 }, 120_000)
@@ -117,7 +104,7 @@ describe('task thread', () => {
     ) as string[]
     expect(bubbles).toHaveLength(2)
     expect(bubbles[0]).toContain('Summarize what this project does.')
-    expect(bubbles[1]).toBe('Thanks — now list the three main components as bullets.')
+    expect(bubbles[1]).toBe('Thanks — now show the markdown summary. mock:md')
 
     // Right-aligned: the bubble hugs the column's right content edge (within its padding),
     // sits entirely right of the midline, while assistant content starts at the left edge.
@@ -201,11 +188,43 @@ describe('task thread', () => {
     expect(footer.text).toBe('Session closed')
   })
 
+  it('renders the transcript tool calls as cards with the computed titles and statuses', () => {
+    const cards = browser.evaluate(`[...document.querySelectorAll('[data-slot="tool-card"]')].map((el) => ({
+      status: el.dataset.status,
+      kind: el.dataset.kind,
+      title: el.querySelector('[data-slot="collapsible-trigger"]').textContent,
+    }))`) as Array<{ status: string; kind: string; title: string }>
+    expect(cards).toHaveLength(2)
+    expect(cards[0]).toMatchObject({ status: 'completed', kind: 'execute' })
+    expect(cards[0]!.title).toContain('Ran')
+    expect(cards[0]!.title).toContain('git status --short')
+    expect(cards[1]).toMatchObject({ status: 'completed', kind: 'other' })
+    expect(cards[1]!.title).toContain('Screenshot')
+  })
+
+  it('a card is closed by default and expands to its mono output (the #381 behavior)', () => {
+    const bash = '[data-slot="tool-card"][data-kind="execute"]'
+    expect(browser.count(`${bash} [data-slot="tool-output"]`)).toBe(0)
+    browser.click(`${bash} [data-slot="collapsible-trigger"]`)
+    browser.waitForFunction(`document.querySelector('${bash} [data-slot="tool-output"] pre') !== null`)
+    expect(browser.evaluate(`document.querySelector('${bash} [data-slot="tool-output"] pre').textContent`)).toBe(
+      ' M src/example.ts',
+    )
+  })
+
+  it('serves and renders the agent screenshot the transcript persisted', () => {
+    browser.waitForFunction(`document.querySelector('[data-slot="thread-image"]')?.naturalWidth > 0`)
+    expect(
+      browser.evaluate(`document.querySelector('[data-slot="thread-image"]').getAttribute('src')`),
+    ).toBe(`/api/runs/${RUN_ID}/images/screenshot-1.png`)
+  })
+
   it('shows the auto-summary title and the done pill in the header', () => {
     expect(browser.evaluate(`document.querySelector('[data-route="task-thread"] h1').textContent`)).toBe(
       'Explain what cezar does',
     )
     expect(browser.evaluate(`document.querySelector('[data-slot="pill"]').textContent`)).toBe('done')
+    // The #381 money shot: tool cards (one expanded) + markdown + image, desktop width.
     browser.screenshot(`${artifactsDir}/thread-desktop.png`)
   })
 
@@ -219,7 +238,7 @@ describe('task thread', () => {
 
   it('reflows at iPhone width with no horizontal overflow', () => {
     browser.setViewport(390, 844)
-    browser.goto(`${baseUrl}/tasks/fix-thread`)
+    browser.goto(`${baseUrl}/tasks/${RUN_ID}`)
     browser.waitForFunction(`document.querySelectorAll('[data-slot="user-bubble"]').length >= 2`)
     browser.waitForFunction(`document.querySelector('[data-streamdown="code-block"]') !== null`)
 

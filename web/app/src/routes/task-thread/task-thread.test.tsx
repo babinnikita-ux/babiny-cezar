@@ -68,17 +68,18 @@ describe('ThreadView', () => {
     expect(document.querySelector('[data-slot="assistant-message"]')?.textContent).not.toContain('**')
   })
 
-  it('dims lifecycle lines and shows the plain tool row + folded reasoning', () => {
+  it('dims lifecycle lines and shows the tool card + folded reasoning', () => {
     render(<ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />)
     const notes = [...document.querySelectorAll('[data-slot="note-line"]')]
     expect(notes.map((n) => n.getAttribute('data-tone'))).toEqual(['dim', 'dim'])
     expect(notes[1]!.textContent).toContain('worktree ready')
 
-    const toolRow = document.querySelector('[data-slot="tool-row"]')
-    expect(toolRow?.textContent).toContain('Ran npm test')
-    expect(toolRow?.getAttribute('data-status')).toBe('completed')
+    const toolCard = document.querySelector('[data-slot="tool-card"]')
+    expect(toolCard?.textContent).toContain('Ran')
+    expect(toolCard?.textContent).toContain('npm test')
+    expect(toolCard?.getAttribute('data-status')).toBe('completed')
 
-    expect(document.querySelector('[data-slot="reasoning-line"]')?.textContent).toContain('Thinking — Considering the layout…')
+    expect(document.querySelector('[data-slot="reasoning"]')?.textContent).toContain('Thinking — Considering the layout…')
   })
 
   it('shows the header title (auto-summary, never the raw title) and the status pill', () => {

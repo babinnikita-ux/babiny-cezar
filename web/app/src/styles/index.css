@@ -308,6 +308,31 @@
   }
 }
 
+/* ---------- shimmer (mockup tokens.css) ----------
+ * Running tool-card titles. Token-driven (muted-foreground → foreground sweep) so it follows
+ * the theme; reduced-motion readers get a plain muted title instead of an animation. */
+
+.shimmer {
+  background: linear-gradient(90deg, var(--muted-foreground) 40%, var(--foreground) 50%, var(--muted-foreground) 60%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: shimmer 1.8s linear infinite;
+}
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shimmer {
+    animation: none;
+    background: none;
+    color: var(--muted-foreground);
+  }
+}
+
 /* ---------- thread markdown (mockup `.msg-assist`) ----------
  * Chat-scale typography for assistant messages. Streamdown ships document-scale utility
  * classes on its elements (text-2xl headings, prose paddings); these rules are deliberately

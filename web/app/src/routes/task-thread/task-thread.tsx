@@ -16,12 +16,15 @@ import { cn } from '@/lib/utils'
 
 import {
   AssistantMessage,
+  ContextGroup,
   ImageItem,
   NoteLine,
-  ReasoningLine,
-  ToolItemRow,
+  ReasoningItem,
+  ToolCard,
+  ToolStreak,
   UserBubble,
 } from './thread-items'
+import { groupThreadItems, type ThreadBlock } from './thread-groups'
 import { ThreadLoading } from './thread-loading'
 import { reduceThread, threadFooter, type ThreadEntry, type ThreadState } from './thread-state'
 
@@ -98,8 +101,8 @@ export function ThreadView({ run, thread }: { run: ApiRun; thread: ThreadState }
             {turn.userMessage ? (
               <UserBubble text={turn.userMessage.text} imageCount={turn.userMessage.imageCount} />
             ) : null}
-            {turn.items.map((entry) => (
-              <ThreadEntryView key={entry.id} entry={entry} />
+            {groupThreadItems(turn.items).map((block) => (
+              <ThreadBlockView key={block.id} block={block} />
             ))}
           </Fragment>
         ))}
@@ -136,7 +139,28 @@ export function ThreadView({ run, thread }: { run: ApiRun; thread: ThreadState }
   )
 }
 
-/** One reducer entry → its block. Every tool item goes through `ToolItemRow` — the 1.2 seam. */
+/** One grouped block → its surface. Grouping (context groups, streaks, sub-agent nesting) is
+ *  `groupThreadItems`'s — this only maps block kinds to components. */
+function ThreadBlockView({ block }: { block: ThreadBlock }) {
+  switch (block.kind) {
+    case 'entry':
+      return <ThreadEntryView entry={block.entry} />
+    case 'tool-card':
+      return <ToolCard item={block.item} nested={block.children} />
+    case 'context-group':
+      return <ContextGroup group={block} />
+    case 'streak':
+      return (
+        <ToolStreak count={block.count}>
+          {block.blocks.map((inner) => (
+            <ThreadBlockView key={inner.id} block={inner} />
+          ))}
+        </ToolStreak>
+      )
+  }
+}
+
+/** One reducer entry → its block (non-tool entries; tools always arrive as tool-card blocks). */
 function ThreadEntryView({ entry }: { entry: ThreadEntry }) {
   switch (entry.kind) {
     case 'message':
@@ -147,9 +171,9 @@ function ThreadEntryView({ entry }: { entry: ThreadEntry }) {
         <UserBubble text={entry.text} />
       )
     case 'reasoning':
-      return <ReasoningLine text={entry.text} />
+      return <ReasoningItem text={entry.text} />
     case 'tool':
-      return <ToolItemRow item={entry} />
+      return <ToolCard item={entry} />
     case 'note':
       return <NoteLine note={entry} />
     case 'image':
