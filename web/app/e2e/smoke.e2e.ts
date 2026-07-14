@@ -113,7 +113,7 @@ describe('cockpit app shell', () => {
     // suite runs (any checkout, any branch).
     const repoName = health.repoRoot.replace(/[\\/]+$/, '').split(/[\\/]/).pop()
     expect(browser.text('[data-slot="repo-chip"]')).toBe(`${repoName} / ${health.repo?.branch}`)
-    expect(browser.text('[data-slot="version-chip"]')).toBe(health.version)
+    expect(browser.text('[data-slot="version-chip"]')).toBe(`v${health.version}`)
 
     // Real values, not a placeholder that happens to match itself.
     expect(health.version).toMatch(/^\d+\.\d+\.\d+/)

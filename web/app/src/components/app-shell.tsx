@@ -3,6 +3,7 @@ import * as React from 'react'
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
 
+import { StatusDot } from '@/components/status-dot'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
@@ -29,6 +30,9 @@ export type AppShellProps = {
   inboxCount?: number | null
   /** cezar version for the footer chip. Null until Step 3.1 reads it from `/api/health`. */
   version?: string | null
+  /** The npm registry's newer version, when the server's update check found one (#368). The
+   *  chip grows a pulsing pending dot + tooltip; absent or equal to `version`, it stays plain. */
+  latestVersion?: string | null
   /** Step 3.3's grouped task quick-list. */
   taskQuickList?: ReactNode
   /** Step 4.2's Tools dropdown trigger. */
@@ -56,6 +60,7 @@ export function AppShell({
   repo = null,
   inboxCount = null,
   version = null,
+  latestVersion = null,
   taskQuickList,
   toolsMenu,
 }: AppShellProps) {
@@ -89,6 +94,7 @@ export function AppShell({
     repo,
     inboxCount,
     version,
+    latestVersion,
     taskQuickList,
     toolsMenu,
   }
@@ -128,6 +134,7 @@ type NavProps = {
   repo: RepoChip | null
   inboxCount: number | null
   version: string | null
+  latestVersion: string | null
   taskQuickList?: ReactNode
   toolsMenu?: ReactNode
 }
@@ -196,6 +203,7 @@ function SidebarContent({
   repo,
   inboxCount,
   version,
+  latestVersion,
   taskQuickList,
   toolsMenu,
   onNavigate,
@@ -294,17 +302,30 @@ function SidebarContent({
       >
         {/* SLOT — Step 4.2 mounts the Tools dropdown (aggregate status dot + tool versions) here. */}
         <div data-slot="tools-menu">{toolsMenu}</div>
-        {version ? (
-          <span
-            data-slot="version-chip"
-            className="rounded-full border border-border px-1.5 py-px font-mono text-[10px] font-medium text-soft-foreground"
-          >
-            {version}
-          </span>
-        ) : null}
+        {version ? <VersionChip version={version} latestVersion={latestVersion} /> : null}
         <ThemeToggle className="ml-auto" />
       </div>
     </div>
+  )
+}
+
+/**
+ * The footer's `v{version}` chip. When the server's npm-registry check found something newer
+ * (`latestVersion`, #368), the chip grows a pulsing pending-tone dot and names the version in
+ * its tooltip — an affordance, not an alert: updating is optional, so the chrome stays quiet.
+ */
+function VersionChip({ version, latestVersion }: { version: string; latestVersion: string | null }) {
+  const updateAvailable = Boolean(latestVersion && latestVersion !== version)
+  return (
+    <span
+      data-slot="version-chip"
+      data-update-available={updateAvailable ? 'true' : undefined}
+      title={updateAvailable ? `update available: v${latestVersion}` : undefined}
+      className="flex items-center gap-1 rounded-full border border-border px-1.5 py-px font-mono text-[10px] font-medium text-soft-foreground"
+    >
+      {updateAvailable ? <StatusDot tone="pending" pulse className="size-[5px]" /> : null}
+      v{version}
+    </span>
   )
 }
 

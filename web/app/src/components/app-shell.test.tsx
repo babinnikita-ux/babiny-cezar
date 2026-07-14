@@ -128,9 +128,38 @@ describe('AppShell', () => {
     })
 
     it('renders the repo chip and version chip from props', () => {
-      renderShell('/', { repo: { name: 'cezar', branch: 'main' }, version: 'v1.2.3' })
+      renderShell('/', { repo: { name: 'cezar', branch: 'main' }, version: '1.2.3' })
       expect(screen.getByText('cezar / main')).toBeTruthy()
+      // The chip prefixes the raw semver from /api/health — `v1.2.3`, mono, muted.
       expect(within(footer()).getByText('v1.2.3')).toBeTruthy()
+    })
+
+    describe('version chip update affordance (#368)', () => {
+      const chip = () => document.querySelector('[data-slot="version-chip"]') as HTMLElement
+
+      it('stays plain while the registry has nothing newer', () => {
+        renderShell('/', { version: '1.2.3' })
+        expect(chip().getAttribute('data-update-available')).toBeNull()
+        expect(chip().getAttribute('title')).toBeNull()
+        expect(chip().querySelector('[data-slot="status-dot"]')).toBeNull()
+      })
+
+      it('stays plain when latestVersion equals the running version', () => {
+        renderShell('/', { version: '1.2.3', latestVersion: '1.2.3' })
+        expect(chip().getAttribute('data-update-available')).toBeNull()
+        expect(chip().querySelector('[data-slot="status-dot"]')).toBeNull()
+      })
+
+      it('pulses and names the newer version when one exists', () => {
+        renderShell('/', { version: '1.2.3', latestVersion: '1.3.0' })
+        expect(chip().getAttribute('data-update-available')).toBe('true')
+        expect(chip().getAttribute('title')).toBe('update available: v1.3.0')
+        const dot = chip().querySelector('[data-slot="status-dot"]') as HTMLElement
+        expect(dot.getAttribute('data-tone')).toBe('pending')
+        expect(dot.className).toContain('animate-pulse')
+        // The version shown is still the one actually running.
+        expect(chip().textContent).toContain('v1.2.3')
+      })
     })
 
     it('renders the Inbox badge only for a non-zero count', () => {

@@ -94,7 +94,7 @@ describe('sidebar wiring', () => {
     await waitFor(() => expect(repoChip()).not.toBeNull())
     // Basename of the root, then the branch — not the whole path.
     expect(repoChip()?.textContent).toBe('cezar / feat/cockpit')
-    expect(versionChip()?.textContent).toBe('0.1.3')
+    expect(versionChip()?.textContent).toBe('v0.1.3')
   })
 
   it('renders the inbox badge from /api/todos', async () => {
@@ -148,7 +148,7 @@ describe('sidebar wiring', () => {
     // Running cezar outside a repo is supported: no repo chip, but the rest of the chrome is
     // real and must not vanish with it.
     await waitFor(() => expect(versionChip()).not.toBeNull())
-    expect(versionChip()?.textContent).toBe('0.1.3')
+    expect(versionChip()?.textContent).toBe('v0.1.3')
     expect(repoChip()).toBeNull()
   })
 })
