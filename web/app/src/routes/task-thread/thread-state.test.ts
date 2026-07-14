@@ -7,7 +7,13 @@ import bashAndScreenshot from '../../../../../src/core/__fixtures__/claude/bash-
 import failedAndDenied from '../../../../../src/core/__fixtures__/claude/failed-and-denied.expected.json'
 import textTurn from '../../../../../src/core/__fixtures__/claude/text-turn.expected.json'
 import thinkingEditWriteTodo from '../../../../../src/core/__fixtures__/claude/thinking-edit-write-todo.expected.json'
-import { latestPlanEntries, reduceThread, threadFooter, type ThreadEntry } from './thread-state'
+import {
+  latestPlanEntries,
+  reduceThread,
+  threadFilePaths,
+  threadFooter,
+  type ThreadEntry,
+} from './thread-state'
 
 /**
  * The reducer, table-driven against REAL event sequences:
@@ -375,4 +381,38 @@ describe('threadFooter', () => {
       expect(threadFooter(status, error)).toEqual(expected)
     })
   }
+})
+
+describe('threadFilePaths — the @ mention source (today: what the tools touched)', () => {
+  const tool = (id: string, extra: Record<string, unknown>): RunEvent =>
+    line(Number(id.replace(/\D/g, '')), 'item.completed', {
+      item: {
+        kind: 'tool',
+        id,
+        name: 'Edit',
+        toolKind: 'edit',
+        title: 'Edit file',
+        status: 'completed',
+        ...extra,
+      },
+    })
+
+  it('collects locations and diff paths, deduped, most recently touched first', () => {
+    const state = reduceThread([
+      line(1, 'turn.started', { turnId: 't1' }),
+      tool('i1', { locations: [{ path: 'src/a.ts' }, { path: 'src/b.ts', line: 3 }] }),
+      tool('i2', { diffs: [{ path: 'src/c.ts', oldText: null }] }),
+      tool('i3', { locations: [{ path: 'src/a.ts' }] }), // a.ts touched again — moves to front
+    ])
+    expect(threadFilePaths(state)).toEqual(['src/a.ts', 'src/c.ts', 'src/b.ts'])
+  })
+
+  it('non-tool items and tools without locations contribute nothing', () => {
+    const state = reduceThread([
+      line(1, 'turn.started', { turnId: 't1' }),
+      line(2, 'item.completed', { item: { kind: 'message', id: 'm1', role: 'assistant', text: 'hi' } }),
+      tool('i3', {}),
+    ])
+    expect(threadFilePaths(state)).toEqual([])
+  })
 })

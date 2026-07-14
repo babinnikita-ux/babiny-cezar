@@ -5,7 +5,8 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import { createQueryClient } from '@/api/query-client'
 import type { RunRecord, Skill } from '@/api/types'
-import { CommandPalette, orderRuns, orderSkills } from '@/components/command-palette'
+import { CommandPalette, orderRuns } from '@/components/command-palette'
+import { orderSkills } from '@/lib/skills'
 import { ThemeProvider } from '@/components/theme-provider'
 import { THEME_STORAGE_KEY, type Theme } from '@/lib/theme'
 

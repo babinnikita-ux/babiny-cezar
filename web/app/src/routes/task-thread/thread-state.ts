@@ -87,6 +87,29 @@ export function latestPlanEntries(state: ThreadState): PlanEntry[] | undefined {
   return undefined
 }
 
+/**
+ * Every file path the run's tool items are known to have touched (edit diffs + read/edit
+ * locations), most recently touched first — TODAY'S source for the composer's `@` mentions.
+ * R5's `/files` API replaces this with a worktree-wide search through the same composer seam
+ * (`getMentionCandidates`); this stays as the offline-honest fallback.
+ */
+export function threadFilePaths(state: ThreadState): string[] {
+  const seen: string[] = []
+  for (const turn of state.turns) {
+    for (const item of turn.items) {
+      if (item.kind !== 'tool') continue
+      for (const location of item.locations ?? []) seen.push(location.path)
+      for (const diff of item.diffs ?? []) seen.push(diff.path)
+    }
+  }
+  // Later mention beats earlier: keep each path's LAST occurrence, then newest first.
+  const deduped: string[] = []
+  for (let i = seen.length - 1; i >= 0; i -= 1) {
+    if (!deduped.includes(seen[i]!)) deduped.push(seen[i]!)
+  }
+  return deduped
+}
+
 export function threadFooter(status: RunStatus, error?: string): ThreadFooter {
   switch (status) {
     case 'waiting':

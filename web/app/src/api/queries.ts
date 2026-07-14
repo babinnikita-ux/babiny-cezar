@@ -13,8 +13,9 @@ import {
   getUiState,
   getWorkflows,
   patchRun,
+  sendMessage,
 } from './client'
-import type { PatchRunInput } from './types'
+import type { MessageInput, PatchRunInput } from './types'
 
 /**
  * Query keys, in one place and exported, because they are a contract rather than an
@@ -101,10 +102,14 @@ export function useWorkflows() {
   })
 }
 
-export function useSkills() {
+/** `enabled` gates the fetch for surfaces that need skills only once interacted with — the
+ *  composer's `/` autocomplete fetches on first trigger, never on every thread visit. (The
+ *  palette gets the same laziness structurally: its content mounts only while open.) */
+export function useSkills(enabled = true) {
   return useQuery({
     queryKey: queryKeys.skills,
     queryFn: ({ signal }) => getSkills({ signal }),
+    enabled,
   })
 }
 
@@ -128,6 +133,18 @@ export function usePatchRun(id: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (patch: PatchRunInput) => patchRun(id, patch),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all }),
+  })
+}
+
+/** Deliver a reply into a live session (`POST /api/runs/:id/messages`). The transcript itself
+ *  grows over SSE (`user-message`, then the agent's turn); the invalidation refreshes the
+ *  record (status flips waiting → running). Errors are the CALLER's to surface — the composer
+ *  restores the draft and toasts, so no toast fires here. */
+export function useSendMessage(id: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (message: MessageInput) => sendMessage(id, message),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all }),
   })
 }

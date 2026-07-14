@@ -108,12 +108,52 @@ describe('ThreadView', () => {
     expect(document.querySelector('[data-slot="pill"]')?.textContent).toContain('needs you')
   })
 
-  it('waiting → the paused footer with a pulsing dot', () => {
+  it('waiting → the paused hint (pulsing dot) in the dock, right above an ENABLED composer', () => {
     renderView(<ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />)
-    const footer = document.querySelector('[data-slot="thread-footer"]')
-    expect(footer?.getAttribute('data-state')).toBe('waiting')
-    expect(footer?.textContent).toContain('The agent is paused, waiting for your reply')
-    expect(footer?.querySelector('[data-slot="status-dot"]')).not.toBeNull()
+    const hint = document.querySelector('[data-slot="thread-dock"] [data-slot="paused-hint"]')
+    expect(hint?.textContent).toContain('The agent is paused, waiting for your reply')
+    expect(hint?.querySelector('[data-slot="status-dot"]')).not.toBeNull()
+    // No body footer for waiting — the dock owns that state now.
+    expect(document.querySelector('[data-slot="thread-footer"]')).toBeNull()
+    const textarea = screen.getByLabelText('Reply to the agent') as HTMLTextAreaElement
+    expect(textarea.disabled).toBe(false)
+    expect(textarea.placeholder).toBe('Reply — / for skills, @ for files…')
+  })
+
+  it('running → the composer stays enabled with the "message" placeholder, no paused hint', () => {
+    renderView(<ThreadView run={run('running')} thread={reduceThread(EVENTS)} />)
+    expect(document.querySelector('[data-slot="paused-hint"]')).toBeNull()
+    const textarea = screen.getByLabelText('Reply to the agent') as HTMLTextAreaElement
+    expect(textarea.disabled).toBe(false)
+    expect(textarea.placeholder).toBe('Message the agent — / for skills, @ for files…')
+  })
+
+  it('closed → the composer is disabled with the legacy reason and the Continue way out', () => {
+    renderView(
+      <ThreadView
+        run={run('done', {
+          steps: [
+            { id: 'task', name: 'Do the task', kind: 'agent', status: 'done', iterations: 1, tokensUsed: 0, sessionId: 's-1' },
+          ],
+        })}
+        thread={reduceThread(EVENTS)}
+      />,
+    )
+    const textarea = screen.getByLabelText('Reply to the agent') as HTMLTextAreaElement
+    expect(textarea.disabled).toBe(true)
+    expect(textarea.placeholder).toBe('Session closed — Continue to reopen.')
+    // The way out, only because this run HAS a session to resume.
+    expect(
+      document.querySelector('[data-slot="composer-disabled-action"]')?.textContent,
+    ).toContain('Continue')
+  })
+
+  it('closed with no resumable session → disabled composer, and no Continue button invented', () => {
+    renderView(<ThreadView run={run('done')} thread={reduceThread(EVENTS)} />)
+    expect((screen.getByLabelText('Reply to the agent') as HTMLTextAreaElement).disabled).toBe(true)
+    expect(document.querySelector('[data-slot="composer-disabled-action"]')?.textContent ?? '').not.toContain(
+      'Continue',
+    )
   })
 
   it('done → the closed footer; failed → the danger footer carrying the run error', () => {

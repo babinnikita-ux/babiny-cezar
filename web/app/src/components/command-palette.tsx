@@ -3,7 +3,7 @@ import * as React from 'react'
 import { useNavigate } from 'react-router'
 
 import { useRuns, useSkills } from '@/api/queries'
-import type { RunRecord, Skill } from '@/api/types'
+import type { RunRecord } from '@/api/types'
 import { NAV_ITEMS } from '@/components/nav-items'
 import { StatusDot } from '@/components/status-dot'
 import { NEXT_THEME } from '@/components/theme-toggle'
@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/command'
 import { deriveAttention } from '@/lib/attention'
 import { shortAge } from '@/lib/format'
+import { orderSkills } from '@/lib/skills'
 import { runTitle } from '@/lib/task-groups'
 import { useCommandShortcut } from '@/lib/use-command-shortcut'
 
@@ -45,19 +46,6 @@ export type DocumentNavigate = (href: string) => void
 /** R1's /new destination still belongs to the legacy document. Keeping this injectable makes
  *  the hard-navigation contract testable without asking jsdom to implement page loads. */
 const navigateDocument: DocumentNavigate = (href) => window.location.assign(href)
-
-/** Project skills first, global/team after — the #377 ordering rule, matching the server's
- *  `Skill.source` values (`src/skills.ts`): `ai`/`cezar`/`agents` live in the repo, `global`
- *  and `team` come from outside it. The sort is stable, so within each half the server's own
- *  order (its directory precedence) is preserved. */
-const PROJECT_SKILL_SOURCES: ReadonlySet<Skill['source']> = new Set(['ai', 'cezar', 'agents'])
-
-export function orderSkills(skills: readonly Skill[]): Skill[] {
-  return [...skills].sort(
-    (a, b) =>
-      Number(!PROJECT_SKILL_SOURCES.has(a.source)) - Number(!PROJECT_SKILL_SOURCES.has(b.source))
-  )
-}
 
 /** Newest first — the palette's unfiltered Tasks group should lead with what you touched last,
  *  exactly like the sidebar. Stable for equal timestamps (variant groups started together). */
