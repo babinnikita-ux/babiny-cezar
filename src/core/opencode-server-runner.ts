@@ -8,6 +8,7 @@ import type {
   ContentBlock,
 } from './agent-runner.js';
 import type { AgentSession, SessionOptions } from './agent-runner.js';
+import { prependSystemPrompt } from './agent-runner.js';
 import { AUTO_END_DELAY_MS, DEFAULT_RUN_TIMEOUT_MS } from './claude-cli-runner.js';
 import {
   createOpencodeUiState,
@@ -280,9 +281,7 @@ class OpencodeSession implements AgentSession {
     // lost (a race this await closes; the bundled mock made it visible).
     await this.consumeEvents();
 
-    const first = this.spec.systemPrompt
-      ? `${this.spec.systemPrompt}\n\n---\n\n${this.spec.userPrompt}`
-      : this.spec.userPrompt;
+    const first = prependSystemPrompt(this.spec.systemPrompt, this.spec.userPrompt);
     await this.prompt(first);
   }
 

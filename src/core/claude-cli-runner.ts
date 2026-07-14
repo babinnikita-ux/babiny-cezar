@@ -300,7 +300,7 @@ export class ClaudeCliRunner implements AgentRunner {
  * from stdin; `--output-format stream-json --verbose` gives per-event NDJSON;
  * `--permission-mode acceptEdits` lets edits through without a TTY prompt.
  */
-function buildClaudeArgs(spec: AgentRunSpec): string[] {
+export function buildClaudeArgs(spec: AgentRunSpec): string[] {
   const args: string[] = [
     '--input-format',
     'stream-json',

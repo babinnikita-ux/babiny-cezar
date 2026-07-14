@@ -68,6 +68,8 @@ export interface RunRecord {
   task: string
   model?: string
   runner?: Runner
+  /** Echo of the extra system prompt the run used (POST override or config default). */
+  systemPrompt?: string
   status: RunStatus
   createdAt: string
   startedAt?: string

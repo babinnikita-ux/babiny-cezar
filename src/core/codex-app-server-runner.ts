@@ -9,6 +9,7 @@ import type {
   ContentBlock,
   SessionOptions,
 } from './agent-runner.js';
+import { prependSystemPrompt } from './agent-runner.js';
 import {
   AUTO_END_DELAY_MS,
   DEFAULT_RUN_TIMEOUT_MS,
@@ -297,9 +298,7 @@ class CodexSession implements AgentSession {
     // Seed the first turn. The system prompt (skill body + handoff contract)
     // has no dedicated app-server field, so it rides along as a leading block
     // of the opening message.
-    const first = this.spec.systemPrompt
-      ? `${this.spec.systemPrompt}\n\n---\n\n${this.spec.userPrompt}`
-      : this.spec.userPrompt;
+    const first = prependSystemPrompt(this.spec.systemPrompt, this.spec.userPrompt);
     await this.startOrSteerTurn(first);
   }
 

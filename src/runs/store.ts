@@ -48,6 +48,12 @@ const runRecordSchema = z.object({
   model: z.string().optional(),
   /** Agent backend this run used — drives "open in CLI" resume command. */
   runner: z.enum(['claude', 'codex', 'opencode']).optional(),
+  /** Echo of the extra system prompt this run actually used (R2): the
+   *  `POST /api/runs` override, or the `config.json` default it fell back to.
+   *  Deliberately NOT the full composed prompt — skill bodies and the handoff
+   *  contract are derivable from the persisted workflow and would bloat the
+   *  index. Resolved at execute time (a queued run picks up config edits). */
+  systemPrompt: z.string().optional(),
   status: z.enum(['queued', 'running', 'waiting', 'review', 'done', 'failed', 'cancelled']),
   createdAt: z.string(),
   startedAt: z.string().optional(),

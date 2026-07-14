@@ -37,6 +37,15 @@ const configSchema = z.object({
    * Unset = the branch currently checked out. Settable from the Repo tab.
    */
   baseBranch: z.string().trim().min(1).optional(),
+  /**
+   * Default extra system prompt applied to every run's agent steps (claude:
+   * `--append-system-prompt`; codex/opencode: prepended to the opening user
+   * message — the AgentRunSpec seam handles the per-backend delivery).
+   * Settings is the single edit place; `POST /api/runs` can override it per
+   * run (`systemPrompt`). `.catch(undefined)` keeps the key additive-safe: a
+   * bad value degrades to unset without discarding the rest of the config.
+   */
+  systemPrompt: z.string().trim().min(1).max(20_000).optional().catch(undefined),
 });
 
 export type CezConfig = z.infer<typeof configSchema>;

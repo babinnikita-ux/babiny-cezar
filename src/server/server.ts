@@ -61,6 +61,15 @@ const startRunSchema = z
     // Parallel variants (spec 010): ×2/×3 runs the task as 2–3 competing
     // agents in separate worktrees; the user compares diffs and picks one.
     variants: z.number().int().min(1).max(3).optional(),
+    // Per-run system-prompt override (R2 2.3) — programmatic callers only
+    // (bookmarklets, scripts); deliberately NOT a composer-UI control. Wins
+    // over the config.json default; whitespace-only degrades to absent.
+    systemPrompt: z
+      .string()
+      .trim()
+      .max(20_000, 'systemPrompt must be at most 20000 characters')
+      .optional()
+      .transform((s) => (s ? s : undefined)),
     // Screenshots pasted into the new-task form — same shape and limits as a
     // live-session message; delivered with the first agent step's opening.
     images: z
@@ -415,7 +424,13 @@ export function createApp(deps: ServerDeps): Hono {
         source: { type: 'base64', media_type: img.mediaType, data: img.data },
       }),
     );
-    const input = { task: parsed.data.task, model: parsed.data.model, runner: parsed.data.runner, images };
+    const input = {
+      task: parsed.data.task,
+      model: parsed.data.model,
+      runner: parsed.data.runner,
+      images,
+      systemPrompt: parsed.data.systemPrompt,
+    };
     const variants = parsed.data.variants ?? 1;
     if (variants > 1) {
       // Variants live in worktrees — without git there's nothing to isolate

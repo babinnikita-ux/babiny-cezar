@@ -67,6 +67,39 @@ export interface StartRunInput {
   /** Screenshots pasted into the new-task form — delivered once, with the
    *  first agent step's opening message. */
   images?: ContentBlock[];
+  /** Per-run system-prompt override (`POST /api/runs`, programmatic callers).
+   *  Replaces the `config.json` default for this run — see
+   *  `resolveExtraSystemPrompt` for the precedence contract. */
+  systemPrompt?: string;
+}
+
+/**
+ * The effective "extra" system prompt for a run (spec §protocol v2, R2 2.3):
+ * the per-run override (`POST /api/runs` `systemPrompt`) REPLACES the
+ * `config.json` default — they are the same knob at two scopes, so the more
+ * specific one wins outright; they never concatenate. Whichever wins is
+ * ADDITIVE to the skill body and the handoff contract, which always ride
+ * along (see `composeSystemPrompt`). Blank strings count as unset.
+ */
+export function resolveExtraSystemPrompt(
+  override: string | undefined,
+  configDefault: string | undefined,
+): string | undefined {
+  return override?.trim() || configDefault?.trim() || undefined;
+}
+
+/**
+ * Joins the parts of one agent step's system prompt in fixed order — skill
+ * body (most task-specific), then the run's extra prompt (user guidance, can
+ * amend the skill), then the handoff contract (always last, never optional in
+ * practice). Blank parts drop out; survivors join with the same `\n\n---\n\n`
+ * divider the skill+handoff composition has always used.
+ */
+export function composeSystemPrompt(...parts: Array<string | undefined>): string {
+  return parts
+    .map((p) => p?.trim())
+    .filter((p): p is string => Boolean(p))
+    .join('\n\n---\n\n');
 }
 
 /** Variant letters + the fixed diversification hints (spec 010). A runs the
@@ -507,7 +540,10 @@ export class RunManager {
     const runner = createRunner(record?.runner ?? 'claude');
     const session = runner.startSession(
       {
-        systemPrompt: HANDOFF_INSTRUCTIONS,
+        // The Continue step is a fresh agent session on the same run — the
+        // run's extra system prompt (already resolved at execute time and
+        // echoed on the record) rides along with the handoff contract.
+        systemPrompt: composeSystemPrompt(record?.systemPrompt, HANDOFF_INSTRUCTIONS),
         userPrompt: prompt,
         cwd: state.cwd,
         allowedTools: DEFAULT_ALLOWED_TOOLS,
@@ -573,11 +609,16 @@ export class RunManager {
 
     // Resolve the agent backend for this run: the task choice (GUI) wins over
     // the config default. Per-step `runner` can still override it below.
-    const taskBackend: RunnerId = input.runner ?? (await loadConfig(this.repoRoot)).defaultRunner;
+    const config = await loadConfig(this.repoRoot);
+    const taskBackend: RunnerId = input.runner ?? config.defaultRunner;
+    // Extra system prompt (R2 2.3): POST override > config default; echoed on
+    // the record so the UI/API can show what the run actually used.
+    const extraSystemPrompt = resolveExtraSystemPrompt(input.systemPrompt, config.systemPrompt);
     this.store.updateRun(runId, {
       status: 'running',
       startedAt: new Date().toISOString(),
       runner: taskBackend,
+      systemPrompt: extraSystemPrompt,
     });
     emit({ type: 'lifecycle', message: `run started — workflow "${workflow.name}" (runner: ${taskBackend})` });
 
@@ -590,7 +631,7 @@ export class RunManager {
       // `develop`) — also the target of the eventual draft PR. Unresolvable
       // (typo, not fetched) → note + the currently checked-out branch.
       let base = repo.branch;
-      const configured = (await loadConfig(this.repoRoot)).baseBranch;
+      const configured = config.baseBranch;
       if (configured) {
         const resolved = await resolveBaseRef(this.repoRoot, configured);
         if (resolved) {
@@ -667,6 +708,7 @@ export class RunManager {
           emit,
           startImages,
           taskBackend,
+          extraSystemPrompt,
         );
         startImages = undefined;
         checkFailure = null;
@@ -751,6 +793,7 @@ export class RunManager {
     emit: (event: { type: string; stepId?: string; [k: string]: unknown }) => void,
     images: ContentBlock[] | undefined,
     taskBackend: RunnerId,
+    extraSystemPrompt: string | undefined,
   ): Promise<string | null> {
     let systemPrompt: string | undefined;
     if (step.skill) {
@@ -860,10 +903,9 @@ export class RunManager {
     try {
       session = runner.startSession(
         {
-          // The handoff/todos contract rides along on every agent step.
-          systemPrompt: systemPrompt
-            ? `${systemPrompt}\n\n---\n\n${HANDOFF_INSTRUCTIONS}`
-            : HANDOFF_INSTRUCTIONS,
+          // Skill body, then the run's extra prompt (POST override or config
+          // default), then the handoff/todos contract — every agent step.
+          systemPrompt: composeSystemPrompt(systemPrompt, extraSystemPrompt, HANDOFF_INSTRUCTIONS),
           userPrompt,
           images,
           cwd: state.cwd,
