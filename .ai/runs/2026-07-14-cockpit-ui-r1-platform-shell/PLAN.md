@@ -25,11 +25,11 @@
 | 3 | 3.1 | Typed API client for /api/* | done | 4de5ac4 |
 | 3 | 3.2 | SSE hooks with reconcile doctrine (global stream) | done | 079ac28 |
 | 3 | 3.3 | deriveAttention + task quick-list (groups, variants, status dots) | done | e503571 |
-| 3 | 3.4 | Tasks table view (the overview home) | done | pending |
-| 4 | 4.1 | CenteredState template + empty states | done | pending |
-| 4 | 4.2 | Tools dropdown (installed tools, versions, setup links, cog) | done | pending |
-| 4 | 4.3 | ⌘K command palette | done | pending |
-| 4 | 4.4 | Design-guardian static-scan test | done | pending |
+| 3 | 3.4 | Tasks table view (the overview home) | done | a953b22 |
+| 4 | 4.1 | CenteredState template + empty states | done | 57700fc |
+| 4 | 4.2 | Tools dropdown (installed tools, versions, setup links, cog) | done | a30e8f2 |
+| 4 | 4.3 | ⌘K command palette | done | d5223ae |
+| 4 | 4.4 | Design-guardian static-scan test | done | 60340f1 |
 
 ## Conventions
 
