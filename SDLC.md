@@ -85,9 +85,10 @@ The claim is released when the work finishes — on success and on failure alike
 Every PR passes the full validation gate before review sign-off, in this order:
 
 - `npm run typecheck`
+- `npm test`
 - `npm run build`
 
-Any non-zero exit fails the gate and blocks the PR. There is no automated test suite yet — typecheck + build is the whole gate, which makes manual QA and the review checklist carry more weight. The implementing skills run the gate before opening a PR, and `om-check-and-commit` runs it before pushing a hand-worked branch. The command list lives in `.ai/agentic.config.json`; when it changes, update it there and in this section together.
+Any non-zero exit fails the gate and blocks the PR. `npm test` is the fast server + cockpit unit/component suite; user-facing changes also need the separate real-browser QA described by the QA gate. The implementing skills run the configured gate before opening a PR, and `om-check-and-commit` runs it before pushing a hand-worked branch. The command list lives in `.ai/agentic.config.json`; when it changes, update it there and in this section together.
 
 ## Amending this process
 
