@@ -1,11 +1,18 @@
-import { MenuIcon, PlusIcon } from 'lucide-react'
+import { MenuIcon, PlusIcon, XIcon } from 'lucide-react'
+import * as React from 'react'
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
 
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
+import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { NAV_ITEMS, activeNavItem, activeNavPath } from '@/components/nav-items'
 import { cn } from '@/lib/utils'
+
+/** Tailwind's `md`. The drawer is the `<md` affordance, so this must stay in step with the
+ *  `md:hidden` / `md:flex` classes below — they are the same breakpoint expressed twice, once
+ *  for CSS and once for the state machine. */
+const DESKTOP_MEDIA_QUERY = '(min-width: 768px)'
 
 export type RepoChip = {
   name: string
@@ -26,8 +33,6 @@ export type AppShellProps = {
   taskQuickList?: ReactNode
   /** Step 4.2's Tools dropdown trigger. */
   toolsMenu?: ReactNode
-  /** Step 2.4's mobile drawer opens from here. */
-  onOpenMenu?: () => void
 }
 
 /**
@@ -43,6 +48,8 @@ export type AppShellProps = {
  *  - Safe-area insets are the shell's job, not each view's: left/right on the root, top on the
  *    mobile bar, bottom on the composer row (which stays mounted, so the home indicator always
  *    has its gutter even before Step R4 puts a composer in it).
+ *  - Below `md` the sidebar is gone and its content moves, unchanged, into an overlay drawer
+ *    (`MobileNavDrawer`). Same components, only the framing changes.
  */
 export function AppShell({
   children,
@@ -51,63 +58,160 @@ export function AppShell({
   version = null,
   taskQuickList,
   toolsMenu,
-  onOpenMenu,
 }: AppShellProps) {
   const { pathname } = useLocation()
   const activeTo = activeNavPath(pathname)
   const current = activeNavItem(pathname)
+  const [menuOpen, setMenuOpen] = React.useState(false)
+
+  // Close on route change. Without this the drawer survives the navigation it triggered and sits
+  // on top of the view the user just asked for — and back/forward and the ⌘K palette (Step 4.3)
+  // navigate without going through the drawer's own links at all.
+  React.useEffect(() => {
+    setMenuOpen(false)
+  }, [pathname])
+
+  // The drawer must not outlive its breakpoint: widening past `md` reveals the real sidebar, and
+  // an open drawer would leave a focus-trapping modal over an already-visible nav.
+  React.useEffect(() => {
+    const query = window.matchMedia?.(DESKTOP_MEDIA_QUERY)
+    if (!query) return
+    if (query.matches) setMenuOpen(false)
+    const onChange = (event: MediaQueryListEvent) => {
+      if (event.matches) setMenuOpen(false)
+    }
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, [])
+
+  const nav = {
+    activeTo,
+    repo,
+    inboxCount,
+    version,
+    taskQuickList,
+    toolsMenu,
+  }
 
   return (
-    <div
-      data-slot="app-shell"
-      className="flex h-dvh overflow-hidden bg-background text-foreground pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
-    >
-      <Sidebar
-        activeTo={activeTo}
-        repo={repo}
-        inboxCount={inboxCount}
-        version={version}
-        taskQuickList={taskQuickList}
-        toolsMenu={toolsMenu}
-      />
+    // The Sheet root renders no DOM of its own — it is the context that lets the top bar's menu
+    // button be a real SheetTrigger while the open state stays ours to close on navigation.
+    <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
+      <div
+        data-slot="app-shell"
+        className="flex h-dvh overflow-hidden bg-background text-foreground pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]"
+      >
+        <Sidebar {...nav} />
+        <MobileNavDrawer {...nav} onNavigate={() => setMenuOpen(false)} />
 
-      <div className="grid min-w-0 flex-1 grid-rows-[auto_1fr_auto] overflow-hidden">
-        <MobileTopBar title={current?.label ?? 'cezar'} onOpenMenu={onOpenMenu} />
+        <div className="grid min-w-0 flex-1 grid-rows-[auto_1fr_auto] overflow-hidden">
+          <MobileTopBar title={current?.label ?? 'cezar'} />
 
-        <main data-slot="main" className="row-start-2 min-h-0 overflow-y-auto overscroll-contain">
-          {children}
-        </main>
+          <main data-slot="main" className="row-start-2 min-h-0 overflow-y-auto overscroll-contain">
+            {children}
+          </main>
 
-        {/* Row 3: the composer dock (thread reply, Step R3). Empty today, but it still carries the
-            bottom safe-area gutter so the scroller never runs under the home indicator. */}
-        <div
-          data-slot="composer"
-          className="row-start-3 pb-[env(safe-area-inset-bottom)]"
-        />
+          {/* Row 3: the composer dock (thread reply, Step R3). Empty today, but it still carries
+              the bottom safe-area gutter so the scroller never runs under the home indicator. */}
+          <div
+            data-slot="composer"
+            className="row-start-3 pb-[env(safe-area-inset-bottom)]"
+          />
+        </div>
       </div>
-    </div>
+    </Sheet>
   )
 }
 
-function Sidebar({
-  activeTo,
-  repo,
-  inboxCount,
-  version,
-  taskQuickList,
-  toolsMenu,
-}: {
+type NavProps = {
   activeTo: string | null
   repo: RepoChip | null
   inboxCount: number | null
   version: string | null
   taskQuickList?: ReactNode
   toolsMenu?: ReactNode
-}) {
+}
+
+/** The desktop frame: a fixed 264px column, from `md` up. */
+function Sidebar(props: NavProps) {
   return (
     <aside
       data-slot="sidebar"
-      className="hidden w-[264px] shrink-0 flex-col border-r border-border bg-sidebar pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] md:flex"
+      className="hidden w-[264px] shrink-0 flex-col border-r border-border bg-sidebar md:flex"
+    >
+      <SidebarContent {...props} />
+    </aside>
+  )
+}
+
+/**
+ * The `<md` frame for the *same* `SidebarContent` the desktop column renders — the spec's mobile
+ * rule is that the sidebar "becomes an overlay drawer", not that mobile gets its own nav.
+ *
+ * Radix's Dialog (via the Sheet primitive) supplies the parts that are easy to get wrong by hand:
+ * `role="dialog"`, the accessible name, the focus trap, the Escape handler, the backdrop's
+ * dismiss-on-tap, and `aria-hidden` on everything outside the portal — which is how it delivers
+ * modality (it does not set `aria-modal`; `hideOthers` is the stronger guarantee).
+ */
+function MobileNavDrawer({ onNavigate, ...props }: NavProps & { onNavigate: () => void }) {
+  return (
+    <SheetContent
+      side="left"
+      data-slot="mobile-nav-drawer"
+      showCloseButton={false}
+      // The drawer is the sidebar: same width, same surface token, and no padding of its own —
+      // SidebarContent brings its own. `sm:max-w-none` sheds the primitive's sheet width cap.
+      className="w-[264px] gap-0 border-border bg-sidebar p-0 sm:max-w-none md:hidden"
+      // Nav needs no prose description, and Radix warns when it cannot find the one it links to.
+      aria-describedby={undefined}
+    >
+      {/* The dialog's accessible name. Visually redundant with the brand lockup below. */}
+      <SheetTitle className="sr-only">Navigation</SheetTitle>
+      <SidebarContent
+        {...props}
+        onNavigate={onNavigate}
+        headerAction={
+          <SheetClose asChild>
+            {/* size-11: the ≥44px touch target the spec's mobile rules require. */}
+            <Button variant="ghost" size="icon" aria-label="Close menu" className="-mr-2 size-11">
+              <XIcon className="size-[17px]" aria-hidden="true" />
+            </Button>
+          </SheetClose>
+        }
+      />
+    </SheetContent>
+  )
+}
+
+/**
+ * Everything inside the sidebar: brand lockup, New task CTA, nav, quick-list, footer. Framed by
+ * `Sidebar` on desktop and by `MobileNavDrawer` below `md` — the two callers differ only in the
+ * box around this, which is what keeps the mobile nav from drifting away from the desktop one.
+ *
+ * The safe-area insets live here rather than on the frames because both need them: the drawer is
+ * a full-height overlay under the same notch and home indicator the sidebar sits under.
+ */
+function SidebarContent({
+  activeTo,
+  repo,
+  inboxCount,
+  version,
+  taskQuickList,
+  toolsMenu,
+  onNavigate,
+  headerAction,
+}: NavProps & {
+  /** Fires on any in-drawer navigation. The route-change effect already closes the drawer for
+   *  every *changed* route; this also covers re-clicking the active item (per the spec, Tasks
+   *  navigates home even when already active), which changes no pathname at all. */
+  onNavigate?: () => void
+  /** The drawer's close button. Absent on desktop, which has nothing to close. */
+  headerAction?: ReactNode
+}) {
+  return (
+    <div
+      data-slot="sidebar-content"
+      className="flex min-h-0 flex-1 flex-col pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]"
     >
       <div className="flex items-center gap-[9px] px-3.5 pt-3.5 pb-2.5">
         <BrandTile />
@@ -120,11 +224,12 @@ function Sidebar({
             {repo.name} / {repo.branch}
           </span>
         ) : null}
+        {headerAction ? <div className={cn('shrink-0', !repo && 'ml-auto')}>{headerAction}</div> : null}
       </div>
 
       <div className="px-2.5 pt-1 pb-2">
         <Button asChild variant="contrast" className="relative w-full justify-center">
-          <Link to="/new">
+          <Link to="/new" onClick={onNavigate}>
             <PlusIcon className="size-[15px]" aria-hidden="true" />
             New task
             {/* Decorative: the ⌘N accelerator itself is registered in Step 4.3. */}
@@ -151,9 +256,12 @@ function Sidebar({
             <Link
               key={item.to}
               to={item.to}
+              onClick={onNavigate}
               aria-current={isActive ? 'page' : undefined}
               className={cn(
-                'flex h-[34px] w-full items-center gap-2.5 rounded-md px-2.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground',
+                // h-[34px] is the mockup's desktop row. In the drawer these are touch targets, so
+                // they relax to 44px — the one place the two framings legitimately differ.
+                'flex h-11 w-full items-center gap-2.5 rounded-md px-2.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:h-[34px]',
                 isActive && 'bg-muted font-semibold text-foreground'
               )}
             >
@@ -196,7 +304,7 @@ function Sidebar({
         ) : null}
         <ThemeToggle className="ml-auto" />
       </div>
-    </aside>
+    </div>
   )
 }
 
@@ -214,25 +322,29 @@ function BrandTile() {
   )
 }
 
-/** Mobile chrome (<md): the sidebar's replacement. The menu button is a prop callback —
- *  Step 2.4 owns the drawer it opens. */
-function MobileTopBar({ title, onOpenMenu }: { title: string; onOpenMenu?: () => void }) {
+/** Mobile chrome (<md): the sidebar's replacement. Its menu button opens `MobileNavDrawer`. */
+function MobileTopBar({ title }: { title: string }) {
   return (
     <header
       data-slot="mobile-top-bar"
       className="row-start-1 border-b border-border bg-card pt-[env(safe-area-inset-top)] md:hidden"
     >
       <div className="flex h-[52px] items-center gap-2.5 px-3">
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label="Open menu"
-          onClick={onOpenMenu}
-          // 44px: the minimum touch target, overriding the 36px desktop icon-button size.
-          className="-ml-1.5 size-11"
-        >
-          <MenuIcon className="size-[17px]" aria-hidden="true" />
-        </Button>
+        {/* A real SheetTrigger rather than an onClick that flips our state: it is what registers
+            the button as the dialog's trigger, which is what Radix restores focus to on close —
+            with a bare onClick, closing the drawer drops focus on <body>. It also carries the
+            aria-haspopup / aria-expanded / aria-controls wiring for free. */}
+        <SheetTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Open menu"
+            // 44px: the minimum touch target, overriding the 36px desktop icon-button size.
+            className="-ml-1.5 size-11"
+          >
+            <MenuIcon className="size-[17px]" aria-hidden="true" />
+          </Button>
+        </SheetTrigger>
         <span className="truncate text-[14.5px] font-semibold">{title}</span>
         {/* SLOT — the run status dot / kebab land with the thread view (Step R3). */}
         <div data-slot="mobile-status" className="ml-auto flex items-center gap-2" />

@@ -88,9 +88,47 @@ export class AgentBrowser {
     return String(this.run(['get', 'url']).url ?? '')
   }
 
-  /** operation: assert (`is visible`) */
+  /** operation: assert (`is visible`).
+   *
+   *  Throws when nothing matches — the CLI reports an absent element as a failed query, not as
+   *  "not visible". Use `count` for anything that unmounts rather than hides. */
   isVisible(selector: string): boolean {
     return this.run(['is', 'visible', selector]).visible === true
+  }
+
+  /** operation: assert (`eval`) — how many nodes match.
+   *
+   *  The distinction from `isVisible` is real and load-bearing: the desktop sidebar is in the DOM
+   *  but display:none, while a closed Radix dialog is not in the DOM at all. Only this can say
+   *  which of the two a surface is, and only this can assert absence without erroring. */
+  count(selector: string): number {
+    return Number(this.evaluate(`document.querySelectorAll(${JSON.stringify(selector)}).length`))
+  }
+
+  /** operation: interact (`wait --fn`) — block until a predicate is truthy in the page.
+   *
+   *  Animated surfaces need this. The drawer slides in over 500ms, so for half a second after the
+   *  tap that opened it, it is mounted, "visible", and still entirely off-screen — sampling it in
+   *  that window answers every question wrong. */
+  waitForFunction(js: string): void {
+    this.run(['wait', '--fn', js])
+  }
+
+  /** operation: interact (`press`) — a key press against whatever currently has focus. */
+  press(key: string): void {
+    this.run(['press', key])
+  }
+
+  /** operation: interact (`mouse move`/`down`/`up`) — a tap at a viewport coordinate.
+   *
+   *  `click` targets an element's center point and, by design, refuses when something covers it.
+   *  A modal backdrop is exactly that case: it spans the viewport, so its center sits under the
+   *  drawer it is dimming, and the only honest way to tap the backdrop *beside* the drawer is by
+   *  coordinate. */
+  tapAt(x: number, y: number): void {
+    this.run(['mouse', 'move', String(x), String(y)])
+    this.run(['mouse', 'down'])
+    this.run(['mouse', 'up'])
   }
 
   /** operation: assert (`eval`) — for DOM facts no selector query can express, such as a

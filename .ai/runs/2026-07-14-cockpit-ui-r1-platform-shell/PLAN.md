@@ -21,7 +21,7 @@
 | 2 | 2.1 | react-router route map + server SPA catch-all | done | pending |
 | 2 | 2.2 | Theme system (pre-paint, light/dark/system) | done | pending |
 | 2 | 2.3 | App shell: sidebar + 100dvh grid + safe areas | done | pending |
-| 2 | 2.4 | Mobile drawer navigation | todo | — |
+| 2 | 2.4 | Mobile drawer navigation | done | pending |
 | 3 | 3.1 | Typed API client for /api/* | todo | — |
 | 3 | 3.2 | SSE hooks with reconcile doctrine (global stream) | todo | — |
 | 3 | 3.3 | deriveAttention + task quick-list (groups, variants, status dots) | todo | — |

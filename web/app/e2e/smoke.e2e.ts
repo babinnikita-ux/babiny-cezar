@@ -178,6 +178,141 @@ describe('mobile shell', () => {
 
     browser.screenshot(`${artifactsDir}/shell-iphone.png`)
   })
+
+  it('never overflows the viewport horizontally', () => {
+    browser.goto(baseUrl + '/')
+
+    // A 264px sidebar that failed to hide, or a nav row wider than the phone, shows up here
+    // first — as a page that scrolls sideways. `<=`, not `===`: the document may legitimately
+    // be narrower than the viewport, it just must never be wider.
+    const overflow = browser.evaluate(
+      `[document.documentElement.scrollWidth, window.innerWidth]`
+    ) as [number, number]
+    expect(overflow[0]).toBeLessThanOrEqual(overflow[1])
+  })
+
+  describe('nav drawer', () => {
+    const DRAWER = '[data-slot="mobile-nav-drawer"]'
+    const MENU_BUTTON = '[data-slot="mobile-top-bar"] button[aria-label="Open menu"]'
+
+    // The drawer slides in over 500ms and out over 300ms, so every assertion has to wait for the
+    // transition to settle. "Settled open" is specifically `left === 0`: mid-flight it is already
+    // mounted and already `visible`, just parked off-screen at left: -264.
+    const SETTLED_OPEN = `(() => {
+      const d = document.querySelector('${DRAWER}')
+      return !!d && d.getBoundingClientRect().left === 0
+    })()`
+    const GONE = `document.querySelector('${DRAWER}') === null`
+
+    function openDrawer(): void {
+      browser.click(MENU_BUTTON)
+      browser.waitForFunction(SETTLED_OPEN)
+    }
+
+    it('opens over a backdrop, and covers the viewport top to bottom', () => {
+      browser.goto(baseUrl + '/')
+      // Closed means unmounted, not merely hidden — hence count rather than isVisible.
+      expect(browser.count(DRAWER)).toBe(0)
+
+      openDrawer()
+      expect(browser.isVisible(DRAWER)).toBe(true)
+      expect(browser.isVisible('[data-slot="sheet-overlay"]')).toBe(true)
+
+      const box = browser.evaluate(`(() => {
+        const rect = document.querySelector('${DRAWER}').getBoundingClientRect()
+        const links = Array.from(document.querySelectorAll('${DRAWER} nav a'))
+        const overlay = document.querySelector('[data-slot="sheet-overlay"]').getBoundingClientRect()
+        return {
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+          viewportHeight: window.innerHeight,
+          viewportWidth: window.innerWidth,
+          overlayWidth: overlay.width,
+          overlayHeight: overlay.height,
+          minLinkHeight: Math.min(...links.map((a) => a.getBoundingClientRect().height)),
+          labels: links.map((a) => a.textContent.trim()),
+        }
+      })()`) as Record<string, number | string[]>
+
+      // Anchored to the left edge, full height, and the sidebar's own width.
+      expect(box.left).toBe(0)
+      expect(box.top).toBe(0)
+      expect(box.width).toBe(264)
+      expect(box.height).toBe(box.viewportHeight)
+
+      // The backdrop really is a backdrop: it dims the whole viewport, not just the gap.
+      expect(box.overlayWidth).toBe(box.viewportWidth)
+      expect(box.overlayHeight).toBe(box.viewportHeight)
+
+      // The same nav the desktop sidebar renders — at touch size, not the 34px desktop row.
+      expect(box.labels).toEqual(['Tasks', 'Inbox', 'Git', 'GitHub', 'Skills', 'Workflows', 'Settings'])
+      expect(box.minLinkHeight).toBeGreaterThanOrEqual(44)
+
+      browser.screenshot(`${artifactsDir}/drawer-iphone.png`)
+    })
+
+    it('navigates and closes when a nav item is tapped', () => {
+      browser.goto(baseUrl + '/')
+      openDrawer()
+
+      browser.click(`${DRAWER} nav a[href="/git"]`)
+      browser.waitForFunction(GONE)
+
+      // Both halves: it routed, *and* the drawer is not still sitting on top of the new view.
+      expect(browser.url()).toMatch(/\/git$/)
+      expect(browser.count(DRAWER)).toBe(0)
+      expect(browser.text('[data-slot="mobile-top-bar"]')).toContain('Git')
+    })
+
+    it('closes when the backdrop is tapped, without navigating', () => {
+      browser.goto(baseUrl + '/')
+      openDrawer()
+
+      // Beside the 264px drawer, in the dimmed strip on the right. By coordinate because the
+      // overlay's own center point sits *under* the drawer, where a tap means something else.
+      browser.tapAt(IPHONE.width - 40, Math.round(IPHONE.height / 2))
+      browser.waitForFunction(GONE)
+
+      expect(browser.count(DRAWER)).toBe(0)
+      expect(browser.url()).toMatch(/\/$/)
+    })
+
+    it('closes on Escape', () => {
+      browser.goto(baseUrl + '/')
+      openDrawer()
+
+      browser.press('Escape')
+      browser.waitForFunction(GONE)
+      expect(browser.count(DRAWER)).toBe(0)
+    })
+
+    it('is unreachable on a desktop viewport', () => {
+      browser.setViewport(DESKTOP.width, DESKTOP.height)
+      try {
+        browser.goto(baseUrl + '/')
+        // The trigger is `md:hidden`, so there is no way in — and the real sidebar is the nav.
+        expect(browser.isVisible('[data-slot="mobile-top-bar"]')).toBe(false)
+        expect(browser.count(DRAWER)).toBe(0)
+        expect(browser.isVisible('[data-slot="sidebar"]')).toBe(true)
+      } finally {
+        browser.setViewport(IPHONE.width, IPHONE.height)
+      }
+    })
+
+    it('does not overflow the viewport while open', () => {
+      browser.goto(baseUrl + '/')
+      openDrawer()
+
+      // The drawer is `fixed` and 264px of a 390px viewport, but a stray `w-3/4`/`sm:max-w-sm`
+      // interaction or a too-wide nav row would push the document sideways.
+      const overflow = browser.evaluate(
+        `[document.documentElement.scrollWidth, window.innerWidth]`
+      ) as [number, number]
+      expect(overflow[0]).toBeLessThanOrEqual(overflow[1])
+    })
+  })
 })
 
 describe('legacy cockpit', () => {

@@ -1,9 +1,10 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AppShell, type AppShellProps } from './app-shell'
+import { NAV_ITEMS } from './nav-items'
 import { ThemeProvider } from './theme-provider'
 
 afterEach(cleanup)
@@ -26,10 +27,19 @@ function renderShell(entry = '/', props: Partial<AppShellProps> = {}, children: 
   return render(
     <ThemeProvider>
       <MemoryRouter initialEntries={[entry]}>
-        <AppShell {...props}>{children}</AppShell>
+        <AppShell {...props}>
+          {children}
+          <LocationProbe />
+        </AppShell>
       </MemoryRouter>
     </ThemeProvider>
   )
+}
+
+/** Makes the current URL assertable, so a "the drawer closed" test can also prove the click it
+ *  fired actually navigated rather than merely dismissing the drawer. */
+function LocationProbe() {
+  return <span data-testid="location">{useLocation().pathname}</span>
 }
 
 const nav = () => screen.getByRole('navigation', { name: 'Main' })
@@ -163,12 +173,6 @@ describe('AppShell', () => {
       expect(within(bar).getByText('Skills')).toBeTruthy()
     })
 
-    it('calls onOpenMenu when the menu button is pressed — Step 2.4 owns the drawer', () => {
-      const onOpenMenu = vi.fn()
-      renderShell('/', { onOpenMenu })
-      fireEvent.click(screen.getByRole('button', { name: 'Open menu' }))
-      expect(onOpenMenu).toHaveBeenCalledOnce()
-    })
   })
 
   /** The layout contract from the spec. These classes are the whole reason the cockpit does not
@@ -202,6 +206,191 @@ describe('AppShell', () => {
       // The composer row keeps the home-indicator gutter even while it is empty.
       const composer = document.querySelector('[data-slot="composer"]') as HTMLElement
       expect(composer.className).toContain('pb-[env(safe-area-inset-bottom)]')
+    })
+  })
+
+  /** The `<md` drawer (spec: "Sidebar becomes an overlay drawer … backdrop").
+   *
+   *  jsdom still cannot evaluate `md:`, so the drawer is always openable here — the button that
+   *  opens it is what CSS hides on desktop, and the e2e suite proves that at 390px for real. What
+   *  these tests do own is the state machine and the semantics, which no screenshot can check.
+   */
+  describe('mobile nav drawer', () => {
+    const drawer = () => screen.queryByRole('dialog', { name: 'Navigation' })
+    const openMenu = () => fireEvent.click(screen.getByRole('button', { name: 'Open menu' }))
+
+    /** Radix arms its outside-pointer listener in a `setTimeout(…, 0)`, so a backdrop press fired
+     *  in the same tick as the open would land before anything is listening. */
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+    it('is closed until the menu button is pressed', () => {
+      renderShell()
+      expect(drawer()).toBeNull()
+      openMenu()
+      expect(drawer()).not.toBeNull()
+    })
+
+    it('is a dialog with an accessible name', () => {
+      renderShell()
+      openMenu()
+      // A real dialog, not a div styled to look like one — the focus trap and the Escape
+      // handling below are only meaningful because the role underneath them is real.
+      expect(drawer()?.getAttribute('role')).toBe('dialog')
+      // `getByRole('dialog', { name: 'Navigation' })` already proves the name resolves; this
+      // pins down *how*, so dropping the sr-only SheetTitle fails here loudly.
+      expect(drawer()?.getAttribute('aria-labelledby')).toBeTruthy()
+    })
+
+    it('advertises the drawer from the menu button', () => {
+      renderShell()
+      const menuButton = screen.getByRole('button', { name: 'Open menu' })
+      expect(menuButton.getAttribute('aria-haspopup')).toBe('dialog')
+      expect(menuButton.getAttribute('aria-expanded')).toBe('false')
+
+      openMenu()
+      expect(menuButton.getAttribute('aria-expanded')).toBe('true')
+      expect(menuButton.getAttribute('aria-controls')).toBe(drawer()?.id)
+    })
+
+    it('hides the rest of the tree from assistive tech while open', () => {
+      renderShell()
+      openMenu()
+
+      // This is the modality, and it is worth asserting precisely because it is NOT spelled
+      // `aria-modal`: Radix's Dialog does not set that attribute at all. It marks every sibling
+      // of the portal `aria-hidden` instead (the `hideOthers` approach), which is the stronger
+      // of the two and what actually makes AT ignore the shell behind the drawer.
+      const shell = document.querySelector('[data-slot="app-shell"]') as HTMLElement
+      expect(shell.closest('[aria-hidden="true"]')).not.toBeNull()
+      expect(drawer()?.closest('[aria-hidden="true"]')).toBeNull()
+    })
+
+    it('moves focus into the drawer and restores it to the menu button on close', async () => {
+      renderShell()
+      const menuButton = screen.getByRole('button', { name: 'Open menu' })
+      // A real pointer click focuses the button it hits; fireEvent.click does not. Without this
+      // the drawer opens while focus is on <body>, and "restore" would restore to <body> — the
+      // test would pass or fail on a jsdom artifact rather than on Radix's focus scope.
+      menuButton.focus()
+      openMenu()
+
+      await waitFor(() => expect(drawer()?.contains(document.activeElement)).toBe(true))
+
+      fireEvent.click(within(drawer() as HTMLElement).getByRole('button', { name: 'Close menu' }))
+      await waitFor(() => expect(drawer()).toBeNull())
+      await waitFor(() => expect(document.activeElement).toBe(menuButton))
+    })
+
+    it('closes on Escape', async () => {
+      renderShell()
+      openMenu()
+      fireEvent.keyDown(document, { key: 'Escape' })
+      await waitFor(() => expect(drawer()).toBeNull())
+    })
+
+    it('closes when the backdrop is tapped', async () => {
+      renderShell()
+      openMenu()
+      await settle()
+
+      const overlay = document.querySelector('[data-slot="sheet-overlay"]')
+      expect(overlay).not.toBeNull()
+
+      // A whole tap, both halves. Radix defers a left-button dismissal from `pointerdown` to the
+      // following `click` (so a drag that starts inside the drawer and releases over the backdrop
+      // does not dismiss it), so a lone pointerDown here would assert nothing.
+      fireEvent.pointerDown(overlay as Element)
+      fireEvent.click(overlay as Element)
+      await waitFor(() => expect(drawer()).toBeNull())
+    })
+
+    it('renders the same nav as the desktop sidebar', () => {
+      renderShell()
+      openMenu()
+
+      const inDrawer = within(drawer() as HTMLElement)
+        .getByRole('navigation', { name: 'Main' })
+      const links = within(inDrawer).getAllByRole('link')
+
+      // Asserted against NAV_ITEMS, not a copy of it: the point of this test is that the drawer
+      // reuses the sidebar's content, so adding a nav item must not need a second edit here.
+      expect(links.map((a) => a.getAttribute('href'))).toEqual(NAV_ITEMS.map((item) => item.to))
+      expect(links.map((a) => a.textContent)).toEqual(NAV_ITEMS.map((item) => item.label))
+
+      // …and the rest of the sidebar came along, not just the nav.
+      expect(within(drawer() as HTMLElement).getByRole('link', { name: /New task/ })).toBeTruthy()
+      expect(within(drawer() as HTMLElement).getByRole('button', { name: /^Theme:/ })).toBeTruthy()
+    })
+
+    it('marks the active nav item inside the drawer too', () => {
+      renderShell('/settings/skills')
+      openMenu()
+      const current = within(drawer() as HTMLElement).getAllByRole('link', { current: 'page' })
+      expect(current).toHaveLength(1)
+      expect(current[0]?.textContent).toBe('Skills')
+    })
+
+    it('closes when a nav item inside it navigates', async () => {
+      renderShell('/')
+      openMenu()
+
+      fireEvent.click(within(drawer() as HTMLElement).getByRole('link', { name: 'Git' }))
+
+      // Both halves matter: an open drawer sitting on top of the newly routed view is the whole
+      // bug this guards, and a drawer that closed without navigating would be just as wrong.
+      await waitFor(() => expect(drawer()).toBeNull())
+      expect(screen.getByTestId('location').textContent).toBe('/git')
+    })
+
+    it('closes when the already-active nav item is re-clicked', async () => {
+      // No pathname change, so the route-change effect cannot fire — the link's own onNavigate
+      // is what has to close it. Tasks navigating home while already active is a spec behavior.
+      renderShell('/')
+      openMenu()
+      fireEvent.click(within(drawer() as HTMLElement).getByRole('link', { name: 'Tasks' }))
+      await waitFor(() => expect(drawer()).toBeNull())
+      expect(screen.getByTestId('location').textContent).toBe('/')
+    })
+
+    it('closes when the New task button navigates', async () => {
+      renderShell('/')
+      openMenu()
+      fireEvent.click(within(drawer() as HTMLElement).getByRole('link', { name: /New task/ }))
+      await waitFor(() => expect(drawer()).toBeNull())
+      expect(screen.getByTestId('location').textContent).toBe('/new')
+    })
+
+    it('closes when the viewport widens past md, where the real sidebar takes over', async () => {
+      // Otherwise an open drawer survives a rotation into a desktop-width layout and traps focus
+      // in a modal copy of a sidebar that is now visible right next to it.
+      const listeners = new Set<(event: MediaQueryListEvent) => void>()
+      vi.stubGlobal('matchMedia', (query: string) => ({
+        matches: false,
+        media: query,
+        addEventListener: (_: string, fn: (event: MediaQueryListEvent) => void) => listeners.add(fn),
+        removeEventListener: (_: string, fn: (event: MediaQueryListEvent) => void) => listeners.delete(fn),
+      }))
+
+      renderShell()
+      openMenu()
+      expect(drawer()).not.toBeNull()
+
+      // Every registered listener gets the event; only the shell's breakpoint one acts on it.
+      for (const fn of listeners) fn({ matches: true } as MediaQueryListEvent)
+      await waitFor(() => expect(drawer()).toBeNull())
+    })
+
+    it('pads the drawer for the safe-area insets', () => {
+      renderShell()
+      openMenu()
+      const content = within(drawer() as HTMLElement)
+        .getByRole('navigation', { name: 'Main' })
+        .closest('[data-slot="sidebar-content"]') as HTMLElement
+
+      // The drawer is a full-height overlay under the same notch and home indicator as the
+      // sidebar — which is exactly why these insets live on the shared content, not on a frame.
+      expect(content.className).toContain('pt-[env(safe-area-inset-top)]')
+      expect(content.className).toContain('pb-[env(safe-area-inset-bottom)]')
     })
   })
 })
