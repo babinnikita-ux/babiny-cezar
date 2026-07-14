@@ -1,5 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArchiveIcon, ArrowUpRightIcon, PlusIcon, ScaleIcon, SearchIcon } from 'lucide-react'
+import {
+  ArchiveIcon,
+  ArrowUpRightIcon,
+  ListChecksIcon,
+  PlusIcon,
+  ScaleIcon,
+  SearchIcon,
+  SearchXIcon,
+} from 'lucide-react'
 import * as React from 'react'
 import { Link, useNavigate } from 'react-router'
 
@@ -7,6 +15,7 @@ import { archiveFinished } from '@/api/client'
 import { useRunUsage } from '@/api/global-events'
 import { queryKeys, useRuns } from '@/api/queries'
 import type { RunRecord } from '@/api/types'
+import { CenteredState } from '@/components/centered-state'
 import { useListView } from '@/components/list-view'
 import { Pill } from '@/components/pill'
 import { Button } from '@/components/ui/button'
@@ -108,11 +117,9 @@ export function TasksOverview({
         </div>
       </header>
 
-      <div className="flex-1 p-3 pb-[calc(90px+env(safe-area-inset-bottom))] md:p-5 md:pb-5">
+      <div className="flex flex-1 flex-col p-3 pb-[calc(90px+env(safe-area-inset-bottom))] md:p-5 md:pb-5">
         {runs === undefined ? null : visible.length === 0 ? (
-          <p data-slot="tasks-empty" className="px-1 py-10 text-center text-[13px] text-muted-foreground">
-            {emptyMessage(view, query)}
-          </p>
+          <TasksEmptyState view={view} query={query} />
         ) : (
           <>
             {/* ≥md: the table. */}
@@ -195,11 +202,53 @@ export function TasksOverview({
   )
 }
 
-/** What an empty list honestly means, given how it got empty. */
-function emptyMessage(view: ListView, query: string): string {
+/**
+ * What an empty list honestly means, given how it got empty — as a CenteredState, one variant
+ * per cause. Only the no-tasks-at-all state is a hero moment and gets the twinkle backdrop
+ * (spec: textures on hero/empty surfaces only); a missed search or an unswept archive is just
+ * a fact, so those stay flat. `heading="h2"` because the page's h1 is the header's "Tasks".
+ */
+function TasksEmptyState({ view, query }: { view: ListView; query: string }) {
   const needle = query.trim()
-  if (needle) return `No tasks match “${needle}”.`
-  return view === 'archived' ? 'Nothing archived yet.' : 'No tasks yet — describe one to get started.'
+  const kind = needle ? 'search-miss' : view === 'archived' ? 'archive' : 'no-tasks'
+  return (
+    <div data-slot="tasks-empty" data-empty-kind={kind} className="flex flex-1 flex-col">
+      {kind === 'search-miss' ? (
+        <CenteredState
+          heading="h2"
+          icon={<SearchXIcon />}
+          tone="neutral"
+          title="No matching tasks"
+          subtitle={`No tasks match “${needle}”.`}
+        />
+      ) : kind === 'archive' ? (
+        <CenteredState
+          heading="h2"
+          icon={<ArchiveIcon />}
+          tone="neutral"
+          title="Nothing archived yet"
+          subtitle="Finished tasks you archive land here."
+        />
+      ) : (
+        <CenteredState
+          heading="h2"
+          icon={<ListChecksIcon />}
+          tone="primary"
+          backdrop
+          title="No tasks yet"
+          subtitle="Describe a task to get started."
+          actions={
+            <Button asChild>
+              <Link to="/new">
+                <PlusIcon aria-hidden="true" />
+                New task
+              </Link>
+            </Button>
+          }
+        />
+      )}
+    </div>
+  )
 }
 
 function OverviewTab({

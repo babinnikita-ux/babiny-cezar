@@ -343,20 +343,43 @@ describe('TasksOverview — empty and loading states', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Tasks')
   })
 
-  it('says there are no tasks', () => {
+  it('celebrates no-tasks-yet: primary tone, the twinkle backdrop, a New-task action', () => {
     renderOverview({ runs: [] })
-    expect(screen.getByText('No tasks yet — describe one to get started.')).not.toBeNull()
+    const empty = document.querySelector<HTMLElement>('[data-slot="tasks-empty"]')
+    if (!empty) throw new Error('no empty state rendered')
+
+    expect(empty.getAttribute('data-empty-kind')).toBe('no-tasks')
+    expect(empty.querySelector('[data-slot="centered-state"]')?.getAttribute('data-tone')).toBe('primary')
+    expect(within(empty).getByRole('heading', { name: 'No tasks yet' })).not.toBeNull()
+    expect(within(empty).getByText('Describe a task to get started.')).not.toBeNull()
+    // Scoped inside the state — the mobile FAB is also a link named "New task".
+    expect(within(empty).getByRole('link', { name: 'New task' }).getAttribute('href')).toBe('/new')
+    // The hero moment: this is the one overview state that gets the decorative backdrop.
+    expect(empty.querySelector('[data-slot="twinkle-backdrop"]')).not.toBeNull()
   })
 
-  it('says the archive is empty', () => {
+  it('says the archive is empty, plainly — neutral, no backdrop', () => {
     renderOverview({ runs: [run({ status: 'done' })], view: 'archived' })
-    expect(screen.getByText('Nothing archived yet.')).not.toBeNull()
+    const empty = document.querySelector<HTMLElement>('[data-slot="tasks-empty"]')
+    if (!empty) throw new Error('no empty state rendered')
+
+    expect(empty.getAttribute('data-empty-kind')).toBe('archive')
+    expect(empty.querySelector('[data-slot="centered-state"]')?.getAttribute('data-tone')).toBe('neutral')
+    expect(within(empty).getByRole('heading', { name: 'Nothing archived yet' })).not.toBeNull()
+    expect(empty.querySelector('[data-slot="twinkle-backdrop"]')).toBeNull()
   })
 
-  it('says what the search missed, quoting it', () => {
+  it('says what the search missed, quoting it, with no backdrop', () => {
     renderOverview({ runs: [run({ title: 'Something' })] })
     fireEvent.change(screen.getByRole('textbox', { name: 'Search tasks' }), { target: { value: 'quaternion' } })
+    const empty = document.querySelector<HTMLElement>('[data-slot="tasks-empty"]')
+    if (!empty) throw new Error('no empty state rendered')
+
+    expect(empty.getAttribute('data-empty-kind')).toBe('search-miss')
+    expect(empty.querySelector('[data-slot="centered-state"]')?.getAttribute('data-tone')).toBe('neutral')
     expect(screen.getByText('No tasks match “quaternion”.')).not.toBeNull()
+    // A missed search is not a hero surface.
+    expect(empty.querySelector('[data-slot="twinkle-backdrop"]')).toBeNull()
   })
 })
 
@@ -426,8 +449,11 @@ describe('TasksOverview — mobile cards and FAB', () => {
   })
 
   it('floats the New task FAB, linking to /new', () => {
-    renderOverview({ runs: [] })
-    expect(screen.getByRole('link', { name: 'New task' }).getAttribute('href')).toBe('/new')
+    // A non-empty list, so the FAB is the only "New task" link (the empty state carries its own).
+    renderOverview({ runs: [run()] })
+    const fab = document.querySelector('[data-slot="new-task-fab"]')
+    expect(fab?.getAttribute('href')).toBe('/new')
+    expect(fab?.getAttribute('aria-label')).toBe('New task')
   })
 })
 

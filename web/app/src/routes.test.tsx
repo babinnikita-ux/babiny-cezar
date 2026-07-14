@@ -82,6 +82,25 @@ describe('route map', () => {
       expect(routeName()).toBe('not-found')
     })
   }
+
+  // Step 4.1: the 404 is a CenteredState with a way home, not a bare stub.
+  it('the 404 renders a CenteredState with a back-to-tasks action', () => {
+    renderAt('/definitely-not-a-route')
+    expect(routeName()).toBe('not-found')
+    expect(document.querySelector('[data-route="not-found"] [data-slot="centered-state"]')).not.toBeNull()
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Page not found')
+    expect(screen.getByRole('link', { name: 'Back to tasks' }).getAttribute('href')).toBe('/')
+  })
+
+  // Every placeholder now speaks through the shared template — one grammar for every stub.
+  it('placeholders render as neutral CenteredStates', () => {
+    renderAt('/git')
+    const state = document.querySelector('[data-route="git"] [data-slot="centered-state"]')
+    expect(state).not.toBeNull()
+    expect(state?.getAttribute('data-tone')).toBe('neutral')
+    // A stub is not a hero surface: no decorative backdrop.
+    expect(state?.querySelector('[data-slot="twinkle-backdrop"]')).toBeNull()
+  })
 })
 
 /** The bookmarklet contract (spec 011), protected by BACKWARD_COMPATIBILITY.md:

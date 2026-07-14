@@ -1,3 +1,4 @@
+import { SquarePenIcon } from 'lucide-react'
 import { useSearchParams } from 'react-router'
 import { Placeholder } from './placeholder'
 import { parseNewTaskParams } from './new-task-params'
@@ -14,7 +15,7 @@ export function NewTaskRoute() {
   const params = parseNewTaskParams(search)
 
   return (
-    <Placeholder route="new" title="New task">
+    <Placeholder route="new" title="New task" icon={<SquarePenIcon />}>
       <dl data-testid="new-task-params" className="mt-2 grid grid-cols-[auto_auto] gap-x-3 gap-y-1 text-left text-sm">
         {([
           ['skill', params.skill],
