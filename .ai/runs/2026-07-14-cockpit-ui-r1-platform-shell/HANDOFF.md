@@ -2,16 +2,22 @@
 
 _A fresh agent should be able to resume in under 30 seconds from this file._
 
-## State (checkpoint 2 — 2026-07-14)
+## State (checkpoint 3 — 2026-07-14)
 
-- **Phases 1 (Platform) and 2 (Shell) are complete** — Steps 1.1–1.6 and 2.1–2.4 landed (`4f3bf43`..`807805e`).
-- **Remaining in R1: 7 Steps** — Phase 3 (3.1–3.4: data layer + task list/table) and Phase 4 (4.1–4.4: chrome).
+- **Phase 1 (Platform), Phase 2 (Shell) complete; Phase 3 (data) is 3/4 done** — Steps 1.1–1.6, 2.1–2.4, 3.1–3.3 landed (`4f3bf43`..`e503571`). **12 of 17 Steps.**
+- **Remaining in R1: 5 Steps** — 3.4 (tasks table) and Phase 4 (4.1 CenteredState, 4.2 Tools dropdown, 4.3 ⌘K palette, 4.4 design-guardian).
 - Branch `feat/cockpit-ui-r1-platform-shell`; **draft PR #396** (kept open deliberately so the user can watch; `Status: in-progress`; lock held: assignee + `in-progress` label).
-- Everything green: `npm run typecheck` · `npm test` **246/246** · `npm run build` · `npm run test:e2e` **14/14** (real Chrome via agent-browser).
+- Everything green: `npm run typecheck` · `npm test` **495/495** · `npm run build` · `npm run test:e2e` **25/25** (real Chrome via agent-browser).
 
 ## Next concrete action
 
-Step **3.1 — Typed API client for /api/\*** (first `todo` row in `PLAN.md`'s Tasks table). Then 3.2 SSE hooks, 3.3 quick-list, 3.4 tasks table; then Phase 4 (4.1 CenteredState, 4.2 Tools dropdown, 4.3 ⌘K palette, 4.4 design-guardian).
+Step **3.4 — Tasks table view (the overview home)** (first `todo` row in `PLAN.md`'s Tasks table). Then Phase 4: 4.1 CenteredState, 4.2 Tools dropdown, 4.3 ⌘K palette, 4.4 design-guardian.
+
+**Everything 3.4 needs already exists** — do not rebuild it:
+- `useRuns()` (live via SSE), `useListView()` from `@/components/list-view` (the Active/Archived state, provider already mounted in `AppShellContainer` — the table's tabs must share it with the sidebar).
+- `groupRuns`/`sortRuns`/`listCounts`/`shortAge`/`compactTokens` from `@/lib/task-groups`, `deriveAttention` from `@/lib/attention` — all reusable as-is.
+- **Live CPU/Mem come from `useRunUsage(runId)` in `@/api/global-events`, NOT `run.usage`.**
+- Per PR #392 (already on main), the table **is** the overview home at `/`: the Tasks nav always lands there, there is no list/table toggle, and Active/Archived tabs live in the table header. The mockup `tasks-home.html` is the visual contract (11 columns; note its list/table toggle is obsolete — do not build it).
 
 ## How to resume
 
