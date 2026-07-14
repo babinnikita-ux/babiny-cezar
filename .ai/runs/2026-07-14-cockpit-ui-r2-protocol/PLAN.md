@@ -15,10 +15,10 @@
 | 1 | 1.2 | Claude runner v2 emitter + golden fixtures (thinking, TodoWrite→plan, parentItemId) | done | 3653ab2 |
 | 1 | 1.3 | Codex runner v2 emitter + golden fixtures (items, statuses, outputDelta, todoList→plan) | done | 6c924cc |
 | 1 | 1.4 | OpenCode runner v2 emitter + golden fixtures (parts, session.idle turn-end, todowrite→plan) | done | cbaf869 |
-| 2 | 2.1 | RunManager persists v2 (delta coalescing + item snapshots) and fans out over SSE | done | pending |
-| 2 | 2.2 | titleSummary + diffStat on turn-end; PATCH /api/runs/:id title | done | pending |
-| 2 | 2.3 | systemPrompt end-to-end (config default + POST /api/runs override + all three runners) | done | pending |
-| 2 | 2.4 | Web: v2 event types + display model; wire titleSummary/± into quick-list and table | done | pending |
+| 2 | 2.1 | RunManager persists v2 (delta coalescing + item snapshots) and fans out over SSE | done | 28a75b3 |
+| 2 | 2.2 | titleSummary + diffStat on turn-end; PATCH /api/runs/:id title | done | 9e89489 |
+| 2 | 2.3 | systemPrompt end-to-end (config default + POST /api/runs override + all three runners) | done | f9c5bd9 |
+| 2 | 2.4 | Web: v2 event types + display model; wire titleSummary/± into quick-list and table | done | 7de1ad2 |
 
 ## Goal
 

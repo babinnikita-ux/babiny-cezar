@@ -1,9 +1,8 @@
 # Handoff — Cockpit UI redesign, Phase R2 (Protocol v2)
 
-## State (checkpoint 1)
-- **Phase 1 complete (4/8 Steps)** — v2 types + all three backend emitters with golden fixtures + the parity roll-up test. `4aaaa82`..`cbaf869`. Gate: 800/800, build green.
-- Next: **Step 2.1 — RunManager persists v2 (delta coalescing ~30-50ms + item snapshots, per the spec's performance guardrails) and fans out over SSE.** Then 2.2 titleSummary/diffStat/PATCH, 2.3 systemPrompt, 2.4 web mirror.
-- All mappers share one shape (`create*UiState`/`map*`/out-of-band session+turn helpers) and one channel: `SessionOptions.onUiEvent`. RunManager consumes it uniformly.
+## State (final — R2 COMPLETE)
+- 8/8 Steps. Gate + e2e green (959 unit / 44 e2e). All work on the single consolidated PR #396 branch `feat/cockpit-ui-r1-platform-shell`.
+- Next: **Phase R3 (thread view)** — new run folder `.ai/runs/2026-07-14-cockpit-ui-r3-thread/`, same branch/PR. Spec steps 8–12. Key inputs ready: `useRunEvents` (both SSE names), `web/app/src/protocol/` mirror, plan dock semantics (plan.updated full-replacement), image events ride v1 only until R3 links by itemId.
 
 ## Context
 - The protocol contract: spec §"Normalized agent-event protocol v2" + the authoritative mapping tables in `.ai/analysis/cockpit-ui-redesign/agent-event-protocols.md` §7 (READ THESE FIRST).
