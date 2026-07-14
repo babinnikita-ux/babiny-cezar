@@ -219,6 +219,24 @@ describe('Tasks group', () => {
     await waitFor(() => expect(dialog()).toBeNull())
   })
 
+  it('shows and filters by the auto-summary title, not the raw title it replaced', async () => {
+    renderPalette({
+      runs: [
+        run({ id: 'r-sum', title: 'fix the login bug plz', titleSummary: 'Catch AuthError in the handler' }),
+      ],
+    })
+    openWith({ metaKey: true })
+    // The rendered name reads through runTitle, like every other surface.
+    await screen.findByText('Catch AuthError in the handler')
+    expect(screen.queryByText('fix the login bug plz')).toBeNull()
+
+    // And the filter matches what is on screen — not the hidden raw title.
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'AuthError' } })
+    expect(document.querySelector('[data-slot="palette-task"]')).not.toBeNull()
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'plz' } })
+    expect(document.querySelector('[data-slot="palette-task"]')).toBeNull()
+  })
+
   it('renders no Tasks group when there are no runs', async () => {
     renderPalette()
     openWith({ metaKey: true })

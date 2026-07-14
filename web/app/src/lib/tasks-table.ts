@@ -1,5 +1,5 @@
 import type { ProcessUsage, RunRecord, RunStatus } from '@/api/types'
-import { groupTitle, type ListView } from '@/lib/task-groups'
+import { groupTitle, runTitle, type ListView } from '@/lib/task-groups'
 
 /**
  * The pure half of the Tasks table (the `/` overview): search, the header's archive count, the
@@ -52,15 +52,17 @@ export function workflowLabel(run: RunRecord): string {
 }
 
 /**
- * The header search: case-insensitive substring over what the table actually shows — title,
- * branch and workflow (both the raw name and the label the column prints). Not the task prompt:
- * matching on text the table never displays makes rows appear for no visible reason.
+ * The header search: case-insensitive substring over what the table actually shows — the
+ * displayed title (`runTitle`: the auto-summary when one exists, per R2 #389), branch and
+ * workflow (both the raw name and the label the column prints). Not the task prompt, and not a
+ * raw `title` hidden behind a summary: matching on text the table never displays makes rows
+ * appear for no visible reason.
  */
 export function filterRuns(runs: readonly RunRecord[], query: string): RunRecord[] {
   const needle = query.trim().toLowerCase()
   if (!needle) return [...runs]
   return runs.filter((run) =>
-    [run.title, run.branch ?? '', run.workflow, workflowLabel(run)].some((text) =>
+    [runTitle(run), run.branch ?? '', run.workflow, workflowLabel(run)].some((text) =>
       text.toLowerCase().includes(needle),
     ),
   )

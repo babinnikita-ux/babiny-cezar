@@ -8,6 +8,7 @@ import {
   groupTitle,
   listCounts,
   queuePositions,
+  runTitle,
   sortRuns,
   type QuickListBucket,
 } from '@/lib/task-groups'
@@ -280,6 +281,28 @@ describe('groupRuns', () => {
   it('handles an empty list', () => {
     expect(groupRuns([], 'active')).toEqual([])
     expect(groupRuns([], 'archived')).toEqual([])
+  })
+})
+
+describe('runTitle — the one name every surface shows', () => {
+  it.each([
+    {
+      label: 'the auto-summary wins over the raw title once a turn produced one',
+      over: { title: 'fix the login bug plz', titleSummary: 'Catch AuthError in the login handler' },
+      expected: 'Catch AuthError in the login handler',
+    },
+    {
+      label: 'no summary yet (or a pre-R2 record) → the raw title, honestly',
+      over: { title: 'fix the login bug plz' },
+      expected: 'fix the login bug plz',
+    },
+    {
+      label: 'a user edit set BOTH fields (PATCH /api/runs/:id), so the edit is what shows',
+      over: { title: 'Login 500 fix', titleSummary: 'Login 500 fix' },
+      expected: 'Login 500 fix',
+    },
+  ])('$label', ({ over, expected }) => {
+    expect(runTitle(run(over))).toBe(expected)
   })
 })
 

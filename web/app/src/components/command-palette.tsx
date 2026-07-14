@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/command'
 import { deriveAttention } from '@/lib/attention'
 import { shortAge } from '@/lib/format'
+import { runTitle } from '@/lib/task-groups'
 import { useCommandShortcut } from '@/lib/use-command-shortcut'
 
 /**
@@ -171,13 +172,15 @@ function PaletteContent({
                 <CommandItem
                   key={run.id}
                   // The id keeps duplicate titles apart; it also lets a pasted run id find its task.
-                  value={`task ${run.title} ${run.id}`}
+                  // `runTitle`, matching the rendered text — filtering on a raw title hidden
+                  // behind an auto-summary would surface rows for no visible reason.
+                  value={`task ${runTitle(run)} ${run.id}`}
                   data-slot="palette-task"
                   data-run-id={run.id}
                   onSelect={() => go(`/tasks/${run.id}`)}
                 >
                   <StatusDot tone={attention.tone} pulse={attention.pulse} aria-label={attention.label} role="img" />
-                  <span className="min-w-0 flex-1 truncate">{run.title}</span>
+                  <span className="min-w-0 flex-1 truncate">{runTitle(run)}</span>
                   <span className="shrink-0 text-xs text-soft-foreground tabular-nums">
                     {shortAge(run.finishedAt ?? run.createdAt, now)}
                   </span>

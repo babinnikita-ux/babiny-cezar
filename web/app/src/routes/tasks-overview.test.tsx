@@ -115,6 +115,7 @@ describe('TasksOverview — the table', () => {
           status: 'review',
           workflow: 'feat',
           branch: 'cez/8f31ab02',
+          diffStat: { adds: 128, dels: 14, files: 6 },
           tokensUsed: 184_700,
           costUsd: 0.31,
           pullRequestUrl: 'https://github.com/o/r/pull/402',
@@ -131,7 +132,7 @@ describe('TasksOverview — the table', () => {
       'Structured changes endpoint',
       'feat',
       'cez/8f31ab02',
-      '—', // ± — RunRecord has no diffStat until R2; nothing is fabricated
+      '+128 −14', // the ± column (R2 #389) — adds and dels, the mockup's pair
       '#402',
       '184.7k',
       '$0.31',
@@ -139,8 +140,37 @@ describe('TasksOverview — the table', () => {
       '—',
       '12m',
     ])
-    // No branch, no PR, no cost yet — dashes, not zeros. Started falls back to createdAt.
+    // No branch, no PR, no diff recorded, no cost yet — dashes, not zeros (a pre-R2 record has
+    // no diffStat, and `+0 −0` would claim a measurement that never happened). Started falls
+    // back to createdAt.
     expect(cellsOf('bare')).toEqual(['needs you', 'Bare minimum', 'default', '—', '—', '—', '0', '—', '—', '—', '26m'])
+    // The pair is two colored halves, not one string — green adds, red dels (design tokens).
+    const diff = tableRow('full')?.querySelector('[data-slot="diff-stat"]')
+    expect(diff?.querySelector('.text-success')?.textContent).toBe('+128')
+    expect(diff?.querySelector('.text-danger')?.textContent).toBe('−14')
+    expect(diff?.getAttribute('title')).toBe('+128 −14 across 6 files')
+  })
+
+  it('shows the auto-summary title once a turn produced one, falling back to the raw title', () => {
+    renderOverview({
+      runs: [
+        run({
+          id: 'sum',
+          title: 'fix the login bug plz',
+          titleSummary: 'Catch AuthError in the login handler',
+        }),
+        run({ id: 'raw', title: 'fix the search crash' }),
+      ],
+    })
+    // The displayed name, the link's accessible name and the truncation tooltip all agree.
+    const link = within(tableRow('sum') as HTMLElement).getByRole('link', {
+      name: 'Catch AuthError in the login handler',
+    })
+    expect(link.getAttribute('title')).toBe('Catch AuthError in the login handler')
+    expect(tableRow('sum')?.textContent).not.toContain('fix the login bug plz')
+    expect(
+      within(tableRow('raw') as HTMLElement).getByRole('link', { name: 'fix the search crash' })
+    ).not.toBeNull()
   })
 
   it('links the PR chip out without hijacking it, while a row click opens the task', () => {
@@ -406,10 +436,12 @@ describe('TasksOverview — mobile cards and FAB', () => {
       runs: [
         run({
           id: 'c1',
-          title: 'Structured changes endpoint',
+          title: 'add a structured changes endpoint',
+          titleSummary: 'Structured changes endpoint',
           status: 'review',
           workflow: 'feat',
           branch: 'cez/8f31ab02',
+          diffStat: { adds: 128, dels: 14, files: 6 },
           tokensUsed: 184_700,
           pullRequestUrl: 'https://github.com/o/r/pull/402',
           createdAt: ago(40 * 60_000),
@@ -419,14 +451,22 @@ describe('TasksOverview — mobile cards and FAB', () => {
     })
     const c = card('c1') as HTMLElement
     expect(c.querySelector('[data-slot="pill"]')?.textContent).toBe('needs review')
+    // The card names the run by the summary too — every surface reads through runTitle.
     expect(within(c).getByRole('link', { name: 'Structured changes endpoint' }).getAttribute('href')).toBe(
       '/tasks/c1'
     )
     expect(c.textContent).toContain('feat')
     expect(c.textContent).toContain('cez/8f31ab02')
+    // The meta row carries the diff pair, like the mockup card (branch · ± · tokens).
+    expect(c.querySelector('[data-slot="diff-stat"]')?.textContent).toBe('+128 −14')
     expect(c.textContent).toContain('184.7k')
     expect(c.textContent).toContain('12m')
     expect(c.querySelector('[data-slot="pr-chip"]')?.getAttribute('href')).toBe('https://github.com/o/r/pull/402')
+  })
+
+  it('shows no diff pair on a card whose run recorded none', () => {
+    renderOverview({ runs: [run({ id: 'c2', branch: 'cez/x' })] })
+    expect(card('c2')?.querySelector('[data-slot="diff-stat"]')).toBeNull()
   })
 
   it('shows a queued card its queue place instead of branch/tokens', () => {

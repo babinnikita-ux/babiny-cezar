@@ -103,6 +103,15 @@ describe('filterRuns', () => {
     expect(ids('ZOD')).toEqual(['a'])
   })
 
+  it('searches the DISPLAYED title: the auto-summary when set, and not the raw title it hides', () => {
+    const summarized = [
+      run({ id: 's', title: 'fix the login bug plz', titleSummary: 'Catch AuthError in the handler' }),
+    ]
+    expect(filterRuns(summarized, 'autherror').map((r) => r.id)).toEqual(['s'])
+    // The raw title is not on screen — matching it would surface a row for no visible reason.
+    expect(filterRuns(summarized, 'plz')).toEqual([])
+  })
+
   it('matches the branch', () => {
     expect(ids('e5f6')).toEqual(['b'])
   })

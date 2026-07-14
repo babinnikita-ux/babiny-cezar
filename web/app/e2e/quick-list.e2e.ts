@@ -40,13 +40,18 @@ const ago = (ms: number) => new Date(now - ms).toISOString()
 const FIXTURE = [
   {
     id: 'fix-review-pr',
-    title: 'Structured changes endpoint for the git view',
+    // The raw title is the user's prompt-ish phrasing; `titleSummary` is what the server derived
+    // on turn-end (#389). Every surface must show the summary — the raw title appearing anywhere
+    // is a regression these specs now catch.
+    title: 'add a structured changes endpoint plz',
+    titleSummary: 'Structured changes endpoint for the git view',
     workflow: 'default',
     task: 'add a structured changes endpoint',
     status: 'review',
     createdAt: ago(40 * 60_000),
     finishedAt: ago(26 * 60_000),
     tokensUsed: 128_400,
+    diffStat: { adds: 128, dels: 14, files: 6 },
     pullRequestUrl: 'https://github.com/open-mercato/cezar/pull/396',
     archived: false,
     steps: [],
@@ -90,6 +95,7 @@ const FIXTURE = [
     createdAt: ago(3 * 3_600_000),
     finishedAt: ago(2 * 3_600_000),
     tokensUsed: 12_000,
+    diffStat: { adds: 9, dels: 2, files: 1 },
     archived: false,
     steps: [],
   },
@@ -215,12 +221,31 @@ describe('task quick-list', () => {
     // The review runs are what wants you; the terminal ones are history. The variant pair is one
     // tile, not two rows — so "Needs you" holds two things, not three.
     // Both are `review`, so the tie breaks on recency: the variant group started 30 minutes ago,
-    // the PR review 40 — newest first.
+    // the PR review 40 — newest first. The PR row reads title (the auto-SUMMARY, not the raw
+    // fixture title), then its `+128 −14` diff pair, then the PR chip.
     expect(rowsIn('Needs you')).toEqual([
       'Add skills autocomplete to composer×2',
-      'Structured changes endpoint for the git viewPR',
+      'Structured changes endpoint for the git view+128 −14PR',
     ])
-    expect(rowsIn('Recent')).toEqual(['README parallel-agents tagline2h', 'Bump zod to v43h'])
+    // fix-done recorded a diff on its last turn; fix-failed predates diffStat and shows none.
+    expect(rowsIn('Recent')).toEqual(['README parallel-agents tagline+9 −22h', 'Bump zod to v43h'])
+  })
+
+  it('renders the diff pair through the success/danger tokens, not as plain text', () => {
+    const pair = browser.evaluate(`(() => {
+      const el = document.querySelector('[data-slot="task-row"][data-run-id="fix-review-pr"] [data-slot="diff-stat"]')
+      if (!el) return null
+      const [adds, dels] = el.querySelectorAll('span')
+      return {
+        adds: adds.textContent, dels: dels.textContent,
+        // Resolved by the real CSS: green ≠ red proves the two tokens actually applied.
+        addsColor: getComputedStyle(adds).color, delsColor: getComputedStyle(dels).color,
+      }
+    })()`) as { adds: string; dels: string; addsColor: string; delsColor: string } | null
+
+    expect(pair?.adds).toBe('+128')
+    expect(pair?.dels).toBe('−14')
+    expect(pair?.addsColor).not.toBe(pair?.delsColor)
   })
 
   it('paints one dot per row, in the tone deriveAttention picked', () => {
@@ -345,17 +370,38 @@ describe('tasks table overview', () => {
     expect(rows.slice(0, 3).map((r) => r.id).sort()).toEqual(['fix-review-pr', 'fix-var-a', 'fix-var-b'])
     expect(rows.slice(3).map((r) => r.id)).toEqual(['fix-done', 'fix-failed'])
 
-    // A spot check across the columns: tokens formatted, the PR chip numbered and pointed out.
+    // A spot check across the columns: tokens formatted, the PR chip numbered and pointed out —
+    // and the Task cell shows the auto-summary, never the raw fixture title behind it.
     const reviewRow = browser.evaluate(`(() => {
       const tr = document.querySelector('${TABLE_ROW}[data-run-id="fix-review-pr"]')
       const pr = tr.querySelector('[data-slot="pr-chip"]')
       return { text: tr.textContent, prHref: pr.href, prTarget: pr.target }
     })()`) as { text: string; prHref: string; prTarget: string }
     expect(reviewRow.text).toContain('128.4k')
+    expect(reviewRow.text).toContain('Structured changes endpoint for the git view')
+    expect(reviewRow.text).not.toContain('add a structured changes endpoint plz')
     expect(reviewRow.prHref).toBe('https://github.com/open-mercato/cezar/pull/396')
     expect(reviewRow.prTarget).toBe('_blank')
 
     browser.screenshot(`${artifactsDir}/tasks-table.png`)
+  })
+
+  it('fills the ± column where a run recorded a diff, and keeps the honest dash where none exists', () => {
+    // Column 5 is ± (Status | Task | Workflow | Branch | ±) — read it for every row at once.
+    const diffs = browser.evaluate(`Object.fromEntries(
+      [...document.querySelectorAll('${TABLE_ROW}')].map((tr) => [
+        tr.dataset.runId,
+        tr.querySelector('td:nth-child(5)').textContent,
+      ])
+    )`) as Record<string, string>
+
+    expect(diffs).toEqual({
+      'fix-review-pr': '+128 −14',
+      'fix-var-a': '—', // no diffStat on these fixture records — nothing is fabricated
+      'fix-var-b': '—',
+      'fix-done': '+9 −2',
+      'fix-failed': '—',
+    })
   })
 
   it('offers the compare strip for the finished variant group', () => {

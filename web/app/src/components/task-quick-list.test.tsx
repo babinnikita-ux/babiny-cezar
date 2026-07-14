@@ -79,6 +79,51 @@ describe('TaskQuickList', () => {
     expect(screen.getByRole('link', { name: /Bump zod to v4/ }).getAttribute('href')).toBe('/tasks/abc123')
   })
 
+  it('names a row by its auto-summary once one exists — the title, the tooltip and the PR chip agree', () => {
+    renderList({
+      runs: [
+        run({
+          id: 'sum',
+          title: 'fix the login bug plz',
+          titleSummary: 'Catch AuthError in the login handler',
+          status: 'review',
+          pullRequestUrl: 'https://github.com/o/r/pull/9',
+        }),
+        run({ id: 'raw', title: 'fix the search crash' }),
+      ],
+    })
+
+    const link = row('sum')?.querySelector('a[href="/tasks/sum"]') as HTMLElement
+    expect(link.textContent).toContain('Catch AuthError in the login handler')
+    expect(link.getAttribute('title')).toBe('Catch AuthError in the login handler')
+    expect(row('sum')?.textContent).not.toContain('fix the login bug plz')
+    expect(
+      within(row('sum') as HTMLElement).getByRole('link', {
+        name: 'Open the pull request for Catch AuthError in the login handler',
+      })
+    ).not.toBeNull()
+    // No summary yet (or a pre-R2 record) → the raw title, honestly.
+    expect(within(row('raw') as HTMLElement).getByRole('link', { name: /fix the search crash/ })).not.toBeNull()
+  })
+
+  it('shows the diff pair when a turn recorded one, and nothing when none exists', () => {
+    renderList({
+      runs: [
+        run({ id: 'diffed', title: 'Has a diff', status: 'review', diffStat: { adds: 42, dels: 7, files: 3 } }),
+        run({ id: 'plain', title: 'No diff yet', status: 'review' }),
+      ],
+    })
+
+    const pair = row('diffed')?.querySelector('[data-slot="diff-stat"]')
+    expect(pair?.textContent).toBe('+42 −7')
+    // Two colored halves through the design tokens — green adds, red dels, like the mockup.
+    expect(pair?.querySelector('.text-success')?.textContent).toBe('+42')
+    expect(pair?.querySelector('.text-danger')?.textContent).toBe('−7')
+    // A sidebar row has no ± column to hold an em dash open for — absence is just absence.
+    expect(row('plain')?.querySelector('[data-slot="diff-stat"]')).toBeNull()
+    expect(row('plain')?.textContent).not.toContain('—')
+  })
+
   it('marks the row for the open task active, from the route', () => {
     const runs = [run({ id: 'open', title: 'Open one' }), run({ id: 'other', title: 'Other one' })]
     renderList({ runs, currentRunId: 'open' }, '/tasks/open')

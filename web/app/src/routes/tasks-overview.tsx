@@ -16,12 +16,13 @@ import { useRunUsage } from '@/api/global-events'
 import { queryKeys, useRuns } from '@/api/queries'
 import type { RunRecord } from '@/api/types'
 import { CenteredState } from '@/components/centered-state'
+import { DiffStatLabel } from '@/components/diff-stat'
 import { useListView } from '@/components/list-view'
 import { Pill } from '@/components/pill'
 import { Button } from '@/components/ui/button'
 import { deriveAttention } from '@/lib/attention'
 import { compactTokens, shortAge } from '@/lib/format'
-import { listCounts, queuePositions, sortRuns, type ListView } from '@/lib/task-groups'
+import { listCounts, queuePositions, runTitle, sortRuns, type ListView } from '@/lib/task-groups'
 import {
   compareGroups,
   filterRuns,
@@ -339,18 +340,16 @@ function TableRow({
         </Pill>
       </td>
       <td className={cn(TD_BASE, 'w-[34%] max-w-0')}>
-        <Link to={to} title={run.title} className="block truncate text-[13px] font-medium">
-          {run.title}
+        <Link to={to} title={runTitle(run)} className="block truncate text-[13px] font-medium">
+          {runTitle(run)}
         </Link>
       </td>
       <td className={cn(TD_BASE, 'text-[12.5px] text-muted-foreground')}>{workflowLabel(run)}</td>
       <td className={TD_BASE}>{run.branch ? <BranchChip branch={run.branch} /> : <Dash />}</td>
-      {/* ± is honest-empty until R2 persists a diffStat — there is no such field to read today. */}
-      <td className={cn(TD_BASE, 'text-[13px]')}>
-        <Dash />
-      </td>
+      {/* ± — refreshed on every turn-end (#389); still an honest dash on records that predate it. */}
+      <td className={TD_BASE}>{run.diffStat ? <DiffStatLabel stat={run.diffStat} /> : <Dash />}</td>
       <td className={TD_BASE}>
-        {run.pullRequestUrl ? <PrChip url={run.pullRequestUrl} taskTitle={run.title} /> : <Dash />}
+        {run.pullRequestUrl ? <PrChip url={run.pullRequestUrl} taskTitle={runTitle(run)} /> : <Dash />}
       </td>
       <td className={cn(TD_BASE, 'text-right font-mono text-xs text-muted-foreground tabular-nums')}>
         {compactTokens(run.tokensUsed)}
@@ -440,7 +439,7 @@ function TaskCard({
           {attention.label}
         </Pill>
         <Link to={to} className="min-w-0 flex-1 text-[13.5px] leading-[1.35] font-medium">
-          {run.title}
+          {runTitle(run)}
         </Link>
         <span className="mt-0.5 shrink-0 text-[11.5px] text-soft-foreground tabular-nums">
           {shortAge(run.finishedAt ?? run.createdAt, now)}
@@ -461,6 +460,13 @@ function TaskCard({
                 <span>{run.branch}</span>
               </>
             ) : null}
+            {/* Branch · ±diff · tokens — the mockup card's meta order. */}
+            {run.diffStat ? (
+              <>
+                <Sep />
+                <DiffStatLabel stat={run.diffStat} className="text-[11.5px]" />
+              </>
+            ) : null}
             {run.tokensUsed > 0 ? (
               <>
                 <Sep />
@@ -470,7 +476,7 @@ function TaskCard({
           </>
         )}
         {run.pullRequestUrl ? (
-          <PrChip url={run.pullRequestUrl} taskTitle={run.title} className="h-5" />
+          <PrChip url={run.pullRequestUrl} taskTitle={runTitle(run)} className="h-5" />
         ) : null}
       </div>
     </div>

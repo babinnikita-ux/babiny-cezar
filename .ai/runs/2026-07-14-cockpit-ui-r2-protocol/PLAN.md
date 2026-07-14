@@ -18,7 +18,7 @@
 | 2 | 2.1 | RunManager persists v2 (delta coalescing + item snapshots) and fans out over SSE | done | pending |
 | 2 | 2.2 | titleSummary + diffStat on turn-end; PATCH /api/runs/:id title | done | pending |
 | 2 | 2.3 | systemPrompt end-to-end (config default + POST /api/runs override + all three runners) | done | pending |
-| 2 | 2.4 | Web: v2 event types + display model; wire titleSummary/± into quick-list and table | todo | — |
+| 2 | 2.4 | Web: v2 event types + display model; wire titleSummary/± into quick-list and table | done | pending |
 
 ## Goal
 

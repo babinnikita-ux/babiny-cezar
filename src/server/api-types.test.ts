@@ -19,8 +19,42 @@ import type {
   WorkflowStepDef as WebWorkflowStepDef,
   WorkflowsResponse as WebWorkflowsResponse,
 } from '../../web/app/src/api/types.js';
+import type { ToolDisplay as WebToolDisplay } from '../../web/app/src/protocol/tool-display.js';
+import type {
+  FileDiff as WebFileDiff,
+  PermissionOption as WebPermissionOption,
+  PermissionOptionKind as WebPermissionOptionKind,
+  PlanEntry as WebPlanEntry,
+  PlanStatus as WebPlanStatus,
+  StopReason as WebStopReason,
+  TokenUsage as WebTokenUsage,
+  ToolKind as WebToolKind,
+  ToolLocation as WebToolLocation,
+  ToolStatus as WebToolStatus,
+  UiBackend as WebUiBackend,
+  UiEvent as WebUiEvent,
+  UiEventType as WebUiEventType,
+  UiItem as WebUiItem,
+} from '../../web/app/src/protocol/ui-events.js';
 import type { BackendCheck } from '../core/backend-detect.js';
 import type { ProcessUsage } from '../core/process-usage.js';
+import type { ToolDisplay } from '../core/tool-display.js';
+import type {
+  FileDiff,
+  PermissionOption,
+  PermissionOptionKind,
+  PlanEntry,
+  PlanStatus,
+  StopReason,
+  TokenUsage,
+  ToolKind,
+  ToolLocation,
+  ToolStatus,
+  UiBackend,
+  UiEvent,
+  UiEventType,
+  UiItem,
+} from '../core/ui-events.js';
 import type { RunEvent, RunRecord, RunStatus, StepState, StepStatus } from '../runs/store.js';
 import type { Skill } from '../skills.js';
 import type { TodoItem } from '../todos.js';
@@ -72,6 +106,27 @@ const guards = {
   todoItem: true satisfies Exact<TodoItem, WebTodoItem>,
   githubItem: true satisfies Exact<GithubItem, WebGithubItem>,
   githubData: true satisfies Exact<GithubData, WebGithubData>,
+
+  // ---- protocol v2 (`web/app/src/protocol/` mirrors `src/core/ui-events.ts` +
+  // `src/core/tool-display.ts`). The full unions are guarded, not just spot fields:
+  // `Exact` over `UiEvent`/`UiItem` compares every member (a new event type, a renamed
+  // field, a widened enum — all break here). `tool-display-mirror.test.ts` guards the
+  // display model's *behavior*; this guards its shape.
+  uiBackend: true satisfies Exact<UiBackend, WebUiBackend>,
+  toolStatus: true satisfies Exact<ToolStatus, WebToolStatus>,
+  toolKind: true satisfies Exact<ToolKind, WebToolKind>,
+  stopReason: true satisfies Exact<StopReason, WebStopReason>,
+  planStatus: true satisfies Exact<PlanStatus, WebPlanStatus>,
+  planEntry: true satisfies Exact<PlanEntry, WebPlanEntry>,
+  tokenUsage: true satisfies Exact<TokenUsage, WebTokenUsage>,
+  fileDiff: true satisfies Exact<FileDiff, WebFileDiff>,
+  toolLocation: true satisfies Exact<ToolLocation, WebToolLocation>,
+  permissionOptionKind: true satisfies Exact<PermissionOptionKind, WebPermissionOptionKind>,
+  permissionOption: true satisfies Exact<PermissionOption, WebPermissionOption>,
+  uiItem: true satisfies Exact<UiItem, WebUiItem>,
+  uiEvent: true satisfies Exact<UiEvent, WebUiEvent>,
+  uiEventType: true satisfies Exact<UiEventType, WebUiEventType>,
+  toolDisplayModel: true satisfies Exact<ToolDisplay, WebToolDisplay>,
 };
 
 describe('web api types mirror the server', () => {

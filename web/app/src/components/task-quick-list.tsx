@@ -4,11 +4,12 @@ import { Link, useMatch } from 'react-router'
 
 import { useRuns } from '@/api/queries'
 import type { RunRecord } from '@/api/types'
+import { DiffStatLabel } from '@/components/diff-stat'
 import { useListView } from '@/components/list-view'
 import { StatusDot } from '@/components/status-dot'
 import { deriveAttention } from '@/lib/attention'
 import { compactTokens, shortAge } from '@/lib/format'
-import { groupRuns, listCounts, type ListView, type QuickListRow } from '@/lib/task-groups'
+import { groupRuns, listCounts, runTitle, type ListView, type QuickListRow } from '@/lib/task-groups'
 import { useNow } from '@/lib/use-now'
 import { cn } from '@/lib/utils'
 
@@ -220,7 +221,7 @@ function RunRow({
         to={`/tasks/${run.id}`}
         // The row's accessible name is the title; `title` gives the full text back when the CSS
         // truncates it, which for a one-line 264px column is most of the time.
-        title={run.title}
+        title={runTitle(run)}
         aria-current={isActive ? 'page' : undefined}
         className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-[7px]"
       >
@@ -233,6 +234,9 @@ function RunRow({
         <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
           {variant ? variantLabel(run) : runTitle(run)}
         </span>
+        {/* The diff numbers, once a turn has produced any (R2 #389). Nothing before that — a
+            sidebar row has no column to hold an em dash open for. */}
+        {run.diffStat ? <DiffStatLabel stat={run.diffStat} className="shrink-0 text-[10.5px]" /> : null}
         {/* The PR chip takes the age's slot when there is one — same as the mockup. */}
         {run.pullRequestUrl || !age ? null : (
           <span className="shrink-0 text-[11px] text-soft-foreground tabular-nums">{age}</span>
@@ -245,7 +249,7 @@ function RunRow({
           target="_blank"
           rel="noopener noreferrer"
           title={run.pullRequestUrl}
-          aria-label={`Open the pull request for ${run.title}`}
+          aria-label={`Open the pull request for ${runTitle(run)}`}
           className="mr-2.5 inline-flex shrink-0 items-center gap-[3px] rounded-full border border-violet/35 px-1.5 py-px font-mono text-[10.5px] font-semibold text-violet hover:bg-violet/10"
         >
           PR
@@ -254,19 +258,6 @@ function RunRow({
       ) : null}
     </div>
   )
-}
-
-/**
- * What a row calls a run.
- *
- * `run.title` for now. Phase R2 adds the auto-summary (`titleSummary`) that the spec's "editable
- * auto-summary title" describes, and this is the single place it plugs in — `titleSummary ??
- * run.title`. It is not read speculatively today: no server writes it, so `RunRecord` has no such
- * field (the mirror in `api/types.ts` is type-checked against the server's own), and reaching for
- * one would be reading a field that cannot exist.
- */
-function runTitle(run: RunRecord): string {
-  return run.title
 }
 
 /** A variant row's subtitle: what differs between A and B — the backend and what it has spent.
