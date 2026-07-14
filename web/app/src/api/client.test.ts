@@ -19,6 +19,7 @@ import {
   getTodos,
   getUiState,
   getWorkflows,
+  patchRun,
   putUiState,
   sendMessage,
 } from './client'
@@ -136,6 +137,13 @@ describe('request shapes', () => {
       body: { text: 'keep going' },
     },
     { name: 'deleteRun', call: () => deleteRun('run-1'), path: '/api/runs/run-1', method: 'DELETE' },
+    {
+      name: 'patchRun',
+      call: () => patchRun('run-1', { title: 'New name' }),
+      path: '/api/runs/run-1',
+      method: 'PATCH',
+      body: { title: 'New name' },
+    },
     {
       name: 'sendMessage',
       call: () => sendMessage('run-1', { text: 'hi' }),

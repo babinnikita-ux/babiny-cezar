@@ -49,9 +49,21 @@ export interface StepState {
   costUsd?: number
 }
 
+/** Aggregate diff numbers of a run's worktree vs its base (#389). */
+export interface DiffStat {
+  adds: number
+  dels: number
+  files: number
+}
+
 export interface RunRecord {
   id: string
   title: string
+  /** Display title (#389): auto-derived from the first agent turn, or the user's inline edit
+   *  (`PATCH /api/runs/:id` sets it together with `title`). Show `titleSummary ?? title`. */
+  titleSummary?: string
+  /** Refreshed on every turn-end; absent until the first turn ends (and on worktree-less runs). */
+  diffStat?: DiffStat
   workflow: string
   task: string
   model?: string
@@ -289,6 +301,12 @@ export interface CreateRunInput {
 export interface MessageInput {
   text?: string
   images?: ImageInput[]
+}
+
+/** `PATCH /api/runs/:id` (#389). `title`: trimmed server-side, 1–300 chars. The edit sets both
+ *  `title` and `titleSummary`, so it wins over any auto-summary. Answers the updated record. */
+export interface PatchRunInput {
+  title?: string
 }
 
 // ---- mutation responses ---------------------------------------------------------------------------

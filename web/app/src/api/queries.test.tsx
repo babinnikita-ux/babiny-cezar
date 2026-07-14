@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from './client'
 import { createQueryClient } from './query-client'
-import { queryKeys, useHealth, useRun, useRuns } from './queries'
+import { queryKeys, useHealth, usePatchRun, useRun, useRuns } from './queries'
 
 const fetchMock = vi.fn<typeof fetch>()
 
@@ -124,6 +124,47 @@ describe('useRun', () => {
     rerender({ id: 'run-1' })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(fetchMock.mock.calls.at(-1)?.[0]).toBe('/api/runs/run-1')
+  })
+})
+
+describe('usePatchRun', () => {
+  it('PATCHes the title and invalidates every runs query on success', async () => {
+    fetchMock.mockResolvedValue(json({ id: 'run-1', title: 'New name', titleSummary: 'New name' }))
+    const client = createQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => usePatchRun('run-1'), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    })
+
+    result.current.mutate({ title: 'New name' })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    const [path, init] = fetchMock.mock.calls.at(-1) as [string, RequestInit]
+    expect(path).toBe('/api/runs/run-1')
+    expect(init.method).toBe('PATCH')
+    expect(JSON.parse(init.body as string)).toEqual({ title: 'New name' })
+    // `runs.all` is a prefix of the list, detail and diff keys — one call reaches them all.
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: queryKeys.runs.all })
+  })
+
+  it('does not invalidate anything on failure', async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: 'not found' }), { status: 404, statusText: 'Not Found' }),
+    )
+    const client = createQueryClient()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => usePatchRun('nope'), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    })
+
+    result.current.mutate({ title: 'x' })
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(result.current.error).toBeInstanceOf(ApiError)
+    expect(invalidate).not.toHaveBeenCalled()
   })
 })
 

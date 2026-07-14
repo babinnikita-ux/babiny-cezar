@@ -17,10 +17,11 @@ import type { AgentEvent, ContentBlock } from '../core/agent-runner.js';
 import { discoverSkills, type Skill } from '../skills.js';
 import { materializeSkillDir } from '../skills-remote.js';
 import { loadConfig } from '../config.js';
-import { autosaveCommit, createWorktree, resolveBaseRef, worktreeDiff } from '../git-worktree.js';
+import { autosaveCommit, createWorktree, resolveBaseRef, worktreeDiff, worktreeShortstat } from '../git-worktree.js';
 import { getRepoInfo } from '../server/git.js';
 import { loadWorkflows } from './load.js';
 import type { RunRecord, RunStore } from '../runs/store.js';
+import { deriveTitleSummary } from '../runs/title-summary.js';
 import { UiEventSink } from '../runs/ui-event-sink.js';
 import { DEFAULT_ALLOWED_TOOLS, stepKind, type WorkflowDef, type WorkflowStepDef } from './types.js';
 
@@ -481,6 +482,7 @@ export class RunManager {
         // coalescers; the v1 turn boundary flushes again (idempotent) so no
         // buffered delta can outlive its turn.
         sink.flushAll();
+        void this.recordTurnEnd(runId, turnText); // titleSummary + diffStat (#389)
         const sessionOpen = !state.cancelled && state.session?.open;
         const done = sessionOpen && DONE_MARKER_RE.test(turnText.trimEnd());
         turnText = '';
@@ -826,6 +828,7 @@ export class RunManager {
         // v2 `turn.completed` already flushed the coalescers; the v1 turn
         // boundary flushes again (idempotent) as a backstop.
         sink.flushAll();
+        void this.recordTurnEnd(runId, turnText); // titleSummary + diffStat (#389)
         const sessionOpen = !state.cancelled && state.session?.open;
         const done = interactive && sessionOpen && DONE_MARKER_RE.test(turnText.trimEnd());
         turnText = '';
@@ -919,6 +922,38 @@ export class RunManager {
       persist: (event) => this.store.appendEvent(runId, { ...event, stepId }),
       emitLive: (event) => this.store.emitEphemeral(runId, { ...event, stepId }),
     });
+  }
+
+  /**
+   * Turn-end bookkeeping (#389), shared by `runAgentStep` and
+   * `runContinuation` — called (fire-and-forget) from every `turn-end` event:
+   *
+   *  - `titleSummary`: derived from the turn's text, set ONCE — only while the
+   *    record has none. A user's inline edit also lands in `titleSummary`
+   *    (see `PATCH /api/runs/:id`), so an edit is never overwritten either.
+   *  - `diffStat`: cheap `git diff --shortstat` vs the base, refreshed every
+   *    turn. Async and best-effort — a git failure becomes at most a `note`
+   *    event, NEVER a run failure. `updateRun` fans the record out over SSE,
+   *    so the list views pick both up with no extra wiring.
+   *
+   * Not `private` so the integration tests can drive a turn-end directly —
+   * a real agent session is the only other way to reach this path.
+   */
+  async recordTurnEnd(runId: string, turnText: string): Promise<void> {
+    try {
+      const run = this.store.getRun(runId);
+      if (!run) return;
+      if (run.titleSummary === undefined) {
+        const summary = deriveTitleSummary(turnText, run.task);
+        if (summary) this.store.updateRun(runId, { titleSummary: summary });
+      }
+      if (!run.worktreePath || !existsSync(run.worktreePath)) return;
+      const stat = await worktreeShortstat(run.worktreePath, run.baseBranch ?? 'HEAD');
+      if (stat) this.store.updateRun(runId, { diffStat: stat });
+      else this.store.appendEvent(runId, { type: 'note', message: 'diff stat unavailable — git diff --shortstat failed in the worktree' });
+    } catch {
+      // Bookkeeping only — nothing here may disturb the run.
+    }
   }
 
   /**

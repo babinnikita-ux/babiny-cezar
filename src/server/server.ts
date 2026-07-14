@@ -120,6 +120,11 @@ const uiStateSchema = z
   })
   .passthrough();
 
+// Editable titles (#389). `title` is the only editable field for now.
+const patchRunSchema = z.object({
+  title: z.string().trim().min(1).max(300).optional(),
+});
+
 const messageSchema = z
   .object({
     text: z.string().max(100_000).default(''),
@@ -509,6 +514,25 @@ export function createApp(deps: ServerDeps): Hono {
   app.get('/api/runs/:id', (c) => {
     const run = store.getRun(c.req.param('id'));
     return run ? c.json(withUsage(run)) : c.json({ error: 'not found' }, 404);
+  });
+
+  // Editable titles (#389). The UI displays `titleSummary ?? title`, so a
+  // user edit sets BOTH: `title` (the record's own name — the raw task stops
+  // being it the moment the user renames the run) and `titleSummary` (what
+  // actually displays). The auto-summarizer only ever fills an *unset*
+  // titleSummary (RunManager.recordTurnEnd), so an edit wins over any past or
+  // future auto-summary. Answers the updated record.
+  app.patch('/api/runs/:id', async (c) => {
+    const id = c.req.param('id');
+    if (!store.getRun(id)) return c.json({ error: 'not found' }, 404);
+    const parsed = patchRunSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.issues.map((i) => i.message).join('; ') }, 400);
+    }
+    if (parsed.data.title !== undefined) {
+      store.updateRun(id, { title: parsed.data.title, titleSummary: parsed.data.title });
+    }
+    return c.json(store.getRun(id));
   });
 
   app.post('/api/runs/:id/cancel', (c) => {

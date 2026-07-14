@@ -34,6 +34,15 @@ const stepStateSchema = z.object({
 const runRecordSchema = z.object({
   id: z.string(),
   title: z.string(),
+  /** Display title (#389): the auto-derived summary of the first agent turn,
+   *  or the user's inline edit (`PATCH /api/runs/:id` sets it together with
+   *  `title` so edits always win). The UI shows `titleSummary ?? title`. */
+  titleSummary: z.string().optional(),
+  /** `git diff --shortstat` of the worktree vs its base, refreshed on every
+   *  turn-end (#389) — what the quick list / table shows without a git call. */
+  diffStat: z
+    .object({ adds: z.number(), dels: z.number(), files: z.number() })
+    .optional(),
   workflow: z.string(),
   task: z.string(),
   model: z.string().optional(),

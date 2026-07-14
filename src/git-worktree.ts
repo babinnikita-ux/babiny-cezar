@@ -157,6 +157,48 @@ export async function worktreeDiffStat(
   return res.ok ? res.stdout.trim() : '';
 }
 
+/** Aggregate diff numbers (#389) — the shape stored on `RunRecord.diffStat`. */
+export interface DiffStat {
+  adds: number;
+  dels: number;
+  files: number;
+}
+
+/**
+ * Parse `git diff --shortstat` output — " 3 files changed, 10 insertions(+),
+ * 2 deletions(-)". Every part is optional: insertions-only and deletions-only
+ * diffs omit the other counter, and an empty diff prints nothing at all
+ * (→ all zeros). The wording is stable porcelain English — git does not
+ * localize `--shortstat` — so matching the words is safe.
+ */
+export function parseShortstat(s: string): DiffStat {
+  const files = /(\d+) files? changed/.exec(s);
+  const adds = /(\d+) insertions?\(\+\)/.exec(s);
+  const dels = /(\d+) deletions?\(-\)/.exec(s);
+  return {
+    files: files ? Number(files[1]) : 0,
+    adds: adds ? Number(adds[1]) : 0,
+    dels: dels ? Number(dels[1]) : 0,
+  };
+}
+
+/**
+ * `git diff --shortstat` of the worktree vs its base (#389) — same
+ * merge-base anchoring and intent-to-add as `worktreeDiff`, parsed into
+ * numbers. Null on git failure (the caller notes it, never fails the run);
+ * an empty diff is a valid all-zero stat.
+ */
+export async function worktreeShortstat(
+  worktreePath: string,
+  baseBranch: string,
+): Promise<DiffStat | null> {
+  await git(worktreePath, ['add', '-N', '.']); // intent-to-add: untracked files show up
+  const mergeBase = await git(worktreePath, ['merge-base', baseBranch, 'HEAD']);
+  const base = mergeBase.ok && mergeBase.stdout.trim() ? mergeBase.stdout.trim() : baseBranch;
+  const res = await git(worktreePath, ['diff', '--shortstat', base]);
+  return res.ok ? parseShortstat(res.stdout) : null;
+}
+
 /**
  * Startup reconcile: `git worktree prune` + remove every directory under
  * `.ai/cezar/worktrees/` whose run id is no longer in the store (and its

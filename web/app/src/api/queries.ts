@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   getGithub,
@@ -11,7 +11,9 @@ import {
   getTodos,
   getUiState,
   getWorkflows,
+  patchRun,
 } from './client'
+import type { PatchRunInput } from './types'
 
 /**
  * Query keys, in one place and exported, because they are a contract rather than an
@@ -105,6 +107,16 @@ export function useUiState() {
   return useQuery({
     queryKey: queryKeys.uiState,
     queryFn: ({ signal }) => getUiState({ signal }),
+  })
+}
+
+/** Rename a run (#389): `PATCH /api/runs/:id`. Invalidates `runs.*` so the list and the detail
+ *  view refetch the authoritative record. The inline-edit UI lands in 2.4 — this is the wiring. */
+export function usePatchRun(id: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (patch: PatchRunInput) => patchRun(id, patch),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all }),
   })
 }
 

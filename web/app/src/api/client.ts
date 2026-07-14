@@ -11,6 +11,7 @@ import type {
   HealthResponse,
   MessageInput,
   MessageResponse,
+  PatchRunInput,
   RepoResponse,
   RunRecord,
   Skill,
@@ -230,6 +231,11 @@ export function finishRun(id: string): Promise<FinishResponse> {
 /** Reopen a finished run's session. 409 (with the reason) when it cannot be resumed. */
 export function continueRun(id: string, text?: string): Promise<ContinueResponse> {
   return mutate<ContinueResponse>('POST', runPath(id, '/continue'), text === undefined ? {} : { text })
+}
+
+/** Rename a run (#389): the edit becomes the display title and wins over any auto-summary. */
+export function patchRun(id: string, patch: PatchRunInput): Promise<RunRecord> {
+  return mutate<RunRecord>('PATCH', runPath(id), patch)
 }
 
 /** Deletes the run, its transcript, its worktree and its branch. 409 while it is still active. */
