@@ -1,4 +1,5 @@
 import { BrowserRouter } from 'react-router'
+import { AppShell } from './components/app-shell'
 import { ThemeProvider } from './components/theme-provider'
 import { AppRoutes } from './routes'
 
@@ -6,13 +7,19 @@ import { AppRoutes } from './routes'
  *  serves index.html for every non-/api GET (src/server/static-ui.ts), so a deep link like
  *  `/tasks/:id/changes` cold-loads and survives a refresh.
  *
- *  The shell chrome (sidebar, 100dvh grid) lands in Step 2.3 and will wrap <AppRoutes /> here.
+ *  AppShell is inside BrowserRouter because its nav reads the current location.
+ *
+ *  Its data props (repo chip, inbox badge, version) are deliberately unset: the API client and
+ *  the SSE stream land in Steps 3.1/3.2, and each slot renders nothing rather than a placeholder
+ *  that would read as real data.
  */
 export function App() {
   return (
     <ThemeProvider>
       <BrowserRouter>
-        <AppRoutes />
+        <AppShell>
+          <AppRoutes />
+        </AppShell>
       </BrowserRouter>
     </ThemeProvider>
   )

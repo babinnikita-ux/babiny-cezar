@@ -99,6 +99,18 @@ export class AgentBrowser {
     return this.run(['eval', js]).result
   }
 
+  /** operation: interact (`set viewport`) — the descriptor's "other actions use the matching
+   *  CLI command" clause. Responsive layout is a real behavior of this app, so the specs must be
+   *  able to ask for an iPhone-sized window rather than assume the default one. */
+  setViewport(width: number, height: number): void {
+    this.run(['set', 'viewport', String(width), String(height)])
+  }
+
+  /** operation: interact (`click`). */
+  click(selector: string): void {
+    this.run(['click', selector])
+  }
+
   /** operation: screenshot. The descriptor requires an absolute path — a relative
    *  multi-segment path is read as a selector by the CLI. */
   screenshot(path: string): string {

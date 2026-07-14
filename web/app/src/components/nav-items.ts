@@ -1,0 +1,74 @@
+import {
+  GitBranchIcon,
+  InboxIcon,
+  ListChecksIcon,
+  SettingsIcon,
+  SparklesIcon,
+  WorkflowIcon,
+} from 'lucide-react'
+import type { ComponentType, SVGProps } from 'react'
+
+import { GithubIcon } from '@/components/icons'
+
+export type NavItem = {
+  /** Where the item navigates. Also its identity — `activeNavPath` returns this. */
+  to: string
+  label: string
+  icon: ComponentType<SVGProps<SVGSVGElement>>
+  /** Path prefixes that light this item up. See `activeNavPath` for the longest-prefix rule. */
+  match: string[]
+  /** Step 4.2 fills the Inbox count; the slot exists so the row's geometry is final now. */
+  badge?: boolean
+}
+
+/** The sidebar nav from the spec's "App shell & navigation" section, in mockup order.
+ *
+ *  `match` exists because a nav item is active for a whole *area*, not just its own URL:
+ *  the spec requires Tasks to stay active while a task thread (`/tasks/:id`) or a variant
+ *  compare (`/compare/:groupId`) is open.
+ */
+export const NAV_ITEMS: NavItem[] = [
+  { to: '/', label: 'Tasks', icon: ListChecksIcon, match: ['/', '/tasks', '/compare'] },
+  { to: '/inbox', label: 'Inbox', icon: InboxIcon, match: ['/inbox'], badge: true },
+  { to: '/git', label: 'Git', icon: GitBranchIcon, match: ['/git'] },
+  { to: '/github', label: 'GitHub', icon: GithubIcon, match: ['/github'] },
+  { to: '/settings/skills', label: 'Skills', icon: SparklesIcon, match: ['/settings/skills'] },
+  { to: '/workflows', label: 'Workflows', icon: WorkflowIcon, match: ['/workflows'] },
+  { to: '/settings', label: 'Settings', icon: SettingsIcon, match: ['/settings'] },
+]
+
+/** Does `pathname` sit inside the area rooted at `prefix`?
+ *
+ *  Segment-aware on purpose: a plain `startsWith` would make `/git` match `/github`, and
+ *  would make the `/` root match literally every route.
+ */
+function inArea(pathname: string, prefix: string): boolean {
+  if (prefix === '/') return pathname === '/'
+  return pathname === prefix || pathname.startsWith(prefix + '/')
+}
+
+/**
+ * The `to` of the nav item that owns `pathname`, or null when no item does (e.g. `/new`,
+ * which is a full-screen surface with no nav home).
+ *
+ * Longest matching prefix wins, which is what disambiguates the nested Settings area:
+ * `/settings/skills` matches both Skills (16 chars) and Settings (9), and Skills — the more
+ * specific item — is the one that should light up. `/settings/agents` only matches Settings.
+ */
+export function activeNavPath(pathname: string): string | null {
+  let best: { to: string; length: number } | null = null
+  for (const item of NAV_ITEMS) {
+    for (const prefix of item.match) {
+      if (inArea(pathname, prefix) && (best === null || prefix.length > best.length)) {
+        best = { to: item.to, length: prefix.length }
+      }
+    }
+  }
+  return best?.to ?? null
+}
+
+/** The nav item that owns `pathname` — the mobile top bar titles itself from this. */
+export function activeNavItem(pathname: string): NavItem | null {
+  const to = activeNavPath(pathname)
+  return NAV_ITEMS.find((item) => item.to === to) ?? null
+}

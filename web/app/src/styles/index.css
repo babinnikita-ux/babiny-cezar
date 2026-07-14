@@ -75,6 +75,10 @@
   --foreground: #ffffff;
   --card: #171717;
   --card-2: #1c1c1c;
+  /* The sidebar's surface. Its own token because the two themes disagree about what it is:
+   * dark wants the card step, light wants a tint *below* the white card so the rail reads as
+   * chrome rather than page. See the `.light` block. */
+  --sidebar: var(--card);
   --muted: #262626;
   --muted-foreground: #a3a3a3;
   --soft-foreground: #7b7b7b;
@@ -87,6 +91,9 @@
   --primary: #a8f372;
   --primary-foreground: #0d0d0d;
   --violet: #8f86e8;
+  /* Text/icons printed *on* --violet (the Inbox count badge). White in both themes — the violet
+   * never lightens enough for ink to pass AA against it. */
+  --violet-foreground: #ffffff;
   --ring: #a8f372;
 
   /* status */
@@ -138,6 +145,7 @@
   --foreground: #171717;
   --card: #ffffff;
   --card-2: #fbfbfb;
+  --sidebar: #fafafa;
   --muted: #f7f7f7;
   --muted-foreground: #5c5c5c;
   --soft-foreground: #a3a3a3;
@@ -199,6 +207,7 @@
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-card-2: var(--card-2);
+  --color-sidebar: var(--sidebar);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-soft-foreground: var(--soft-foreground);
@@ -210,6 +219,7 @@
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-violet: var(--violet);
+  --color-violet-foreground: var(--violet-foreground);
   --color-ring: var(--ring);
 
   --color-danger: var(--danger);
@@ -250,6 +260,14 @@
   body,
   #root {
     height: 100%;
+  }
+
+  /* The document never scrolls — the shell is exactly `h-dvh` and its main region is the one
+   * scroller (see AppShell). Without this, iOS Safari still lets the whole page rubber-band,
+   * which drags the fixed sidebar and the composer dock out of view. */
+  html,
+  body {
+    overflow: hidden;
   }
 
   body {
