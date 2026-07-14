@@ -22,11 +22,32 @@ cezar is a **parallel coding-agents orchestrator**: a local cockpit (CLI + brows
 Before any commit or PR, run in order:
 
 ```bash
-npm run typecheck   # tsc --noEmit
-npm run build       # tsc → dist/
+npm run typecheck   # tsc --noEmit (server)
+npm test            # vitest — server + cockpit unit suites
+npm run build       # tsc → dist/, vite → web/dist/
 ```
 
-There is no test suite yet; `CEZ_DRY_RUN=1 npm run dev` exercises the whole cockpit offline for manual verification.
+`npm test` is the fast unit gate: no server, no browser. It must stay that way.
+
+The UI smoke suite is a **separate** command — it boots the real app and drives it in a real
+Chrome through the `agent-browser` provider (`.ai/browsers/agent-browser.md`):
+
+```bash
+npm run test:e2e    # .ai/scripts/e2e.sh → test-env-up.sh + vitest (web/app/e2e/)
+```
+
+It boots the app on a free port with `CEZ_DRY_RUN=1` (agent CLIs mocked — no login, no
+network), reuses an already-healthy instance instead of double-booting, and writes
+`.ai/qa/test-env.json` so QA skills attach to the same instance. Stop it with
+`.ai/scripts/test-env-down.sh`. Exit contract:
+
+| Exit | Marker | Meaning |
+| --- | --- | --- |
+| 0 | `TEST_E2E_STATUS=passed` | every spec passed |
+| 0 | `TEST_E2E_STATUS=skipped` | agent-browser could not be provisioned (no network / unsupported platform); prints a loud banner — **not** a pass |
+| non-zero | `TEST_E2E_STATUS=failed` | a spec failed, or the env could not boot |
+
+`CEZ_DRY_RUN=1 npm run dev` still exercises the whole cockpit offline for manual verification.
 
 ## Related documents
 

@@ -28,6 +28,7 @@
     "dev:web": "vite --config web/app/vite.config.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "sh .ai/scripts/e2e.sh",
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "typecheck:web": "tsc --noEmit -p web/app/tsconfig.json",
     "prepublishOnly": "npm run build"
