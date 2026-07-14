@@ -354,4 +354,5 @@ Steps are sized for autonomous runs (om-auto-create-pr / -loop, one PR per phase
 20. Workflows builder on dnd-kit; Skills under Settings (+ ordering, bookmarklets); Settings shell (registry: skills/appearance/agents) + notifications toggle.
 
 ### Phase R7 — Retirement
-21. Delete legacy web app; packaging flip (`files: web/dist`, prepublish build); design-guardian + bundle check in validation gate; docs + README screenshots refresh; full iOS + degradation-matrix QA sweep.
+21. Delete legacy web app; packaging flip (`files: web/dist`, prepublish build); design-guardian + bundle check in validation gate; full iOS + degradation-matrix QA sweep.
+22. **Refresh every screenshot in the main `README.md`** — the "A look inside" gallery (`docs/screenshots/live-run.png`, `review-gate.png`, `variants-compare.png`, `plan-chain.png`, `workflow-builder.png`, `github-issues.png`) still shows the pre-redesign cockpit. Recapture each against the new UI through the configured browser provider (agent-browser), at the same framing, and update any README prose that describes the old chrome. This is the last step of the program — the README is the product's shop window and must never show a UI that no longer exists.

@@ -55,6 +55,10 @@ Land the platform and shell for the cockpit redesign: a React + Vite + Tailwind 
 - No changes to the run engine, worktree/queue logic, review-gate semantics, or the CEZ:DONE contract.
 - No new runtime dependencies for end users (all new deps are devDependencies; the build ships static assets).
 
+## Deferred to later phases (tracked, not lost)
+
+- **Refresh the main `README.md` screenshots** — the gallery still shows the pre-redesign cockpit. Deliberately NOT done in R1: this phase ships a shell whose main region is still placeholders, so recapturing now would put a half-built UI in the shop window. Tracked as **step 22 of phase R7** in the spec (the final step of the program), to be recaptured through the agent-browser provider.
+
 ## Risks
 
 - **Bundle/offline**: fonts must be self-hosted (no CDN) so the cockpit works offline. Verified at the checkpoint.
