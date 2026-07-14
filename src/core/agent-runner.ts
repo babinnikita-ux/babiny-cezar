@@ -11,6 +11,8 @@
  *  - `opencode` — `opencode serve`, HTTP + SSE.
  */
 
+import type { UiEvent } from './ui-events.js';
+
 /** `claude-cli` is the legacy id kept so old run records still parse. */
 export type AgentBackend = 'claude' | 'codex' | 'opencode' | 'claude-cli';
 
@@ -96,6 +98,10 @@ export interface SessionOptions {
    *  behavior, used for non-interactive workflow steps). Interactive
    *  sessions omit this and control `end()` themselves. */
   autoEndAfterFirstTurn?: boolean;
+  /** Protocol-v2 channel: receives the normalized `UiEvent` stream emitted
+   *  ALONGSIDE the v1 `AgentEvent`s (additive — v1 keeps flowing unchanged).
+   *  RunManager consumption lands in R2 step 2.1. */
+  onUiEvent?: (event: UiEvent) => void;
 }
 
 /**
