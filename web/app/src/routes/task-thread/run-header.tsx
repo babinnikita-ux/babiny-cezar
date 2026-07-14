@@ -15,7 +15,7 @@ import {
 import { Fragment, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
 
-import { ApiError, archiveRun, cancelRun, continueRun, deleteRun, finishRun, openRunInCli } from '@/api/client'
+import { ApiError, archiveRun, cancelRun, continueRun, deleteRun, openRunInCli } from '@/api/client'
 import { queryKeys, usePatchRun, useRunHandoff, useRuns } from '@/api/queries'
 import type { ApiRun } from '@/api/types'
 import { DiffStatLabel } from '@/components/diff-stat'
@@ -48,6 +48,7 @@ import { cn } from '@/lib/utils'
 import { Markdown } from './markdown'
 import { finishTitle, resumeHint, runActionFlags } from './run-actions'
 import { StepRail } from './step-rail'
+import { useFinishRun } from './use-finish-run'
 
 /**
  * The run header (spec §"Task thread" → Header): editable title + status pill, the meta line,
@@ -191,7 +192,9 @@ function useRunActions(run: ApiRun) {
   const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
   const onError = (error: Error) => toast(error.message, { tone: 'danger' })
 
-  const finish = useMutation({ mutationFn: () => finishRun(run.id), onSuccess: invalidate, onError })
+  // Shared with the review panel's ✓ Accept (use-finish-run.ts) — the review-accept semantics
+  // must be ONE implementation, not two buttons that happen to agree today.
+  const finish = useFinishRun(run.id)
   const continueMutation = useMutation({
     mutationFn: () => continueRun(run.id),
     onSuccess: invalidate,

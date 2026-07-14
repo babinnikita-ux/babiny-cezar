@@ -25,6 +25,7 @@ import {
   UserBubble,
 } from './thread-items'
 import { PlanDock, planCounts } from './plan-dock'
+import { AcceptCelebration, ReviewPanel } from './review-panel'
 import { runActionFlags } from './run-actions'
 import { RunHeader } from './run-header'
 import { groupThreadItems, type ThreadBlock } from './thread-groups'
@@ -134,9 +135,28 @@ export function ThreadView({ run, thread }: { run: ApiRun; thread: ThreadState }
             )}
           >
             {footer.label}
+            {run.pullRequestUrl ? (
+              // The run shipped as a PR (review-gate Draft PR, or agent-opened) — the link
+              // stays reachable after the panel is gone, like the legacy list badge.
+              <a
+                data-slot="pr-link"
+                href={run.pullRequestUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-foreground underline-offset-2 hover:underline"
+              >
+                PR ↗
+              </a>
+            ) : null}
           </div>
         ) : null}
+
+        {/* The review gate (spec 009): a finished run with changes parks here — nothing
+            auto-merges. The panel exists exactly while the run rests at `review`. */}
+        {run.status === 'review' ? <ReviewPanel run={run} /> : null}
       </div>
+
+      <AcceptCelebration status={run.status} />
 
       {/* The dock region (mockup `.dock`): plan dock, paused hint, then the composer. */}
       <div

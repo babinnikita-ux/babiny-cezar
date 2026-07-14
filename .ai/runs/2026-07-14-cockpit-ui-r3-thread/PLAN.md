@@ -16,7 +16,7 @@
 | 1 | 1.3 | Plan dock + step rail + check-step cards | done | d7d1d5a |
 | 1 | 1.4 | Run header: meta, status, tabs, action bar (Finish/Continue/Terminal/Notes/Archive/Cancel/Delete) | done | 1b7a72e |
 | 2 | 2.1 | Shared composer: reply, attachments, / skills autocomplete, @ files, dictation, quick replies | done | pending |
-| 2 | 2.2 | Review gate on the new surface (diff panel, send back, Draft PR) | todo | — |
+| 2 | 2.2 | Review gate on the new surface (diff panel, send back, Draft PR) | done | pending |
 | 2 | 2.3 | Variants compare view | todo | — |
 | 2 | 2.4 | Thread virtualization + scroll caches + iOS pass + v1 fallback for old runs | todo | — |
 

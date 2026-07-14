@@ -337,6 +337,14 @@ export interface ContinueResponse {
   continued: boolean
 }
 
+/** `POST /api/runs/:id/pr` (spec 009) — the draft PR's URL; `dryRun` marks the CEZ_DRY_RUN
+ *  fake (no push, no gh). On failure the server answers 409 and the `ApiError` carries the
+ *  `manual` merge command instead. */
+export interface CreatePrResponse {
+  url: string
+  dryRun?: boolean
+}
+
 export interface MessageResponse {
   delivered: boolean
 }

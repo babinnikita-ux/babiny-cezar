@@ -3,6 +3,7 @@ import type {
   ArchiveFinishedResponse,
   CancelResponse,
   ContinueResponse,
+  CreatePrResponse,
   CreateRunInput,
   CreateRunResponse,
   DeleteRunResponse,
@@ -238,6 +239,13 @@ export function finishRun(id: string): Promise<FinishResponse> {
 /** Reopen a finished run's session. 409 (with the reason) when it cannot be resumed. */
 export function continueRun(id: string, text?: string): Promise<ContinueResponse> {
   return mutate<ContinueResponse>('POST', runPath(id, '/continue'), text === undefined ? {} : { text })
+}
+
+/** Draft PR from the review gate (spec 009): push the branch, `gh pr create --draft`; the run
+ *  completes as done with the PR badge. On 409 the ApiError's `manual` carries the
+ *  `git merge <branch>` fallback to show copyable. */
+export function createRunPr(id: string): Promise<CreatePrResponse> {
+  return mutate<CreatePrResponse>('POST', runPath(id, '/pr'))
 }
 
 /** Rename a run (#389): the edit becomes the display title and wins over any auto-summary. */

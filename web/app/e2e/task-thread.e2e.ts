@@ -182,10 +182,14 @@ describe('task thread', () => {
 
     const footer = browser.evaluate(`(() => {
       const el = document.querySelector('[data-slot="thread-footer"]')
-      return { state: el.dataset.state, text: el.textContent }
-    })()`) as { state: string; text: string }
+      const link = el.querySelector('[data-slot="pr-link"]')
+      return { state: el.dataset.state, text: el.textContent, prHref: link?.href ?? null }
+    })()`) as { state: string; text: string; prHref: string | null }
     expect(footer.state).toBe('closed')
-    expect(footer.text).toBe('Session closed')
+    expect(footer.text).toContain('Session closed')
+    // The fixture record carries the agent-opened PR (`pullRequestUrl`) — since R3 Step 2.2
+    // the closed footer keeps that link reachable after the review gate is gone.
+    expect(footer.prHref).toBe('https://github.com/open-mercato/demo/pull/123')
   })
 
   it('renders the transcript tool calls as cards — and the TodoWrite cards not at all (#382)', () => {
