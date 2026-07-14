@@ -6,6 +6,23 @@
     <!-- Relative so Vite bundles the legacy logo out of web/ instead of duplicating it under a public dir. -->
     <link rel="icon" href="../open-mercato.svg" />
     <title>cezar</title>
+    <!-- Theme before first paint — no flash. Mirrors resolveTheme()/applyResolvedTheme() in
+         src/lib/theme.ts; keep the two in sync. Shares the legacy cockpit's `cez-theme` key
+         ('light' | 'dark' | 'system'); anything else falls back to dark, as legacy does. -->
+    <script>
+      (function () {
+        try {
+          var pref = localStorage.getItem('cez-theme')
+          var light =
+            pref === 'light' ||
+            (pref === 'system' && matchMedia('(prefers-color-scheme: light)').matches)
+          document.documentElement.classList.toggle('light', light)
+          document.documentElement.style.colorScheme = light ? 'light' : 'dark'
+        } catch (e) {
+          // Storage or matchMedia unavailable — the default dark tokens already apply.
+        }
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

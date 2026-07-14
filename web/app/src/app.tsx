@@ -1,4 +1,5 @@
 import { BrowserRouter } from 'react-router'
+import { ThemeProvider } from './components/theme-provider'
 import { AppRoutes } from './routes'
 
 /** Real URLs, no basename: the cockpit is always mounted at the origin root, and the server
@@ -9,8 +10,10 @@ import { AppRoutes } from './routes'
  */
 export function App() {
   return (
-    <BrowserRouter>
-      <AppRoutes />
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <AppRoutes />
+      </BrowserRouter>
+    </ThemeProvider>
   )
 }
