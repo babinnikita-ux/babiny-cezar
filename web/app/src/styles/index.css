@@ -1,0 +1,279 @@
+/* cezar cockpit — Tailwind v4 entry point and the Mercato design-token definition site.
+ *
+ * Ported verbatim from the mockup token sheet (.ai/analysis/cockpit-ui-redesign/mercato-visuals.md §1).
+ * Dark is the default theme; `.light` on <html> flips it.
+ *
+ * THIS FILE IS THE ONLY PLACE RAW HEX MAY APPEAR. Everything else — components, pages, tests —
+ * goes through the tokens below (Tailwind utilities like `bg-card`, or `var(--…)` for the
+ * non-color tokens). The design-guardian test (Step 4.4) enforces that.
+ */
+
+@import "tailwindcss";
+
+/* ---------- self-hosted fonts (no CDN: the cockpit must work offline) ----------
+ * Variable woff2 subsets vendored from @fontsource-variable/{inter,jetbrains-mono} v5.2.8
+ * (SIL OFL 1.1 — see the LICENSE files next to the binaries). Latin + latin-ext only;
+ * the unicode-range split keeps latin-ext off the wire for the common case.
+ */
+
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../assets/fonts/inter-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('../assets/fonts/inter-latin-ext-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono Variable';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('../assets/fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono Variable';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('../assets/fonts/jetbrains-mono-latin-ext-wght-normal.woff2') format('woff2-variations');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ---------- tokens: dark (default) ---------- */
+
+:root {
+  color-scheme: dark;
+
+  /* neutral ramp — elevation comes from surface steps, not shadows */
+  --background: #0d0d0d;
+  --foreground: #ffffff;
+  --card: #171717;
+  --card-2: #1c1c1c;
+  --muted: #262626;
+  --muted-foreground: #a3a3a3;
+  --soft-foreground: #7b7b7b;
+  --border: #262626;
+  --input: #262626;
+  --contrast: #ebebeb;
+  --contrast-foreground: #171717;
+
+  /* accents */
+  --primary: #a8f372;
+  --primary-foreground: #0d0d0d;
+  --violet: #8f86e8;
+  --ring: #a8f372;
+
+  /* status */
+  --danger: #ef4444;
+  --danger-foreground: #ffffff;
+  --success: #10b981; /* emerald-500 */
+  --pending: #fbbf24; /* amber-400 — dots/spinners only, never text */
+
+  /* diff tints */
+  --diff-add-bg: rgba(16, 185, 129, 0.1);
+  --diff-add-strong: rgba(16, 185, 129, 0.28);
+  --diff-del-bg: rgba(239, 68, 68, 0.1);
+  --diff-del-strong: rgba(239, 68, 68, 0.3);
+
+  /* brand gradient: lime → yellow → violet */
+  --grad: linear-gradient(135deg, #b4f372 12%, #eefb63 58%, #bc9aff 100%);
+
+  /* type stacks — the woff2 above, then platform fallbacks */
+  --sans: 'Inter Variable', 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, 'SF Mono', 'Menlo', monospace;
+
+  /* shiki syntax highlighting (dark) */
+  --syn-key: #c4b5fd;
+  --syn-str: #86efac;
+  --syn-fn: #93c5fd;
+  --syn-com: #6b7280;
+  --syn-num: #fca5a5;
+  --syn-punc: #9ca3af;
+  --syn-var: #e5e7eb;
+
+  /* shadcn aliases — mapped onto the tokens above, never duplicated */
+  --popover: var(--card);
+  --popover-foreground: var(--foreground);
+  --card-foreground: var(--foreground);
+  --accent: var(--muted);
+  --accent-foreground: var(--foreground);
+  --secondary: var(--muted);
+  --secondary-foreground: var(--foreground);
+  --destructive: var(--danger);
+  --destructive-foreground: var(--danger-foreground);
+}
+
+/* ---------- tokens: light ---------- */
+
+.light {
+  color-scheme: light;
+
+  --background: #ffffff;
+  --foreground: #171717;
+  --card: #ffffff;
+  --card-2: #fbfbfb;
+  --muted: #f7f7f7;
+  --muted-foreground: #5c5c5c;
+  --soft-foreground: #a3a3a3;
+  --border: #ebebeb;
+  --input: #ebebeb;
+  --contrast: #262626;
+  --contrast-foreground: #ffffff;
+
+  --ring: #171717;
+
+  --shadow-modal: 0 16px 48px 0 rgba(0, 0, 0, 0.12);
+
+  --diff-add-bg: rgba(16, 185, 129, 0.08);
+  --diff-del-bg: rgba(239, 68, 68, 0.07);
+
+  /* shiki syntax highlighting (light) */
+  --syn-key: #7c3aed;
+  --syn-str: #15803d;
+  --syn-fn: #1d4ed8;
+  --syn-com: #9ca3af;
+  --syn-num: #b91c1c;
+  --syn-punc: #6b7280;
+  --syn-var: #111827;
+}
+
+/* ---------- tokens: radius + shadow ----------
+ * These two scales are declared in a plain `@theme` (not `@theme inline`) because their token names
+ * ARE Tailwind's own namespace keys — one declaration both defines `var(--radius-lg)` for hand-written
+ * CSS and wires the `rounded-lg` / `shadow-md` utilities. Routing them through `@theme inline` instead
+ * would emit a circular `--radius-lg: var(--radius-lg)`.
+ * `initial` first wipes Tailwind's stock scales, so off-system steps (`shadow-2xl`, `rounded-3xl`) don't exist.
+ * `static` keeps every step in the output even when no utility uses it yet, so hand-written CSS and
+ * inline styles can rely on `var(--shadow-modal)` & co. being defined.
+ */
+
+@theme static {
+  --radius-*: initial;
+  --radius-sm: 8px;
+  --radius: 10px; /* default control radius — no namespace suffix, so it makes no utility of its own */
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* restrained by design — borders carry most of the separation */
+  --shadow-*: initial;
+  --shadow-xs: 0 1px 2px 0 rgba(10, 13, 20, 0.03);
+  --shadow-sm: 0 2px 4px 0 rgba(27, 28, 29, 0.04);
+  --shadow-md: 0 16px 32px -12px rgba(14, 18, 27, 0.1);
+  --shadow-modal: 0 16px 48px 0 rgba(0, 0, 0, 0.45);
+}
+
+/* ---------- Tailwind theme: utilities point at the tokens above ----------
+ * `inline` means Tailwind emits `var(--card)` in the utility rather than copying the value,
+ * so a single class like `bg-card` follows the active theme with no `dark:` variant anywhere.
+ */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-card-2: var(--card-2);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-soft-foreground: var(--soft-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-contrast: var(--contrast);
+  --color-contrast-foreground: var(--contrast-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-violet: var(--violet);
+  --color-ring: var(--ring);
+
+  --color-danger: var(--danger);
+  --color-danger-foreground: var(--danger-foreground);
+  --color-success: var(--success);
+  --color-pending: var(--pending);
+
+  --color-diff-add: var(--diff-add-bg);
+  --color-diff-add-strong: var(--diff-add-strong);
+  --color-diff-del: var(--diff-del-bg);
+  --color-diff-del-strong: var(--diff-del-strong);
+
+  /* shadcn aliases */
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+
+  --font-sans: var(--sans);
+  --font-mono: var(--mono);
+
+  /* `rounded-md` is the default control radius — the token sheet spells that step `--radius`. */
+  --radius-md: var(--radius);
+}
+
+/* ---------- base ---------- */
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  code,
+  pre,
+  kbd,
+  samp {
+    font-family: var(--mono);
+  }
+
+  ::placeholder {
+    color: var(--soft-foreground);
+  }
+
+  /* Slim scrollbars — the cockpit is dense and the default chrome is heavy. */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--muted);
+    border-radius: 99px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}

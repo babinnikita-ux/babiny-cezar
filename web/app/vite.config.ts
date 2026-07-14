@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import { dirname, resolve } from 'node:path'
+import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 
@@ -12,7 +13,8 @@ const API_TARGET = 'http://127.0.0.1:4321'
 export default defineConfig({
   root: appDir,
   base: '/',
-  plugins: [react()],
+  // Tailwind v4 is CSS-first: the whole theme lives in src/styles/index.css, there is no tailwind.config.js.
+  plugins: [react(), tailwindcss()],
   build: {
     // Sibling of the legacy UI files (web/index.html, app.js, style.css), which stay untouched.
     outDir: resolve(webDir, 'dist'),

@@ -13,7 +13,7 @@
 | Phase | Step | Title | Status | Commit |
 |-------|------|-------|--------|--------|
 | 1 | 1.1 | Vite + React + TS scaffold with dev:web / build:web scripts | done | c431924 |
-| 1 | 1.2 | Tailwind v4 + design tokens + self-hosted fonts | todo | — |
+| 1 | 1.2 | Tailwind v4 + design tokens + self-hosted fonts | done | pending |
 | 1 | 1.3 | shadcn/ui primitives and the cn() utility | todo | — |
 | 1 | 1.4 | vitest projects (server + web) and npm test in the validation gate | todo | — |
 | 1 | 1.5 | Hono serves web/dist with legacy fallback and ?legacy=1 | todo | — |
