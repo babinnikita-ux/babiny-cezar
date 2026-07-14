@@ -238,7 +238,10 @@ function SidebarContent({
 
       <div className="px-2.5 pt-1 pb-2">
         <Button asChild variant="contrast" className="relative w-full justify-center">
-          <Link to="/new" onClick={onNavigate}>
+          {/* Until R4 ships the React composer, /new must be a document navigation: the server
+              deliberately serves the working legacy composer for a full request. A Router Link
+              would stay inside this bundle and dead-end on NewTaskRoute's placeholder. */}
+          <a href="/new" onClick={onNavigate}>
             <PlusIcon className="size-[15px]" aria-hidden="true" />
             New task
             {/* Decorative: the ⌘N accelerator itself is registered in Step 4.3. */}
@@ -248,7 +251,7 @@ function SidebarContent({
             >
               ⌘N
             </kbd>
-          </Link>
+          </a>
         </Button>
       </div>
 

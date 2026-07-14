@@ -381,12 +381,16 @@ describe('AppShell', () => {
       expect(screen.getByTestId('location').textContent).toBe('/')
     })
 
-    it('closes when the New task button navigates', async () => {
+    it('closes before the New task anchor hands off to the legacy document', async () => {
       renderShell('/')
       openMenu()
-      fireEvent.click(within(drawer() as HTMLElement).getByRole('link', { name: /New task/ }))
+      const link = within(drawer() as HTMLElement).getByRole('link', { name: /New task/ })
+      // jsdom does not implement full document navigation; suppress only that browser default.
+      link.addEventListener('click', (event) => event.preventDefault(), { once: true })
+      fireEvent.click(link)
       await waitFor(() => expect(drawer()).toBeNull())
-      expect(screen.getByTestId('location').textContent).toBe('/new')
+      expect(link.getAttribute('href')).toBe('/new')
+      expect(screen.getByTestId('location').textContent).toBe('/')
     })
 
     it('closes when the viewport widens past md, where the real sidebar takes over', async () => {

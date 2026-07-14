@@ -7,8 +7,8 @@ import { parseNewTaskParams } from './new-task-params'
  *
  *  This Step only proves the params survive the move off the legacy page: they
  *  are parsed and echoed. Auto-start (`auto=1` + launch key) is Step R4's job,
- *  together with the real composer; until then the legacy page still honors it
- *  at `/new?legacy=1`.
+ *  together with the real composer; until then deliberate New task affordances
+ *  document-navigate to `/new`, which the server serves through the legacy UI.
  */
 export function NewTaskRoute() {
   const [search] = useSearchParams()

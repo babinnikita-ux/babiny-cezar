@@ -190,14 +190,16 @@ export function TasksOverview({
       </div>
 
       {/* The mobile New-task FAB. The desktop CTA lives in the sidebar. */}
-      <Link
-        to="/new"
+      {/* A plain anchor is intentional until R4: a full /new request is routed by Hono to the
+          working legacy composer, while React's /new route is only a parameter-preserving shell. */}
+      <a
+        href="/new"
         data-slot="new-task-fab"
         aria-label="New task"
         className="fixed right-4 bottom-[calc(16px+env(safe-area-inset-bottom))] z-20 inline-flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-modal md:hidden"
       >
         <PlusIcon className="size-[22px]" aria-hidden="true" />
-      </Link>
+      </a>
     </div>
   )
 }
@@ -239,10 +241,10 @@ function TasksEmptyState({ view, query }: { view: ListView; query: string }) {
           subtitle="Describe a task to get started."
           actions={
             <Button asChild>
-              <Link to="/new">
+              <a href="/new">
                 <PlusIcon aria-hidden="true" />
                 New task
-              </Link>
+              </a>
             </Button>
           }
         />
