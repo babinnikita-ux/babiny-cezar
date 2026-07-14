@@ -440,4 +440,16 @@ describe('legacy cockpit', () => {
 
     browser.screenshot(`${artifactsDir}/legacy-shell.png`)
   })
+
+  it('serves the legacy page for a full load of /new until the R4 composer lands', () => {
+    // The bookmarklet contract (/new?skill=&ref=&auto=1&key=) needs a composer
+    // that auto-starts; only the legacy UI has one today, so the server pins
+    // full loads of /new to legacy even with the build present. The React /new
+    // stays reachable via client-side navigation only — acceptable interim
+    // behavior; a reload lands back here.
+    browser.goto(baseUrl + '/new?skill=om-code-review&auto=1')
+
+    expect(browser.isVisible('#brand')).toBe(true)
+    expect(browser.evaluate('document.getElementById("root") === null')).toBe(true)
+  })
 })

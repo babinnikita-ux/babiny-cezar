@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -35,7 +35,7 @@ import { fetchGithub } from './github.js';
 import { ensureLaunchKey } from './launch-key.js';
 import { openInTerminal } from './open-in-terminal.js';
 import { createDraftPr } from './pr.js';
-import { ASSET_CACHE_CONTROL, assetContentType, resolveGetRequest } from './static-ui.js';
+import { ASSET_CACHE_CONTROL, assetContentType, isSafeAssetFilename, resolveGetRequest } from './static-ui.js';
 
 export interface ServerDeps {
   repoRoot: string;
@@ -174,12 +174,15 @@ export function createApp(deps: ServerDeps): Hono {
   };
 
   // Hashed bundles/fonts of the built app. Vite fingerprints every name, so
-  // the bytes behind a URL never change — cache them hard. `basename` pins
-  // reads inside the assets dir.
+  // the bytes behind a URL never change — cache them hard. Only plain
+  // filenames are served: `basename('..')` is `'..'` (it resolves to the
+  // assets dir itself and readFileSync would throw EISDIR), so dot-segments
+  // and separator-bearing params get a 404, not a 500.
   app.get('/assets/:file', (c) => {
-    const file = basename(c.req.param('file'));
+    const file = c.req.param('file');
+    if (!isSafeAssetFilename(file)) return c.json({ error: 'not found' }, 404);
     const path = join(distDir, 'assets', file);
-    if (!existsSync(path)) return c.json({ error: 'not found' }, 404);
+    if (!existsSync(path) || !statSync(path).isFile()) return c.json({ error: 'not found' }, 404);
     return new Response(readFileSync(path), {
       headers: { 'content-type': assetContentType(file), 'cache-control': ASSET_CACHE_CONTROL },
     });

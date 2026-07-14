@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ASSET_CACHE_CONTROL,
   assetContentType,
+  isSafeAssetFilename,
   resolveGetRequest,
   resolveIndexHtml,
   type GetTarget,
@@ -47,8 +48,11 @@ describe('resolveGetRequest', () => {
     { name: '/settings/skills → the shell', path: '/settings/skills', target: 'dist' },
     // react-router owns the 404 — it is the only side that knows the route map.
     { name: '/nope → the shell, which renders the 404 route', path: '/nope', target: 'dist' },
-    // The bookmarklet target moves to the React composer; ?legacy=1 still escapes.
-    { name: '/new → the shell', path: '/new', target: 'dist' },
+    // /new is pinned to the legacy page until R4 lands the React composer:
+    // the bookmarklet contract (?skill=&ref=&auto=1&key=) needs auto-start,
+    // which only the legacy UI has today. A build being present changes nothing.
+    { name: '/new with the build → still the legacy page (composer lands in R4)', path: '/new', target: 'legacy' },
+    { name: '/new without the build → the legacy page', path: '/new', distExists: false, target: 'legacy' },
     { name: '/new?legacy=1 → the legacy page (saved bookmarklets keep an escape hatch)', path: '/new', legacyRequested: true, target: 'legacy' },
 
     // Never shadow the API: an unknown /api path must 404 as JSON, not as HTML.
@@ -90,7 +94,32 @@ describe('resolveGetRequest', () => {
     // An /api or asset caller is not a person who could run `npm run build:web`.
     expect(resolveGetRequest({ path: '/api/runs', ...opts }).hint).toBe(false);
     expect(resolveGetRequest({ path: '/assets/index-abc123.js', ...opts }).hint).toBe(false);
+    // /new serves legacy on purpose (until R4) — never a misconfiguration.
+    expect(resolveGetRequest({ path: '/new', ...opts }).hint).toBe(false);
   });
+});
+
+describe('isSafeAssetFilename', () => {
+  const cases: Array<[string, boolean]> = [
+    ['index-D1sxO2Tm.js', true],
+    ['inter-latin-wght-normal-Dx4kXJAl.woff2', true],
+    // basename('..') is '..' — it must never reach readFileSync (EISDIR → 500).
+    ['..', false],
+    ['.', false],
+    ['', false],
+    ['../index.html', false],
+    ['..\\index.html', false],
+    ['sub/dir.js', false],
+    ['file\0.js', false],
+    // A dotfile is a plain filename; whether it exists is the route's 404 check.
+    ['.hidden', true],
+  ];
+
+  for (const [file, safe] of cases) {
+    it(`${JSON.stringify(file)} → ${safe}`, () => {
+      expect(isSafeAssetFilename(file)).toBe(safe);
+    });
+  }
 });
 
 describe('assetContentType', () => {

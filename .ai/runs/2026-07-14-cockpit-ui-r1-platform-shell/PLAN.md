@@ -30,6 +30,7 @@
 | 4 | 4.2 | Tools dropdown (installed tools, versions, setup links, cog) | done | a30e8f2 |
 | 4 | 4.3 | ⌘K command palette | done | d5223ae |
 | 4 | 4.4 | Design-guardian static-scan test | done | 60340f1 |
+| 4 | 4.4-review-fix | Route /new to legacy until R4; harden /assets; fix step count | done | pending |
 
 ## Conventions
 

@@ -67,6 +67,18 @@ export function resolveGetRequest(opts: {
   if (path === '/api' || path.startsWith('/api/') || isStaticAsset(path)) {
     return { target: 'passthrough', hint: false };
   }
+  // TEMPORARY until phase R4 lands the React composer: a full page load of
+  // /new serves the LEGACY page even when the build exists. The bookmarklet
+  // contract (`/new?skill=&ref=&auto=1&key=`, BACKWARD_COMPATIBILITY.md) needs
+  // a composer that auto-starts, and only the legacy UI has one today — the
+  // React route is a placeholder that would dead-end saved bookmarklets. The
+  // React /new route and its param parsing stay in place for R4; it remains
+  // reachable via client-side navigation only (a reload lands back on legacy),
+  // which is acceptable interim behavior. `?legacy=1` semantics are unchanged
+  // (legacy is already the answer here). No build hint: legacy is deliberate.
+  if (path === '/new') {
+    return { target: 'legacy', hint: false };
+  }
   return resolveIndexHtml({ distExists, legacyRequested });
 }
 
@@ -85,6 +97,23 @@ const ASSET_TYPES: Record<string, string> = {
   json: 'application/json; charset=utf-8',
   map: 'application/json; charset=utf-8',
 };
+
+/** True only for a plain filename the `/assets/:file` route may serve.
+ *
+ *  `basename` alone is not a guard here: `basename('..')` is `'..'`, which
+ *  joins back to the assets dir itself and turns the route's `readFileSync`
+ *  into an EISDIR crash (a 500) instead of a 404. Dot-segments, separators,
+ *  and NUL all mean "not a file we ship" — the caller answers 404. */
+export function isSafeAssetFilename(file: string): boolean {
+  return (
+    file.length > 0 &&
+    file !== '.' &&
+    file !== '..' &&
+    !file.includes('/') &&
+    !file.includes('\\') &&
+    !file.includes('\0')
+  );
+}
 
 /** Content type for a hashed file under `web/dist/assets/`. */
 export function assetContentType(file: string): string {

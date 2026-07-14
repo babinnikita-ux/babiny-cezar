@@ -1,4 +1,4 @@
-# Final gate — Phase R1 complete (17/17 Steps)
+# Final gate — Phase R1 complete (18/18 Steps — Step 1.6 was added mid-run)
 
 ## Full validation gate (in order)
 
