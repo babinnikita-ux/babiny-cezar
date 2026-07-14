@@ -430,6 +430,16 @@ describe('global SSE stream', () => {
 })
 
 describe('legacy cockpit', () => {
+  it('hands the React shell New task CTA to the working legacy composer', () => {
+    browser.goto(baseUrl + '/')
+    browser.click('[data-slot="sidebar"] a[href="/new"]')
+    browser.waitForFunction(`document.getElementById('brand') !== null`)
+
+    expect(browser.url()).toBe(baseUrl + '/new')
+    expect(browser.isVisible('#brand')).toBe(true)
+    expect(browser.evaluate('document.getElementById("root") === null')).toBe(true)
+  })
+
   it('still serves the legacy UI at /?legacy=1', () => {
     browser.goto(baseUrl + '/?legacy=1')
 
@@ -444,9 +454,8 @@ describe('legacy cockpit', () => {
   it('serves the legacy page for a full load of /new until the R4 composer lands', () => {
     // The bookmarklet contract (/new?skill=&ref=&auto=1&key=) needs a composer
     // that auto-starts; only the legacy UI has one today, so the server pins
-    // full loads of /new to legacy even with the build present. The React /new
-    // stays reachable via client-side navigation only — acceptable interim
-    // behavior; a reload lands back here.
+    // full loads of /new to legacy even with the build present. Deliberate New
+    // task affordances use full document navigation until R4 replaces this path.
     browser.goto(baseUrl + '/new?skill=om-code-review&auto=1')
 
     expect(browser.isVisible('#brand')).toBe(true)

@@ -1,6 +1,6 @@
 # Code review rules
 
-How to review a diff in this repository. Applies to humans and to the `om-code-review` skill alike. The validation gate (`npm run typecheck` && `npm run build`) must be green before a review verdict is meaningful — there is no test suite, so the review itself is the main correctness gate.
+How to review a diff in this repository. Applies to humans and to the `om-code-review` skill alike. The validation gate (`npm run typecheck` && `npm test` && `npm run build`) must be green before a review verdict is meaningful. The unit/component suite is the fast correctness gate; real-browser E2E remains the QA layer for user-facing changes.
 
 ## Review priorities (in order)
 
@@ -8,7 +8,7 @@ How to review a diff in this repository. Applies to humans and to the `om-code-r
 2. **Graceful degradation** — the README's core promise: no `gh` → works without PRs, no network → local skills still load, no git repo → tasks run in place, `CEZ_DRY_RUN=1` → everything works offline. A diff that turns a degradation path into an error is a blocker.
 3. **State-file compatibility** — `.ai/cezar/` files outlive the process and the version that wrote them (see `BACKWARD_COMPATIBILITY.md`).
 4. **Security of the local server** — it binds to `127.0.0.1`, but it executes agents with file access; treat every request body as hostile.
-5. **Simplicity** — "every module is meant to be read in one sitting." Push back on new dependencies, frameworks, or abstractions the change doesn't need.
+5. **Simplicity** — "every module is meant to be read in one sitting." Push back on new dependencies or abstractions the change doesn't need; browser dependencies must justify their bundle and maintenance cost.
 
 ## Checklist
 
@@ -49,8 +49,8 @@ How to review a diff in this repository. Applies to humans and to the `om-code-r
 ### Code quality
 
 - Comments cite the spec or issue that motivated the code (`spec 006`, `#348`); non-obvious behavior in the diff should too.
-- No new runtime dependencies without strong justification — the dependency budget is hono, @hono/node-server, yaml, zod.
-- Web UI changes stay framework-free and build-step-free; no npm packages, no bundler, theme toggle keeps working.
+- No new **server runtime** dependencies without strong justification — that dependency budget remains hono, @hono/node-server, yaml, and zod. Browser packages are build-time dependencies and must remain locked, bundle-measured, and absent from the installed CLI's runtime dependency graph.
+- Web UI changes belong under `web/app/` and follow the accepted React 19 + Vite + Tailwind v4 + shadcn/ui architecture. Keep `web/dist` reproducible from source, preserve light/dark/system themes and mobile/accessibility behavior, and add unit/component tests for changed behavior. Until redesign phase R7, do not break the legacy fallback; until R4, every New task affordance must document-navigate to the legacy `/new` composer.
 - User-facing errors are one human-readable line (the `createDraftPr` pattern), not stack traces.
 
 ## Severity guidance

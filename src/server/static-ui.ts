@@ -72,10 +72,10 @@ export function resolveGetRequest(opts: {
   // contract (`/new?skill=&ref=&auto=1&key=`, BACKWARD_COMPATIBILITY.md) needs
   // a composer that auto-starts, and only the legacy UI has one today — the
   // React route is a placeholder that would dead-end saved bookmarklets. The
-  // React /new route and its param parsing stay in place for R4; it remains
-  // reachable via client-side navigation only (a reload lands back on legacy),
-  // which is acceptable interim behavior. `?legacy=1` semantics are unchanged
-  // (legacy is already the answer here). No build hint: legacy is deliberate.
+  // React /new route and its param parsing stay in place for R4, but deliberate
+  // New task affordances use document navigation so they land here meanwhile.
+  // `?legacy=1` semantics are unchanged (legacy is already the answer here).
+  // No build hint: legacy is deliberate.
   if (path === '/new') {
     return { target: 'legacy', hint: false };
   }

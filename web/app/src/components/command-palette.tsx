@@ -39,6 +39,12 @@ export function openCommandPalette(): void {
   window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT))
 }
 
+export type DocumentNavigate = (href: string) => void
+
+/** R1's /new destination still belongs to the legacy document. Keeping this injectable makes
+ *  the hard-navigation contract testable without asking jsdom to implement page loads. */
+const navigateDocument: DocumentNavigate = (href) => window.location.assign(href)
+
 /** Project skills first, global/team after — the #377 ordering rule, matching the server's
  *  `Skill.source` values (`src/skills.ts`): `ai`/`cezar`/`agents` live in the repo, `global`
  *  and `team` come from outside it. The sort is stable, so within each half the server's own
@@ -58,7 +64,11 @@ export function orderRuns(runs: readonly RunRecord[]): RunRecord[] {
   return [...runs].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
 }
 
-export function CommandPalette() {
+export function CommandPalette({
+  onDocumentNavigate = navigateDocument,
+}: {
+  onDocumentNavigate?: DocumentNavigate
+} = {}) {
   const [open, setOpen] = React.useState(false)
   const navigate = useNavigate()
 
@@ -66,7 +76,7 @@ export function CommandPalette() {
   // The sidebar CTA's decorative ⌘N hint becomes real here: new task from anywhere.
   useCommandShortcut('n', () => {
     setOpen(false)
-    navigate('/new')
+    onDocumentNavigate('/new')
   })
 
   React.useEffect(() => {
@@ -85,12 +95,18 @@ export function CommandPalette() {
     >
       {/* The body mounts only while the dialog is open (Radix portals nothing when closed), so
           its queries — notably the skills fetch — run on first open, never on app boot. */}
-      <PaletteContent close={() => setOpen(false)} />
+      <PaletteContent close={() => setOpen(false)} onDocumentNavigate={onDocumentNavigate} />
     </CommandDialog>
   )
 }
 
-function PaletteContent({ close }: { close: () => void }) {
+function PaletteContent({
+  close,
+  onDocumentNavigate,
+}: {
+  close: () => void
+  onDocumentNavigate: DocumentNavigate
+}) {
   const navigate = useNavigate()
   const { theme, setTheme } = useTheme()
   // Runs are already cached by the sidebar's quick-list; skills fetch here, on first open.
@@ -104,6 +120,10 @@ function PaletteContent({ close }: { close: () => void }) {
   const go = (to: string) => {
     close()
     navigate(to)
+  }
+  const goToComposer = (to: string) => {
+    close()
+    onDocumentNavigate(to)
   }
   const nextTheme = NEXT_THEME[theme]
 
@@ -131,7 +151,12 @@ function PaletteContent({ close }: { close: () => void }) {
               </CommandItem>
             )
           })}
-          <CommandItem value="view new task" data-slot="palette-view" data-nav-to="/new" onSelect={() => go('/new')}>
+          <CommandItem
+            value="view new task"
+            data-slot="palette-view"
+            data-nav-to="/new"
+            onSelect={() => goToComposer('/new')}
+          >
             <PlusIcon aria-hidden="true" />
             New task
             <CommandShortcut>⌘N</CommandShortcut>
@@ -182,7 +207,7 @@ function PaletteContent({ close }: { close: () => void }) {
             value="action new task"
             data-slot="palette-action"
             data-action="new-task"
-            onSelect={() => go('/new')}
+            onSelect={() => goToComposer('/new')}
           >
             <PlusIcon aria-hidden="true" />
             New task
@@ -200,7 +225,7 @@ function PaletteContent({ close }: { close: () => void }) {
                 keywords={skill.description ? [skill.description] : undefined}
                 data-slot="palette-skill"
                 data-skill={skill.name}
-                onSelect={() => go(`/new?skill=${encodeURIComponent(skill.name)}`)}
+                onSelect={() => goToComposer(`/new?skill=${encodeURIComponent(skill.name)}`)}
               >
                 <span className="shrink-0 font-medium">{skill.name}</span>
                 {skill.description ? (
