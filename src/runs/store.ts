@@ -266,6 +266,20 @@ export class RunStore extends EventEmitter {
     return full;
   }
 
+  /**
+   * Fan an event out to live subscribers WITHOUT writing it to the NDJSON
+   * file — the channel for coalesced `item.delta` flushes (protocol-v2
+   * performance guardrail: raw deltas never hit disk; replay = the persisted
+   * snapshots). Stamped with `seq`/`ts` like persisted lines so the live
+   * wire keeps one ordering axis; the seq simply never appears in a replay
+   * (gaps are fine — dedup compares with `>`).
+   */
+  emitEphemeral(runId: string, event: { type: string; stepId?: string; [key: string]: unknown }): RunEvent {
+    const full: RunEvent = { ...event, seq: this.nextSeq(runId), ts: new Date().toISOString() };
+    this.emit('event', { runId, event: full });
+    return full;
+  }
+
   readEvents(runId: string): RunEvent[] {
     try {
       const raw = readFileSync(this.eventsPath(runId), 'utf8');

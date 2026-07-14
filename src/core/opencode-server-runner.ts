@@ -275,7 +275,10 @@ class OpencodeSession implements AgentSession {
     const sessionId = this.sessionId;
     this.emitUi((state) => opencodeSessionStarted(sessionId, state));
 
-    void this.consumeEvents();
+    // The SSE subscription must be LIVE before the first prompt posts —
+    // events the server emits while the POST is in flight would otherwise be
+    // lost (a race this await closes; the bundled mock made it visible).
+    await this.consumeEvents();
 
     const first = this.spec.systemPrompt
       ? `${this.spec.systemPrompt}\n\n---\n\n${this.spec.userPrompt}`
@@ -307,6 +310,9 @@ class OpencodeSession implements AgentSession {
 
   // ---- SSE stream ---------------------------------------------------------
 
+  /** Resolves once the SSE stream is CONNECTED (headers in) — the frames are
+   *  then drained in the background. Callers await the connection so no
+   *  event emitted after this resolves can be missed. */
   private async consumeEvents(): Promise<void> {
     if (!this.baseUrl) return;
     let res: Response;
@@ -319,7 +325,10 @@ class OpencodeSession implements AgentSession {
       return; // aborted or server gone — the turn response still carries results
     }
     if (!res.body) return;
-    const reader = res.body.getReader();
+    void this.readEvents(res.body.getReader());
+  }
+
+  private async readEvents(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<void> {
     const decoder = new TextDecoder();
     let buffer = '';
     try {

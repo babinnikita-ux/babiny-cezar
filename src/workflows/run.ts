@@ -21,6 +21,7 @@ import { autosaveCommit, createWorktree, resolveBaseRef, worktreeDiff } from '..
 import { getRepoInfo } from '../server/git.js';
 import { loadWorkflows } from './load.js';
 import type { RunRecord, RunStore } from '../runs/store.js';
+import { UiEventSink } from '../runs/ui-event-sink.js';
 import { DEFAULT_ALLOWED_TOOLS, stepKind, type WorkflowDef, type WorkflowStepDef } from './types.js';
 
 const CHECK_OUTPUT_CAP = 20_000;
@@ -451,6 +452,7 @@ export class RunManager {
 
     let stepCost = 0;
     let turnText = '';
+    const sink = this.makeUiSink(runId, stepId);
     const onEvent = (event: AgentEvent) => {
       if (event.type === 'image') {
         const saved = this.persistImage(runId, state, event.mediaType, event.data);
@@ -475,6 +477,10 @@ export class RunManager {
         this.store.updateStep(runId, stepId, { costUsd: stepCost });
       }
       if (event.type === 'turn-end') {
+        // Belt-and-braces: v2 `turn.completed` already flushed the delta
+        // coalescers; the v1 turn boundary flushes again (idempotent) so no
+        // buffered delta can outlive its turn.
+        sink.flushAll();
         const sessionOpen = !state.cancelled && state.session?.open;
         const done = sessionOpen && DONE_MARKER_RE.test(turnText.trimEnd());
         turnText = '';
@@ -510,6 +516,7 @@ export class RunManager {
         timeoutMs: 0,
       },
       onEvent,
+      { onUiEvent: (event) => sink.handle(event) },
     );
     state.session = session;
     state.currentStepId = stepId;
@@ -519,6 +526,7 @@ export class RunManager {
     const finishedAt = () => new Date().toISOString();
     try {
       await session.result;
+      sink.sessionEnded(state.cancelled ? 'cancelled' : 'end_turn');
       if (state.cancelled) {
         this.store.updateStep(runId, stepId, { status: 'cancelled', finishedAt: finishedAt() });
         this.store.updateRun(runId, { status: 'cancelled', finishedAt: finishedAt(), currentStepId: undefined });
@@ -532,6 +540,7 @@ export class RunManager {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      sink.sessionEnded('error', message);
       this.store.updateStep(runId, stepId, { status: 'failed', error: message, finishedAt: finishedAt() });
       appendHandoffHeartbeat(this.dataDir, runId, `step "${stepId}" complete — status=failed`);
       this.store.updateRun(runId, {
@@ -788,6 +797,7 @@ export class RunManager {
     const startTokens = stepRecord?.tokensUsed ?? 0;
     let stepCost = stepRecord?.costUsd ?? 0;
     let turnText = '';
+    const sink = this.makeUiSink(runId, step.id);
     const onEvent = (event: AgentEvent) => {
       if (event.type === 'image') {
         const saved = this.persistImage(runId, state, event.mediaType, event.data);
@@ -813,6 +823,9 @@ export class RunManager {
         this.store.updateStep(runId, step.id, { costUsd: stepCost });
       }
       if (event.type === 'turn-end') {
+        // v2 `turn.completed` already flushed the coalescers; the v1 turn
+        // boundary flushes again (idempotent) as a backstop.
+        sink.flushAll();
         const sessionOpen = !state.cancelled && state.session?.open;
         const done = interactive && sessionOpen && DONE_MARKER_RE.test(turnText.trimEnd());
         turnText = '';
@@ -862,7 +875,7 @@ export class RunManager {
           timeoutMs: interactive ? 0 : undefined,
         },
         onEvent,
-        { autoEndAfterFirstTurn: !interactive },
+        { autoEndAfterFirstTurn: !interactive, onUiEvent: (event) => sink.handle(event) },
       );
     } catch (err) {
       return err instanceof Error ? err.message : String(err);
@@ -874,10 +887,15 @@ export class RunManager {
 
     try {
       const result = await session.result;
+      // v2 counterpart of v1's `done` (spec: the mappers leave session-close
+      // events to the RunManager — only it knows how the session settled).
+      sink.sessionEnded(state.cancelled ? 'cancelled' : 'end_turn');
       this.store.updateStep(runId, step.id, { tokensUsed: startTokens + result.tokensUsed });
       return null;
     } catch (err) {
-      return err instanceof Error ? err.message : String(err);
+      const message = err instanceof Error ? err.message : String(err);
+      sink.sessionEnded('error', message); // alongside v1's fatal `error`
+      return message;
     } finally {
       this.recordUsagePeaks(runId);
       this.clearIdleTimer(state);
@@ -885,6 +903,22 @@ export class RunManager {
       state.currentStepId = undefined;
       state.interrupt = () => undefined;
     }
+  }
+
+  /**
+   * Protocol-v2 sink for one agent session (R2 step 2.1): the runner's
+   * `onUiEvent` stream flows through here. Persisted snapshots ride the same
+   * NDJSON file as v1 (the store stamps `seq`/`ts`, `appendEvent` fans them
+   * out live too); coalesced `item.delta` flushes go out live-only via
+   * `emitEphemeral` — raw deltas never hit disk (spec §performance
+   * guardrails). One sink per session: cumulative usage dedup and the
+   * item-shape cache are session-scoped, like the mapper state feeding them.
+   */
+  private makeUiSink(runId: string, stepId: string): UiEventSink {
+    return new UiEventSink({
+      persist: (event) => this.store.appendEvent(runId, { ...event, stepId }),
+      emitLive: (event) => this.store.emitEphemeral(runId, { ...event, stepId }),
+    });
   }
 
   /**

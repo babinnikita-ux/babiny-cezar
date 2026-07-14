@@ -27,6 +27,7 @@ import { refreshTeamSkills } from '../skills-remote.js';
 import { appendHandoffHeartbeat, handoffProgressExcerpt, readHandoff } from '../handoff.js';
 import { markStarted, onTodosChanged, readTodos, removeTodo, startTodosWatch, type TodoItem } from '../todos.js';
 import type { RunEvent, RunRecord, RunStore } from '../runs/store.js';
+import { isV2WireEventType } from '../runs/ui-event-sink.js';
 import type { RunManager } from '../workflows/run.js';
 import { removeWorktree, worktreeDiff, worktreeDiffStat } from '../git-worktree.js';
 import { getBranches, getCommit, getDiff, getLog, getRepoInfo, getStatus } from './git.js';
@@ -720,8 +721,17 @@ export function createApp(deps: ServerDeps): Hono {
       let replaying = true;
       let maxSeq = 0;
       const buffered: RunEvent[] = [];
+      // One endpoint, two SSE event names: v1 lines stay `run-event` (what
+      // the legacy UI listens to and renders — its default branch JSON-dumps
+      // unknown types into the transcript, so v2 must not ride that name);
+      // protocol-v2 lines (dotted types, persisted snapshots AND ephemeral
+      // coalesced deltas) ride `ui-event`, which only v2-aware clients
+      // subscribe to. EventSource ignores names it has no listener for.
       const writeEvent = (event: RunEvent) =>
-        stream.writeSSE({ event: 'run-event', data: JSON.stringify(event) });
+        stream.writeSSE({
+          event: isV2WireEventType(event.type) ? 'ui-event' : 'run-event',
+          data: JSON.stringify(event),
+        });
       const onEvent = (payload: { runId: string; event: RunEvent }) => {
         if (payload.runId !== id) return;
         if (replaying) buffered.push(payload.event);
