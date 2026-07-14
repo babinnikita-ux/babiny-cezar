@@ -24,7 +24,7 @@
 | 2 | 2.4 | Mobile drawer navigation | done | 807805e |
 | 3 | 3.1 | Typed API client for /api/* | done | pending |
 | 3 | 3.2 | SSE hooks with reconcile doctrine (global stream) | done | pending |
-| 3 | 3.3 | deriveAttention + task quick-list (groups, variants, status dots) | todo | — |
+| 3 | 3.3 | deriveAttention + task quick-list (groups, variants, status dots) | done | pending |
 | 3 | 3.4 | Tasks table view (the overview home) | todo | — |
 | 4 | 4.1 | CenteredState template + empty states | todo | — |
 | 4 | 4.2 | Tools dropdown (installed tools, versions, setup links, cog) | todo | — |

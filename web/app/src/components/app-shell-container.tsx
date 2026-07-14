@@ -3,6 +3,8 @@ import type { ReactNode } from 'react'
 import { useHealth, useTodos } from '@/api/queries'
 import type { HealthResponse } from '@/api/types'
 import { AppShell, type RepoChip } from '@/components/app-shell'
+import { ListViewProvider } from '@/components/list-view'
+import { TaskQuickListContainer } from '@/components/task-quick-list'
 
 /**
  * Derive the sidebar's repo chip from `/api/health`.
@@ -39,14 +41,20 @@ export function AppShellContainer({ children }: { children: ReactNode }) {
   const todos = useTodos()
 
   return (
-    <AppShell
-      repo={repoChipOf(health.data)}
-      version={health.data?.version ?? null}
-      // `?? null` rather than `?? 0`: no badge while the inbox is unknown, and no badge when it
-      // is known to be empty — AppShell renders neither for a falsy count.
-      inboxCount={todos.data?.length ?? null}
-    >
-      {children}
-    </AppShell>
+    // The Active/Archived filter is shared by the quick-list below and the Tasks table (Step 3.4),
+    // which renders in `children`. The provider goes here because this is the lowest node that has
+    // both of them under it — the spec requires the two sets of tabs to be one filter.
+    <ListViewProvider>
+      <AppShell
+        repo={repoChipOf(health.data)}
+        version={health.data?.version ?? null}
+        // `?? null` rather than `?? 0`: no badge while the inbox is unknown, and no badge when it
+        // is known to be empty — AppShell renders neither for a falsy count.
+        inboxCount={todos.data?.length ?? null}
+        taskQuickList={<TaskQuickListContainer />}
+      >
+        {children}
+      </AppShell>
+    </ListViewProvider>
   )
 }
