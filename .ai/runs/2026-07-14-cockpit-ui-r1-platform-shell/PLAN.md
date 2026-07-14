@@ -12,11 +12,12 @@
 
 | Phase | Step | Title | Status | Commit |
 |-------|------|-------|--------|--------|
-| 1 | 1.1 | Vite + React + TS scaffold with dev:web / build:web scripts | done | 28bc0a9 |
+| 1 | 1.1 | Vite + React + TS scaffold with dev:web / build:web scripts | done | c431924 |
 | 1 | 1.2 | Tailwind v4 + design tokens + self-hosted fonts | todo | — |
 | 1 | 1.3 | shadcn/ui primitives and the cn() utility | todo | — |
 | 1 | 1.4 | vitest projects (server + web) and npm test in the validation gate | todo | — |
 | 1 | 1.5 | Hono serves web/dist with legacy fallback and ?legacy=1 | todo | — |
+| 1 | 1.6 | Agent-browser provider setup + first UI smoke test | done | pending |
 | 2 | 2.1 | react-router route map + server SPA catch-all | todo | — |
 | 2 | 2.2 | Theme system (pre-paint, light/dark/system) | todo | — |
 | 2 | 2.3 | App shell: sidebar + 100dvh grid + safe areas | todo | — |
@@ -30,6 +31,11 @@
 | 4 | 4.3 | ⌘K command palette | todo | — |
 | 4 | 4.4 | Design-guardian static-scan test | todo | — |
 
+## Conventions
+
+- **`Commit` column is informational and backfilled by the dispatcher.** A commit cannot contain its own SHA (amending re-hashes it), so executors flip `Status` → `done` in their Step's commit and the dispatcher backfills real short SHAs at each checkpoint. `Status` is what the resume logic reads.
+- **UI verification uses the agent-browser provider** (`.ai/browsers/agent-browser.md`, `browser.provider` in the pipeline config). Every checkpoint that touches UI runs the integration suite through it and saves screenshots into `checkpoint-<N>-artifacts/`.
+
 ## Goal
 
 Land the platform and shell for the cockpit redesign: a React + Vite + Tailwind v4 + shadcn/ui app served by the existing Hono server, with the app shell, theming, routing, live data layer, task overview, and chrome — while the legacy vanilla UI stays reachable and every existing feature keeps working.
@@ -39,7 +45,9 @@ Land the platform and shell for the cockpit redesign: a React + Vite + Tailwind 
 - `web/` — new React app (`web/src`, `web/index.html`, vite/tailwind/vitest configs). The legacy `web/app.js`, `web/style.css`, `web/index.html` are preserved (served at `?legacy=1`) until phase R7.
 - `src/server/server.ts` — serve `web/dist` when present, legacy fallback, SPA catch-all for deep links.
 - `package.json` — vite/react/tailwind/shadcn/vitest devDeps, `dev:web`, `build:web`, `test` scripts; `build` runs both.
-- `.ai/agentic.config.json` — add `npm test` to `validation.commands`.
+- `.ai/agentic.config.json` — add `npm test` to `validation.commands`; select the `agent-browser` browser provider.
+- `.ai/browsers/agent-browser.md` — the committed browser-provider descriptor (from the skills collection, which made agent-browser the default).
+- `web/app/e2e/` — integration tests driven through the agent-browser provider, extended at every UI step.
 
 ## Non-goals
 
