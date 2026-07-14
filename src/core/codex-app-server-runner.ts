@@ -17,6 +17,13 @@ import {
   KILL_GRACE_MS,
 } from './claude-cli-runner.js';
 import { readNdjson } from './ndjson.js';
+import {
+  codexSessionStarted,
+  createCodexUiState,
+  mapCodexNotification,
+  type CodexUiMapping,
+  type CodexUiMapperState,
+} from './codex-ui-mapper.js';
 
 export interface CodexRunnerOptions {
   /** Override the binary name/path; defaults to `codex` on PATH. */
@@ -95,6 +102,10 @@ class CodexSession implements AgentSession {
   private eofKillTimer: NodeJS.Timeout | undefined;
   private spawnFailed: Error | null = null;
   private timedOut = false;
+  /** Protocol v2 emission — additive alongside v1 (`onEvent` keeps flowing
+   *  byte-identical); the channel is `opts.onUiEvent` (RunManager wiring
+   *  lands in R2 step 2.1). */
+  private uiState: CodexUiMapperState = createCodexUiState();
 
   constructor(
     private readonly bin: string,
@@ -150,6 +161,7 @@ class CodexSession implements AgentSession {
           } catch {
             continue; // not JSON-RPC — skip
           }
+          this.emitUi((state) => mapCodexNotification(msg, state));
           this.dispatch(msg);
         }
       } catch (err) {
@@ -274,7 +286,13 @@ class CodexSession implements AgentSession {
       const res = await this.request('thread/start', clean(overrides));
       this.threadId = threadIdOf(res) ?? this.spec.sessionId;
     }
-    if (this.threadId) this.emit({ type: 'session', sessionId: this.threadId });
+    if (this.threadId) {
+      this.emit({ type: 'session', sessionId: this.threadId });
+      // The result path (thread/start response, or thread/resume which sends
+      // no thread/started notification) — deduplicated inside the mapper.
+      const threadId = this.threadId;
+      this.emitUi((state) => codexSessionStarted(threadId, state));
+    }
 
     // Seed the first turn. The system prompt (skill body + handoff contract)
     // has no dedicated app-server field, so it rides along as a leading block
@@ -408,6 +426,20 @@ class CodexSession implements AgentSession {
 
   private emit(event: AgentEvent): void {
     this.onEvent?.(event);
+  }
+
+  /** The mapper never throws, but a defect in it must still never disturb
+   *  the v1 stream — hence the belt-and-braces try. */
+  private emitUi(map: (state: CodexUiMapperState) => CodexUiMapping): void {
+    try {
+      const mapped = map(this.uiState);
+      this.uiState = mapped.state;
+      if (this.opts.onUiEvent) {
+        for (const event of mapped.events) this.opts.onUiEvent(event);
+      }
+    } catch {
+      // v2 mapping is best-effort; v1 consumers stay unaffected.
+    }
   }
 }
 
