@@ -53,6 +53,7 @@ const GOLDEN_FIXTURES = [
   'file-change-and-mcp',
   'todo-list',
   'turn-failed',
+  'review-mode',
 ] as const;
 
 describe('codex → v2 golden fixtures', () => {
