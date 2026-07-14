@@ -10,6 +10,13 @@
 
 @import "tailwindcss";
 
+/* Enter/exit animation utilities (`animate-in`, `fade-in-0`, `zoom-in-95`, `slide-in-from-*`) that the
+ * shadcn primitives reference on their Radix `data-[state]` hooks. Tailwind v4 dropped the v3 plugin,
+ * so without this import those classes are silently dead and overlays pop in with no transition.
+ * It only adds animation tokens/utilities — it does not touch our color, radius or shadow scales.
+ */
+@import "tw-animate-css";
+
 /* ---------- self-hosted fonts (no CDN: the cockpit must work offline) ----------
  * Variable woff2 subsets vendored from @fontsource-variable/{inter,jetbrains-mono} v5.2.8
  * (SIL OFL 1.1 — see the LICENSE files next to the binaries). Latin + latin-ext only;

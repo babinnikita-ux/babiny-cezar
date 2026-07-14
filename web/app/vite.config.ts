@@ -15,6 +15,10 @@ export default defineConfig({
   base: '/',
   // Tailwind v4 is CSS-first: the whole theme lives in src/styles/index.css, there is no tailwind.config.js.
   plugins: [react(), tailwindcss()],
+  // `@/…` → web/app/src — the alias shadcn/ui components import `cn` through. Mirrored in tsconfig.json `paths`.
+  resolve: {
+    alias: { '@': resolve(appDir, 'src') },
+  },
   build: {
     // Sibling of the legacy UI files (web/index.html, app.js, style.css), which stay untouched.
     outDir: resolve(webDir, 'dist'),
