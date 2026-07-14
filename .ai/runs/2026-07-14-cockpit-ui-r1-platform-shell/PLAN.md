@@ -28,7 +28,7 @@
 | 3 | 3.4 | Tasks table view (the overview home) | done | pending |
 | 4 | 4.1 | CenteredState template + empty states | done | pending |
 | 4 | 4.2 | Tools dropdown (installed tools, versions, setup links, cog) | done | pending |
-| 4 | 4.3 | ⌘K command palette | todo | — |
+| 4 | 4.3 | ⌘K command palette | done | pending |
 | 4 | 4.4 | Design-guardian static-scan test | todo | — |
 
 ## Conventions

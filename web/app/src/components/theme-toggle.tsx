@@ -8,7 +8,9 @@ import type { Theme } from '@/lib/theme'
  * It cycles rather than opening a menu: three states, one target, no popover to hit on mobile.
  * The icon shows the *choice*, not the resolved palette — otherwise `system` would be invisible. */
 
-const NEXT_THEME: Record<Theme, Theme> = { light: 'dark', dark: 'system', system: 'light' }
+/** Exported because the ⌘K palette's "Toggle theme" action must cycle exactly like this button —
+ *  one order, defined once. */
+export const NEXT_THEME: Record<Theme, Theme> = { light: 'dark', dark: 'system', system: 'light' }
 const ICON = { light: SunIcon, dark: MoonIcon, system: MonitorIcon } as const
 const LABEL: Record<Theme, string> = { light: 'light', dark: 'dark', system: 'system' }
 

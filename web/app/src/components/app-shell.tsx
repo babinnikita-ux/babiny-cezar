@@ -1,8 +1,9 @@
-import { MenuIcon, PlusIcon, XIcon } from 'lucide-react'
+import { MenuIcon, PlusIcon, SearchIcon, XIcon } from 'lucide-react'
 import * as React from 'react'
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
 
+import { openCommandPalette } from '@/components/command-palette'
 import { StatusDot } from '@/components/status-dot'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
@@ -303,9 +304,31 @@ function SidebarContent({
         {/* SLOT — Step 4.2 mounts the Tools dropdown (aggregate status dot + tool versions) here. */}
         <div data-slot="tools-menu">{toolsMenu}</div>
         {version ? <VersionChip version={version} latestVersion={latestVersion} /> : null}
+        <CommandPaletteHint />
         <ThemeToggle className="ml-auto" />
       </div>
     </div>
+  )
+}
+
+/**
+ * The ⌘K discoverability affordance (Step 4.3): a quiet chip-shaped button in the footer, cut
+ * from the same cloth as the version chip — the palette is chrome, not a feature to shout
+ * about. Clicking it opens the palette through the same programmatic seam anything else would.
+ */
+function CommandPaletteHint() {
+  return (
+    <button
+      type="button"
+      data-slot="command-palette-hint"
+      title="Command palette (⌘K / Ctrl+K)"
+      aria-label="Open the command palette"
+      onClick={() => openCommandPalette()}
+      className="flex items-center gap-1 rounded-full border border-border px-1.5 py-px font-mono text-[10px] font-medium text-soft-foreground transition-colors hover:bg-muted hover:text-foreground"
+    >
+      <SearchIcon className="size-[9px]" aria-hidden="true" />
+      ⌘K
+    </button>
   )
 }
 

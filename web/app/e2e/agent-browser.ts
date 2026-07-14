@@ -119,6 +119,12 @@ export class AgentBrowser {
     this.run(['press', key])
   }
 
+  /** operation: interact (`fill`) — set a field's value the way typing would (real input
+   *  events, so controlled React inputs — the ⌘K palette's filter — see the change). */
+  fill(selector: string, value: string): void {
+    this.run(['fill', selector, value])
+  }
+
   /** operation: interact (`mouse move`/`down`/`up`) — a tap at a viewport coordinate.
    *
    *  `click` targets an element's center point and, by design, refuses when something covers it.

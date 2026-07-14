@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { useHealth, useTodos } from '@/api/queries'
 import type { HealthResponse } from '@/api/types'
 import { AppShell, type RepoChip } from '@/components/app-shell'
+import { CommandPalette } from '@/components/command-palette'
 import { ListViewProvider } from '@/components/list-view'
 import { TaskQuickListContainer } from '@/components/task-quick-list'
 import { ToolsMenu } from '@/components/tools-menu'
@@ -58,6 +59,9 @@ export function AppShellContainer({ children }: { children: ReactNode }) {
       >
         {children}
       </AppShell>
+      {/* Global chrome, not a route: ⌘K must work on every URL. Mounted here (not in AppShell)
+          because it needs the query client and router this container already assumes. */}
+      <CommandPalette />
     </ListViewProvider>
   )
 }
