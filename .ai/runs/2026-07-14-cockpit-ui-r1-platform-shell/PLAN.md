@@ -18,10 +18,10 @@
 | 1 | 1.4 | vitest projects (server + web) and npm test in the validation gate | done | ca8208f |
 | 1 | 1.5 | Hono serves web/dist with legacy fallback and ?legacy=1 | done | 85db541 |
 | 1 | 1.6 | Agent-browser provider setup + first UI smoke test | done | 03b58d0 |
-| 2 | 2.1 | react-router route map + server SPA catch-all | done | pending |
-| 2 | 2.2 | Theme system (pre-paint, light/dark/system) | done | pending |
-| 2 | 2.3 | App shell: sidebar + 100dvh grid + safe areas | done | pending |
-| 2 | 2.4 | Mobile drawer navigation | done | pending |
+| 2 | 2.1 | react-router route map + server SPA catch-all | done | d4ebaeb |
+| 2 | 2.2 | Theme system (pre-paint, light/dark/system) | done | 3f12a2d |
+| 2 | 2.3 | App shell: sidebar + 100dvh grid + safe areas | done | 8819d6c |
+| 2 | 2.4 | Mobile drawer navigation | done | 807805e |
 | 3 | 3.1 | Typed API client for /api/* | todo | — |
 | 3 | 3.2 | SSE hooks with reconcile doctrine (global stream) | todo | — |
 | 3 | 3.3 | deriveAttention + task quick-list (groups, variants, status dots) | todo | — |
