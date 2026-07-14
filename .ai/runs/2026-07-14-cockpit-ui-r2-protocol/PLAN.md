@@ -11,7 +11,7 @@
 
 | Phase | Step | Title | Status | Commit |
 |-------|------|-------|--------|--------|
-| 1 | 1.1 | UiEvent/UiItem v2 types + tool display model (shared protocol module) | todo | — |
+| 1 | 1.1 | UiEvent/UiItem v2 types + tool display model (shared protocol module) | done | pending |
 | 1 | 1.2 | Claude runner v2 emitter + golden fixtures (thinking, TodoWrite→plan, parentItemId) | todo | — |
 | 1 | 1.3 | Codex runner v2 emitter + golden fixtures (items, statuses, outputDelta, todoList→plan) | todo | — |
 | 1 | 1.4 | OpenCode runner v2 emitter + golden fixtures (parts, session.idle turn-end, todowrite→plan) | todo | — |
