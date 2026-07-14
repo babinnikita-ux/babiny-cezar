@@ -26,7 +26,7 @@ import { discoverSkills } from '../skills.js';
 import { refreshTeamSkills } from '../skills-remote.js';
 import { appendHandoffHeartbeat, handoffProgressExcerpt, readHandoff } from '../handoff.js';
 import { markStarted, onTodosChanged, readTodos, removeTodo, startTodosWatch, type TodoItem } from '../todos.js';
-import type { RunEvent, RunRecord, RunStore } from '../runs/store.js';
+import type { RunEvent, RunRecord, RunStatus, RunStore } from '../runs/store.js';
 import { isV2WireEventType } from '../runs/ui-event-sink.js';
 import type { RunManager } from '../workflows/run.js';
 import { removeWorktree, worktreeDiff, worktreeDiffStat } from '../git-worktree.js';
@@ -46,6 +46,34 @@ export interface ServerDeps {
   /** Mutable holder for the async npm-registry update check (#368) —
    *  `latest` appears once the registry answers with a newer version. */
   update?: { latest?: string };
+}
+
+// ---- variant-compare response shapes (spec 010) ----------------------------
+// Named and exported so `api-types.test.ts` can drift-guard the cockpit's
+// hand-mirrored copies (`web/app/src/api/types.ts`) against the real thing.
+
+/** One column of `GET /api/groups/:groupId`. NOTE: `diffStat` here is the raw
+ *  `git diff --stat` text (worktreeDiffStat), NOT the numeric `RunRecord.diffStat`. */
+export interface GroupVariant {
+  id: string;
+  variant: string;
+  title: string;
+  status: RunStatus;
+  archived: boolean;
+  tokensUsed: number;
+  costUsd?: number;
+  diffStat: string;
+  handoffExcerpt: string;
+}
+
+export interface GroupResponse {
+  groupId: string;
+  runs: GroupVariant[];
+}
+
+/** `POST /api/groups/:groupId/pick` — the winner, parked at `review` when it has a diff. */
+export interface PickVariantResponse {
+  winner?: RunRecord;
 }
 
 // A run starts from a named workflow OR an inline chain of steps (spec 008 —
@@ -464,22 +492,24 @@ export function createApp(deps: ServerDeps): Hono {
     const runs = groupRuns(c.req.param('groupId'));
     if (runs.length === 0) return c.json({ error: 'not found' }, 404);
     const detailed = await Promise.all(
-      runs.map(async (r) => ({
-        id: r.id,
-        variant: r.variant ?? '?',
-        title: r.title,
-        status: r.status,
-        archived: r.archived,
-        tokensUsed: r.tokensUsed,
-        costUsd: r.costUsd,
-        diffStat:
-          r.worktreePath && existsSync(r.worktreePath)
-            ? await worktreeDiffStat(r.worktreePath, r.baseBranch ?? 'HEAD')
-            : '',
-        handoffExcerpt: handoffProgressExcerpt(readHandoff(dataDir, r.id)),
-      })),
+      runs.map(
+        async (r): Promise<GroupVariant> => ({
+          id: r.id,
+          variant: r.variant ?? '?',
+          title: r.title,
+          status: r.status,
+          archived: r.archived,
+          tokensUsed: r.tokensUsed,
+          costUsd: r.costUsd,
+          diffStat:
+            r.worktreePath && existsSync(r.worktreePath)
+              ? await worktreeDiffStat(r.worktreePath, r.baseBranch ?? 'HEAD')
+              : '',
+          handoffExcerpt: handoffProgressExcerpt(readHandoff(dataDir, r.id)),
+        }),
+      ),
     );
-    return c.json({ groupId: c.req.param('groupId'), runs: detailed });
+    return c.json({ groupId: c.req.param('groupId'), runs: detailed } satisfies GroupResponse);
   });
 
   // "Pick this one": the winner rests at `review` (spec 009 takes it from
@@ -523,7 +553,7 @@ export function createApp(deps: ServerDeps): Hono {
         message: `variant ${winner.variant ?? '?'} was picked — this variant is archived, its worktree removed`,
       });
     }
-    return c.json({ winner: store.getRun(winner.id) });
+    return c.json({ winner: store.getRun(winner.id) } satisfies PickVariantResponse);
   });
 
   app.get('/api/runs/:id', (c) => {

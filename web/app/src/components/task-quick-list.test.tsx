@@ -279,6 +279,15 @@ describe('TaskQuickList', () => {
       expect(row('va')).toBeNull()
     })
 
+    it('offers a ⚖ compare link beside the tile, pointing at /compare/:groupId', () => {
+      renderList({ runs: variants() })
+
+      // A sibling of the toggle button, never its child — a link inside a button is invalid.
+      const link = screen.getByRole('link', { name: 'Compare the variants of Add skills autocomplete' })
+      expect(link.getAttribute('href')).toBe('/compare/g1')
+      expect(link.closest('button')).toBeNull()
+    })
+
     it('omits the token count from a variant that has not spent anything yet', () => {
       renderList({ runs: variants().map((v, i) => ({ ...v, tokensUsed: i === 0 ? 0 : v.tokensUsed })) })
       fireEvent.click(screen.getByRole('button', { expanded: false }))

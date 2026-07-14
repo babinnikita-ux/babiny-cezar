@@ -1,4 +1,4 @@
-import { ArrowUpRightIcon, ChevronDownIcon } from 'lucide-react'
+import { ArrowUpRightIcon, ChevronDownIcon, ScaleIcon } from 'lucide-react'
 import * as React from 'react'
 import { Link, useMatch } from 'react-router'
 
@@ -147,23 +147,36 @@ function Row({
   }
   return (
     <>
-      <button
-        type="button"
-        data-slot="group-tile"
-        data-group-id={row.groupId}
-        aria-expanded={expanded}
-        onClick={() => onToggle(row.groupId)}
-        className="flex w-full items-center gap-2 rounded-sm px-2.5 py-[7px] text-left hover:bg-muted"
-      >
-        <ChevronDownIcon
-          className={cn('size-3 shrink-0 text-soft-foreground transition-transform', !expanded && '-rotate-90')}
-          aria-hidden="true"
-        />
-        <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{row.title}</span>
-        <span className="shrink-0 rounded-full bg-muted px-1.5 py-px font-mono text-[10.5px] font-semibold text-muted-foreground">
-          ×{row.members.length}
-        </span>
-      </button>
+      {/* Like RunRow: the compare link is the toggle button's flex SIBLING, not its child —
+          a link inside a button is invalid, and both targets are real. */}
+      <div className="flex items-center rounded-sm hover:bg-muted">
+        <button
+          type="button"
+          data-slot="group-tile"
+          data-group-id={row.groupId}
+          aria-expanded={expanded}
+          onClick={() => onToggle(row.groupId)}
+          className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-[7px] text-left"
+        >
+          <ChevronDownIcon
+            className={cn('size-3 shrink-0 text-soft-foreground transition-transform', !expanded && '-rotate-90')}
+            aria-hidden="true"
+          />
+          <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{row.title}</span>
+          <span className="shrink-0 rounded-full bg-muted px-1.5 py-px font-mono text-[10.5px] font-semibold text-muted-foreground">
+            ×{row.members.length}
+          </span>
+        </button>
+        <Link
+          to={`/compare/${row.groupId}`}
+          data-slot="group-compare"
+          title="Compare the variants"
+          aria-label={`Compare the variants of ${row.title}`}
+          className="mr-1.5 inline-flex size-6 shrink-0 items-center justify-center rounded-sm text-soft-foreground hover:bg-violet/10 hover:text-violet"
+        >
+          <ScaleIcon className="size-3.5" aria-hidden="true" />
+        </Link>
+      </div>
       {expanded
         ? row.members.map((member) => (
             <RunRow key={member.id} run={member} queuePosition={null} currentRunId={currentRunId} now={now} variant />

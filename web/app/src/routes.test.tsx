@@ -48,7 +48,8 @@ describe('route map', () => {
     ['/tasks/abc123', 'task-thread', 'Loading task…'],
     ['/tasks/abc123/changes', 'task-changes', 'Changes'],
     ['/tasks/abc123/files', 'task-files', 'Files'],
-    ['/compare/grp-1', 'compare', 'Compare variants'],
+    // The real compare view (Step R3 2.3): with fetch never answering it is honestly loading.
+    ['/compare/grp-1', 'compare', 'Loading variants…'],
     ['/git', 'git', 'Git'],
     ['/github', 'github', 'GitHub'],
     ['/github/issues/42', 'github-issue', 'Issue'],

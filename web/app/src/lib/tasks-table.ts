@@ -16,7 +16,7 @@ const USAGE_LIVE_STATUSES: ReadonlySet<RunStatus> = new Set(['running', 'waiting
 
 /** Nothing left to observe: these runs can never report a live sample again. Legacy
  *  `TERMINAL_STATUSES` — `review` is terminal because the agent is done and a human is not. */
-const TERMINAL_STATUSES: ReadonlySet<RunStatus> = new Set(['done', 'failed', 'review', 'cancelled'])
+export const TERMINAL_STATUSES: ReadonlySet<RunStatus> = new Set(['done', 'failed', 'review', 'cancelled'])
 
 /** What "Archive finished" archives (`POST /api/runs/archive-finished` server-side): outcomes,
  *  not gates — a `review` run still wants a human and must not be swept away. */

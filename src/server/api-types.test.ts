@@ -3,6 +3,9 @@ import type {
   BackendCheck as WebBackendCheck,
   GithubData as WebGithubData,
   GithubItem as WebGithubItem,
+  GroupResponse as WebGroupResponse,
+  GroupVariant as WebGroupVariant,
+  PickVariantResponse as WebPickVariantResponse,
   LogEntry as WebLogEntry,
   ProcessUsage as WebProcessUsage,
   RepoInfo as WebRepoInfo,
@@ -62,6 +65,7 @@ import type { WorkflowLoadIssue, loadWorkflows } from '../workflows/load.js';
 import type { WorkflowDef, WorkflowStepDef } from '../workflows/types.js';
 import type { GithubData, GithubItem } from './github.js';
 import type { LogEntry, RepoInfo, StatusEntry } from './git.js';
+import type { GroupResponse, GroupVariant, PickVariantResponse } from './server.js';
 
 /**
  * The drift guard for `web/app/src/api/types.ts`.
@@ -106,6 +110,10 @@ const guards = {
   todoItem: true satisfies Exact<TodoItem, WebTodoItem>,
   githubItem: true satisfies Exact<GithubItem, WebGithubItem>,
   githubData: true satisfies Exact<GithubData, WebGithubData>,
+  // Variant compare (spec 010): the compare view's columns and the pick answer.
+  groupVariant: true satisfies Exact<GroupVariant, WebGroupVariant>,
+  groupResponse: true satisfies Exact<GroupResponse, WebGroupResponse>,
+  pickVariantResponse: true satisfies Exact<PickVariantResponse, WebPickVariantResponse>,
 
   // ---- protocol v2 (`web/app/src/protocol/` mirrors `src/core/ui-events.ts` +
   // `src/core/tool-display.ts`). The full unions are guarded, not just spot fields:

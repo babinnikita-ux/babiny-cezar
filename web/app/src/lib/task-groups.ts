@@ -92,7 +92,7 @@ export function runTitle(run: RunRecord): string {
  * The suffix is the server's own convention (`startVariants` appends ` (A)`…` (C)`), so this
  * strips exactly that shape — a title that merely ends in "(D)" or "(draft)" is left alone.
  */
-export function groupTitle(run: RunRecord): string {
+export function groupTitle(run: Pick<RunRecord, 'title'>): string {
   return run.title.replace(/ \([A-C]\)$/, '')
 }
 

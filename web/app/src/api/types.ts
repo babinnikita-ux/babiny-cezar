@@ -123,6 +123,38 @@ export interface RunEvent {
   [key: string]: unknown
 }
 
+// ---- parallel variants (spec 010, `GET /api/groups/:groupId`) ------------------------------
+
+/**
+ * One variant column of the compare view. CAREFUL: `diffStat` here is the raw `git diff --stat`
+ * TEXT the server runs in the variant's worktree (legacy compare semantics) — a different thing
+ * from the numeric `RunRecord.diffStat`. `''` when the worktree is gone.
+ */
+export interface GroupVariant {
+  id: string
+  /** 'A' | 'B' | 'C' in practice; `'?'` for a record that lost its letter. */
+  variant: string
+  title: string
+  status: RunStatus
+  archived: boolean
+  tokensUsed: number
+  costUsd?: number
+  diffStat: string
+  /** First lines of the handoff journal's "## Progress log" section, as markdown. */
+  handoffExcerpt: string
+}
+
+export interface GroupResponse {
+  groupId: string
+  runs: GroupVariant[]
+}
+
+/** `POST /api/groups/:groupId/pick` — the winner (parked at `review` when it has a diff);
+ *  the losers were cancelled if alive, archived, and their worktrees + branches removed. */
+export interface PickVariantResponse {
+  winner?: RunRecord
+}
+
 // ---- health / environment (src/core/backend-detect.ts, src/server/git.ts) -----------------
 
 export interface BackendCheck {

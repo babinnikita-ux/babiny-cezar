@@ -53,7 +53,7 @@ export interface Attention {
  *
  * When R2 lands the events, this is the only function that changes.
  */
-function hasPendingPermission(_run: RunRecord): boolean {
+function hasPendingPermission(_run: AttentionInput): boolean {
   return false
 }
 
@@ -64,9 +64,14 @@ function hasPendingPermission(_run: RunRecord): boolean {
  * and cezar persists none — not in `RunRecord`, not in `UiState`. A terminal run therefore lands
  * in `none`, which is honest: the list shows its outcome, nothing is demanding attention.
  */
-function isUnseen(_run: RunRecord): boolean {
+function isUnseen(_run: AttentionInput): boolean {
   return false
 }
+
+/** What attention derivation actually reads. `Pick`ed rather than the full `RunRecord` so
+ *  surfaces that only have a status — the compare view's `GroupVariant` columns — can use the
+ *  same canonical function instead of inventing a second status-to-tone mapping. */
+export type AttentionInput = Pick<RunRecord, 'status'>
 
 /**
  * `RunRecord` → attention.
@@ -81,7 +86,7 @@ function isUnseen(_run: RunRecord): boolean {
  *  - `queued` → neutral and still: parked, not transitioning. Its row shows `#2` instead.
  *  - `done`/`failed` → the green/red outcome, still.
  */
-export function deriveAttention(run: RunRecord): Attention {
+export function deriveAttention(run: AttentionInput): Attention {
   if (hasPendingPermission(run)) {
     return { bucket: 'permission', tone: 'violet', pulse: true, label: 'needs permission' }
   }

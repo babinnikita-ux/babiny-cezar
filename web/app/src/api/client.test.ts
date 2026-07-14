@@ -10,6 +10,7 @@ import {
   deleteRun,
   finishRun,
   getGithub,
+  getGroup,
   getHealth,
   getRepo,
   getRun,
@@ -22,6 +23,7 @@ import {
   getWorkflows,
   openRunInCli,
   patchRun,
+  pickVariant,
   putUiState,
   sendMessage,
 } from './client'
@@ -79,6 +81,14 @@ describe('request shapes', () => {
     { name: 'getSkills', call: () => getSkills(), path: '/api/skills', method: 'GET' },
     { name: 'getTodos', call: () => getTodos(), path: '/api/todos', method: 'GET' },
     { name: 'getRepo', call: () => getRepo(), path: '/api/repo', method: 'GET' },
+    { name: 'getGroup', call: () => getGroup('grp-1'), path: '/api/groups/grp-1', method: 'GET' },
+    {
+      name: 'pickVariant',
+      call: () => pickVariant('grp-1', 'run-a'),
+      path: '/api/groups/grp-1/pick',
+      method: 'POST',
+      body: { runId: 'run-a' },
+    },
     { name: 'getGithub (no params)', call: () => getGithub(), path: '/api/github', method: 'GET' },
     {
       name: 'getGithub (limit + refresh)',

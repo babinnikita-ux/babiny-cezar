@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
   getGithub,
+  getGroup,
   getHealth,
   getRepo,
   getRun,
@@ -34,6 +35,9 @@ export const queryKeys = {
     detail: (id: string) => ['runs', 'detail', id] as const,
     diff: (id: string) => ['runs', 'diff', id] as const,
     handoff: (id: string) => ['runs', 'handoff', id] as const,
+  },
+  groups: {
+    detail: (groupId: string) => ['groups', groupId] as const,
   },
   todos: ['todos'] as const,
   workflows: ['workflows'] as const,
@@ -74,6 +78,18 @@ export function useRunDiff(id: string | undefined) {
     queryKey: queryKeys.runs.diff(id ?? ''),
     queryFn: ({ signal }) => getRunDiff(id as string, { signal }),
     enabled: Boolean(id),
+  })
+}
+
+/** The variant-compare data for `/compare/:groupId` (spec 010). Freshness while variants are
+ *  still running is the ROUTE's concern: the group endpoint is not on the SSE stream, so the
+ *  compare view invalidates this key when the run list (which IS stream-patched) shows a member
+ *  changing state — no polling, per the sync doctrine. */
+export function useGroup(groupId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.groups.detail(groupId ?? ''),
+    queryFn: ({ signal }) => getGroup(groupId as string, { signal }),
+    enabled: Boolean(groupId),
   })
 }
 

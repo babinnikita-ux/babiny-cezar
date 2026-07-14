@@ -131,7 +131,7 @@ describe('the review gate on the thread', () => {
     })
     expect(document.querySelector('[data-slot="diff-file-path"]')?.textContent).toBe('notes.md')
     // The summary line and the per-file counts agree with the hunk.
-    expect(document.querySelector('[data-slot="review-diff"]')?.textContent).toContain('1 file changed')
+    expect(document.querySelector('[data-slot="run-diff"]')?.textContent).toContain('1 file changed')
     expect(document.querySelector('[data-slot="diff-file"]')?.textContent).toContain('+2')
     expect(document.querySelector('[data-slot="diff-file"]')?.textContent).toContain('−1')
     // Line tinting comes from the --diff-* tokens.
@@ -147,7 +147,7 @@ describe('the review gate on the thread', () => {
     })
     renderWithProviders(<ReviewPanel run={run('review')} />)
     await waitFor(() => {
-      expect(document.querySelector('[data-slot="review-diff-empty"]')?.textContent).toContain(
+      expect(document.querySelector('[data-slot="run-diff-empty"]')?.textContent).toContain(
         'no worktree',
       )
     })

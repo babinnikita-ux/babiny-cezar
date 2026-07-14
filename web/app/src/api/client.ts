@@ -9,11 +9,13 @@ import type {
   DeleteRunResponse,
   FinishResponse,
   GithubData,
+  GroupResponse,
   HealthResponse,
   MessageInput,
   MessageResponse,
   OpenInCliResponse,
   PatchRunInput,
+  PickVariantResponse,
   RepoResponse,
   RunRecord,
   Skill,
@@ -209,6 +211,12 @@ export function getRunHandoff(id: string, opts?: ReadOptions): Promise<string> {
   return requestText(runPath(id, '/handoff'), { method: 'GET', signal: opts?.signal })
 }
 
+/** The variant-compare data (spec 010): one entry per variant of the group, with the legacy
+ *  `git diff --stat` text and the handoff Progress excerpt. 404 for an unknown group. */
+export function getGroup(groupId: string, opts?: ReadOptions): Promise<GroupResponse> {
+  return get<GroupResponse>(`/api/groups/${encodeURIComponent(groupId)}`, opts)
+}
+
 // ---- run mutations ------------------------------------------------------------------------
 
 /** ×1 answers the run record; ×2/×3 answers `{ runs }` — narrow on `'runs' in result`. */
@@ -256,6 +264,13 @@ export function patchRun(id: string, patch: PatchRunInput): Promise<RunRecord> {
 /** Deletes the run, its transcript, its worktree and its branch. 409 while it is still active. */
 export function deleteRun(id: string): Promise<DeleteRunResponse> {
   return mutate<DeleteRunResponse>('DELETE', runPath(id))
+}
+
+/** "Pick this one" (spec 010): the winner rests at `review` for the gate; the losers are
+ *  cancelled if alive, archived, and their worktrees + branches removed. 409 while the picked
+ *  variant is still active — the server's words come back verbatim in the ApiError. */
+export function pickVariant(groupId: string, runId: string): Promise<PickVariantResponse> {
+  return mutate<PickVariantResponse>('POST', `/api/groups/${encodeURIComponent(groupId)}/pick`, { runId })
 }
 
 /** Hand the session off to a real terminal (spec 003), in the run's worktree when it still

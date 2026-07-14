@@ -7,7 +7,6 @@ import {
   GitPullRequestIcon,
   InboxIcon,
   PaletteIcon,
-  ScaleIcon,
   SettingsIcon,
   SparklesIcon,
   WorkflowIcon,
@@ -16,6 +15,7 @@ import { Suspense, lazy } from 'react'
 import { Route, Routes } from 'react-router'
 
 import { GithubIcon } from './components/icons'
+import { CompareLoading } from './routes/compare-loading'
 import { NewTaskRoute } from './routes/new-task'
 import { NotFoundRoute } from './routes/not-found'
 import { Placeholder } from './routes/placeholder'
@@ -28,6 +28,12 @@ import { TasksOverviewRoute } from './routes/tasks-overview'
  *  shows while fetching, so the split is invisible to the user. */
 const TaskThreadRoute = lazy(() =>
   import('./routes/task-thread/task-thread').then((m) => ({ default: m.TaskThreadRoute })),
+)
+
+/** Lazy for the same reason: the compare view renders Progress excerpts through Streamdown and
+ *  full diffs through the Shiki singleton — thread-chunk weight the home screen must not pay. */
+const CompareVariantsRoute = lazy(() =>
+  import('./routes/compare-variants').then((m) => ({ default: m.CompareVariantsRoute })),
 )
 
 /** The route map from the spec's "Routing — every surface is a URL" section.
@@ -56,7 +62,14 @@ export function AppRoutes() {
       />
       <Route path="/tasks/:id/changes" element={<Placeholder route="task-changes" title="Changes" icon={<FileDiffIcon />} />} />
       <Route path="/tasks/:id/files" element={<Placeholder route="task-files" title="Files" icon={<FolderTreeIcon />} />} />
-      <Route path="/compare/:groupId" element={<Placeholder route="compare" title="Compare variants" icon={<ScaleIcon />} />} />
+      <Route
+        path="/compare/:groupId"
+        element={
+          <Suspense fallback={<CompareLoading />}>
+            <CompareVariantsRoute />
+          </Suspense>
+        }
+      />
 
       <Route path="/git" element={<Placeholder route="git" title="Git" icon={<GitBranchIcon />} />} />
       <Route path="/github" element={<Placeholder route="github" title="GitHub" icon={<GithubIcon />} />} />
