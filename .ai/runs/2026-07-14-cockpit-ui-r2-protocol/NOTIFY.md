@@ -1,0 +1,3 @@
+# Notifications — Cockpit UI redesign, Phase R2
+- 2026-07-14T17:11:52Z — **run start (R2)**. 8 Steps: v2 types, 3 backend emitters w/ golden fixtures, RunManager persistence w/ coalescing guardrails, titleSummary/diffStat/PATCH-title, systemPrompt e2e, web display model. Stacked on R1.
+- 2026-07-14T17:11:52Z — **decision**: executor dispatch stays SERIAL despite the three mappers being disjoint files — every Step commits to one branch and flips one PLAN.md, so parallel executors would collide on the git index/push; the one-Step-one-commit bisectability contract wins over wall-clock (skill rule: conflict avoidance trumps speed).
