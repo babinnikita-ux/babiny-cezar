@@ -12,12 +12,12 @@
 
 | Phase | Step | Title | Status | Commit |
 |-------|------|-------|--------|--------|
-| 1 | 1.1 | Vite + React + TS scaffold with dev:web / build:web scripts | done | c431924 |
-| 1 | 1.2 | Tailwind v4 + design tokens + self-hosted fonts | done | pending |
-| 1 | 1.3 | shadcn/ui primitives and the cn() utility | done | pending |
-| 1 | 1.4 | vitest projects (server + web) and npm test in the validation gate | done | pending |
-| 1 | 1.5 | Hono serves web/dist with legacy fallback and ?legacy=1 | done | pending |
-| 1 | 1.6 | Agent-browser provider setup + first UI smoke test | done | pending |
+| 1 | 1.1 | Vite + React + TS scaffold with dev:web / build:web scripts | done | 4f3bf43 |
+| 1 | 1.2 | Tailwind v4 + design tokens + self-hosted fonts | done | da0f27b |
+| 1 | 1.3 | shadcn/ui primitives and the cn() utility | done | 907c125 |
+| 1 | 1.4 | vitest projects (server + web) and npm test in the validation gate | done | ca8208f |
+| 1 | 1.5 | Hono serves web/dist with legacy fallback and ?legacy=1 | done | 85db541 |
+| 1 | 1.6 | Agent-browser provider setup + first UI smoke test | done | 03b58d0 |
 | 2 | 2.1 | react-router route map + server SPA catch-all | todo | — |
 | 2 | 2.2 | Theme system (pre-paint, light/dark/system) | todo | — |
 | 2 | 2.3 | App shell: sidebar + 100dvh grid + safe areas | todo | — |
