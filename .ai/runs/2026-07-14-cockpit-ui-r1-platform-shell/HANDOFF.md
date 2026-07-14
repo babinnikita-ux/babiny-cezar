@@ -2,29 +2,16 @@
 
 _A fresh agent should be able to resume in under 30 seconds from this file._
 
-## State (checkpoint 3 — 2026-07-14)
+## State (final — R1 COMPLETE)
 
-- **Phase 1 (Platform), Phase 2 (Shell) complete; Phase 3 (data) is 3/4 done** — Steps 1.1–1.6, 2.1–2.4, 3.1–3.3 landed (`4f3bf43`..`e503571`). **12 of 17 Steps.**
-- **Remaining in R1: 5 Steps** — 3.4 (tasks table) and Phase 4 (4.1 CenteredState, 4.2 Tools dropdown, 4.3 ⌘K palette, 4.4 design-guardian).
-- Branch `feat/cockpit-ui-r1-platform-shell`; **draft PR #396** (kept open deliberately so the user can watch; `Status: in-progress`; lock held: assignee + `in-progress` label).
-- Everything green: `npm run typecheck` · `npm test` **495/495** · `npm run build` · `npm run test:e2e` **25/25** (real Chrome via agent-browser).
+- **All 18 Steps done** (17 planned + 4.4-review-fix), `4f3bf43`..`367e550`. Final gate green: typecheck (server+web) · `npm test` **647/647** · build · `npm run test:e2e` **41/41** (agent-browser, real Chrome).
+- Fresh-context review: verdict REQUEST CHANGES → one major fixed (`/new` now serves the LEGACY page until R4 lands the composer — the bookmarklet contract is a hard-protected surface) + `/assets` traversal hardening. Re-verified live.
+- **PR #396 is ready for the user's review/merge** (draft, `Status: complete`).
 
 ## Next concrete action
 
-Step **3.4 — Tasks table view (the overview home)** (first `todo` row in `PLAN.md`'s Tasks table). Then Phase 4: 4.1 CenteredState, 4.2 Tools dropdown, 4.3 ⌘K palette, 4.4 design-guardian.
-
-**Everything 3.4 needs already exists** — do not rebuild it:
-- `useRuns()` (live via SSE), `useListView()` from `@/components/list-view` (the Active/Archived state, provider already mounted in `AppShellContainer` — the table's tabs must share it with the sidebar).
-- `groupRuns`/`sortRuns`/`listCounts`/`shortAge`/`compactTokens` from `@/lib/task-groups`, `deriveAttention` from `@/lib/attention` — all reusable as-is.
-- **Live CPU/Mem come from `useRunUsage(runId)` in `@/api/global-events`, NOT `run.usage`.**
-- Per PR #392 (already on main), the table **is** the overview home at `/`: the Tasks nav always lands there, there is no list/table toggle, and Active/Archived tabs live in the table header. The mockup `tasks-home.html` is the visual contract (11 columns; note its list/table toggle is obsolete — do not build it).
-
-## How to resume
-
-```
-om-auto-continue-pr-loop 396
-```
-It reads `PLAN.md`'s Tasks table; the first non-`done` row is the resume point. The worktree may be gone — recreate one off the branch. Executors get their brief from `/tmp/.../scratchpad/EXECUTOR-CONTEXT.md` (recreate it from this file if the scratchpad is gone: it carries the worktree path, the reference material, and the hard rules below).
+**Phase R2 (protocol v2)** as a NEW run — branch `feat/cockpit-ui-r2-protocol` stacked on this branch (base PR #396's branch; GitHub retargets to main when #396 merges). Spec steps 5–7: UiEvent/UiItem types + claude emitter w/ golden fixtures; codex + opencode emitters w/ fixtures; RunManager v2 persistence + titleSummary + diffStat + PATCH title + systemPrompt. R2 unlocks the honest slots R1 left: `titleSummary`, `± diffStat`, `permission`/`unseen` attention sources.
+**R2 note**: the three backend mappers are disjoint files — a Workflow fan-out is appropriate there (unlike R1's serial one-branch steps).
 
 ## What exists now
 
