@@ -91,6 +91,36 @@ describe('cockpit app shell', () => {
     expect(browser.isVisible('[data-slot="sidebar-footer"] [data-slot="theme-toggle"]')).toBe(true)
   })
 
+  it('fills the repo and version chips from the live /api/health', async () => {
+    // The server runs against this checkout (a real git repo), so health is real data — the one
+    // thing a jsdom test with a mocked fetch cannot prove. Ask it from here rather than inside
+    // the page: `eval` hands back whatever the expression evaluates to, and a promise is not a
+    // value — an `await` in there would assert against `{}` and pass on nothing.
+    const health = (await fetch(`${baseUrl}/api/health`).then((r) => r.json())) as {
+      version: string
+      repoRoot: string
+      repo: { branch: string } | null
+    }
+    expect(health.repo).not.toBeNull()
+
+    browser.goto(baseUrl + '/')
+    // The chips are async — they appear only once the health query answers.
+    browser.waitForFunction(`document.querySelector('[data-slot="repo-chip"]') !== null`)
+
+    // Compared against what the server says right now, not a hardcoded repo name: this asserts
+    // the client → query → chip path really carries live API data, and stays true wherever the
+    // suite runs (any checkout, any branch).
+    const repoName = health.repoRoot.replace(/[\\/]+$/, '').split(/[\\/]/).pop()
+    expect(browser.text('[data-slot="repo-chip"]')).toBe(`${repoName} / ${health.repo?.branch}`)
+    expect(browser.text('[data-slot="version-chip"]')).toBe(health.version)
+
+    // Real values, not a placeholder that happens to match itself.
+    expect(health.version).toMatch(/^\d+\.\d+\.\d+/)
+    expect(repoName).toBeTruthy()
+
+    browser.screenshot(`${artifactsDir}/shell-repo-chip.png`)
+  })
+
   it('marks exactly one nav item active, following the route', () => {
     const activeLabel = () =>
       browser.evaluate(

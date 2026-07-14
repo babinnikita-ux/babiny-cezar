@@ -1,0 +1,84 @@
+import { describe, expect, it } from 'vitest';
+import type {
+  BackendCheck as WebBackendCheck,
+  GithubData as WebGithubData,
+  GithubItem as WebGithubItem,
+  LogEntry as WebLogEntry,
+  ProcessUsage as WebProcessUsage,
+  RepoInfo as WebRepoInfo,
+  RunEvent as WebRunEvent,
+  RunRecord as WebRunRecord,
+  RunStatus as WebRunStatus,
+  Skill as WebSkill,
+  StatusEntry as WebStatusEntry,
+  StepState as WebStepState,
+  StepStatus as WebStepStatus,
+  TodoItem as WebTodoItem,
+  WorkflowDef as WebWorkflowDef,
+  WorkflowLoadIssue as WebWorkflowLoadIssue,
+  WorkflowStepDef as WebWorkflowStepDef,
+  WorkflowsResponse as WebWorkflowsResponse,
+} from '../../web/app/src/api/types.js';
+import type { BackendCheck } from '../core/backend-detect.js';
+import type { ProcessUsage } from '../core/process-usage.js';
+import type { RunEvent, RunRecord, RunStatus, StepState, StepStatus } from '../runs/store.js';
+import type { Skill } from '../skills.js';
+import type { TodoItem } from '../todos.js';
+import type { WorkflowLoadIssue, loadWorkflows } from '../workflows/load.js';
+import type { WorkflowDef, WorkflowStepDef } from '../workflows/types.js';
+import type { GithubData, GithubItem } from './github.js';
+import type { LogEntry, RepoInfo, StatusEntry } from './git.js';
+
+/**
+ * The drift guard for `web/app/src/api/types.ts`.
+ *
+ * The cockpit bundle cannot import the server's modules (Node built-ins, NodeNext specifiers,
+ * zod at runtime), so its API types are hand-mirrored. This file is what keeps "hand-mirrored"
+ * from meaning "eventually wrong": every pair below must be mutually assignable, so renaming a
+ * field, widening a union or making something optional in the server breaks `npm run typecheck`
+ * — the gate — instead of breaking the UI at runtime.
+ *
+ * It lives on the server side deliberately: `npm run typecheck` covers `src/**`, and the web
+ * types module is import-free precisely so NodeNext can reach it from here.
+ *
+ * Type-only imports, so nothing crosses the runtime boundary in either direction.
+ */
+
+/** Mutual assignability. `[…]` wrappers stop a naked union from distributing. */
+type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+
+/** Each `true` is one assertion the compiler makes. A drift turns it into `false`, which is
+ *  not assignable to `true` — and the file stops compiling. */
+const guards = {
+  runStatus: true satisfies Exact<RunStatus, WebRunStatus>,
+  stepStatus: true satisfies Exact<StepStatus, WebStepStatus>,
+  stepState: true satisfies Exact<StepState, WebStepState>,
+  runRecord: true satisfies Exact<RunRecord, WebRunRecord>,
+  runEvent: true satisfies Exact<RunEvent, WebRunEvent>,
+  processUsage: true satisfies Exact<ProcessUsage, WebProcessUsage>,
+  backendCheck: true satisfies Exact<BackendCheck, WebBackendCheck>,
+  repoInfo: true satisfies Exact<RepoInfo, WebRepoInfo>,
+  statusEntry: true satisfies Exact<StatusEntry, WebStatusEntry>,
+  logEntry: true satisfies Exact<LogEntry, WebLogEntry>,
+  workflowStepDef: true satisfies Exact<WorkflowStepDef, WebWorkflowStepDef>,
+  workflowDef: true satisfies Exact<WorkflowDef, WebWorkflowDef>,
+  workflowLoadIssue: true satisfies Exact<WorkflowLoadIssue, WebWorkflowLoadIssue>,
+  // `GET /api/workflows` returns loadWorkflows()'s resolved value verbatim.
+  workflowsResponse: true satisfies Exact<
+    Awaited<ReturnType<typeof loadWorkflows>>,
+    WebWorkflowsResponse
+  >,
+  skill: true satisfies Exact<Skill, WebSkill>,
+  todoItem: true satisfies Exact<TodoItem, WebTodoItem>,
+  githubItem: true satisfies Exact<GithubItem, WebGithubItem>,
+  githubData: true satisfies Exact<GithubData, WebGithubData>,
+};
+
+describe('web api types mirror the server', () => {
+  // The assertions above are compile-time; this only proves the guard block is still here and
+  // still says `true` — a deleted or negated guard is a real regression.
+  it('holds every guard', () => {
+    expect(Object.values(guards).every((v) => v === true)).toBe(true);
+    expect(Object.keys(guards).length).toBeGreaterThan(15);
+  });
+});

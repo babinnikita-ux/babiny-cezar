@@ -22,7 +22,7 @@
 | 2 | 2.2 | Theme system (pre-paint, light/dark/system) | done | 3f12a2d |
 | 2 | 2.3 | App shell: sidebar + 100dvh grid + safe areas | done | 8819d6c |
 | 2 | 2.4 | Mobile drawer navigation | done | 807805e |
-| 3 | 3.1 | Typed API client for /api/* | todo | — |
+| 3 | 3.1 | Typed API client for /api/* | done | pending |
 | 3 | 3.2 | SSE hooks with reconcile doctrine (global stream) | todo | — |
 | 3 | 3.3 | deriveAttention + task quick-list (groups, variants, status dots) | todo | — |
 | 3 | 3.4 | Tasks table view (the overview home) | todo | — |
