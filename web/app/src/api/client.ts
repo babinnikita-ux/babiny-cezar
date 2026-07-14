@@ -11,6 +11,7 @@ import type {
   HealthResponse,
   MessageInput,
   MessageResponse,
+  OpenInCliResponse,
   PatchRunInput,
   RepoResponse,
   RunRecord,
@@ -201,6 +202,12 @@ export function getRunDiff(id: string, opts?: ReadOptions): Promise<string> {
   return requestText(runPath(id, '/diff'), { method: 'GET', signal: opts?.signal })
 }
 
+/** The run's handoff journal (spec 007) as markdown text. `''` until the file is seeded —
+ *  the server only 404s for an unknown run, never for a missing file. */
+export function getRunHandoff(id: string, opts?: ReadOptions): Promise<string> {
+  return requestText(runPath(id, '/handoff'), { method: 'GET', signal: opts?.signal })
+}
+
 // ---- run mutations ------------------------------------------------------------------------
 
 /** ×1 answers the run record; ×2/×3 answers `{ runs }` — narrow on `'runs' in result`. */
@@ -241,6 +248,12 @@ export function patchRun(id: string, patch: PatchRunInput): Promise<RunRecord> {
 /** Deletes the run, its transcript, its worktree and its branch. 409 while it is still active. */
 export function deleteRun(id: string): Promise<DeleteRunResponse> {
   return mutate<DeleteRunResponse>('DELETE', runPath(id))
+}
+
+/** Hand the session off to a real terminal (spec 003), in the run's worktree when it still
+ *  exists. On 409 the ApiError's `command` carries the manual `cd … && <resume>` to copy. */
+export function openRunInCli(id: string): Promise<OpenInCliResponse> {
+  return mutate<OpenInCliResponse>('POST', runPath(id, '/open-in-cli'))
 }
 
 /** Deliver text and/or pasted screenshots into a run's live session. 409 once it has closed. */

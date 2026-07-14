@@ -1,5 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import type { ReactElement } from 'react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -13,6 +14,25 @@ afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
 })
+
+/** ThreadView now hosts the run header, whose hooks need a query client (mutations, the runs
+ *  list) and a router (tabs, delete-navigates-home). Data assertions still drive the reduced
+ *  fixture states directly — the providers are plumbing, not fixtures. */
+function renderView(ui: ReactElement) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() =>
+      Promise.resolve(
+        new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } }),
+      ),
+    ),
+  )
+  return render(
+    <QueryClientProvider client={createQueryClient()}>
+      <MemoryRouter>{ui}</MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
 
 const run = (status: RunStatus, extra: Partial<ApiRun> = {}): ApiRun =>
   ({
@@ -49,7 +69,7 @@ const EVENTS: RunEvent[] = [
 
 describe('ThreadView', () => {
   it('renders the task as the leading user bubble and the v1 reply as another', () => {
-    render(<ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />)
+    renderView(<ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />)
     const bubbles = document.querySelectorAll('[data-slot="user-bubble"]')
     expect(bubbles).toHaveLength(2)
     expect(bubbles[0]!.textContent).toContain('Summarize what this project does.')
@@ -58,7 +78,7 @@ describe('ThreadView', () => {
   })
 
   it('renders assistant messages as markdown, not raw text', async () => {
-    render(<ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />)
+    renderView(<ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />)
     // The ** marks became a strong element (Streamdown spells it as a data-tagged span) —
     // the renderer parsed, it didn't echo.
     await waitFor(() => {
@@ -69,7 +89,7 @@ describe('ThreadView', () => {
   })
 
   it('dims lifecycle lines and shows the tool card + folded reasoning', () => {
-    render(<ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />)
+    renderView(<ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />)
     const notes = [...document.querySelectorAll('[data-slot="note-line"]')]
     expect(notes.map((n) => n.getAttribute('data-tone'))).toEqual(['dim', 'dim'])
     expect(notes[1]!.textContent).toContain('worktree ready')
@@ -83,13 +103,13 @@ describe('ThreadView', () => {
   })
 
   it('shows the header title (auto-summary, never the raw title) and the status pill', () => {
-    render(<ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />)
+    renderView(<ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />)
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Do the thing')
     expect(document.querySelector('[data-slot="pill"]')?.textContent).toContain('needs you')
   })
 
   it('waiting → the paused footer with a pulsing dot', () => {
-    render(<ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />)
+    renderView(<ThreadView run={run('waiting')} thread={reduceThread(EVENTS)} />)
     const footer = document.querySelector('[data-slot="thread-footer"]')
     expect(footer?.getAttribute('data-state')).toBe('waiting')
     expect(footer?.textContent).toContain('The agent is paused, waiting for your reply')
@@ -97,29 +117,29 @@ describe('ThreadView', () => {
   })
 
   it('done → the closed footer; failed → the danger footer carrying the run error', () => {
-    render(<ThreadView run={run('done')} thread={reduceThread(EVENTS)} />)
+    renderView(<ThreadView run={run('done')} thread={reduceThread(EVENTS)} />)
     expect(document.querySelector('[data-slot="thread-footer"]')?.textContent).toBe('Session closed')
     cleanup()
 
-    render(<ThreadView run={run('failed', { error: 'checks failed' })} thread={reduceThread(EVENTS)} />)
+    renderView(<ThreadView run={run('failed', { error: 'checks failed' })} thread={reduceThread(EVENTS)} />)
     const footer = document.querySelector('[data-slot="thread-footer"]')
     expect(footer?.textContent).toBe('Session failed — checks failed')
     expect(footer?.className).toContain('text-danger')
   })
 
   it('running → no footer (the stream itself is the status), and no invented empty state', () => {
-    render(<ThreadView run={run('running')} thread={reduceThread(EVENTS)} />)
+    renderView(<ThreadView run={run('running')} thread={reduceThread(EVENTS)} />)
     expect(document.querySelector('[data-slot="thread-footer"]')).toBeNull()
     expect(document.querySelector('[data-slot="thread-empty"]')).toBeNull()
   })
 
   it('an eventless run says so instead of rendering blank space', () => {
-    render(<ThreadView run={run('running')} thread={reduceThread([])} />)
+    renderView(<ThreadView run={run('running')} thread={reduceThread([])} />)
     expect(document.querySelector('[data-slot="thread-empty"]')?.textContent).toBe('No session events yet.')
   })
 
   it('no plan → no dock, no header mirror; steps present → the rail renders in the header', () => {
-    render(
+    renderView(
       <ThreadView
         run={run('running', {
           steps: [
@@ -148,7 +168,7 @@ describe('ThreadView', () => {
         ],
       }),
     ]
-    render(<ThreadView run={run('running')} thread={reduceThread(withPlan)} />)
+    renderView(<ThreadView run={run('running')} thread={reduceThread(withPlan)} />)
     expect(document.querySelector('[data-slot="plan-dock"]')).not.toBeNull()
     expect(document.querySelector('[data-slot="plan-count"]')?.textContent).toBe('· 1/3')
     expect(document.querySelector('[data-slot="plan-mirror"]')?.textContent).toBe('Plan 1/3')
@@ -173,7 +193,7 @@ describe('ThreadView', () => {
         item: { kind: 'tool', id: 'toolu_todo', name: 'TodoWrite', toolKind: 'plan', title: 'Update plan', status: 'completed', input: todoInput },
       }),
     ]
-    render(<ThreadView run={run('running')} thread={reduceThread(events)} />)
+    renderView(<ThreadView run={run('running')} thread={reduceThread(events)} />)
     expect(document.querySelector('[data-slot="tool-card"]')).toBeNull()
     expect(document.querySelector('[data-slot="plan-dock"]')).not.toBeNull()
   })

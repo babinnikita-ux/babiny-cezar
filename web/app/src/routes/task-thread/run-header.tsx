@@ -1,0 +1,531 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import {
+  ArchiveIcon,
+  ArchiveRestoreIcon,
+  CheckIcon,
+  CircleStopIcon,
+  CopyIcon,
+  EllipsisVerticalIcon,
+  FileTextIcon,
+  PencilIcon,
+  PlayIcon,
+  SquareTerminalIcon,
+  Trash2Icon,
+} from 'lucide-react'
+import { Fragment, useRef, useState, type ReactNode } from 'react'
+import { Link, useNavigate } from 'react-router'
+
+import { ApiError, archiveRun, cancelRun, continueRun, deleteRun, finishRun, openRunInCli } from '@/api/client'
+import { queryKeys, usePatchRun, useRunHandoff, useRuns } from '@/api/queries'
+import type { ApiRun } from '@/api/types'
+import { DiffStatLabel } from '@/components/diff-stat'
+import { Pill } from '@/components/pill'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { toast } from '@/components/ui/toaster'
+import { deriveAttention } from '@/lib/attention'
+import { compactTokens } from '@/lib/format'
+import { queuePositions, runTitle } from '@/lib/task-groups'
+import { formatCost } from '@/lib/tasks-table'
+import { cn } from '@/lib/utils'
+
+import { Markdown } from './markdown'
+import { finishTitle, resumeHint, runActionFlags } from './run-actions'
+import { StepRail } from './step-rail'
+
+/**
+ * The run header (spec §"Task thread" → Header): editable title + status pill, the meta line,
+ * the Session | Changes | Files tabs with the action bar, the workflow step rail and the plan
+ * mirror — the whole sticky region above the thread.
+ *
+ * Two deliberate omissions, both seams rather than gaps:
+ *  - **VS Code** (spec: `POST /api/runs/:id/open-in-editor`) — the endpoint does not exist yet;
+ *    R5 adds it driver-detected. Faking the button against nothing would be dishonest.
+ *  - **Hosted mode** (spec §"Deployment modes"): when R5's `capabilities.localHandoff` lands in
+ *    `/api/health`, Terminal (and VS Code) must disappear entirely and the resume hint must drop
+ *    its `cd`. Today's HealthResponse carries no such field, so Terminal renders per current
+ *    (local-only) behavior — the gate goes in where the flags are read, `runActionFlags` callers.
+ */
+export function RunHeader({ run, planTally }: { run: ApiRun; planTally?: { done: number; total: number } }) {
+  const attention = deriveAttention(run)
+  const flags = runActionFlags(run)
+  const hint = resumeHint(run)
+  const [notesOpen, setNotesOpen] = useState(false)
+  const actions = useRunActions(run)
+
+  // The queue position a parked run shows in its pill ("queued #2"). Reads the shared runs-list
+  // query — already warm from the sidebar quick-list — because position is a property of the
+  // whole queue, not of this record.
+  const runs = useRuns()
+  const queuePosition =
+    run.status === 'queued' ? queuePositions(runs.data ?? []).get(run.id) : undefined
+
+  return (
+    <header
+      data-slot="run-header"
+      className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 pt-3 backdrop-blur md:px-6"
+    >
+      <div className="mx-auto w-full max-w-[820px]">
+        <div className="flex min-w-0 items-center gap-2">
+          <EditableTitle run={run} />
+          <span className="ml-auto flex shrink-0 items-center gap-2.5">
+            {planTally ? (
+              // The plan dock's compact mirror (spec: "mirrored as a compact progress line in
+              // the run header").
+              <span data-slot="plan-mirror" className="text-[11px] text-soft-foreground tabular-nums">
+                Plan {planTally.done}/{planTally.total}
+              </span>
+            ) : null}
+            <Pill dot={attention.tone} pulse={attention.pulse}>
+              {attention.label}
+              {queuePosition !== undefined ? ` #${queuePosition}` : ''}
+            </Pill>
+            <ActionsKebab run={run} actions={actions} onToggleNotes={() => setNotesOpen((open) => !open)} />
+          </span>
+        </div>
+
+        <MetaRow run={run} />
+
+        <div data-slot="run-tabs" className="mt-2.5 flex items-end gap-1">
+          <TabLink to={`/tasks/${run.id}`} active>
+            Session
+          </TabLink>
+          {/* R2.1 routes; the views themselves are R5 — until then they answer with honest
+              placeholders rather than pretending at a diff. */}
+          <TabLink to={`/tasks/${run.id}/changes`}>Changes</TabLink>
+          <TabLink to={`/tasks/${run.id}/files`}>Files</TabLink>
+
+          <div data-slot="run-actions" className="ml-auto hidden items-center gap-1 pb-1 md:flex">
+            {flags.finish ? (
+              <Button variant="outline" size="sm" title={finishTitle(run.status)} onClick={() => actions.finish.mutate()}>
+                <CheckIcon aria-hidden="true" />
+                Finish
+              </Button>
+            ) : null}
+            {flags.continueRun ? (
+              <Button variant="outline" size="sm" title="Reopen the session" onClick={() => actions.continueRun.mutate()}>
+                <PlayIcon aria-hidden="true" />
+                Continue
+              </Button>
+            ) : null}
+            {flags.terminal ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                title="Take over the session in a real terminal"
+                onClick={() => actions.terminal.mutate()}
+              >
+                <SquareTerminalIcon aria-hidden="true" />
+                Terminal
+              </Button>
+            ) : null}
+            <Button
+              variant="ghost"
+              size="sm"
+              title="Handoff notes — what the agent did and what's left"
+              aria-expanded={notesOpen}
+              onClick={() => setNotesOpen((open) => !open)}
+            >
+              <FileTextIcon aria-hidden="true" />
+              Notes
+            </Button>
+            {flags.archive ? (
+              <Button variant="ghost" size="sm" onClick={() => actions.archive.mutate()}>
+                {run.archived ? <ArchiveRestoreIcon aria-hidden="true" /> : <ArchiveIcon aria-hidden="true" />}
+                {run.archived ? 'Unarchive' : 'Archive'}
+              </Button>
+            ) : null}
+            {flags.cancel ? (
+              <Button variant="danger-ghost" size="sm" onClick={() => actions.setConfirming('cancel')}>
+                <CircleStopIcon aria-hidden="true" />
+                Cancel
+              </Button>
+            ) : null}
+            {flags.deleteRun ? (
+              <Button variant="danger-ghost" size="sm" onClick={() => actions.setConfirming('delete')}>
+                <Trash2Icon aria-hidden="true" />
+                Delete
+              </Button>
+            ) : null}
+          </div>
+        </div>
+
+        {run.steps.length > 0 ? (
+          <div className="border-t border-border pt-2.5 pb-1">
+            <StepRail steps={run.steps} />
+          </div>
+        ) : null}
+
+        {hint ? <ResumeHintLine hint={hint} /> : null}
+        {notesOpen ? <NotesPanel runId={run.id} /> : null}
+      </div>
+
+      <ConfirmDialog run={run} actions={actions} />
+    </header>
+  )
+}
+
+/** The mutations + confirm state, bundled so the desktop bar and the mobile kebab drive the
+ *  exact same behavior. Every failure surfaces the server's own words as a danger toast. */
+function useRunActions(run: ApiRun) {
+  const queryClient = useQueryClient()
+  const navigate = useNavigate()
+  const [confirming, setConfirming] = useState<'cancel' | 'delete' | null>(null)
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
+  const onError = (error: Error) => toast(error.message, { tone: 'danger' })
+
+  const finish = useMutation({ mutationFn: () => finishRun(run.id), onSuccess: invalidate, onError })
+  const continueMutation = useMutation({
+    mutationFn: () => continueRun(run.id),
+    onSuccess: invalidate,
+    onError,
+  })
+  const archive = useMutation({
+    mutationFn: () => archiveRun(run.id, !run.archived),
+    onSuccess: invalidate,
+    onError,
+  })
+  const cancel = useMutation({ mutationFn: () => cancelRun(run.id), onSuccess: invalidate, onError })
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteRun(run.id),
+    onSuccess: () => {
+      invalidate()
+      // The run is gone — so is this page. Home is the only honest destination.
+      void navigate('/')
+    },
+    onError,
+  })
+  const terminal = useMutation({
+    mutationFn: () => openRunInCli(run.id),
+    onError: (error: Error) => {
+      // The legacy 409 fallback: no terminal emulator → the server sends the manual command;
+      // put it on the clipboard so "no terminal" still ends with the user one paste away.
+      if (error instanceof ApiError && error.command) {
+        void copyToClipboard(error.command, 'No terminal found — command copied to clipboard.')
+        return
+      }
+      onError(error)
+    },
+  })
+
+  return {
+    finish,
+    continueRun: continueMutation,
+    archive,
+    cancel,
+    delete: deleteMutation,
+    terminal,
+    confirming,
+    setConfirming,
+  }
+}
+
+type RunActions = ReturnType<typeof useRunActions>
+
+async function copyToClipboard(text: string, doneMessage: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text)
+    toast(doneMessage)
+  } catch {
+    // No clipboard access (permissions, http) — show the command itself; it is the payload.
+    toast(`Run manually: ${text}`)
+  }
+}
+
+/**
+ * The editable title (#389): a plain h1 with a pencil that only appears on hover (mockup
+ * `.pencil-btn`), flipping into an inline input. Enter/blur commit through `usePatchRun`
+ * (the server stores it as both `title` and `titleSummary`), Escape abandons the draft.
+ */
+function EditableTitle({ run }: { run: ApiRun }) {
+  const patch = usePatchRun(run.id)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState('')
+  // Enter both commits AND blurs in sequence — the ref makes whichever fires second a no-op,
+  // so one edit can never become two PATCHes.
+  const committed = useRef(false)
+  const title = runTitle(run)
+
+  const begin = () => {
+    setDraft(title)
+    committed.current = false
+    setEditing(true)
+  }
+  const commit = () => {
+    if (committed.current) return
+    committed.current = true
+    setEditing(false)
+    const next = draft.trim()
+    if (next.length === 0 || next === title) return // nothing to say to the server
+    patch.mutate({ title: next }, { onError: (error) => toast(error.message, { tone: 'danger' }) })
+  }
+  const cancel = () => {
+    committed.current = true
+    setEditing(false)
+  }
+
+  if (editing) {
+    return (
+      <input
+        data-slot="title-input"
+        aria-label="Task title"
+        // eslint-disable-next-line jsx-a11y/no-autofocus — the user just asked to edit this field
+        autoFocus
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') {
+            event.preventDefault()
+            commit()
+          } else if (event.key === 'Escape') {
+            event.preventDefault()
+            cancel()
+          }
+        }}
+        className="w-full min-w-0 flex-1 rounded-sm border border-border bg-card px-1.5 py-0.5 text-[15px] font-semibold outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      />
+    )
+  }
+
+  return (
+    <span className="group flex min-w-0 items-center gap-1">
+      <h1 className="min-w-0 truncate text-[15px] font-semibold" title={run.task}>
+        {title}
+      </h1>
+      <button
+        type="button"
+        aria-label="Rename task"
+        onClick={begin}
+        className="shrink-0 rounded-sm p-1 text-soft-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+      >
+        <PencilIcon className="size-3.5" aria-hidden="true" />
+      </button>
+    </span>
+  )
+}
+
+/** workflow · runner · model · branch chip · ± · tokens · cost (mockup `.meta-row`). Each part
+ *  renders only when the record carries it — absence is absence, not a placeholder. */
+function MetaRow({ run }: { run: ApiRun }) {
+  const parts: ReactNode[] = [<span key="workflow">{run.workflow}</span>]
+  // Runner only when it is a choice worth noting — Claude is the default everywhere.
+  if (run.runner && run.runner !== 'claude') parts.push(<span key="runner">{run.runner}</span>)
+  if (run.model) parts.push(<span key="model">{run.model}</span>)
+  if (run.branch) {
+    parts.push(
+      <span
+        key="branch"
+        data-slot="branch-chip"
+        className="rounded-sm border border-border bg-card px-1.5 py-px font-mono text-[11px] font-medium"
+      >
+        {run.branch}
+      </span>,
+    )
+  }
+  if (run.diffStat) parts.push(<DiffStatLabel key="diff" stat={run.diffStat} />)
+  if (run.tokensUsed > 0) {
+    // Tokens WITHOUT the mockup's context gauge, on purpose: the gauge needs "used / window",
+    // and RunRecord carries only the lifetime `tokensUsed` — no context-window size, no
+    // per-session usage. When the protocol starts persisting one, the bar goes here.
+    parts.push(
+      <span key="tokens" className="tabular-nums">
+        {compactTokens(run.tokensUsed)} tokens
+      </span>,
+    )
+  }
+  if (run.costUsd) {
+    parts.push(
+      <span key="cost" className="tabular-nums">
+        {formatCost(run.costUsd)}
+      </span>,
+    )
+  }
+
+  return (
+    <div
+      data-slot="run-meta"
+      className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground"
+    >
+      {parts.map((part, index) => (
+        <Fragment key={index}>
+          {index > 0 ? (
+            <span className="text-soft-foreground" aria-hidden="true">
+              ·
+            </span>
+          ) : null}
+          {part}
+        </Fragment>
+      ))}
+    </div>
+  )
+}
+
+/** One tab (mockup `.tab`). The header only exists on the Session view, so `active` is a prop
+ *  rather than a route match — Changes/Files render their own surfaces. */
+function TabLink({ to, active = false, children }: { to: string; active?: boolean; children: ReactNode }) {
+  return (
+    <Link
+      to={to}
+      aria-current={active ? 'page' : undefined}
+      className={cn(
+        '-mb-px flex h-8 items-center rounded-t-md border-b-2 px-3 text-[13px] font-medium',
+        active
+          ? 'border-foreground font-semibold text-foreground'
+          : 'border-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
+      )}
+    >
+      {children}
+    </Link>
+  )
+}
+
+/** The <md action surface: everything the desktop bar offers, folded into a kebab menu next to
+ *  the pill (the mockup's mobile pattern — `.tabs-row .actions { display:none }` under 768px). */
+function ActionsKebab({
+  run,
+  actions,
+  onToggleNotes,
+}: {
+  run: ApiRun
+  actions: RunActions
+  onToggleNotes: () => void
+}) {
+  const flags = runActionFlags(run)
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon-sm" aria-label="Run actions" className="md:hidden">
+          <EllipsisVerticalIcon aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" data-slot="run-actions-menu">
+        {flags.finish ? (
+          <DropdownMenuItem onSelect={() => actions.finish.mutate()}>
+            <CheckIcon aria-hidden="true" /> Finish
+          </DropdownMenuItem>
+        ) : null}
+        {flags.continueRun ? (
+          <DropdownMenuItem onSelect={() => actions.continueRun.mutate()}>
+            <PlayIcon aria-hidden="true" /> Continue
+          </DropdownMenuItem>
+        ) : null}
+        {flags.terminal ? (
+          <DropdownMenuItem onSelect={() => actions.terminal.mutate()}>
+            <SquareTerminalIcon aria-hidden="true" /> Terminal
+          </DropdownMenuItem>
+        ) : null}
+        <DropdownMenuItem onSelect={onToggleNotes}>
+          <FileTextIcon aria-hidden="true" /> Notes
+        </DropdownMenuItem>
+        {flags.archive ? (
+          <DropdownMenuItem onSelect={() => actions.archive.mutate()}>
+            {run.archived ? <ArchiveRestoreIcon aria-hidden="true" /> : <ArchiveIcon aria-hidden="true" />}
+            {run.archived ? 'Unarchive' : 'Archive'}
+          </DropdownMenuItem>
+        ) : null}
+        {flags.cancel || flags.deleteRun ? <DropdownMenuSeparator /> : null}
+        {flags.cancel ? (
+          <DropdownMenuItem variant="destructive" onSelect={() => actions.setConfirming('cancel')}>
+            <CircleStopIcon aria-hidden="true" /> Cancel
+          </DropdownMenuItem>
+        ) : null}
+        {flags.deleteRun ? (
+          <DropdownMenuItem variant="destructive" onSelect={() => actions.setConfirming('delete')}>
+            <Trash2Icon aria-hidden="true" /> Delete
+          </DropdownMenuItem>
+        ) : null}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/** The destructive confirms — one dialog, two scripts. Never a native confirm(). */
+function ConfirmDialog({ run, actions }: { run: ApiRun; actions: RunActions }) {
+  const confirming = actions.confirming
+  return (
+    <AlertDialog open={confirming !== null} onOpenChange={(open) => !open && actions.setConfirming(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{confirming === 'delete' ? 'Delete this task?' : 'Cancel this task?'}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {confirming === 'delete'
+              ? 'This removes the run, its transcript, its worktree and its branch. There is no undo.'
+              : 'The agent is stopped and the run completes as cancelled. The worktree stays.'}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Keep it</AlertDialogCancel>
+          <AlertDialogAction
+            className="bg-danger text-danger-foreground hover:brightness-[0.96]"
+            onClick={() => {
+              if (confirming === 'delete') actions.delete.mutate()
+              else actions.cancel.mutate()
+              actions.setConfirming(null)
+            }}
+          >
+            {confirming === 'delete' ? `Delete ${runTitle(run).slice(0, 40)}` : 'Cancel the run'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
+/** "take over interactively: cd … && claude --resume …" — the legacy `#d-resume` line, now
+ *  copyable. Local-machine phrasing; hosted mode (R5, `capabilities.localHandoff`) will swap the
+ *  cd-prefix for a bare resume command. */
+function ResumeHintLine({ hint }: { hint: string }) {
+  return (
+    <button
+      type="button"
+      data-slot="resume-hint"
+      title="Copy the command"
+      onClick={() => void copyToClipboard(hint, 'Command copied to clipboard.')}
+      className="mb-2 flex w-full min-w-0 items-center gap-1.5 rounded-sm px-1 py-0.5 text-left font-mono text-[11px] text-soft-foreground hover:bg-muted hover:text-foreground"
+    >
+      <CopyIcon className="size-3 shrink-0" aria-hidden="true" />
+      <span className="truncate">take over interactively: {hint}</span>
+    </button>
+  )
+}
+
+/** The handoff journal (spec 007) as rendered markdown — fetched only while open. */
+function NotesPanel({ runId }: { runId: string }) {
+  const handoff = useRunHandoff(runId)
+  return (
+    <div
+      data-slot="notes-panel"
+      className="mb-3 max-h-72 overflow-y-auto rounded-md border border-border bg-card px-4 py-3"
+    >
+      {handoff.isPending ? (
+        <p className="text-xs text-soft-foreground">Loading notes…</p>
+      ) : handoff.isError ? (
+        <p className="text-xs text-danger">{handoff.error.message}</p>
+      ) : handoff.data.trim().length > 0 ? (
+        <Markdown>{handoff.data}</Markdown>
+      ) : (
+        <p className="text-xs text-soft-foreground">
+          No notes yet — the handoff file is seeded when the task starts.
+        </p>
+      )}
+    </div>
+  )
+}

@@ -14,7 +14,7 @@
 | 1 | 1.1 | Thread skeleton: turns, message items, Streamdown+Shiki markdown | done | pending |
 | 1 | 1.2 | Tool cards + context groups + reasoning + live output streaming | done | pending |
 | 1 | 1.3 | Plan dock + step rail + check-step cards | done | pending |
-| 1 | 1.4 | Run header: meta, status, tabs, action bar (Finish/Continue/Terminal/Notes/Archive/Cancel/Delete) | todo | — |
+| 1 | 1.4 | Run header: meta, status, tabs, action bar (Finish/Continue/Terminal/Notes/Archive/Cancel/Delete) | done | pending |
 | 2 | 2.1 | Shared composer: reply, attachments, / skills autocomplete, @ files, dictation, quick replies | todo | — |
 | 2 | 2.2 | Review gate on the new surface (diff panel, send back, Draft PR) | todo | — |
 | 2 | 2.3 | Variants compare view | todo | — |

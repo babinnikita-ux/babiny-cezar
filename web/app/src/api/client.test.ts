@@ -14,11 +14,13 @@ import {
   getRepo,
   getRun,
   getRunDiff,
+  getRunHandoff,
   getRuns,
   getSkills,
   getTodos,
   getUiState,
   getWorkflows,
+  openRunInCli,
   patchRun,
   putUiState,
   sendMessage,
@@ -71,6 +73,7 @@ describe('request shapes', () => {
     { name: 'getRuns', call: () => getRuns(), path: '/api/runs', method: 'GET' },
     { name: 'getRun', call: () => getRun('run-1'), path: '/api/runs/run-1', method: 'GET' },
     { name: 'getRunDiff', call: () => getRunDiff('run-1'), path: '/api/runs/run-1/diff', method: 'GET' },
+    { name: 'getRunHandoff', call: () => getRunHandoff('run-1'), path: '/api/runs/run-1/handoff', method: 'GET' },
     { name: 'getUiState', call: () => getUiState(), path: '/api/ui-state', method: 'GET' },
     { name: 'getWorkflows', call: () => getWorkflows(), path: '/api/workflows', method: 'GET' },
     { name: 'getSkills', call: () => getSkills(), path: '/api/skills', method: 'GET' },
@@ -137,6 +140,12 @@ describe('request shapes', () => {
       body: { text: 'keep going' },
     },
     { name: 'deleteRun', call: () => deleteRun('run-1'), path: '/api/runs/run-1', method: 'DELETE' },
+    {
+      name: 'openRunInCli',
+      call: () => openRunInCli('run-1'),
+      path: '/api/runs/run-1/open-in-cli',
+      method: 'POST',
+    },
     {
       name: 'patchRun',
       call: () => patchRun('run-1', { title: 'New name' }),
@@ -214,6 +223,13 @@ describe('response parsing', () => {
       new Response(diff, { status: 200, headers: { 'content-type': 'text/plain' } }),
     )
     await expect(getRunDiff('run-1')).resolves.toBe(diff)
+  })
+
+  it('reads the handoff journal as markdown text — an empty file is an empty string, not an error', async () => {
+    fetchMock.mockResolvedValue(
+      new Response('', { status: 200, headers: { 'content-type': 'text/markdown; charset=utf-8' } }),
+    )
+    await expect(getRunHandoff('run-1')).resolves.toBe('')
   })
 
   it('passes an unavailable GitHub through as data — it is a hint, not a failure', async () => {

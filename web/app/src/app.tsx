@@ -6,6 +6,7 @@ import { GlobalEventsProvider } from './api/global-events'
 import { createQueryClient } from './api/query-client'
 import { AppShellContainer } from './components/app-shell-container'
 import { ThemeProvider } from './components/theme-provider'
+import { Toaster } from './components/ui/toaster'
 import { AppRoutes } from './routes'
 
 /** Real URLs, no basename: the cockpit is always mounted at the origin root, and the server
@@ -34,6 +35,8 @@ export function App() {
             <AppShellContainer>
               <AppRoutes />
             </AppShellContainer>
+            {/* One toast outlet for the whole app — `toast()` is a module-level call. */}
+            <Toaster />
           </BrowserRouter>
         </ThemeProvider>
       </GlobalEventsProvider>

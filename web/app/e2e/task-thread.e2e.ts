@@ -316,6 +316,87 @@ describe('task thread', () => {
     browser.screenshot(`${artifactsDir}/thread-desktop.png`)
   })
 
+  it('the header meta line reads workflow · branch chip · ± · tokens · cost off the record', () => {
+    const meta = browser.evaluate(
+      `document.querySelector('[data-slot="run-meta"]').textContent`,
+    ) as string
+    expect(meta).toContain('quick-task')
+    expect(meta).toContain('cez/fcd519dd')
+    expect(meta).toContain('+1 −0')
+    expect(meta).toContain('3.6k tokens')
+    expect(meta).toContain('$0.04')
+    // The fixture is a claude run — the runner stays out of the line, like the mockup.
+    expect(meta).not.toContain('claude')
+    // Branch renders as the mono chip, not plain text.
+    expect(
+      browser.evaluate(`document.querySelector('[data-slot="branch-chip"]').textContent`),
+    ).toBe('cez/fcd519dd')
+  })
+
+  it('tabs point at the routed Session/Changes/Files surfaces; the done run offers the closed-run actions', () => {
+    const tabs = browser.evaluate(`[...document.querySelectorAll('[data-slot="run-tabs"] a')].map((a) => ({
+      text: a.textContent,
+      href: a.getAttribute('href'),
+      current: a.getAttribute('aria-current'),
+    }))`) as Array<{ text: string; href: string; current: string | null }>
+    expect(tabs).toEqual([
+      { text: 'Session', href: `/tasks/${RUN_ID}`, current: 'page' },
+      { text: 'Changes', href: `/tasks/${RUN_ID}/changes`, current: null },
+      { text: 'Files', href: `/tasks/${RUN_ID}/files`, current: null },
+    ])
+
+    const actions = browser.evaluate(
+      `[...document.querySelectorAll('[data-slot="run-actions"] button')].map((b) => b.textContent.trim())`,
+    ) as string[]
+    expect(actions).toEqual(['Continue', 'Terminal', 'Notes', 'Archive', 'Delete'])
+
+    // The take-over hint, per-backend (the fixture's last agent session, in its worktree).
+    const hint = browser.evaluate(
+      `document.querySelector('[data-slot="resume-hint"]').textContent`,
+    ) as string
+    expect(hint).toContain('claude --resume 40169e05-629f-4d7c-853c-8a2a197255e4')
+    expect(hint).toContain('cd /tmp/cezar-fixture-hg7X')
+  })
+
+  it('opens the Notes panel — an unseeded handoff reads as the honest empty state', () => {
+    browser.evaluate(
+      `[...document.querySelectorAll('[data-slot="run-actions"] button')].find((b) => b.textContent.trim() === 'Notes').click()`,
+    )
+    browser.waitForFunction(`document.querySelector('[data-slot="notes-panel"]') !== null`)
+    browser.waitForFunction(
+      `document.querySelector('[data-slot="notes-panel"]').textContent.includes('No notes yet')`,
+    )
+    // The 1.4 money shot: full header (title, meta, tabs+actions, rail, hint) + open notes.
+    browser.screenshot(`${artifactsDir}/thread-header-desktop.png`)
+    browser.evaluate(
+      `[...document.querySelectorAll('[data-slot="run-actions"] button')].find((b) => b.textContent.trim() === 'Notes').click()`,
+    )
+    browser.waitForFunction(`document.querySelector('[data-slot="notes-panel"]') === null`)
+  })
+
+  it('renames the task inline and the PATCH persists server-side', async () => {
+    browser.click('[aria-label="Rename task"]')
+    browser.waitForFunction(`document.querySelector('[data-slot="title-input"]') !== null`)
+    expect(
+      browser.evaluate(`document.querySelector('[data-slot="title-input"]').value`),
+    ).toBe('Explain what cezar does')
+
+    browser.fill('[data-slot="title-input"]', 'Renamed by the header e2e')
+    browser.press('Enter')
+
+    // The header re-reads the invalidated record — the new title lands in the h1…
+    browser.waitForFunction(
+      `document.querySelector('[data-route="task-thread"] h1')?.textContent === 'Renamed by the header e2e'`,
+    )
+    // …and the API readback proves it persisted rather than living in component state.
+    const record = (await (await fetch(`${baseUrl}/api/runs/${RUN_ID}`)).json()) as {
+      title: string
+      titleSummary: string
+    }
+    expect(record.titleSummary).toBe('Renamed by the header e2e')
+    expect(record.title).toBe('Renamed by the header e2e')
+  })
+
   it('an unknown run id lands on the 404-style state with a way home', () => {
     browser.goto(`${baseUrl}/tasks/no-such-run`)
     browser.waitForFunction(`document.querySelector('[data-slot="centered-state"] h1')?.textContent === 'Task not found'`)
@@ -344,6 +425,30 @@ describe('task thread', () => {
     expect(browser.evaluate(`document.querySelector('[data-slot="plan-count"]').textContent`)).toBe('· 2/4')
 
     browser.screenshot(`${artifactsDir}/thread-mobile.png`)
+    browser.setViewport(1440, 900)
+  })
+
+  it('mobile header: the action bar folds into the kebab next to the pill', () => {
+    browser.setViewport(390, 844)
+    browser.goto(`${baseUrl}/tasks/${RUN_ID}`)
+    browser.waitForFunction(`document.querySelector('[data-slot="run-header"]') !== null`)
+
+    // The desktop action bar is gone (`md:flex`), the kebab is the mobile surface.
+    expect(
+      browser.evaluate(
+        `getComputedStyle(document.querySelector('[data-slot="run-actions"]')).display`,
+      ),
+    ).toBe('none')
+    expect(
+      browser.evaluate(
+        `(() => { const el = document.querySelector('[aria-label="Run actions"]'); return el !== null && el.offsetParent !== null })()`,
+      ),
+    ).toBe(true)
+    // Title + pill still read in one compact row.
+    expect(browser.isVisible('[data-route="task-thread"] h1')).toBe(true)
+    expect(browser.evaluate(`document.querySelector('[data-slot="pill"]').textContent`)).toBe('done')
+
+    browser.screenshot(`${artifactsDir}/thread-header-mobile.png`)
     browser.setViewport(1440, 900)
   })
 })

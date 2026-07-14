@@ -6,6 +6,7 @@ import {
   getRepo,
   getRun,
   getRunDiff,
+  getRunHandoff,
   getRuns,
   getSkills,
   getTodos,
@@ -31,6 +32,7 @@ export const queryKeys = {
     list: () => ['runs', 'list'] as const,
     detail: (id: string) => ['runs', 'detail', id] as const,
     diff: (id: string) => ['runs', 'diff', id] as const,
+    handoff: (id: string) => ['runs', 'handoff', id] as const,
   },
   todos: ['todos'] as const,
   workflows: ['workflows'] as const,
@@ -74,6 +76,16 @@ export function useRunDiff(id: string | undefined) {
   })
 }
 
+/** The handoff journal behind the header's Notes panel. `enabled` gates the fetch on the panel
+ *  actually being open — notes are read on demand, not on every thread visit. */
+export function useRunHandoff(id: string | undefined, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.runs.handoff(id ?? ''),
+    queryFn: ({ signal }) => getRunHandoff(id as string, { signal }),
+    enabled: Boolean(id) && enabled,
+  })
+}
+
 /** The follow-up inbox. Drives the nav badge. */
 export function useTodos() {
   return useQuery({
@@ -111,7 +123,7 @@ export function useUiState() {
 }
 
 /** Rename a run (#389): `PATCH /api/runs/:id`. Invalidates `runs.*` so the list and the detail
- *  view refetch the authoritative record. The inline-edit UI lands in 2.4 — this is the wiring. */
+ *  view refetch the authoritative record. The run header's inline title edit sits on this. */
 export function usePatchRun(id: string) {
   const queryClient = useQueryClient()
   return useMutation({

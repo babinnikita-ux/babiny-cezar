@@ -340,3 +340,11 @@ export interface ContinueResponse {
 export interface MessageResponse {
   delivered: boolean
 }
+
+/** `POST /api/runs/:id/open-in-cli` — a terminal was spawned with `command` running in it.
+ *  When no terminal emulator exists the server answers 409 instead, and the `ApiError` carries
+ *  the full `cd … && <command>` in its `command` field for the clipboard fallback. */
+export interface OpenInCliResponse {
+  opened: boolean
+  command: string
+}
