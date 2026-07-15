@@ -12,3 +12,9 @@
 - Gate: typecheck ✓ · npm test 1850/1850 ✓ (incl. design-guardian 7/7) · build ✓ · e2e 143/143 ✓ (agent-browser, dry-run env).
 - Fix-forward Step 1.8 (ad323d1, test-only): e2e expectation drift — smoke specs raced the forge-gated GitHub nav item (1.1), settings-shell spec predated Notifications unhiding (1.7). 2 additional first-run e2e failures were flakes (passed on re-run, env warm-up).
 - Next: om-code-review + om-auto-review-pr autofix pass, then summary comment. R7 remains (new run folder).
+
+## 2026-07-15T12:17:31Z — om-auto-continue-pr-loop resume end
+- Final status: R6 complete (8/8); PR #396 stays in-progress at program level — R7 remains.
+- Review: self code-review APPROVE (4 nits documented in the summary comment); compatibility clean; review pass clean on first iteration.
+- Summary comment: https://github.com/open-mercato/cezar/pull/396#issuecomment-4980470578
+- Carry-forward: R7 = legacy retirement + packaging flip + README screenshots (new run folder; anchors in HANDOFF.md).
