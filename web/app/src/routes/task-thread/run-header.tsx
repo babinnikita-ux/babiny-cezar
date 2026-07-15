@@ -144,18 +144,8 @@ export function RunHeader({
                 Continue
               </Button>
             ) : null}
-            {flags.terminal ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                title="Take over the session in a real terminal"
-                onClick={() => actions.terminal.mutate()}
-              >
-                <SquareTerminalIcon aria-hidden="true" />
-                Terminal
-              </Button>
-            ) : null}
-            <OpenInMenu run={run} />
+            {/* Terminal is folded into the Open in… menu to save room in the actions row. */}
+            <OpenInMenu run={run} canResume={flags.terminal} onResume={() => actions.terminal.mutate()} />
             <Button
               variant="ghost"
               size="sm"
@@ -203,18 +193,27 @@ export function RunHeader({
 }
 
 /**
- * "Open in…" session takeover (#open-in): open the run's worktree in a local editor / Finder /
- * terminal, or copy its path. Renders only when the machine offers targets (empty in hosted mode)
- * and the run has a worktree — otherwise there's nothing local to open.
+ * "Open in…" session takeover (#open-in): resume the session in a real terminal, open the run's
+ * worktree in a local editor / Finder / terminal / agent CLI, or copy its path. The old standalone
+ * Terminal button folds in here as the first item. Renders when the session can be resumed OR the
+ * machine offers worktree targets (both empty in hosted mode → nothing to show).
  */
-function OpenInMenu({ run }: { run: ApiRun }) {
+function OpenInMenu({
+  run,
+  canResume,
+  onResume,
+}: {
+  run: ApiRun
+  canResume: boolean
+  onResume: () => void
+}) {
   const targets = useOpenTargets()
   const open = useMutation({
     mutationFn: (target: string) => openRunIn(run.id, target),
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
   })
-  const list = targets.data?.targets ?? []
-  if (!run.worktreePath || list.length === 0) return null
+  const worktreeTargets = run.worktreePath ? (targets.data?.targets ?? []) : []
+  if (!canResume && worktreeTargets.length === 0) return null
 
   const copyPath = () => {
     const path = run.worktreePath
@@ -228,13 +227,20 @@ function OpenInMenu({ run }: { run: ApiRun }) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" title="Open the worktree in an editor, Finder or terminal">
+        <Button variant="ghost" size="sm" title="Resume in a terminal, or open the worktree locally">
           <ExternalLinkIcon aria-hidden="true" />
           Open in…
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {list.map((target) => (
+        {canResume ? (
+          <DropdownMenuItem data-target="terminal-resume" onSelect={onResume}>
+            <SquareTerminalIcon aria-hidden="true" />
+            Terminal (resume session)
+          </DropdownMenuItem>
+        ) : null}
+        {canResume && worktreeTargets.length > 0 ? <DropdownMenuSeparator /> : null}
+        {worktreeTargets.map((target) => (
           <DropdownMenuItem
             key={target.id}
             data-target={target.id}
@@ -243,11 +249,15 @@ function OpenInMenu({ run }: { run: ApiRun }) {
             {target.label}
           </DropdownMenuItem>
         ))}
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={copyPath}>
-          <CopyIcon aria-hidden="true" />
-          Copy worktree path
-        </DropdownMenuItem>
+        {run.worktreePath ? (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={copyPath}>
+              <CopyIcon aria-hidden="true" />
+              Copy worktree path
+            </DropdownMenuItem>
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   )

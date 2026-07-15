@@ -154,10 +154,11 @@ describe('action bar visibility per status (the legacy rules, rendered)', () => 
     { status: 'queued', visible: ['Notes', 'Cancel'] },
     { status: 'running', visible: ['Notes', 'Cancel'] },
     { status: 'waiting', visible: ['Finish', 'Notes', 'Cancel'] },
-    { status: 'review', visible: ['Finish', 'Continue', 'Terminal', 'Notes', 'Archive', 'Delete'] },
-    { status: 'done', visible: ['Continue', 'Terminal', 'Notes', 'Archive', 'Delete'] },
-    { status: 'failed', visible: ['Continue', 'Terminal', 'Notes', 'Archive', 'Delete'] },
-    { status: 'cancelled', visible: ['Continue', 'Terminal', 'Notes', 'Archive', 'Delete'] },
+    // Terminal folded into the Open in… menu — it shows whenever the session can be resumed.
+    { status: 'review', visible: ['Finish', 'Continue', 'Open in…', 'Notes', 'Archive', 'Delete'] },
+    { status: 'done', visible: ['Continue', 'Open in…', 'Notes', 'Archive', 'Delete'] },
+    { status: 'failed', visible: ['Continue', 'Open in…', 'Notes', 'Archive', 'Delete'] },
+    { status: 'cancelled', visible: ['Continue', 'Open in…', 'Notes', 'Archive', 'Delete'] },
   ]
 
   it.each(matrix)('$status → $visible', ({ status, visible }) => {
@@ -272,6 +273,14 @@ describe('actions hit their endpoints', () => {
   })
 })
 
+/** Terminal now lives inside the Open in… menu: open it (Radix opens on pointerdown) and click
+ *  the resume item. */
+async function clickTerminalResume(): Promise<void> {
+  fireEvent.pointerDown(actionBar().getByRole('button', { name: 'Open in…' }))
+  const menu = await screen.findByRole('menu')
+  fireEvent.click(within(menu).getByRole('menuitem', { name: /Terminal \(resume session\)/ }))
+}
+
 describe('Terminal — the copy-command 409 fallback', () => {
   it('copies the server-sent command to the clipboard and says so', async () => {
     const command = "cd '/tmp/wt' && claude --resume sess-1"
@@ -283,7 +292,7 @@ describe('Terminal — the copy-command 409 fallback', () => {
     vi.stubGlobal('navigator', { clipboard: { writeText } })
 
     renderHeader(run('done'))
-    fireEvent.click(actionBar().getByRole('button', { name: 'Terminal' }))
+    await clickTerminalResume()
 
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(command))
     expect((await screen.findByRole('status')).textContent).toBe(
@@ -300,7 +309,7 @@ describe('Terminal — the copy-command 409 fallback', () => {
     vi.stubGlobal('navigator', {}) // http, denied permission — no clipboard at all
 
     renderHeader(run('done'))
-    fireEvent.click(actionBar().getByRole('button', { name: 'Terminal' }))
+    await clickTerminalResume()
 
     expect((await screen.findByRole('status')).textContent).toBe(`Run manually: ${command}`)
   })
@@ -310,7 +319,7 @@ describe('Terminal — the copy-command 409 fallback', () => {
       '/api/runs/r1/open-in-cli': () => jsonResponse({ error: 'no agent session to resume' }, 409),
     })
     renderHeader(run('done'))
-    fireEvent.click(actionBar().getByRole('button', { name: 'Terminal' }))
+    await clickTerminalResume()
     expect((await screen.findByRole('status')).textContent).toBe('no agent session to resume')
   })
 })
