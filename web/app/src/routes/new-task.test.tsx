@@ -51,6 +51,8 @@ const HEALTH: HealthResponse = {
     { name: 'claude', available: true, version: '2.0.44' },
     { name: 'git', available: true, version: '2.43.0' },
   ],
+  forge: null,
+  capabilities: { localHandoff: true },
 }
 
 const HEALTH_MULTI: HealthResponse = {

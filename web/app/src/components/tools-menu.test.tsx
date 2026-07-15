@@ -43,6 +43,8 @@ const HEALTH: HealthResponse = {
       hint: 'optional: install the Codex CLI (npm i -g @openai/codex) and log in to use the Codex runner',
     },
   ],
+  forge: null,
+  capabilities: { localHandoff: true },
 }
 
 const ALL_GOOD: HealthResponse = {

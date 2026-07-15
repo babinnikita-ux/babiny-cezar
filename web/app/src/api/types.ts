@@ -171,6 +171,22 @@ export interface RepoInfo {
   remote?: string
 }
 
+/** How `/api/health` serializes the resolved forge driver (R5, src/server/forge/):
+ *  `{ kind, ...detect() }`. Null means plain-git features only — no PR/issue surfaces. */
+export interface ForgeInfo {
+  kind: 'github'
+  available: boolean
+  /** Human-readable hint when unavailable (`gh` missing, offline…). */
+  reason?: string
+}
+
+/** Deployment-mode capabilities (src/server/capabilities.ts). `localHandoff: false` means
+ *  hosted mode (`CEZ_REMOTE` / non-loopback bind) — every open-on-my-machine affordance
+ *  (Terminal, editor, `cd …` hints) must disappear, not disable. */
+export interface Capabilities {
+  localHandoff: boolean
+}
+
 export interface HealthResponse {
   version: string
   /** Only once the npm-registry check answers with something newer (#368). */
@@ -180,12 +196,65 @@ export interface HealthResponse {
   repo: RepoInfo | null
   checks: BackendCheck[]
   defaultRunner: Runner
+  /** R5 additive fields (BACKWARD_COMPATIBILITY.md §2 keeps the pre-forge shape intact). */
+  forge: ForgeInfo | null
+  capabilities: Capabilities
 }
 
 /** `GET /api/launch-key` — the bookmarklet auto-start secret (spec 011). Fetched only to
  *  COMPARE against the `?key=` query param; the value must never reach the DOM. */
 export interface LaunchKeyResponse {
   key: string
+}
+
+// ---- session git view (src/server/git-changes.ts, R5) ---------------------------------------
+
+/** One changed file of `GET /api/runs/:id/changes` / `GET /api/repo/changes`. Assignable to
+ *  the diff facade's `DiffFileChange` (components/diff/types.ts) by construction. */
+export interface ChangedFile {
+  path: string
+  /** Rename/copy source — present only when `status` is renamed/copied. */
+  oldPath?: string
+  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied'
+  adds: number
+  dels: number
+  /** Binary per numstat — there is no text patch to render. */
+  binary: boolean
+  /** This file's unified-diff section; possibly `… (patch truncated)`, possibly empty. */
+  patch: string
+}
+
+/** `GET /api/runs/:id/changes` — the structured worktree-vs-base diff. 409 (+ reason) when
+ *  the run has no worktree or git itself refuses; never HTML. */
+export interface ChangesPayload {
+  files: ChangedFile[]
+  stat: { adds: number; dels: number; files: number }
+}
+
+/** `GET /api/runs/:id/files?path=` — a directory listing or one file (size-capped, binary
+ *  flagged). `content` is absent exactly when `binary` or `tooLarge`. */
+export interface WorktreeDirEntry {
+  name: string
+  type: 'dir' | 'file'
+  size?: number
+}
+
+export type WorktreeEntry =
+  | { type: 'dir'; path: string; entries: WorktreeDirEntry[] }
+  | { type: 'file'; path: string; size: number; binary: boolean; tooLarge: boolean; content?: string }
+
+/** `POST /api/runs/:id/git/commit` — commit -A in the run's worktree. */
+export interface GitCommitResponse {
+  committed: boolean
+  sha: string
+}
+
+/** `POST /api/runs/:id/git/push` — push the worktree's branch, setting upstream if none. */
+export interface GitPushResponse {
+  pushed: boolean
+  branch: string
+  remote: string
+  upstreamSet: boolean
 }
 
 // ---- repo view (src/server/git.ts) ---------------------------------------------------------

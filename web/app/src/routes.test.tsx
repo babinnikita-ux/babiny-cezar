@@ -50,8 +50,9 @@ describe('route map', () => {
     ['/new', 'new', 'What should the agent work on?'],
     // The real thread view (Step R3.1): with fetch never answering it is honestly loading.
     ['/tasks/abc123', 'task-thread', 'Loading task…'],
-    ['/tasks/abc123/changes', 'task-changes', 'Changes'],
-    ['/tasks/abc123/files', 'task-files', 'Files'],
+    // The real R5 tab routes: with fetch never answering they are honestly loading.
+    ['/tasks/abc123/changes', 'task-changes', 'Loading changes…'],
+    ['/tasks/abc123/files', 'task-files', 'Loading files…'],
     // The real compare view (Step R3 2.3): with fetch never answering it is honestly loading.
     ['/compare/grp-1', 'compare', 'Loading variants…'],
     ['/git', 'git', 'Git'],

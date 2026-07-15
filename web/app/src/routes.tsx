@@ -1,8 +1,6 @@
 import {
   BotIcon,
   CircleDotIcon,
-  FileDiffIcon,
-  FolderTreeIcon,
   GitBranchIcon,
   GitPullRequestIcon,
   InboxIcon,
@@ -19,6 +17,7 @@ import { CompareLoading } from './routes/compare-loading'
 import { NewTaskRoute } from './routes/new-task'
 import { NotFoundRoute } from './routes/not-found'
 import { Placeholder } from './routes/placeholder'
+import { GitTabLoading } from './routes/task-git/git-tab-loading'
 import { ThreadLoading } from './routes/task-thread/thread-loading'
 import { TasksOverviewRoute } from './routes/tasks-overview'
 
@@ -34,6 +33,15 @@ const TaskThreadRoute = lazy(() =>
  *  full diffs through the Shiki singleton — thread-chunk weight the home screen must not pay. */
 const CompareVariantsRoute = lazy(() =>
   import('./routes/compare-variants').then((m) => ({ default: m.CompareVariantsRoute })),
+)
+
+/** Lazy because both tabs render the shared run header, which lives in the thread chunk
+ *  (markdown stack and all) — a static import here would pull that into the main bundle. */
+const TaskChangesRoute = lazy(() =>
+  import('./routes/task-git/task-changes').then((m) => ({ default: m.TaskChangesRoute })),
+)
+const TaskFilesRoute = lazy(() =>
+  import('./routes/task-git/task-files').then((m) => ({ default: m.TaskFilesRoute })),
 )
 
 /** The route map from the spec's "Routing — every surface is a URL" section.
@@ -60,8 +68,22 @@ export function AppRoutes() {
           </Suspense>
         }
       />
-      <Route path="/tasks/:id/changes" element={<Placeholder route="task-changes" title="Changes" icon={<FileDiffIcon />} />} />
-      <Route path="/tasks/:id/files" element={<Placeholder route="task-files" title="Files" icon={<FolderTreeIcon />} />} />
+      <Route
+        path="/tasks/:id/changes"
+        element={
+          <Suspense fallback={<GitTabLoading tab="changes" />}>
+            <TaskChangesRoute />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/tasks/:id/files"
+        element={
+          <Suspense fallback={<GitTabLoading tab="files" />}>
+            <TaskFilesRoute />
+          </Suspense>
+        }
+      />
       <Route
         path="/compare/:groupId"
         element={

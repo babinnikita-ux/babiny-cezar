@@ -2,12 +2,15 @@ import type {
   ApiRun,
   ArchiveFinishedResponse,
   CancelResponse,
+  ChangesPayload,
   ContinueResponse,
   CreatePrResponse,
   CreateRunInput,
   CreateRunResponse,
   DeleteRunResponse,
   FinishResponse,
+  GitCommitResponse,
+  GitPushResponse,
   GithubData,
   GroupResponse,
   HealthResponse,
@@ -20,6 +23,7 @@ import type {
   PlanResponse,
   RepoResponse,
   RunRecord,
+  WorktreeEntry,
   SaveWorkflowInput,
   SaveWorkflowResponse,
   SetConfigInput,
@@ -223,6 +227,18 @@ export function getRunHandoff(id: string, opts?: ReadOptions): Promise<string> {
   return requestText(runPath(id, '/handoff'), { method: 'GET', signal: opts?.signal })
 }
 
+/** The run's structured worktree-vs-base diff (R5): per-file status/±/patch + the aggregate
+ *  stat. 409 (as an ApiError with the server's reason) when the run has no worktree. */
+export function getRunChanges(id: string, opts?: ReadOptions): Promise<ChangesPayload> {
+  return get<ChangesPayload>(runPath(id, '/changes'), opts)
+}
+
+/** One worktree path (R5 Files tab; also the Changes tab's expandable-context source):
+ *  a directory listing, or a file with content unless binary/too large. */
+export function getRunFile(id: string, path: string, opts?: ReadOptions): Promise<WorktreeEntry> {
+  return get<WorktreeEntry>(runPath(id, `/files?path=${encodeURIComponent(path)}`), opts)
+}
+
 /** The variant-compare data (spec 010): one entry per variant of the group, with the legacy
  *  `git diff --stat` text and the handoff Progress excerpt. 404 for an unknown group. */
 export function getGroup(groupId: string, opts?: ReadOptions): Promise<GroupResponse> {
@@ -289,6 +305,18 @@ export function pickVariant(groupId: string, runId: string): Promise<PickVariant
  *  exists. On 409 the ApiError's `command` carries the manual `cd … && <resume>` to copy. */
 export function openRunInCli(id: string): Promise<OpenInCliResponse> {
   return mutate<OpenInCliResponse>('POST', runPath(id, '/open-in-cli'))
+}
+
+/** `git add -A && git commit` in the run's worktree (R5). Every predictable git failure —
+ *  clean tree, failing hook, missing identity — is a 409 whose ApiError speaks git's words. */
+export function commitRun(id: string, message: string): Promise<GitCommitResponse> {
+  return mutate<GitCommitResponse>('POST', runPath(id, '/git/commit'), { message })
+}
+
+/** Push the worktree's branch, setting upstream when it has none (R5). No remote, detached
+ *  HEAD and rejected pushes all come back as 409 + reason. */
+export function pushRun(id: string): Promise<GitPushResponse> {
+  return mutate<GitPushResponse>('POST', runPath(id, '/git/push'))
 }
 
 /** Deliver text and/or pasted screenshots into a run's live session. 409 once it has closed. */

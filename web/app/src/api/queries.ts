@@ -6,6 +6,7 @@ import {
   getHealth,
   getRepo,
   getRun,
+  getRunChanges,
   getRunDiff,
   getRunHandoff,
   getRuns,
@@ -34,6 +35,7 @@ export const queryKeys = {
     list: () => ['runs', 'list'] as const,
     detail: (id: string) => ['runs', 'detail', id] as const,
     diff: (id: string) => ['runs', 'diff', id] as const,
+    changes: (id: string) => ['runs', 'changes', id] as const,
     handoff: (id: string) => ['runs', 'handoff', id] as const,
   },
   groups: {
@@ -78,6 +80,18 @@ export function useRunDiff(id: string | undefined) {
     queryKey: queryKeys.runs.diff(id ?? ''),
     queryFn: ({ signal }) => getRunDiff(id as string, { signal }),
     enabled: Boolean(id),
+  })
+}
+
+/** The structured worktree diff behind the Changes tab (R5). A 409 ("no worktree — …") is a
+ *  real answer here, not a network hiccup — retrying cannot change it, so retries are off and
+ *  the view renders the server's own reason. */
+export function useRunChanges(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.runs.changes(id ?? ''),
+    queryFn: ({ signal }) => getRunChanges(id as string, { signal }),
+    enabled: Boolean(id),
+    retry: false,
   })
 }
 

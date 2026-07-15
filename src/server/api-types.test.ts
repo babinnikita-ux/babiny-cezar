@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type {
   BackendCheck as WebBackendCheck,
+  Capabilities as WebCapabilities,
+  ChangedFile as WebChangedFile,
+  ChangesPayload as WebChangesPayload,
+  ForgeInfo as WebForgeInfo,
   GithubData as WebGithubData,
   GithubItem as WebGithubItem,
   GroupResponse as WebGroupResponse,
@@ -21,6 +25,7 @@ import type {
   WorkflowLoadIssue as WebWorkflowLoadIssue,
   WorkflowStepDef as WebWorkflowStepDef,
   WorkflowsResponse as WebWorkflowsResponse,
+  WorktreeDirEntry as WebWorktreeDirEntry,
 } from '../../web/app/src/api/types.js';
 import type { ToolDisplay as WebToolDisplay } from '../../web/app/src/protocol/tool-display.js';
 import type {
@@ -63,6 +68,9 @@ import type { Skill } from '../skills.js';
 import type { TodoItem } from '../todos.js';
 import type { WorkflowLoadIssue, loadWorkflows } from '../workflows/load.js';
 import type { WorkflowDef, WorkflowStepDef } from '../workflows/types.js';
+import type { Capabilities } from './capabilities.js';
+import type { ForgeAvailability, ForgeKind } from './forge/index.js';
+import type { ChangedFile, ChangesPayload, DirEntry } from './git-changes.js';
 import type { GithubData, GithubItem } from './github.js';
 import type { LogEntry, RepoInfo, StatusEntry } from './git.js';
 import type { GroupResponse, GroupVariant, PickVariantResponse } from './server.js';
@@ -114,6 +122,13 @@ const guards = {
   groupVariant: true satisfies Exact<GroupVariant, WebGroupVariant>,
   groupResponse: true satisfies Exact<GroupResponse, WebGroupResponse>,
   pickVariantResponse: true satisfies Exact<PickVariantResponse, WebPickVariantResponse>,
+  // Session git view (R5): the structured /changes payload, the files-listing rows, and the
+  // health route's additive forge/capabilities fields (`forge: { kind, ...detect() }`).
+  changedFile: true satisfies Exact<ChangedFile, WebChangedFile>,
+  changesPayload: true satisfies Exact<ChangesPayload, WebChangesPayload>,
+  worktreeDirEntry: true satisfies Exact<DirEntry, WebWorktreeDirEntry>,
+  capabilities: true satisfies Exact<Capabilities, WebCapabilities>,
+  forgeInfo: true satisfies Exact<{ kind: ForgeKind } & ForgeAvailability, WebForgeInfo>,
 
   // ---- protocol v2 (`web/app/src/protocol/` mirrors `src/core/ui-events.ts` +
   // `src/core/tool-display.ts`). The full unions are guarded, not just spot fields:

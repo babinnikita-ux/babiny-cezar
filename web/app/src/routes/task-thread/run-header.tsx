@@ -64,7 +64,19 @@ import { useFinishRun } from './use-finish-run'
  *    its `cd`. Today's HealthResponse carries no such field, so Terminal renders per current
  *    (local-only) behavior — the gate goes in where the flags are read, `runActionFlags` callers.
  */
-export function RunHeader({ run, planTally }: { run: ApiRun; planTally?: { done: number; total: number } }) {
+/** Which run-detail tab this header instance sits above — drives the active underline.
+ *  A prop rather than a route match so the header stays testable with a bare render. */
+export type RunTab = 'session' | 'changes' | 'files'
+
+export function RunHeader({
+  run,
+  planTally,
+  tab = 'session',
+}: {
+  run: ApiRun
+  planTally?: { done: number; total: number }
+  tab?: RunTab
+}) {
   const attention = deriveAttention(run)
   const flags = runActionFlags(run)
   const hint = resumeHint(run)
@@ -105,13 +117,15 @@ export function RunHeader({ run, planTally }: { run: ApiRun; planTally?: { done:
         <MetaRow run={run} />
 
         <div data-slot="run-tabs" className="mt-2.5 flex items-end gap-1">
-          <TabLink to={`/tasks/${run.id}`} active>
+          <TabLink to={`/tasks/${run.id}`} active={tab === 'session'}>
             Session
           </TabLink>
-          {/* R2.1 routes; the views themselves are R5 — until then they answer with honest
-              placeholders rather than pretending at a diff. */}
-          <TabLink to={`/tasks/${run.id}/changes`}>Changes</TabLink>
-          <TabLink to={`/tasks/${run.id}/files`}>Files</TabLink>
+          <TabLink to={`/tasks/${run.id}/changes`} active={tab === 'changes'}>
+            Changes
+          </TabLink>
+          <TabLink to={`/tasks/${run.id}/files`} active={tab === 'files'}>
+            Files
+          </TabLink>
 
           <div data-slot="run-actions" className="ml-auto hidden items-center gap-1 pb-1 md:flex">
             {flags.finish ? (
@@ -343,8 +357,8 @@ function MetaRow({ run }: { run: ApiRun }) {
   )
 }
 
-/** One tab (mockup `.tab`). The header only exists on the Session view, so `active` is a prop
- *  rather than a route match — Changes/Files render their own surfaces. */
+/** One tab (mockup `.tab`). Since R5 the header renders on all three run-detail surfaces
+ *  (Session | Changes | Files) — `RunHeader`'s `tab` prop says which underline is active. */
 function TabLink({ to, active = false, children }: { to: string; active?: boolean; children: ReactNode }) {
   return (
     <Link

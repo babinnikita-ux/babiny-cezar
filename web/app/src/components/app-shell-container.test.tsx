@@ -31,6 +31,8 @@ const HEALTH: HealthResponse = {
   repo: { root: '/home/me/Projects/cezar', branch: 'feat/cockpit', remote: 'origin' },
   checks: [],
   defaultRunner: 'claude',
+  forge: null,
+  capabilities: { localHandoff: true },
 }
 
 const TODOS = [
