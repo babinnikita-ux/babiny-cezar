@@ -367,6 +367,7 @@ export function NewTaskRoute() {
                 value={String(variants)}
                 onPick={(next) => update({ variants: Number(next) })}
                 disabled={!hasGit}
+                hint="How many times to run this task in parallel — each variant gets its own worktree, and you pick the diff you keep. ×1 runs it once."
                 disabledHint="Parallel variants need a git repository — each variant runs in its own worktree."
                 options={[
                   { value: '1', label: '×1', desc: 'One run' },
@@ -668,6 +669,7 @@ function PickerPill({
   options,
   onPick,
   disabled = false,
+  hint,
   disabledHint,
 }: {
   slot: string
@@ -677,6 +679,8 @@ function PickerPill({
   options: ReadonlyArray<{ value: string; label: string; desc?: string }>
   onPick: (value: string) => void
   disabled?: boolean
+  /** Hover explanation for the enabled pill — what the setting does (e.g. the ×1 variants pill). */
+  hint?: string
   disabledHint?: string
 }) {
   const trigger = (
@@ -685,7 +689,7 @@ function PickerPill({
       data-slot={slot}
       aria-label={ariaLabel}
       disabled={disabled}
-      title={disabled ? disabledHint : undefined}
+      title={disabled ? disabledHint : hint}
       className={chipClass}
     >
       {label}
