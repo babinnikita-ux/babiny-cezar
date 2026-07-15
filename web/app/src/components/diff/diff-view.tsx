@@ -94,8 +94,11 @@ function DiffFileCard({
       data-path={file.path}
       className="min-w-0 overflow-clip rounded-md border border-border bg-card"
     >
-      {/* Sticky within the consumer's scroll container — the reader always knows which file. */}
-      <header className="sticky top-0 z-10 rounded-t-md border-b border-border/50 bg-card">
+      {/* Sticky within the consumer's scroll container — the reader always knows which file.
+          The offset is a consumer-set CSS var so the file header parks BELOW a sticky page
+          header (Git / run header) rather than colliding with it; `z-10` keeps it beneath the
+          page header's higher layer. Defaults to 0 for consumers without a sticky header. */}
+      <header className="sticky top-[var(--diff-sticky-top,0px)] z-10 rounded-t-md border-b border-border/50 bg-card">
         <button
           type="button"
           data-slot="diff-file-header"

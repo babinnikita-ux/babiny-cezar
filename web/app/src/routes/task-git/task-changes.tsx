@@ -172,7 +172,7 @@ function ChangesView({ run }: { run: ApiRun }) {
           subtitle="The worktree matches its base branch. Changes appear here as the agent works."
         />
       ) : (
-        <div className="flex min-h-0 flex-1 items-start gap-5 px-4 py-4 md:px-6">
+        <div className="flex min-h-0 flex-1 items-start gap-5 px-4 py-4 [--diff-sticky-top:10rem] md:px-6">
           {/* The tree column: sticky under the header so long diffs scroll beside it. */}
           <aside className="sticky top-40 hidden w-60 shrink-0 md:block lg:w-72">
             <ChangesTree root={tree} selected={selected} onSelect={selectFile} />

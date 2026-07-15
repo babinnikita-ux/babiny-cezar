@@ -81,7 +81,7 @@ export function RepoChangesSection() {
           subtitle="No uncommitted changes in the main working tree. Edits show up here as they happen."
         />
       ) : (
-        <div className="flex min-h-0 flex-1 items-start gap-5 px-4 py-4 md:px-6">
+        <div className="flex min-h-0 flex-1 items-start gap-5 px-4 py-4 [--diff-sticky-top:7rem] md:px-6">
           <aside className="sticky top-28 hidden w-60 shrink-0 md:block lg:w-72">
             <ChangesTree root={tree} selected={selected} onSelect={selectFile} />
           </aside>
