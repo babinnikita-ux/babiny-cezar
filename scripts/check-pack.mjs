@@ -22,9 +22,10 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 // process.execPath works on every platform (no .cmd shim needed on Windows).
 const npmExecpath = process.env.npm_execpath;
 const packArgs = ['pack', '--dry-run', '--json'];
+const npmCli = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const stdout = npmExecpath
   ? execFileSync(process.execPath, [npmExecpath, ...packArgs], { cwd: repoRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
-  : execFileSync('npm', packArgs, { cwd: repoRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  : execFileSync(npmCli, packArgs, { cwd: repoRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, shell: process.platform === 'win32' });
 
 /** @type {{ files?: { path: string }[] }[]} */
 const reports = JSON.parse(stdout);

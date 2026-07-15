@@ -16,6 +16,7 @@
 | 1 | 1.3 | iOS + degradation-matrix e2e sweep: iPhone viewport across every view; forge-off/degraded states where reachable | done | adeb2a4 |
 | 1 | 1.4 | README refresh: recapture all 6 `docs/screenshots/*.png` against the new UI via agent-browser; prose sweep | done | 9552c87 |
 | 1 | 1.5 | Stabilize e2e: badge-proof nav labels, settled dnd-kit keyboard reorder | done | c7da6b9 |
+| 1 | 1.5-review-fix | check-pack: Windows-safe npm fallback invocation | done | 4300f7f |
 
 ## Goal
 
