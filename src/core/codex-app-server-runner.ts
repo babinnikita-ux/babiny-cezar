@@ -116,7 +116,16 @@ class CodexSession implements AgentSession {
     private readonly opts: SessionOptions,
   ) {
     try {
-      this.child = nodeSpawn(bin, ['app-server'], {
+      // Give the workspace-write sandbox network access so agent tools that need the network
+      // (gh, npm, git over https) work — otherwise `gh` fails with "error connecting to
+      // api.github.com" under codex while the same tool works under claude (#codex-network).
+      // `-c` is codex's documented config override (dotted key, TOML value); opt out with
+      // CEZ_CODEX_NETWORK=0.
+      const args = ['app-server'];
+      if (process.env.CEZ_CODEX_NETWORK !== '0') {
+        args.push('-c', 'sandbox_workspace_write.network_access=true');
+      }
+      this.child = nodeSpawn(bin, args, {
         cwd: spec.cwd,
         env: { ...process.env, ...spec.env },
       });
