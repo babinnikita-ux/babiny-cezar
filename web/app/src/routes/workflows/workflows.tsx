@@ -287,7 +287,7 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
       {/* Desktop header — below `md` the shell's top bar already says "Workflows". */}
       <header className="sticky top-0 z-10 hidden h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-5 md:flex">
         <h1 className="text-base font-semibold">Workflows</h1>
-        <p className="text-[13px] text-soft-foreground">
+        <p className="text-[13px] text-muted-foreground">
           Portable skill chains — the agent applies them top to bottom.
         </p>
       </header>
@@ -567,7 +567,7 @@ function Canvas({
       data-slot="wb-steps"
       className={cn(
         'mt-4 rounded-lg border border-dashed p-2 transition-colors',
-        isOver ? 'border-primary/60 bg-primary/5' : 'border-border',
+        isOver ? 'border-primary/60 bg-primary/5' : 'border-muted-foreground/25',
       )}
     >
       {steps.length === 0 ? (
@@ -581,7 +581,7 @@ function Canvas({
               <StepCard key={step.id} step={step} index={index} skills={skills} onRemove={() => onRemove(index)} />
             ))}
           </ol>
-          <div className="flex items-center justify-center gap-1.5 pt-2 pb-1 text-[11px] text-soft-foreground">
+          <div className="flex items-center justify-center gap-1.5 pt-2 pb-1 text-[11px] text-muted-foreground">
             <ArrowDownIcon aria-hidden="true" className="size-3" />
             runs top to bottom
           </div>
@@ -660,7 +660,9 @@ function StepCardBody({
       data-id={step.id}
       data-index={index}
       className={cn(
-        'flex items-center gap-2.5 rounded-md border border-border bg-card px-2.5 py-2 shadow-xs',
+        // `bg-card-2` + a slightly stronger border: a white-on-white card with a `#ebebeb`
+        // border all but vanished on the light page (the workflows low-contrast finding).
+        'flex items-center gap-2.5 rounded-md border border-muted-foreground/20 bg-card-2 px-2.5 py-2 shadow-xs',
         overlay && 'shadow-md',
       )}
     >
@@ -668,12 +670,12 @@ function StepCardBody({
         type="button"
         data-slot="wb-step-grip"
         aria-label={`Reorder step ${index + 1}: ${title}`}
-        className="shrink-0 cursor-grab rounded text-soft-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className="shrink-0 cursor-grab rounded text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
         {...gripProps}
       >
         <GripVerticalIcon aria-hidden="true" className="size-3.5" />
       </button>
-      <span className="shrink-0 font-mono text-[11px] text-soft-foreground">
+      <span className="shrink-0 font-mono text-[11px] text-muted-foreground">
         {String(index + 1).padStart(2, '0')}
       </span>
       {isCheck ? (
@@ -684,7 +686,7 @@ function StepCardBody({
       <div className="min-w-0 flex-1">
         <div className="truncate font-mono text-[13px] font-medium">{title}</div>
         {description ? (
-          <div className="truncate text-xs text-soft-foreground">{description}</div>
+          <div className="truncate text-xs text-muted-foreground">{description}</div>
         ) : null}
       </div>
       {badge ? (
