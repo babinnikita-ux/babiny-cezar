@@ -24,10 +24,22 @@ const IPHONE = { width: 390, height: 844 } // iPhone 14/15 CSS pixels
 let browser: AgentBrowser
 let baseUrl: string
 
-beforeAll(() => {
+let forgeAvailable = false
+
+beforeAll(async () => {
   baseUrl = readTestEnv().baseUrl
   browser = AgentBrowser.open(runId)
+  const health = (await fetch(`${baseUrl}/api/health`).then((r) => r.json())) as {
+    forge: { available: boolean } | null
+  }
+  forgeAvailable = health.forge?.available === true
 })
+
+/** The nav the shell renders — the GitHub item gates on the live forge payload (R6 Step 1.1),
+ *  so the expectation must too, same as github.e2e.ts. */
+function expectedNavLabels(): string[] {
+  return ['Tasks', 'Inbox', 'Git', ...(forgeAvailable ? ['GitHub'] : []), 'Skills', 'Workflows', 'Settings']
+}
 
 afterAll(() => {
   browser?.close()
@@ -79,10 +91,14 @@ describe('cockpit app shell', () => {
     expect(browser.isVisible('[data-slot="brand-tile"]')).toBe(true)
     expect(browser.text('[data-slot="sidebar"] nav')).toContain('Tasks')
 
+    // The GitHub item waits on the health answer — settle it before sampling the nav.
+    if (forgeAvailable) {
+      browser.waitForFunction(`document.querySelector('[data-slot="sidebar"] nav a[href="/github"]') !== null`)
+    }
     const labels = browser.evaluate(
       `Array.from(document.querySelectorAll('[data-slot="sidebar"] nav a')).map(a => a.textContent.trim())`
     )
-    expect(labels).toEqual(['Tasks', 'Inbox', 'Git', 'GitHub', 'Skills', 'Workflows', 'Settings'])
+    expect(labels).toEqual(expectedNavLabels())
 
     // The "New task" CTA and its accelerator hint.
     expect(browser.text('[data-slot="sidebar"] a[href="/new"]')).toContain('New task')
@@ -249,6 +265,12 @@ describe('mobile shell', () => {
       expect(browser.isVisible(DRAWER)).toBe(true)
       expect(browser.isVisible('[data-slot="sheet-overlay"]')).toBe(true)
 
+      // The drawer nav mirrors the desktop one, including the forge-gated GitHub item — settle
+      // the health answer before sampling the labels.
+      if (forgeAvailable) {
+        browser.waitForFunction(`document.querySelector('${DRAWER} nav a[href="/github"]') !== null`)
+      }
+
       const box = browser.evaluate(`(() => {
         const rect = document.querySelector('${DRAWER}').getBoundingClientRect()
         const links = Array.from(document.querySelectorAll('${DRAWER} nav a'))
@@ -278,7 +300,7 @@ describe('mobile shell', () => {
       expect(box.overlayHeight).toBe(box.viewportHeight)
 
       // The same nav the desktop sidebar renders — at touch size, not the 34px desktop row.
-      expect(box.labels).toEqual(['Tasks', 'Inbox', 'Git', 'GitHub', 'Skills', 'Workflows', 'Settings'])
+      expect(box.labels).toEqual(expectedNavLabels())
       expect(box.minLinkHeight).toBeGreaterThanOrEqual(44)
 
       browser.screenshot(`${artifactsDir}/drawer-iphone.png`)
