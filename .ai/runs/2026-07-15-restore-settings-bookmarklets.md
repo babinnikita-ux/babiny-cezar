@@ -34,8 +34,9 @@ Source docs: `.ai/specs/011-bookmarklets.md`, `.ai/specs/2026-07-14-cockpit-ui-r
 ## Risks
 
 - The generator embeds the launch key; the implementation must retain its current same-origin fetch and protected `/new?skill=&ref=&auto=&key=` format.
-- The task sandbox cannot write Git metadata and cannot reach GitHub. The plan and implementation can be completed and tested in the existing isolated worktree, but commits, pushes, PR creation, labels, and remote review are blocked until those capabilities are restored.
-- Validation is infrastructure-blocked: `npm test` reaches 1,881/1,882 passing but the bundled OpenCode mock cannot start here and process sampling reports `spawn EPERM`; `npm run test:package` times out while exercising the spawned packaged CLI. Typecheck, all 1,454 web tests, `test:unit`, and the production build/package-content check pass.
+- The task sandbox that drafted this plan could not write Git metadata or reach GitHub. Resolved: the branch was re-authored, rebased onto the base tip, and pushed as PR #399.
+- Validation was reported infrastructure-blocked in the sandbox (`npm test` 1,881/1,882, `npm run test:package` timing out). Resolved: the full gate — `typecheck`, `test` (1,908 passing), `test:unit`, `build`, `test:package` — runs green outside that sandbox.
+- The `feat/cockpit-ui-r1-platform-shell` base branch carries pre-existing e2e failures unrelated to this change (`smoke` ⌘N accelerator, `settings-agents`, `github`, `repo-git`, `review-gate`, `task-changes`, `task-thread`, `workflows`). They fail identically at the base tip and are out of scope here.
 
 ## Progress
 
@@ -51,4 +52,5 @@ PR: #399
 ### Phase 2: Verify navigation and behavior
 
 - [x] 2.1 Update registry, route, and bookmarklet surface tests for the new subpage — squashed into this PR's single commit
-- [ ] 2.2 Update the redesign spec route and Settings inventory, then run the configured validation gate — spec updated in this PR's single commit; gate blocked by sandbox child-process restrictions
+- [x] 2.2 Update the redesign spec route and Settings inventory, then run the configured validation gate — spec updated in this PR's single commit; full gate green (typecheck, 1,908 tests, test:unit, build, test:package)
+- [x] Post-review: add the `settings-bookmarklets` e2e spec and correct the settings-nav count in `settings-appearance.e2e.ts`
