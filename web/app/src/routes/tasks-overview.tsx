@@ -3,6 +3,7 @@ import {
   ArchiveIcon,
   ArrowUpRightIcon,
   ListChecksIcon,
+  PencilIcon,
   PlusIcon,
   ScaleIcon,
   SearchIcon,
@@ -11,15 +12,17 @@ import {
 import * as React from 'react'
 import { Link, useNavigate } from 'react-router'
 
-import { archiveFinished } from '@/api/client'
+import { archiveFinished, patchRun } from '@/api/client'
 import { useRunUsage } from '@/api/global-events'
 import { queryKeys, useRuns } from '@/api/queries'
 import type { RunRecord } from '@/api/types'
 import { CenteredState } from '@/components/centered-state'
 import { DiffStatLabel } from '@/components/diff-stat'
+import { TitleEditInput, useTitleEditor } from '@/components/editable-title'
 import { useListView } from '@/components/list-view'
 import { Pill } from '@/components/pill'
 import { Button } from '@/components/ui/button'
+import { toast } from '@/components/ui/toaster'
 import { deriveAttention } from '@/lib/attention'
 import { compactTokens, shortAge } from '@/lib/format'
 import { listCounts, queuePositions, runTitle, sortRuns, type ListView } from '@/lib/task-groups'
@@ -53,6 +56,7 @@ export function TasksOverview({
   view,
   onViewChange,
   onArchiveFinished,
+  onRename,
   now = Date.now(),
 }: {
   /** Undefined while `/api/runs` has not answered: the header renders, the body stays empty —
@@ -61,6 +65,9 @@ export function TasksOverview({
   view: ListView
   onViewChange: (view: ListView) => void
   onArchiveFinished: () => void
+  /** Inline rename from the table's Task cell (spec step 15) — the route wires this to
+   *  `PATCH /api/runs/:id`, the same flow as the run header's pencil. */
+  onRename: (id: string, title: string) => void
   /** Injected so the ages are not racing the clock in tests. */
   now?: number
 }) {
@@ -150,6 +157,7 @@ export function TasksOverview({
                       key={run.id}
                       run={run}
                       queuePosition={run.status === 'queued' ? (positions.get(run.id) ?? null) : null}
+                      onRename={onRename}
                       now={now}
                     />
                   ))}
@@ -190,17 +198,16 @@ export function TasksOverview({
         ))}
       </div>
 
-      {/* The mobile New-task FAB. The desktop CTA lives in the sidebar. */}
-      {/* A plain anchor is intentional until R4: a full /new request is routed by Hono to the
-          working legacy composer, while React's /new route is only a parameter-preserving shell. */}
-      <a
-        href="/new"
+      {/* The mobile New-task FAB. The desktop CTA lives in the sidebar. A router Link since
+          R4 step 1.3 re-pointed /new at the React composer — no full page load needed. */}
+      <Link
+        to="/new"
         data-slot="new-task-fab"
         aria-label="New task"
         className="fixed right-4 bottom-[calc(16px+env(safe-area-inset-bottom))] z-20 inline-flex size-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-modal md:hidden"
       >
         <PlusIcon className="size-[22px]" aria-hidden="true" />
-      </a>
+      </Link>
     </div>
   )
 }
@@ -242,10 +249,10 @@ function TasksEmptyState({ view, query }: { view: ListView; query: string }) {
           subtitle="Describe a task to get started."
           actions={
             <Button asChild>
-              <a href="/new">
+              <Link to="/new">
                 <PlusIcon aria-hidden="true" />
                 New task
-              </a>
+              </Link>
             </Button>
           }
         />
@@ -306,17 +313,20 @@ const TD_BASE = 'h-11 border-b border-border px-2.5 whitespace-nowrap first:pl-4
 /**
  * One run, one row.
  *
- * The whole row is a click target for `/tasks/:id` — but a click that lands on any anchor inside
- * it (the PR chip, the title's real link) belongs to that anchor and is not hijacked. The title
- * is a true `<Link>` so the row's destination exists for keyboards and middle-clicks too.
+ * The whole row is a click target for `/tasks/:id` — but a click that lands on any anchor,
+ * button or input inside it (the PR chip, the title's real link, the rename pencil and its
+ * input) belongs to that control and is not hijacked. The title is a true `<Link>` so the
+ * row's destination exists for keyboards and middle-clicks too.
  */
 function TableRow({
   run,
   queuePosition,
+  onRename,
   now,
 }: {
   run: RunRecord
   queuePosition: number | null
+  onRename: (id: string, title: string) => void
   now: number
 }) {
   const navigate = useNavigate()
@@ -329,10 +339,10 @@ function TableRow({
       data-slot="task-table-row"
       data-run-id={run.id}
       onClick={(event) => {
-        if ((event.target as Element).closest('a')) return
+        if ((event.target as Element).closest('a, button, input')) return
         navigate(to)
       }}
-      className="cursor-pointer hover:bg-muted"
+      className="group/row cursor-pointer hover:bg-muted"
     >
       <td className={TD_BASE}>
         <Pill dot={attention.tone} pulse={attention.pulse}>
@@ -340,9 +350,7 @@ function TableRow({
         </Pill>
       </td>
       <td className={cn(TD_BASE, 'w-[34%] max-w-0')}>
-        <Link to={to} title={runTitle(run)} className="block truncate text-[13px] font-medium">
-          {runTitle(run)}
-        </Link>
+        <TitleCell run={run} to={to} onRename={onRename} />
       </td>
       <td className={cn(TD_BASE, 'text-[12.5px] text-muted-foreground')}>{workflowLabel(run)}</td>
       <td className={TD_BASE}>{run.branch ? <BranchChip branch={run.branch} /> : <Dash />}</td>
@@ -372,6 +380,46 @@ function TableRow({
         {shortAge(run.startedAt ?? run.createdAt, now)}
       </td>
     </tr>
+  )
+}
+
+/**
+ * The Task cell: the title as a real link, with the mockup's hover pencil (`tasks-home.html`
+ * `.task-title .pencil`) flipping it into the shared inline-rename input. Same machine as the
+ * run header's title — one edit, one PATCH. The quick-list's rows stay read-only on purpose:
+ * at 13px-in-a-260px-sidebar there is no room for an input worth typing into.
+ */
+function TitleCell({
+  run,
+  to,
+  onRename,
+}: {
+  run: RunRecord
+  to: string
+  onRename: (id: string, title: string) => void
+}) {
+  const title = runTitle(run)
+  const editor = useTitleEditor(title, (next) => onRename(run.id, next))
+
+  if (editor.editing) {
+    return <TitleEditInput editor={editor} className="text-[13px] font-medium" />
+  }
+
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <Link to={to} title={title} className="min-w-0 truncate text-[13px] font-medium">
+        {title}
+      </Link>
+      <button
+        type="button"
+        data-slot="row-rename"
+        aria-label="Rename task"
+        onClick={editor.begin}
+        className="shrink-0 rounded-sm p-0.5 text-soft-foreground opacity-0 transition-opacity group-hover/row:opacity-100 hover:text-foreground focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+      >
+        <PencilIcon className="size-3" aria-hidden="true" />
+      </button>
+    </span>
   )
 }
 
@@ -541,6 +589,13 @@ export function TasksOverviewRoute() {
     mutationFn: archiveFinished,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all }),
   })
+  // The table's inline rename — `usePatchRun` is per-run, so the any-row variant carries the id
+  // in its variables. Same endpoint, same invalidation, same danger toast as the run header.
+  const rename = useMutation({
+    mutationFn: ({ id, title }: { id: string; title: string }) => patchRun(id, { title }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all }),
+    onError: (error: Error) => toast(error.message, { tone: 'danger' }),
+  })
   const now = useNow(30_000)
 
   return (
@@ -549,6 +604,7 @@ export function TasksOverviewRoute() {
       view={view}
       onViewChange={setView}
       onArchiveFinished={() => archive.mutate()}
+      onRename={(id, title) => rename.mutate({ id, title })}
       now={now}
     />
   )

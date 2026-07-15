@@ -155,6 +155,12 @@ export class AgentBrowser {
     this.run(['click', selector])
   }
 
+  /** operation: interact (`hover`) — hover-revealed affordances (the table's rename pencil)
+   *  only exist under a real pointer; tests must produce one, not reach past it. */
+  hover(selector: string): void {
+    this.run(['hover', selector])
+  }
+
   /** operation: screenshot. The descriptor requires an absolute path — a relative
    *  multi-segment path is read as a selector by the CLI.
    *

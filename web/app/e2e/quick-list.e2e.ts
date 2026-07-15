@@ -444,6 +444,38 @@ describe('tasks table overview', () => {
     browser.waitForFunction(`document.querySelectorAll('${TABLE_ROW}').length > 0`)
   })
 
+  it('renames a task inline from its row — the hover pencil, committed by Enter, stored for real', async () => {
+    const row = `${TABLE_ROW}[data-run-id="fix-failed"]`
+    // The pencil is a hover affordance (mockup `.task-title .pencil`): produce a real pointer.
+    browser.hover(row)
+    browser.click(`${row} [data-slot="row-rename"]`)
+    browser.waitForFunction(`document.querySelector('${row} [data-slot="title-input"]') !== null`)
+    // Viewport mode: a full-page capture scrolls the document, and this shot exists to show the
+    // open editor exactly as the user sees it.
+    browser.screenshot(`${artifactsDir}/tasks-table-row-edit.png`, { viewport: true })
+
+    browser.fill(`${row} [data-slot="title-input"]`, 'Bump zod to v4 — second attempt')
+    browser.press('Enter')
+
+    // The readback, twice over. First the UI: the PATCH invalidates `runs`, the refetched list
+    // re-renders the row under its new name and the editor is gone.
+    browser.waitForFunction(
+      `document.querySelector('${row}').textContent.includes('Bump zod to v4 — second attempt')`
+    )
+    expect(browser.count(`${row} [data-slot="title-input"]`)).toBe(0)
+
+    // Then the record: the server stored the edit as BOTH title and the displayed summary
+    // (an edit must beat any past or future auto-summary).
+    const runs = (await fetch(`${baseUrl}/api/runs`).then((r) => r.json())) as Array<{
+      id: string
+      title: string
+      titleSummary?: string
+    }>
+    const renamed = runs.find((r) => r.id === 'fix-failed')
+    expect(renamed?.title).toBe('Bump zod to v4 — second attempt')
+    expect(renamed?.titleSummary).toBe('Bump zod to v4 — second attempt')
+  })
+
   it('reflows to cards plus a New-task FAB at phone width, with no horizontal overflow', () => {
     browser.setViewport(390, 844)
     browser.goto(`${baseUrl}/`)

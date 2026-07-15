@@ -12,13 +12,14 @@ import {
   SquareTerminalIcon,
   Trash2Icon,
 } from 'lucide-react'
-import { Fragment, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router'
 
 import { ApiError, archiveRun, cancelRun, continueRun, deleteRun, openRunInCli } from '@/api/client'
 import { queryKeys, usePatchRun, useRunHandoff, useRuns } from '@/api/queries'
 import type { ApiRun } from '@/api/types'
 import { DiffStatLabel } from '@/components/diff-stat'
+import { TitleEditInput, useTitleEditor } from '@/components/editable-title'
 import { Pill } from '@/components/pill'
 import {
   AlertDialog,
@@ -256,56 +257,17 @@ async function copyToClipboard(text: string, doneMessage: string): Promise<void>
  * The editable title (#389): a plain h1 with a pencil that only appears on hover (mockup
  * `.pencil-btn`), flipping into an inline input. Enter/blur commit through `usePatchRun`
  * (the server stores it as both `title` and `titleSummary`), Escape abandons the draft.
+ * The rename machine itself is shared with the Tasks table (`components/editable-title.tsx`).
  */
 function EditableTitle({ run }: { run: ApiRun }) {
   const patch = usePatchRun(run.id)
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState('')
-  // Enter both commits AND blurs in sequence — the ref makes whichever fires second a no-op,
-  // so one edit can never become two PATCHes.
-  const committed = useRef(false)
   const title = runTitle(run)
+  const editor = useTitleEditor(title, (next) =>
+    patch.mutate({ title: next }, { onError: (error) => toast(error.message, { tone: 'danger' }) }),
+  )
 
-  const begin = () => {
-    setDraft(title)
-    committed.current = false
-    setEditing(true)
-  }
-  const commit = () => {
-    if (committed.current) return
-    committed.current = true
-    setEditing(false)
-    const next = draft.trim()
-    if (next.length === 0 || next === title) return // nothing to say to the server
-    patch.mutate({ title: next }, { onError: (error) => toast(error.message, { tone: 'danger' }) })
-  }
-  const cancel = () => {
-    committed.current = true
-    setEditing(false)
-  }
-
-  if (editing) {
-    return (
-      <input
-        data-slot="title-input"
-        aria-label="Task title"
-        // eslint-disable-next-line jsx-a11y/no-autofocus — the user just asked to edit this field
-        autoFocus
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        onBlur={commit}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            event.preventDefault()
-            commit()
-          } else if (event.key === 'Escape') {
-            event.preventDefault()
-            cancel()
-          }
-        }}
-        className="w-full min-w-0 flex-1 rounded-sm border border-border bg-card px-1.5 py-0.5 text-[15px] font-semibold outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-      />
-    )
+  if (editor.editing) {
+    return <TitleEditInput editor={editor} className="flex-1 text-[15px] font-semibold" />
   }
 
   return (
@@ -316,7 +278,7 @@ function EditableTitle({ run }: { run: ApiRun }) {
       <button
         type="button"
         aria-label="Rename task"
-        onClick={begin}
+        onClick={editor.begin}
         className="shrink-0 rounded-sm p-1 text-soft-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-muted hover:text-foreground focus-visible:opacity-100 focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
       >
         <PencilIcon className="size-3.5" aria-hidden="true" />

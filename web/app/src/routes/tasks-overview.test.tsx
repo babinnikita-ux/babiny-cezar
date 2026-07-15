@@ -41,6 +41,7 @@ function LocationProbe() {
 function renderOverview(props: Partial<ComponentProps<typeof TasksOverview>> = {}) {
   const onViewChange = props.onViewChange ?? vi.fn()
   const onArchiveFinished = props.onArchiveFinished ?? vi.fn()
+  const onRename = props.onRename ?? vi.fn()
   const utils = render(
     <MemoryRouter initialEntries={['/']}>
       <LocationProbe />
@@ -55,6 +56,7 @@ function renderOverview(props: Partial<ComponentProps<typeof TasksOverview>> = {
               {...props}
               onViewChange={onViewChange}
               onArchiveFinished={onArchiveFinished}
+              onRename={onRename}
             />
           }
         />
@@ -63,7 +65,7 @@ function renderOverview(props: Partial<ComponentProps<typeof TasksOverview>> = {
       </Routes>
     </MemoryRouter>
   )
-  return { ...utils, onViewChange, onArchiveFinished }
+  return { ...utils, onViewChange, onArchiveFinished, onRename }
 }
 
 const location = () => screen.getByTestId('location').textContent
@@ -231,6 +233,75 @@ describe('TasksOverview — the table', () => {
   })
 })
 
+describe('TasksOverview — inline rename from the table (spec step 15)', () => {
+  const pencilOf = (id: string) =>
+    within(tableRow(id) as HTMLElement).getByRole('button', { name: 'Rename task' })
+  const openEditor = (id: string) => {
+    fireEvent.click(pencilOf(id))
+    return within(tableRow(id) as HTMLElement).getByLabelText('Task title') as HTMLInputElement
+  }
+
+  it('flips the Task cell into an input seeded with the DISPLAYED title, and Enter commits the trim', () => {
+    const { onRename } = renderOverview({
+      runs: [run({ id: 'e1', title: 'raw prompt text', titleSummary: 'Displayed summary' })],
+    })
+    const input = openEditor('e1')
+    expect(input.value).toBe('Displayed summary') // never the raw title behind the summary
+
+    fireEvent.change(input, { target: { value: '  Renamed from the table  ' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    // Enter is typically followed by the blur of the unmounting input — one commit, not two.
+    fireEvent.blur(input)
+
+    expect(onRename).toHaveBeenCalledTimes(1)
+    expect(onRename).toHaveBeenCalledWith('e1', 'Renamed from the table')
+    // Back to the resting cell immediately — the edit UI does not wait for the server.
+    expect(within(tableRow('e1') as HTMLElement).queryByLabelText('Task title')).toBeNull()
+  })
+
+  it('blur commits like Enter', () => {
+    const { onRename } = renderOverview({ runs: [run({ id: 'e2', title: 'Before' })] })
+    const input = openEditor('e2')
+    fireEvent.change(input, { target: { value: 'After blur' } })
+    fireEvent.blur(input)
+    expect(onRename).toHaveBeenCalledWith('e2', 'After blur')
+  })
+
+  it('Escape abandons the draft — nothing reported, the old title stays', () => {
+    const { onRename } = renderOverview({ runs: [run({ id: 'e3', title: 'Keep me' })] })
+    const input = openEditor('e3')
+    fireEvent.change(input, { target: { value: 'Never sent' } })
+    fireEvent.keyDown(input, { key: 'Escape' })
+
+    expect(onRename).not.toHaveBeenCalled()
+    expect(within(tableRow('e3') as HTMLElement).getByRole('link', { name: 'Keep me' })).not.toBeNull()
+  })
+
+  it('an unchanged or emptied draft is not worth a request', () => {
+    const { onRename } = renderOverview({ runs: [run({ id: 'e4', title: 'Same' })] })
+    for (const value of ['Same', '   ']) {
+      const input = openEditor('e4')
+      fireEvent.change(input, { target: { value } })
+      fireEvent.keyDown(input, { key: 'Enter' })
+    }
+    expect(onRename).not.toHaveBeenCalled()
+  })
+
+  it('neither the pencil nor the open editor hands the click to the row navigation', () => {
+    renderOverview({ runs: [run({ id: 'e5', title: 'Stay here' })] })
+    fireEvent.click(pencilOf('e5'))
+    expect(location()).toBe('/') // the pencil began an edit, it did not open the task
+
+    fireEvent.click(within(tableRow('e5') as HTMLElement).getByLabelText('Task title'))
+    expect(location()).toBe('/') // clicking into the input is editing, not navigating
+  })
+
+  it('offers no rename affordance on the mobile cards — hover pencils do not exist on touch', () => {
+    renderOverview({ runs: [run({ id: 'e6' })] })
+    expect(within(card('e6') as HTMLElement).queryByRole('button', { name: 'Rename task' })).toBeNull()
+  })
+})
+
 describe('TasksOverview — usage cells', () => {
   const SAMPLE: ProcessUsage = { cpuPct: 38.4, rssBytes: 612 * 1024 ** 2, procCount: 5 }
 
@@ -272,7 +343,14 @@ describe('TasksOverview — usage cells', () => {
       <QueryClientProvider client={createQueryClient()}>
         <GlobalEventsProvider>
           <MemoryRouter>
-            <TasksOverview runs={runs} view="active" onViewChange={vi.fn()} onArchiveFinished={vi.fn()} now={NOW} />
+            <TasksOverview
+              runs={runs}
+              view="active"
+              onViewChange={vi.fn()}
+              onArchiveFinished={vi.fn()}
+              onRename={vi.fn()}
+              now={NOW}
+            />
           </MemoryRouter>
         </GlobalEventsProvider>
       </QueryClientProvider>
@@ -586,6 +664,27 @@ describe('TasksOverviewRoute — wired to the app', () => {
       expect(posted?.[1]?.method).toBe('POST')
     })
     // The doctrine: after the mutation, ask the endpoint again rather than trusting the cache.
+    await waitFor(() => {
+      const listFetches = fetchMock.mock.calls.filter(([path]) => String(path) === '/api/runs')
+      expect(listFetches.length).toBeGreaterThan(1)
+    })
+  })
+
+  it('PATCHes a table rename to /api/runs/:id and refetches the authoritative list', async () => {
+    renderApp([run({ id: 'rn1', title: 'Old name', status: 'done' })])
+    await waitFor(() => expect(tableRow('rn1')).not.toBeNull())
+
+    fireEvent.click(within(tableRow('rn1') as HTMLElement).getByRole('button', { name: 'Rename task' }))
+    const input = within(tableRow('rn1') as HTMLElement).getByLabelText('Task title')
+    fireEvent.change(input, { target: { value: 'New name' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    await waitFor(() => {
+      const patched = fetchMock.mock.calls.find(([path]) => String(path) === '/api/runs/rn1')
+      expect(patched?.[1]?.method).toBe('PATCH')
+      expect(JSON.parse(String(patched?.[1]?.body))).toEqual({ title: 'New name' })
+    })
+    // Same doctrine as archive: the endpoint's answer is the truth — refetch, don't trust.
     await waitFor(() => {
       const listFetches = fetchMock.mock.calls.filter(([path]) => String(path) === '/api/runs')
       expect(listFetches.length).toBeGreaterThan(1)

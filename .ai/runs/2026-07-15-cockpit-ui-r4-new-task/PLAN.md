@@ -14,7 +14,7 @@
 | 1 | 1.1 | Full-screen /new: hero composer, pickers (workflow/skill, runner, model, variants, base), drafts | done | pending |
 | 1 | 1.2 | Plan-mode toggle + plan review overlay (drag-reorder, save-as-chain, start) | done | pending |
 | 1 | 1.3 | Bookmarklet auto-start parity + re-point /new to the React shell | done | pending |
-| 1 | 1.4 | List/table polish: header meta finishing touches + ⌘N routing + R4 loose ends | todo | — |
+| 1 | 1.4 | List/table polish: header meta finishing touches + ⌘N routing + R4 loose ends | done | pending |
 
 ## Goal
 The full-screen new-task experience (#386, #383): shared composer on a hero surface with all pickers, plan-first mode with the review overlay (spec 008 parity), the protected bookmarklet contract auto-start moving to React (undoing the R1 review-fix legacy pin), and the remaining list polish.

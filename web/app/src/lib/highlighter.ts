@@ -198,18 +198,37 @@ function plaintext(code: string): SynHighlight {
   }
 }
 
+export interface HighlightOptions {
+  /**
+   * Shiki's per-line wall-clock budget in milliseconds (its `tokenizeTimeLimit`, default 500;
+   * `0` disables it). When a line's tokenization exceeds the budget — the JS regex engine
+   * compiles grammar rules lazily DURING the first scan, so a cold grammar on a busy CPU can
+   * eat it — Shiki stops mid-line and the rest of the line comes back as plain text.
+   *
+   * The app keeps the default: a pathological line degrading to plaintext beats a wedged main
+   * thread. Tests that assert full tokenization of known-small inputs must pass `0`, because
+   * their wall clock is shared with every parallel worker vitest spawned — under full-suite
+   * load the budget trips on trivial lines and the assertion flakes.
+   */
+  tokenizeTimeLimit?: number
+}
+
 /**
  * Highlight synchronously when the core and grammar are already resident, else null.
  * Streaming markdown re-highlights the growing tail block on every chunk — after the first
  * async load this is the path every subsequent chunk takes.
  */
-export function highlightSync(code: string, lang: string): SynHighlight | null {
+export function highlightSync(code: string, lang: string, options: HighlightOptions = {}): SynHighlight | null {
   if (isPlainLang(lang)) return plaintext(code)
   const canonical = canonicalLang(lang)
   if (canonical === null) return plaintext(code) // unknown fence info — honest plaintext, sync
   if (!core || !loadedLangs.has(canonical)) return null
   try {
-    const result = core.codeToTokens(code, { lang: canonical as never, theme: SYN_THEME.name })
+    const result = core.codeToTokens(code, {
+      lang: canonical as never,
+      theme: SYN_THEME.name,
+      tokenizeTimeLimit: options.tokenizeTimeLimit,
+    })
     return {
       tokens: result.tokens.map((line) => line.map(({ content, color }) => ({ content, color }))),
       fg: result.fg ?? 'var(--syn-var)',
@@ -221,11 +240,11 @@ export function highlightSync(code: string, lang: string): SynHighlight | null {
 }
 
 /** Highlight, loading the core and the grammar on the way when needed. Never rejects. */
-export async function highlight(code: string, lang: string): Promise<SynHighlight> {
-  const sync = highlightSync(code, lang)
+export async function highlight(code: string, lang: string, options: HighlightOptions = {}): Promise<SynHighlight> {
+  const sync = highlightSync(code, lang, options)
   if (sync) return sync
   await ensureLang(lang)
-  return highlightSync(code, lang) ?? plaintext(code)
+  return highlightSync(code, lang, options) ?? plaintext(code)
 }
 
 /** Test seam: drop the singleton so a suite can assert cold-boot behavior. */
