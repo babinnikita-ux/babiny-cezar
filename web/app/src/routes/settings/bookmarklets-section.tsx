@@ -14,6 +14,15 @@ import { orderSkills } from '@/lib/skills'
 export function BookmarkletsSection() {
   const skillsQuery = useSkills()
 
+  // Without this the in-flight catalog renders as the panel's empty state, which tells the
+  // user "(no skills yet)" — a claim that is simply false while the fetch is still running.
+  if (skillsQuery.isPending) {
+    return (
+      <p data-slot="bookmarklets-loading" className="p-4 text-[13px] text-soft-foreground md:p-6">
+        Loading bookmarklets…
+      </p>
+    )
+  }
   if (skillsQuery.isError) {
     return (
       <CenteredState
