@@ -40,7 +40,7 @@ import {
   pushCurrentBranch,
   readWorktreePath,
 } from './git-changes.js';
-import { loadConfig } from '../config.js';
+import { loadConfig, type CezConfig } from '../config.js';
 import { resolveCapabilities } from './capabilities.js';
 import { resolveForge } from './forge/index.js';
 import { fetchGithub } from './github.js';
@@ -1020,12 +1020,34 @@ export function createApp(deps: ServerDeps): Hono {
     return c.json({ info, status, log, branches, baseBranch: config.baseBranch ?? null });
   });
 
-  // Set/clear the agents' base branch (Repo tab). Merges into the RAW
-  // config.json so user keys (skillsRepos…) survive and schema defaults are
-  // never materialized into the file.
+  // The Settings → Agents knobs in one read (R6 Step 1.5) — an ADDITIVE
+  // sibling of PUT /api/config below; /api/health keeps its protected shape.
+  const configAnswer = (config: CezConfig) => ({
+    baseBranch: config.baseBranch ?? null,
+    defaultRunner: config.defaultRunner,
+    systemPrompt: config.systemPrompt ?? null,
+    defaultModels: config.defaultModels ?? {},
+  });
+  app.get('/api/config', async (c) => c.json(configAnswer(await loadConfig(repoRoot))));
+
+  // Set/clear the agents' config knobs (Settings → Agents; the Repo tab's
+  // base-branch picker). Merges into the RAW config.json so user keys
+  // (skillsRepos…) survive and schema defaults are never materialized into
+  // the file. All fields optional + additive: `null` (and `''` for the
+  // R6 keys) clears a knob back to its default.
+  const modelPresetSchema = z.string().trim().max(200).nullable().optional();
   const setConfigSchema = z.object({
     baseBranch: z.string().trim().min(1).max(200).nullable().optional(),
     defaultRunner: z.enum(['claude', 'codex', 'opencode']).optional(),
+    systemPrompt: z
+      .string()
+      .trim()
+      .max(20_000, 'systemPrompt must be at most 20000 characters')
+      .nullable()
+      .optional(),
+    defaultModels: z
+      .object({ claude: modelPresetSchema, codex: modelPresetSchema, opencode: modelPresetSchema })
+      .optional(),
   });
   app.put('/api/config', async (c) => {
     const parsed = setConfigSchema.safeParse(await c.req.json().catch(() => null));
@@ -1045,14 +1067,36 @@ export function createApp(deps: ServerDeps): Hono {
       else raw.baseBranch = parsed.data.baseBranch;
     }
     if (parsed.data.defaultRunner !== undefined) raw.defaultRunner = parsed.data.defaultRunner;
+    if (parsed.data.systemPrompt !== undefined) {
+      // '' and null both clear: an emptied textarea means "no extra prompt".
+      if (parsed.data.systemPrompt === null || parsed.data.systemPrompt === '') {
+        delete raw.systemPrompt;
+      } else {
+        raw.systemPrompt = parsed.data.systemPrompt;
+      }
+    }
+    if (parsed.data.defaultModels !== undefined) {
+      // Per-runner merge, so setting codex's preset never clobbers claude's.
+      const current =
+        raw.defaultModels && typeof raw.defaultModels === 'object'
+          ? { ...(raw.defaultModels as Record<string, unknown>) }
+          : {};
+      for (const [runner, model] of Object.entries(parsed.data.defaultModels)) {
+        if (model === undefined) continue;
+        if (model === null || model === '') delete current[runner];
+        else current[runner] = model;
+      }
+      if (Object.keys(current).length === 0) delete raw.defaultModels;
+      else raw.defaultModels = current;
+    }
     try {
       await mkdir(dataDir, { recursive: true });
       await writeFile(configPath, `${JSON.stringify(raw, null, 2)}\n`, 'utf8');
     } catch (err) {
       return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
     }
-    const config = await loadConfig(repoRoot);
-    return c.json({ baseBranch: config.baseBranch ?? null, defaultRunner: config.defaultRunner });
+    // Pre-R6 answer shape ({baseBranch, defaultRunner}) + additive R6 fields.
+    return c.json(configAnswer(await loadConfig(repoRoot)));
   });
 
   app.get('/api/repo/diff', async (c) => {

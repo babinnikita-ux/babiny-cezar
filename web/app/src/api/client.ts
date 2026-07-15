@@ -3,6 +3,7 @@ import type {
   ArchiveFinishedResponse,
   CancelResponse,
   ChangesPayload,
+  ConfigResponse,
   ContinueResponse,
   CreatePrResponse,
   CreateRunInput,
@@ -212,6 +213,11 @@ export function getRepo(opts?: ReadOptions): Promise<RepoResponse> {
   return get<RepoResponse>('/api/repo', opts)
 }
 
+/** The Settings → Agents knobs in one read (`GET /api/config`, additive R6 route). */
+export function getConfig(opts?: ReadOptions): Promise<ConfigResponse> {
+  return get<ConfigResponse>('/api/config', opts)
+}
+
 /** The main working tree's structured uncommitted diff vs HEAD (R5 repo view). 409 (as an
  *  ApiError with the reason) when the server runs outside a git repository. */
 export function getRepoChanges(opts?: ReadOptions): Promise<ChangesPayload> {
@@ -395,8 +401,9 @@ export function putUiState(patch: UiState): Promise<UiState> {
   return mutate<UiState>('PUT', '/api/ui-state', patch)
 }
 
-/** Set/clear the agents' base branch (and default runner). Merged into the raw config.json
- *  server-side so unrelated user keys survive. */
+/** Set/clear the agents' config knobs — base branch, default runner, system prompt, per-runner
+ *  model presets (Settings → Agents, R6 1.5). Merged into the raw config.json server-side so
+ *  unrelated user keys survive; `null` clears a knob back to its default. */
 export function putConfig(patch: SetConfigInput): Promise<SetConfigResponse> {
   return mutate<SetConfigResponse>('PUT', '/api/config', patch)
 }

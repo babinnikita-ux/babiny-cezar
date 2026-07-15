@@ -94,10 +94,20 @@ export function resolveRunner(
 }
 
 /** The effective model: the user's pick when it exists in the selected runner's presets, else
- *  auto (`''`). Deliberately STRICTER than legacy, which kept a stale `taskModel` in state
- *  while displaying auto — here what is displayed is what is sent. */
-export function resolveModel(picked: string | null, runner: Runner): string {
-  if (picked !== null && modelsForRunner(runner).some((m) => m.id === picked)) return picked
+ *  the configured per-runner default (Settings → Agents `defaultModels`, R6 1.5) when IT is a
+ *  known preset, else auto (`''`). An explicit pick — including picking auto — always beats
+ *  the configured default (`picked: ''` is a pick; only `null` means "never touched").
+ *  Deliberately STRICTER than legacy, which kept a stale `taskModel` in state while displaying
+ *  auto — here what is displayed is what is sent. */
+export function resolveModel(
+  picked: string | null,
+  runner: Runner,
+  defaults?: Partial<Record<Runner, string>>,
+): string {
+  const models = modelsForRunner(runner)
+  if (picked !== null && models.some((m) => m.id === picked)) return picked
+  const preset = defaults?.[runner]
+  if (preset !== undefined && models.some((m) => m.id === preset)) return preset
   return ''
 }
 

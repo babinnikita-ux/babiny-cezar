@@ -76,4 +76,29 @@ describe('loadConfig systemPrompt', () => {
     expect(config.systemPrompt).toBeUndefined();
     expect(config.maxParallel).toBe(2);
   });
+
+  /** `defaultModels?` (R6 1.5) rides the same additive-key rules as `systemPrompt`. */
+  describe('defaultModels', () => {
+    it('is undefined when absent — old config files load unchanged', async () => {
+      write({ maxParallel: 5 });
+      const config = await loadConfig(repoRoot);
+      expect(config.defaultModels).toBeUndefined();
+      expect(config.maxParallel).toBe(5);
+    });
+
+    it('round-trips per-runner presets, trimmed', async () => {
+      write({ defaultModels: { claude: ' opus ', opencode: 'openai/gpt-5.1' } });
+      expect((await loadConfig(repoRoot)).defaultModels).toEqual({
+        claude: 'opus',
+        opencode: 'openai/gpt-5.1',
+      });
+    });
+
+    it('degrades a bad value to unset per-key, keeping the rest of the config', async () => {
+      write({ defaultModels: { claude: 42 }, maxParallel: 6 });
+      const config = await loadConfig(repoRoot);
+      expect(config.defaultModels).toBeUndefined();
+      expect(config.maxParallel).toBe(6);
+    });
+  });
 });

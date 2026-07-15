@@ -82,6 +82,19 @@ describe('model presets (legacy MODELS_BY_RUNNER, mirrored faithfully)', () => {
     expect(resolveModel('opus', 'codex')).toBe('')
     expect(resolveModel(null, 'claude')).toBe('')
   })
+
+  it('resolveModel falls back to the Settings → Agents per-runner preset (R6 1.5)', () => {
+    const defaults = { claude: 'opus', codex: 'not-a-preset' }
+    // Untouched pill: the configured preset for THIS runner preselects.
+    expect(resolveModel(null, 'claude', defaults)).toBe('opus')
+    // An explicit pick — including explicitly picking auto ('') — beats the preset.
+    expect(resolveModel('sonnet', 'claude', defaults)).toBe('sonnet')
+    expect(resolveModel('', 'claude', defaults)).toBe('')
+    // A configured id the runner does not offer is ignored, not sent blind.
+    expect(resolveModel(null, 'codex', defaults)).toBe('')
+    // No preset for the runner → auto, exactly as before.
+    expect(resolveModel(null, 'opencode', defaults)).toBe('')
+  })
 })
 
 describe('resolveSource (legacy lastTask validation + defaultTaskSource)', () => {

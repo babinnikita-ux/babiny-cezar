@@ -477,17 +477,31 @@ export interface PatchRunInput {
   title?: string
 }
 
-/** `PUT /api/config` (the base-branch picker; legacy Repo tab). `baseBranch: null` clears the
- *  setting back to "current checkout". Merged into the raw config.json server-side. */
+/** Per-runner default model preset (Settings → Agents, R6 1.5): the composer preselects this
+ *  model id for the runner. Absent = auto (the runner decides). */
+export type RunnerModels = Partial<Record<Runner, string>>
+
+/** `GET /api/config` (additive R6 route): every Settings → Agents knob in one read. */
+export interface ConfigResponse {
+  baseBranch: string | null
+  defaultRunner: Runner
+  systemPrompt: string | null
+  defaultModels: RunnerModels
+}
+
+/** `PUT /api/config` (Settings → Agents; the Repo tab's base-branch picker). `baseBranch: null`
+ *  clears the setting back to "current checkout"; `systemPrompt` and per-runner `defaultModels`
+ *  entries clear on `null` (or `''`) too. Merged into the raw config.json server-side —
+ *  `defaultModels` merges per runner, so one write never clobbers another runner's preset. */
 export interface SetConfigInput {
   baseBranch?: string | null
   defaultRunner?: Runner
+  systemPrompt?: string | null
+  defaultModels?: Partial<Record<Runner, string | null>>
 }
 
-export interface SetConfigResponse {
-  baseBranch: string | null
-  defaultRunner: Runner
-}
+/** The PUT answer: the same shape GET serves (the pre-R6 fields stayed, the rest is additive). */
+export type SetConfigResponse = ConfigResponse
 
 // ---- mutation responses ---------------------------------------------------------------------------
 

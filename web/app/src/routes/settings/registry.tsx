@@ -9,6 +9,7 @@ import {
 import type { ComponentType, SVGProps } from 'react'
 
 import { CenteredState } from '@/components/centered-state'
+import { AgentsSection } from './agents-section'
 import { AppearanceSection } from './appearance'
 import { SkillsSection } from './skills-section'
 
@@ -76,7 +77,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     title: 'Agents',
     description: 'Default runner, models and system prompt.',
     icon: BotIcon,
-    component: comingSoon('Agents', BotIcon), // Step 1.5 replaces this with the real form.
+    component: AgentsSection,
   },
   {
     id: 'mcp',

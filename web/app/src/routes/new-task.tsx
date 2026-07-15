@@ -10,7 +10,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 
 import { createRun, getLaunchKey, postPlan, putConfig, putUiState } from '@/api/client'
-import { queryKeys, useHealth, useRepo, useSkills, useUiState, useWorkflows } from '@/api/queries'
+import { queryKeys, useConfig, useHealth, useRepo, useSkills, useUiState, useWorkflows } from '@/api/queries'
 import type { ImageInput, RepoResponse, Runner, Skill, WorkflowDef } from '@/api/types'
 import { TwinkleBackdrop } from '@/components/centered-state'
 import { Composer } from '@/components/composer/composer'
@@ -85,6 +85,8 @@ export function NewTaskRoute() {
   const skills = useSkills()
   const repo = useRepo()
   const uiState = useUiState()
+  // Settings → Agents `defaultModels` (R6 1.5): the per-runner preset the Model pill starts on.
+  const config = useConfig()
 
   // The draft survives navigation (module store); explicit deep-link params beat it — a
   // pasted `/new?skill=&ref=` link states intent, a leftover draft only remembers it.
@@ -114,7 +116,7 @@ export function NewTaskRoute() {
   const runners = availableRunners(health.data?.checks ?? [])
   const runner = resolveRunner(draft.runner, runners, health.data?.defaultRunner ?? 'claude')
   const models = modelsForRunner(runner)
-  const model = resolveModel(draft.model, runner)
+  const model = resolveModel(draft.model, runner, config.data?.defaultModels)
 
   // Parallel variants need a worktree per variant, hence git (the server 409s without it).
   const hasGit = health.data === undefined || health.data.repo !== null

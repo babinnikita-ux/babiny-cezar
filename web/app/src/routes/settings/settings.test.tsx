@@ -101,8 +101,11 @@ describe('the settings shell', () => {
   })
 
   it('unfinished sections say so through the shared CenteredState template', () => {
-    renderAt('/settings/agents')
-    const state = document.querySelector('[data-route="settings-agents"] [data-slot="centered-state"]')
+    // Hidden sections are not routed (their URLs 404) — render the registry component
+    // directly to pin the placeholder contract itself.
+    const Mcp = SETTINGS_SECTIONS.find((s) => s.id === 'mcp')!.component
+    render(<Mcp />)
+    const state = document.querySelector('[data-slot="centered-state"]')
     expect(state?.textContent).toContain('later phase')
   })
 })

@@ -171,6 +171,8 @@ function serve(overrides: {
       if (url === '/api/ui-state' && method === 'GET') return json(data.uiState)
       if (url === '/api/ui-state' && method === 'PUT') return json(body ?? {})
       if (url === '/api/runs' && method === 'POST') return json(data.createRun, data.createRunStatus)
+      if (url === '/api/config' && method === 'GET')
+        return json({ baseBranch: null, defaultRunner: 'claude', systemPrompt: null, defaultModels: {} })
       if (url === '/api/config' && method === 'PUT')
         return json({ baseBranch: (body as { baseBranch: string | null }).baseBranch, defaultRunner: 'claude' })
       return json({ error: `unmocked ${method} ${url}` }, 404)
@@ -313,7 +315,10 @@ describe('picker data flows', () => {
     await waitFor(() =>
       expect(requests.some((r) => r.method === 'PUT' && r.url === '/api/config')).toBe(true),
     )
-    expect(requests.find((r) => r.url === '/api/config')?.body).toEqual({ baseBranch: null })
+    // find the PUT specifically — the composer also GETs /api/config for the model presets.
+    expect(requests.find((r) => r.method === 'PUT' && r.url === '/api/config')?.body).toEqual({
+      baseBranch: null,
+    })
   })
 
   it('preselects the persisted lastTask when it still exists', async () => {

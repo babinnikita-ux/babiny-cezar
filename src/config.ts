@@ -46,6 +46,21 @@ const configSchema = z.object({
    * bad value degrades to unset without discarding the rest of the config.
    */
   systemPrompt: z.string().trim().min(1).max(20_000).optional().catch(undefined),
+  /**
+   * Per-runner default model preset (Settings → Agents, redesign R6 1.5): the
+   * model id the composer preselects for that runner. Missing = auto (the
+   * runner decides). A capability (`model`), never a vendor config format.
+   * `.catch(undefined)` keeps the key additive-safe like `systemPrompt`: a
+   * bad value degrades to unset without discarding the rest of the config.
+   */
+  defaultModels: z
+    .object({
+      claude: z.string().trim().min(1).max(200).optional(),
+      codex: z.string().trim().min(1).max(200).optional(),
+      opencode: z.string().trim().min(1).max(200).optional(),
+    })
+    .optional()
+    .catch(undefined),
 });
 
 export type CezConfig = z.infer<typeof configSchema>;

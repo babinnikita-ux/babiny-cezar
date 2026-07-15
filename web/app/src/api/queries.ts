@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import {
+  getConfig,
   getGithub,
   getGroup,
   getHealth,
@@ -56,6 +57,8 @@ export const queryKeys = {
   repoChanges: ['repo', 'changes'] as const,
   repoCommit: (sha: string) => ['repo', 'commit', sha] as const,
   uiState: ['ui-state'] as const,
+  /** The Settings → Agents knobs (`GET /api/config`, R6 1.5). */
+  config: ['config'] as const,
   github: (params: { limit?: number } = {}) => ['github', params.limit ?? null] as const,
 } as const
 
@@ -203,6 +206,15 @@ export function useRepoCommit(sha: string | undefined) {
     queryFn: ({ signal }) => getRepoCommit(sha as string, { signal }),
     enabled: Boolean(sha),
     retry: false,
+  })
+}
+
+/** The Settings → Agents knobs (R6 1.5): base branch, default runner, system prompt, per-runner
+ *  model presets. The composer reads it too — `defaultModels` preselects its Model pill. */
+export function useConfig() {
+  return useQuery({
+    queryKey: queryKeys.config,
+    queryFn: ({ signal }) => getConfig({ signal }),
   })
 }
 
