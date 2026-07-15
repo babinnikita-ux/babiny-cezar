@@ -15,10 +15,10 @@
 | 1 | 1.2 | Inbox restyle: cards, status dots, Run/Dismiss, CenteredState empty (badge logic unchanged) | done | 67ce236 |
 | 1 | 1.3 | Settings shell (registry-driven) + Appearance section (theme/accent/density, ui-state.json additive) | done | b6c854f |
 | 1 | 1.4 | Skills under Settings: catalog + detail + refresh + bookmarklets, project-first (#377), stable scroll (#384) | done | 32b3484 |
-| 1 | 1.5 | Agents section: default runner, model presets, system prompt (single edit place), base branch | done | e4eadf2 |
-| 1 | 1.6 | Workflows builder on dnd-kit + shadcn: canvas, palette drag, YAML import/export/preview, 8-step limit | done | pending |
-| 1 | 1.7 | Notifications: browser Notification via deriveAttention (off by default) + Settings toggle | done | pending |
-| 1 | 1.8 | Fix e2e expectation drift from 1.1/1.7 (forge-gated nav settle, 4 settings sections) | done | pending |
+| 1 | 1.5 | Agents section: default runner, model presets, system prompt (single edit place), base branch | done | 9c20080 |
+| 1 | 1.6 | Workflows builder on dnd-kit + shadcn: canvas, palette drag, YAML import/export/preview, 8-step limit | done | 33b46d0 |
+| 1 | 1.7 | Notifications: browser Notification via deriveAttention (off by default) + Settings toggle | done | 4123e01 |
+| 1 | 1.8 | Fix e2e expectation drift from 1.1/1.7 (forge-gated nav settle, 4 settings sections) | done | ad323d1 |
 
 ## Goal
 
