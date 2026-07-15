@@ -62,10 +62,10 @@ export function useRunEvents(runId: string | undefined): RunEvent[] {
     const Source = globalThis.EventSource
     if (typeof Source !== 'function') return
 
-    const source = new Source(`/api/runs/${encodeURIComponent(runId)}/events`)
     // The high-water mark lives with the socket's effect, not in state: a reconnect replay
     // arrives between renders, and dedup must not race React's batching.
     let maxSeq = 0
+    let source: EventSource | null = null
 
     const onFrame = (event: Event) => {
       const parsed = parseRunEvent((event as MessageEvent<string>).data)
@@ -73,9 +73,30 @@ export function useRunEvents(runId: string | undefined): RunEvent[] {
       maxSeq = parsed.seq
       setEvents((current) => [...current, parsed])
     }
-    for (const name of RUN_EVENT_NAMES) source.addEventListener(name, onFrame)
 
-    return () => source.close()
+    const open = (): void => {
+      source?.close()
+      source = new Source(`/api/runs/${encodeURIComponent(runId)}/events`)
+      for (const name of RUN_EVENT_NAMES) source.addEventListener(name, onFrame)
+    }
+
+    // Same bfcache discipline as the global stream: a full navigation parks this document with
+    // its socket open and starves the per-origin pool. Close on pagehide; a bfcache restore
+    // reopens, and `maxSeq` swallows the replayed prefix.
+    const onPageHide = (): void => source?.close()
+    const onPageShow = (event: PageTransitionEvent): void => {
+      if (event.persisted) open()
+    }
+
+    window.addEventListener('pagehide', onPageHide)
+    window.addEventListener('pageshow', onPageShow)
+    open()
+
+    return () => {
+      window.removeEventListener('pagehide', onPageHide)
+      window.removeEventListener('pageshow', onPageShow)
+      source?.close()
+    }
   }, [runId])
 
   return events

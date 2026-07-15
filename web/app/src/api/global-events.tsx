@@ -177,13 +177,35 @@ export function useGlobalEvents(usage: UsageStore, url: string = SSE_URL): void 
       }
     }
 
+    const onPageHide = (): void => {
+      // Full navigation away. React never unmounts for those — the document goes to the
+      // back/forward cache still holding this socket, and six cached documents exhaust the
+      // browser's per-origin connection pool: the *next* page load then hangs waiting for a
+      // free socket. Close eagerly; pageshow reopens if the document ever comes back.
+      clearTimeout(reopenTimer)
+      reopenTimer = undefined
+      source?.close()
+    }
+
+    const onPageShow = (event: PageTransitionEvent): void => {
+      // Only a bfcache restore (`persisted`) finds this document alive with its stream closed
+      // by onPageHide; on a normal load this effect just ran and the stream is fresh.
+      if (!event.persisted) return
+      reconcile(queryClient)
+      connect()
+    }
+
     document.addEventListener('visibilitychange', onVisibilityChange)
+    window.addEventListener('pagehide', onPageHide)
+    window.addEventListener('pageshow', onPageShow)
     connect()
 
     return () => {
       disposed = true
       clearTimeout(reopenTimer)
       document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('pagehide', onPageHide)
+      window.removeEventListener('pageshow', onPageShow)
       // Explicit: an EventSource keeps its socket (and its retry loop) alive on its own, so a
       // dropped reference leaks a connection per remount, and StrictMode remounts every effect.
       source?.close()

@@ -839,6 +839,16 @@ function mergeUsage(runs) {
 function connectGlobal() {
   const es = new EventSource('/api/events');
   es.onopen = () => void resyncRuns(); // fires on the initial connect AND every auto-reconnect
+  window.addEventListener('pagehide', () => {
+    // Navigating away parks this document in the back/forward cache with its sockets open;
+    // enough parked documents exhaust the browser's per-origin pool and wedge the NEXT page
+    // load. Close both streams; a bfcache restore reloads for a fresh, honest state.
+    es.close();
+    if (state.runEs) { state.runEs.close(); state.runEs = null; }
+  });
+  window.addEventListener('pageshow', (e) => {
+    if (e.persisted) location.reload();
+  });
   document.addEventListener('visibilitychange', () => {
     // SSE can die silently across a sleep — a tab coming back re-syncs too.
     if (!document.hidden) void resyncRuns();

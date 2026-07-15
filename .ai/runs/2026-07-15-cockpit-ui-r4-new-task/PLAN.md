@@ -11,10 +11,11 @@
 
 | Phase | Step | Title | Status | Commit |
 |-------|------|-------|--------|--------|
-| 1 | 1.1 | Full-screen /new: hero composer, pickers (workflow/skill, runner, model, variants, base), drafts | done | pending |
-| 1 | 1.2 | Plan-mode toggle + plan review overlay (drag-reorder, save-as-chain, start) | done | pending |
-| 1 | 1.3 | Bookmarklet auto-start parity + re-point /new to the React shell | done | pending |
-| 1 | 1.4 | List/table polish: header meta finishing touches + ⌘N routing + R4 loose ends | done | pending |
+| 1 | 1.1 | Full-screen /new: hero composer, pickers (workflow/skill, runner, model, variants, base), drafts | done | cf01558 |
+| 1 | 1.2 | Plan-mode toggle + plan review overlay (drag-reorder, save-as-chain, start) | done | 696a5e9 |
+| 1 | 1.3 | Bookmarklet auto-start parity + re-point /new to the React shell | done | c0680f0 |
+| 1 | 1.4 | List/table polish: header meta finishing touches + ⌘N routing + R4 loose ends | done | 2e82aa4 |
+| 1 | 1.5 | SSE bfcache leak: close streams on pagehide, reopen on restore (React + legacy) | done | 7d35d18 |
 
 ## Goal
 The full-screen new-task experience (#386, #383): shared composer on a hero surface with all pickers, plan-first mode with the review overlay (spec 008 parity), the protected bookmarklet contract auto-start moving to React (undoing the R1 review-fix legacy pin), and the remaining list polish.

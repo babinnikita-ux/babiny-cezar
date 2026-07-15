@@ -203,4 +203,31 @@ describe('useRunEvents — lifecycle', () => {
     expect(result.current).toEqual([])
     expect(FakeEventSource.instances).toHaveLength(0)
   })
+
+  it('closes on pagehide and reopens on a bfcache restore, deduping the replay', () => {
+    const { result } = renderHook(() => useRunEvents('run-1'))
+    const first = FakeEventSource.last
+    first.emit('run-event', line(1, 'stdout', { text: 'before' }))
+
+    // Navigate away: the parked document must not hold a per-origin socket.
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'))
+    })
+    expect(first.closeCount).toBe(1)
+
+    // Restored from bfcache: a fresh socket to the same run, and the server's replay of what
+    // we already rendered stays swallowed by the high-water mark.
+    const pageshow = new Event('pageshow')
+    Object.defineProperty(pageshow, 'persisted', { value: true })
+    act(() => {
+      window.dispatchEvent(pageshow)
+    })
+
+    const second = FakeEventSource.last
+    expect(second).not.toBe(first)
+    expect(second.url).toBe('/api/runs/run-1/events')
+    second.emit('run-event', line(1, 'stdout', { text: 'before' })) // replayed prefix
+    second.emit('run-event', line(2, 'stdout', { text: 'after' }))
+    expect(result.current.map((event) => event.seq)).toEqual([1, 2])
+  })
 })

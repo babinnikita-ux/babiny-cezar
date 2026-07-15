@@ -165,6 +165,50 @@ describe('useGlobalEvents — connection', () => {
   })
 })
 
+describe('useGlobalEvents — back/forward cache', () => {
+  // jsdom has no PageTransitionEvent; a plain Event with `persisted` defined is what the
+  // handler reads either way.
+  function firePageShow(persisted: boolean): void {
+    const event = new Event('pageshow')
+    Object.defineProperty(event, 'persisted', { value: persisted })
+    act(() => {
+      window.dispatchEvent(event)
+    })
+  }
+
+  it('closes the stream when the document is navigated away (pagehide)', () => {
+    const { source } = mount()
+
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'))
+    })
+
+    // The leak this prevents: a bfcached document's open EventSource keeps a real socket, and
+    // six parked documents exhaust the per-origin pool — the NEXT page load hangs.
+    expect(source.closeCount).toBe(1)
+  })
+
+  it('reopens the stream when the document is restored from bfcache', () => {
+    mount()
+
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'))
+    })
+    firePageShow(true)
+
+    expect(FakeEventSource.instances).toHaveLength(2)
+    expect(FakeEventSource.last.url).toBe('/api/events')
+  })
+
+  it('does nothing on the pageshow of a normal load', () => {
+    mount()
+
+    firePageShow(false)
+
+    expect(FakeEventSource.instances).toHaveLength(1)
+  })
+})
+
 describe('useGlobalEvents — run events', () => {
   it('upserts a run into the list cache without refetching', () => {
     client.setQueryData<ApiRun[]>(queryKeys.runs.list(), [])
