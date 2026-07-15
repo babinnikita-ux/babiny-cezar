@@ -434,12 +434,13 @@ export function Composer({
             // The footer may WRAP (the /new pill row on narrow widths), but the trailing
             // controls stay one unbreakable group so the send button never strands alone.
             <div className="flex flex-wrap items-center gap-1 gap-y-1.5 px-2 pt-1.5 pb-2">
-              <AttachButton disabled={disabled} onFiles={addFiles} />
-              {footerStart ? (
-                <div data-slot="composer-footer-start" className="flex min-w-0 flex-wrap items-center gap-1">
-                  {footerStart}
-                </div>
-              ) : null}
+              {/* The paperclip shares ONE wrapping row with the footer pills — otherwise the
+                  pill group is a single flex item that wraps as a block, stranding the
+                  paperclip alone on the line above it (#composer-attach-line). */}
+              <div data-slot="composer-footer-start" className="flex min-w-0 flex-wrap items-center gap-1">
+                <AttachButton disabled={disabled} onFiles={addFiles} />
+                {footerStart}
+              </div>
               <div className="ml-auto flex items-center gap-1">
                 {disabled && disabledAction ? (
                   <div data-slot="composer-disabled-action" className="mr-1">
