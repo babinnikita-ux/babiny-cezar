@@ -32,6 +32,8 @@ import type { RunManager } from '../workflows/run.js';
 import { removeWorktree, worktreeDiff, worktreeDiffStat } from '../git-worktree.js';
 import { getBranches, getCommit, getDiff, getLog, getRepoInfo, getStatus } from './git.js';
 import { loadConfig } from '../config.js';
+import { resolveCapabilities } from './capabilities.js';
+import { resolveForge } from './forge/index.js';
 import { fetchGithub } from './github.js';
 import { ensureLaunchKey } from './launch-key.js';
 import { openInTerminal } from './open-in-terminal.js';
@@ -46,6 +48,9 @@ export interface ServerDeps {
   /** Mutable holder for the async npm-registry update check (#368) —
    *  `latest` appears once the registry answers with a newer version. */
   update?: { latest?: string };
+  /** Host the HTTP server binds (default 127.0.0.1). A non-loopback host
+   *  implies hosted mode — `capabilities.localHandoff:false`. */
+  bindHost?: string;
 }
 
 // ---- variant-compare response shapes (spec 010) ----------------------------
@@ -181,8 +186,11 @@ const messageSchema = z
   });
 
 export function createApp(deps: ServerDeps): Hono {
-  const { repoRoot, store, manager, version, update } = deps;
+  const { repoRoot, store, manager, version, update, bindHost } = deps;
   const dataDir = join(repoRoot, '.ai/cezar');
+  // Hosted-mode gate (spec §"Deployment modes") — read per request so
+  // CEZ_REMOTE flips take effect live (and tests can toggle it).
+  const capabilities = () => resolveCapabilities(process.env, bindHost);
   startTodosWatch(dataDir); // inbox live updates (spec 007)
   const launchKey = ensureLaunchKey(dataDir); // bookmarklet auto-start secret (spec 011)
   const app = new Hono();
@@ -257,6 +265,9 @@ export function createApp(deps: ServerDeps): Hono {
       getRepoInfo(repoRoot),
       loadConfig(repoRoot),
     ]);
+    // Additive fields only below — the pre-forge shape is the most
+    // externally-depended-on JSON in the app (BACKWARD_COMPATIBILITY.md §2).
+    const forge = resolveForge(repo);
     return c.json({
       version,
       latestVersion: update?.latest,
@@ -264,6 +275,8 @@ export function createApp(deps: ServerDeps): Hono {
       repo,
       checks,
       defaultRunner: config.defaultRunner,
+      forge: forge ? { kind: forge.kind, ...(await forge.detect()) } : null,
+      capabilities: capabilities(),
     });
   });
 
@@ -637,6 +650,14 @@ export function createApp(deps: ServerDeps): Hono {
     const id = c.req.param('id');
     const run = store.getRun(id);
     if (!run) return c.json({ error: 'not found' }, 404);
+    // Hosted mode: there is no "my machine" to open a terminal on. The UI
+    // hides the button when localHandoff is false — this is defense in depth.
+    if (!capabilities().localHandoff) {
+      return c.json(
+        { error: 'local handoff is disabled — this cockpit runs in hosted mode (CEZ_REMOTE); resume the session from a machine that has the checkout' },
+        409,
+      );
+    }
     const sessionId = [...run.steps].reverse().find((s) => s.sessionId)?.sessionId;
     if (!sessionId) return c.json({ error: 'no agent session to resume' }, 409);
     const cwd = run.worktreePath && existsSync(run.worktreePath) ? run.worktreePath : repoRoot;
@@ -960,7 +981,7 @@ export function createApp(deps: ServerDeps): Hono {
 
 export function startServer(deps: ServerDeps, port: number): ServerType {
   const app = createApp(deps);
-  return serve({ fetch: app.fetch, port, hostname: '127.0.0.1' });
+  return serve({ fetch: app.fetch, port, hostname: deps.bindHost ?? '127.0.0.1' });
 }
 
 function resolveWebDir(): string {

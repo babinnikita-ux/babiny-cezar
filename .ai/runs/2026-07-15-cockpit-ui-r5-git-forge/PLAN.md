@@ -11,7 +11,7 @@
 
 | Phase | Step | Title | Status | Commit |
 |-------|------|-------|--------|--------|
-| 1 | 1.1 | Forge driver seam: src/server/forge/, health `forge` + `capabilities.localHandoff`, hosted-mode 409s | todo | — |
+| 1 | 1.1 | Forge driver seam: src/server/forge/, health `forge` + `capabilities.localHandoff`, hosted-mode 409s | done | pending |
 | 1 | 1.2 | Session git API: /api/runs/:id/changes + /files + git/commit + git/push (zod, 409-with-reason) | todo | — |
 | 1 | 1.3 | Repo API: /api/repo/changes + /api/repo/branch | todo | — |
 | 1 | 1.4 | `<Diff>` facade on @pierre/diffs (fallback impl, same props) + shared Shiki highlighting | todo | — |
