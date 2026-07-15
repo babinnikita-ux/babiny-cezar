@@ -345,18 +345,36 @@ export interface PlanResponse {
   fallback: boolean
 }
 
-/** `POST /api/workflows`: save a chain as `.ai/cezar/workflows/<slug>.yaml`. Without `overwrite`
- *  an existing file answers 409 with `exists: true` (see ApiError) — the UI confirms, then
- *  retries with `overwrite: true`. */
+/** `POST /api/workflows`: save a chain as `.ai/cezar/workflows/<slug>.yaml`. Exactly one of
+ *  `steps` / the portable `skills` shorthand — the server's schema refines on the XOR. Without
+ *  `overwrite` an existing file answers 409 with `exists: true` (see ApiError) — the UI
+ *  confirms, then retries with `overwrite: true`. */
 export interface SaveWorkflowInput {
   name: string
-  steps: WorkflowStepDef[]
+  description?: string
+  steps?: WorkflowStepDef[]
+  skills?: string[]
   overwrite?: boolean
 }
 
 export interface SaveWorkflowResponse {
   path: string
   name: string
+}
+
+/** `POST /api/workflows/parse` (spec 012): pasted YAML → the normalized definition. The
+ *  server owns YAML parsing and validation; a bad paste is a 400 whose ApiError carries the
+ *  zod/YAML reason verbatim. */
+export interface ParsedWorkflow {
+  name: string
+  description?: string
+  steps: WorkflowStepDef[]
+}
+
+/** `DELETE /api/workflows/:name` — file workflows only; built-ins answer 400. */
+export interface DeleteWorkflowResponse {
+  ok: boolean
+  path: string
 }
 
 // ---- skills (src/skills.ts) -----------------------------------------------------------------

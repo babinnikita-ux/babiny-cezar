@@ -75,8 +75,10 @@ describe('route map', () => {
     ['/github/issues/42', 'github', 'Loading GitHub…'],
     ['/github/prs/7', 'github', 'Loading GitHub…'],
     ['/inbox', 'inbox', 'Inbox'],
-    ['/workflows', 'workflows', 'Workflows'],
-    ['/workflows/ship-it', 'workflow', 'Workflow'],
+    // The real workflow builder (R6 Step 1.6): with fetch never answering both the list URL
+    // and a named deep link are honestly loading.
+    ['/workflows', 'workflows', 'Loading workflows…'],
+    ['/workflows/ship-it', 'workflows', 'Loading workflows…'],
     ['/settings', 'settings', 'Settings'],
     ['/settings/skills', 'settings-skills', 'Skills'],
     ['/settings/appearance', 'settings-appearance', 'Appearance'],
@@ -126,16 +128,6 @@ describe('route map', () => {
     expect(screen.getByRole('link', { name: 'Back to tasks' }).getAttribute('href')).toBe('/')
   })
 
-  // Every placeholder now speaks through the shared template — one grammar for every stub.
-  // (/inbox graduated to a real view in R6 1.2 — /workflows is the exemplar until 1.6.)
-  it('placeholders render as neutral CenteredStates', () => {
-    renderAt('/workflows')
-    const state = document.querySelector('[data-route="workflows"] [data-slot="centered-state"]')
-    expect(state).not.toBeNull()
-    expect(state?.getAttribute('data-tone')).toBe('neutral')
-    // A stub is not a hero surface: no decorative backdrop.
-    expect(state?.querySelector('[data-slot="twinkle-backdrop"]')).toBeNull()
-  })
 })
 
 /** The bookmarklet contract (spec 011), protected by BACKWARD_COMPATIBILITY.md:

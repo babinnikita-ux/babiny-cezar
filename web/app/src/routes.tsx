@@ -1,4 +1,3 @@
-import { WorkflowIcon } from 'lucide-react'
 import { Suspense, lazy } from 'react'
 import { Route, Routes } from 'react-router'
 
@@ -7,8 +6,8 @@ import { GithubLoading } from './routes/github/github-loading'
 import { InboxRoute } from './routes/inbox'
 import { NewTaskRoute } from './routes/new-task'
 import { NotFoundRoute } from './routes/not-found'
-import { Placeholder } from './routes/placeholder'
 import { RepoGitLoading } from './routes/repo-git/repo-git-loading'
+import { WorkflowsLoading } from './routes/workflows/workflows-loading'
 import { GitTabLoading } from './routes/task-git/git-tab-loading'
 import { ThreadLoading } from './routes/task-thread/thread-loading'
 import { visibleSettingsSections } from './routes/settings/registry'
@@ -50,15 +49,20 @@ const GithubRoute = lazy(() =>
   import('./routes/github/github').then((m) => ({ default: m.GithubRoute })),
 )
 
+/** Lazy because the builder carries dnd-kit (R6 Step 1.6) — drag machinery only this surface
+ *  uses, so only this surface pays for it. */
+const WorkflowsRoute = lazy(() =>
+  import('./routes/workflows/workflows').then((m) => ({ default: m.WorkflowsRoute })),
+)
+
 /** The route map from the spec's "Routing — every surface is a URL" section.
  *
  *  Real URLs, not hash routes: the Hono server serves the built index.html for
  *  every non-/api GET (src/server/static-ui.ts `resolveGetRequest`), so each of
  *  these cold-loads and survives a refresh.
  *
- *  `/` is the real Tasks overview (Step 3.4); the remaining elements are
- *  placeholders until their views land in R3–R6. Keep the paths stable: they
- *  are what teammates paste.
+ *  Every element is a real view now (R3–R6). Keep the paths stable: they are
+ *  what teammates paste.
  */
 export function AppRoutes() {
   return (
@@ -172,8 +176,25 @@ export function AppRoutes() {
       {/* The follow-up inbox (R6 Step 1.2): light — no markdown stack — so it rides the main
           bundle like the overview does. */}
       <Route path="/inbox" element={<InboxRoute />} />
-      <Route path="/workflows" element={<Placeholder route="workflows" title="Workflows" icon={<WorkflowIcon />} />} />
-      <Route path="/workflows/:name" element={<Placeholder route="workflow" title="Workflow" icon={<WorkflowIcon />} />} />
+
+      {/* The workflow builder (R6 Step 1.6): /workflows opens the canvas on the repo's first
+          saved chain, /workflows/:name deep-links a specific one. */}
+      <Route
+        path="/workflows"
+        element={
+          <Suspense fallback={<WorkflowsLoading />}>
+            <WorkflowsRoute />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/workflows/:name"
+        element={
+          <Suspense fallback={<WorkflowsLoading />}>
+            <WorkflowsRoute />
+          </Suspense>
+        }
+      />
 
       {/* Settings (R6 Step 1.3): registry-driven — the section list, nav and routes all come
           from routes/settings/registry.tsx. Hidden sections are NOT routed, so their URLs are

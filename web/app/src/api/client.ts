@@ -9,6 +9,7 @@ import type {
   CreateRunInput,
   CreateRunResponse,
   DeleteRunResponse,
+  DeleteWorkflowResponse,
   FinishResponse,
   GitCommitResponse,
   GitPushResponse,
@@ -19,6 +20,7 @@ import type {
   MessageInput,
   MessageResponse,
   OpenInCliResponse,
+  ParsedWorkflow,
   PatchRunInput,
   PickVariantResponse,
   PlanResponse,
@@ -392,6 +394,18 @@ export function postPlan(task: string): Promise<PlanResponse> {
  *  ask the user, then retry with `overwrite: true`. */
 export function createWorkflow(input: SaveWorkflowInput): Promise<SaveWorkflowResponse> {
   return mutate<SaveWorkflowResponse>('POST', '/api/workflows', input)
+}
+
+/** Import support for the builder (spec 012): the server parses + validates pasted workflow
+ *  YAML (either form) and answers the normalized definition. */
+export function parseWorkflow(yaml: string): Promise<ParsedWorkflow> {
+  return mutate<ParsedWorkflow>('POST', '/api/workflows/parse', { yaml })
+}
+
+/** Delete a saved workflow file (spec 012 follow-up). Built-ins answer 400 — they have no
+ *  file and always come back. */
+export function deleteWorkflow(name: string): Promise<DeleteWorkflowResponse> {
+  return mutate<DeleteWorkflowResponse>('DELETE', `/api/workflows/${encodeURIComponent(name)}`)
 }
 
 // ---- prefs ---------------------------------------------------------------------------------
