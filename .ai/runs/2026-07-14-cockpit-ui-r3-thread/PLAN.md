@@ -18,7 +18,7 @@
 | 2 | 2.1 | Shared composer: reply, attachments, / skills autocomplete, @ files, dictation, quick replies | done | pending |
 | 2 | 2.2 | Review gate on the new surface (diff panel, send back, Draft PR) | done | pending |
 | 2 | 2.3 | Variants compare view | done | pending |
-| 2 | 2.4 | Thread virtualization + scroll caches + iOS pass + v1 fallback for old runs | todo | — |
+| 2 | 2.4 | Thread virtualization + scroll caches + iOS pass + v1 fallback for old runs | done | pending |
 
 ## Goal
 The chat view at `/tasks/:id` (Session tab) rendered from protocol v2 with v1 fallback: turns, tool cards with live output, context groups, reasoning, the plan dock (#382), tool results Codex-style (#381), the composer with skills autocomplete (#380) and Dictation, review gate, variants compare — matching the thread.html mockup, mobile-first.

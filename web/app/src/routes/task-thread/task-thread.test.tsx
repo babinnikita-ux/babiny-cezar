@@ -178,6 +178,20 @@ describe('ThreadView', () => {
     expect(document.querySelector('[data-slot="thread-empty"]')?.textContent).toBe('No session events yet.')
   })
 
+  it('an eventless QUEUED run gets the queued placeholder, not the generic empty line (#351)', () => {
+    renderView(<ThreadView run={run('queued')} thread={reduceThread([])} />)
+    const placeholder = document.querySelector('[data-slot="queued-state"]')
+    expect(placeholder?.textContent).toContain('Waiting for a free agent slot')
+    expect(placeholder?.textContent).toContain('quick-task · starts automatically')
+    expect(document.querySelector('[data-slot="thread-empty"]')).toBeNull()
+  })
+
+  it('the first real event replaces the queued placeholder', () => {
+    renderView(<ThreadView run={run('queued')} thread={reduceThread([line(1, 'lifecycle', { message: 'cezar restarted — task re-queued' })])} />)
+    expect(document.querySelector('[data-slot="queued-state"]')).toBeNull()
+    expect(document.querySelector('[data-slot="note-line"]')?.textContent).toContain('re-queued')
+  })
+
   it('no plan → no dock, no header mirror; steps present → the rail renders in the header', () => {
     renderView(
       <ThreadView

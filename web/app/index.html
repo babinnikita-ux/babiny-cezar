@@ -2,7 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- interactive-widget: engines that honor it shrink the viewport under the virtual
+         keyboard themselves; the visualViewport --kb watcher (lib/keyboard-inset.ts) is the
+         required iOS fallback beneath it. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
     <!-- Relative so Vite bundles the legacy logo out of web/ instead of duplicating it under a public dir. -->
     <link rel="icon" href="../open-mercato.svg" />
     <title>cezar</title>

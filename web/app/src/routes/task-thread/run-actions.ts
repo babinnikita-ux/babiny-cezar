@@ -78,3 +78,16 @@ export function runActionFlags(run: RunRecord): RunActionFlags {
 export function finishTitle(status: RunStatus): string {
   return status === 'review' ? 'Accept the changes without a PR' : 'Close the session'
 }
+
+/**
+ * 1-based position among the queued, unarchived runs, FIFO by `createdAt` — the legacy
+ * queued-placeholder math (web/app.js `queuePosition`, spec 006). Undefined when the run is
+ * not itself queued (or the list doesn't know it yet — SSE races the detail fetch).
+ */
+export function queuePosition(runs: RunRecord[], runId: string): number | undefined {
+  const queued = runs
+    .filter((run) => !run.archived && run.status === 'queued')
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+  const index = queued.findIndex((run) => run.id === runId)
+  return index >= 0 ? index + 1 : undefined
+}

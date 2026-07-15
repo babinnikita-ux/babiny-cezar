@@ -156,11 +156,16 @@ export class AgentBrowser {
   }
 
   /** operation: screenshot. The descriptor requires an absolute path — a relative
-   *  multi-segment path is read as a selector by the CLI. */
-  screenshot(path: string): string {
+   *  multi-segment path is read as a selector by the CLI.
+   *
+   *  `viewport: true` captures the visible viewport only. Full-page capture stitches by
+   *  scrolling through the document, which is both pathological on a virtualized thread and
+   *  destroys scroll-dependent UI state (it re-pins the thread and unmounts the jump pill) —
+   *  any spec asserting such state after the shot must use the viewport mode. */
+  screenshot(path: string, { viewport = false } = {}): string {
     const absolute = resolve(path)
     mkdirSync(dirname(absolute), { recursive: true })
-    this.run(['screenshot', '--full', absolute])
+    this.run(viewport ? ['screenshot', absolute] : ['screenshot', '--full', absolute])
     if (statSync(absolute).size === 0) throw new Error(`cezar e2e: empty screenshot at ${absolute}`)
     return absolute
   }

@@ -434,9 +434,29 @@ export function reduceThread(events: RunEvent[]): ThreadState {
         break
       }
 
-      // step-start, token-usage, cost, turn-end, done, session, session.started,
-      // usage.updated, permission.* and anything future: header/telemetry material or not yet
-      // rendered — never guessed at in the thread body.
+      // ---- THE v1 VOCABULARY SWEEP (cezar-code-map §3.2) — deliberate suppressions ---------
+      // Every persisted v1 type is either rendered above or named here with the surface that
+      // owns it instead, so an old transcript reads complete without transcript noise:
+      //  - `step-start` / non-failed `step-end`: the run header's step rail (step-rail.tsx)
+      //    is the steps surface, same as the legacy divider-free design choice for step ends.
+      //  - `token-usage` / `cost`: the header meta line renders the RECORD's running totals;
+      //    per-event ticks in the body would just repaint the same numbers.
+      //  - `turn-end` / `done`: pure engine control flow — completion already reads from the
+      //    run status footer (and `done` is always shadowed by a `lifecycle` line).
+      //  - `session`: the backend's session id, surfaced by the header's take-over hint via
+      //    the record's `sessionId` — an id line in the transcript helps no one.
+      case 'step-start':
+      case 'token-usage':
+      case 'cost':
+      case 'turn-end':
+      case 'done':
+      case 'session':
+        break
+
+      // session.started, usage.updated, permission.* and anything future: header/telemetry
+      // material or not yet rendered — never guessed at in the thread body. (Deliberate
+      // divergence from the legacy raw-JSON-note fallback: an unknown type renders as
+      // nothing rather than as debug output.)
       default:
         break
     }

@@ -416,3 +416,85 @@ describe('threadFilePaths — the @ mention source (today: what the tools touche
     expect(threadFilePaths(state)).toEqual([])
   })
 })
+
+describe('the v1 vocabulary sweep (cezar-code-map §3.2) — every persisted type renders or is a documented suppression', () => {
+  const allItems = (events: RunEvent[]): ThreadEntry[] =>
+    reduceThread(events).turns.flatMap((turn) => turn.items)
+
+  // -- types that RENDER ------------------------------------------------------------------
+
+  it('text → an assistant message', () => {
+    const items = allItems([line(1, 'text', { text: 'hello' })])
+    expect(items).toEqual([{ kind: 'message', id: 'v1:1', role: 'assistant', text: 'hello' }])
+  })
+
+  it('tool-call + tool-result → one tool card, honest 2-state status', () => {
+    const items = allItems([
+      line(1, 'tool-call', { id: 't1', tool: 'Bash', input: { command: 'ls' } }),
+      line(2, 'tool-result', { toolCallId: 't1', result: 'a.ts' }),
+    ])
+    expect(items).toHaveLength(1)
+    expect(items[0]).toMatchObject({ kind: 'tool', status: 'completed', output: 'a.ts' })
+  })
+
+  it('note / lifecycle → dim lines', () => {
+    const items = allItems([
+      line(1, 'note', { message: 'worktree ready' }),
+      line(2, 'lifecycle', { message: 'run started' }),
+    ])
+    expect(items).toEqual([
+      { kind: 'note', id: 'v1:1', text: 'worktree ready', tone: 'dim' },
+      { kind: 'note', id: 'v1:2', text: 'run started', tone: 'dim' },
+    ])
+  })
+
+  it('error → a danger line', () => {
+    expect(allItems([line(1, 'error', { message: 'claude exited with code 1' })])).toEqual([
+      { kind: 'note', id: 'v1:1', text: 'claude exited with code 1', tone: 'danger' },
+    ])
+  })
+
+  it('user-message → opens a turn with the bubble', () => {
+    const { turns } = reduceThread([line(1, 'user-message', { text: 'do it', imageCount: 1 })])
+    expect(turns).toHaveLength(1)
+    expect(turns[0]!.userMessage).toEqual({ text: 'do it', imageCount: 1 })
+  })
+
+  it('image (the URL-bearing v1 line) → a thread image', () => {
+    expect(allItems([line(1, 'image', { url: '/api/runs/r/images/s.png', name: 's.png' })])).toEqual([
+      { kind: 'image', id: 'v1:1', url: '/api/runs/r/images/s.png', name: 's.png' },
+    ])
+  })
+
+  it('check-output → an execute card carrying the exit-code verdict', () => {
+    const items = allItems([
+      line(1, 'check-output', { stepId: 'verify', command: 'npm test', exitCode: 1, text: '1 failed' }),
+    ])
+    expect(items[0]).toMatchObject({ kind: 'tool', toolKind: 'execute', status: 'failed', exitCode: 1 })
+  })
+
+  it('step-end failed → the one step fact the transcript must not hide', () => {
+    expect(allItems([line(1, 'step-end', { stepId: 'task', status: 'failed', error: 'boom' })])).toEqual([
+      { kind: 'note', id: 'v1:1', text: 'step task failed — boom', tone: 'danger' },
+    ])
+  })
+
+  // -- DOCUMENTED suppressions (the surface that owns each is named in the reducer) ---------
+
+  it.each([
+    ['step-start', { stepId: 'task', name: 'Do the task', kind: 'agent', iteration: 1 }], // step rail
+    ['step-end', { stepId: 'task', status: 'done' }], // step rail (non-failed)
+    ['token-usage', { tokensUsed: 4200 }], // header meta (record totals)
+    ['cost', { usd: 0.03 }], // header meta
+    ['turn-end', {}], // engine control flow
+    ['done', {}], // shadowed by its lifecycle line
+    ['session', { sessionId: 'abc-123' }], // header resume hint (record sessionId)
+  ])('%s → deliberately nothing in the thread body', (type, rest) => {
+    const state = reduceThread([line(1, type, rest)])
+    expect(state.turns.flatMap((turn) => turn.items)).toEqual([])
+  })
+
+  it('unknown future types → nothing, never a guessed rendering (divergence from the legacy raw-JSON note, on purpose)', () => {
+    expect(allItems([line(1, 'telemetry.fancy', { whatever: true })])).toEqual([])
+  })
+})

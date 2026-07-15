@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { RunRecord, RunStatus, StepState } from '@/api/types'
 
-import { finishTitle, isRunActive, lastSessionId, resumeCommand, resumeHint, runActionFlags } from './run-actions'
+import { finishTitle, isRunActive, lastSessionId, queuePosition, resumeCommand, resumeHint, runActionFlags } from './run-actions'
 
 const step = (extra: Partial<StepState> = {}): StepState => ({
   id: 'task',
@@ -126,5 +126,26 @@ describe('finishTitle', () => {
   it('review reads as accepting, everything else as closing the session', () => {
     expect(finishTitle('review')).toBe('Accept the changes without a PR')
     expect(finishTitle('waiting')).toBe('Close the session')
+  })
+})
+
+describe('queuePosition — the legacy FIFO math (web/app.js), 1-based among queued unarchived runs', () => {
+  const queued = (id: string, createdAt: string, extra: Partial<RunRecord> = {}) =>
+    run('queued', { id, createdAt, ...extra })
+
+  it('orders by createdAt, skipping non-queued and archived runs', () => {
+    const runs = [
+      run('running', { id: 'busy' }),
+      queued('second', '2026-07-14T12:05:00.000Z'),
+      queued('first', '2026-07-14T12:01:00.000Z'),
+      queued('parked', '2026-07-14T12:00:00.000Z', { archived: true }),
+    ]
+    expect(queuePosition(runs, 'first')).toBe(1)
+    expect(queuePosition(runs, 'second')).toBe(2)
+  })
+
+  it('is undefined for a run the queue does not hold (not queued, or list not loaded yet)', () => {
+    expect(queuePosition([run('running', { id: 'busy' })], 'busy')).toBeUndefined()
+    expect(queuePosition([], 'anything')).toBeUndefined()
   })
 })

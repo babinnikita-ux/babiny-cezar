@@ -1,10 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { MessageSquareTextIcon, PlayIcon, SearchXIcon } from 'lucide-react'
-import { Fragment, useMemo } from 'react'
-import { Link, useParams } from 'react-router'
+import { useMemo } from 'react'
+import { Link, useLocation, useParams } from 'react-router'
 
 import { ApiError, continueRun } from '@/api/client'
-import { queryKeys, useRun, useSendMessage } from '@/api/queries'
+import { queryKeys, useRun, useRuns, useSendMessage } from '@/api/queries'
 import { useRunEvents } from '@/api/run-events'
 import type { ApiRun } from '@/api/types'
 import { CenteredState } from '@/components/centered-state'
@@ -12,6 +12,7 @@ import { Composer } from '@/components/composer/composer'
 import { StatusDot } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
+import { useKeyboardInsetVar } from '@/lib/keyboard-inset'
 import { cn } from '@/lib/utils'
 
 import {
@@ -26,10 +27,13 @@ import {
 } from './thread-items'
 import { PlanDock, planCounts } from './plan-dock'
 import { AcceptCelebration, ReviewPanel } from './review-panel'
-import { runActionFlags } from './run-actions'
+import { queuePosition, runActionFlags } from './run-actions'
 import { RunHeader } from './run-header'
 import { groupThreadItems, type ThreadBlock } from './thread-groups'
 import { ThreadLoading } from './thread-loading'
+import { ThreadCardCache } from './thread-open-cards'
+import { threadRenderMode } from './thread-scroll'
+import { JumpToLatestPill, ThreadRows, useThreadScroll, type ThreadRow } from './thread-scroller'
 import {
   latestPlanEntries,
   reduceThread,
@@ -47,8 +51,8 @@ import {
  *
  * Data doctrine: `useRun` (fetch) is authoritative for the record — status, title, error;
  * `useRunEvents` (SSE replay + live) is the transcript. The reducer folds the full event list
- * on each change — fine at this phase's scale; virtualization and incremental folding are
- * Step 2.4's, deliberately.
+ * on each change; the rendered rows go through the threshold-switched scroller
+ * (thread-scroller.tsx — flat + content-visibility below ~300 rows, virtua above).
  */
 export function TaskThreadRoute() {
   const { id } = useParams<{ id: string }>()
@@ -84,6 +88,30 @@ export function TaskThreadRoute() {
   return <ThreadView run={run.data} thread={thread} />
 }
 
+/**
+ * The run's task + every turn, flattened to keyed rows for the threshold-switched scroller
+ * (thread-scroll.ts owns the rule). Row keys are turn-scoped — the same keys the open-card
+ * cache uses, because v2 item ids repeat across sessions.
+ */
+export function buildThreadRows(run: ApiRun, thread: ThreadState): ThreadRow[] {
+  const rows: ThreadRow[] = []
+  // The initial prompt: the engine writes no v1 `user-message` line for it — the task on
+  // the run record IS that message, so it renders from there, not from an invented event.
+  if (run.task) rows.push({ key: 'task', node: <UserBubble text={run.task} /> })
+  for (const turn of thread.turns) {
+    if (turn.userMessage) {
+      rows.push({
+        key: `${turn.id}:user`,
+        node: <UserBubble text={turn.userMessage.text} imageCount={turn.userMessage.imageCount} />,
+      })
+    }
+    for (const block of groupThreadItems(turn.items)) {
+      rows.push({ key: `${turn.id}:${block.id}`, node: <ThreadBlockView block={block} scope={turn.id} /> })
+    }
+  }
+  return rows
+}
+
 /** The loaded thread. The header owns its own data hooks (mutations, the runs list); the
  *  thread body stays presentational — tests drive it with reduced fixture states directly. */
 export function ThreadView({ run, thread }: { run: ApiRun; thread: ThreadState }) {
@@ -97,30 +125,33 @@ export function ThreadView({ run, thread }: { run: ApiRun; thread: ThreadState }
   const sessionOpen = run.status === 'running' || run.status === 'waiting'
   const sendMessage = useSendMessage(run.id)
 
+  const rows = useMemo(() => buildThreadRows(run, thread), [run, thread])
+  const { search } = useLocation()
+  const mode = threadRenderMode(search, rows.length)
+  const scroll = useThreadScroll(run.id)
+  // The iOS keyboard lifts the dock via `--kb`; once it settles, a pinned reader re-pins
+  // (research §7: re-run scrollToEnd after the viewport settles).
+  useKeyboardInsetVar(scroll.restickIfStuck)
+
   return (
     <div data-route="task-thread" className="flex min-h-full flex-col">
       <RunHeader run={run} planTally={planTally} />
 
+      {/* Row spacing lives on each thread row (pb-3.5, both render modes measure alike);
+          this gap only separates the sections — rows, empty state, footer, review panel. */}
       <div className="mx-auto flex w-full max-w-[820px] flex-1 flex-col gap-3.5 px-4 py-5 md:px-6">
-        {/* The initial prompt: the engine writes no v1 `user-message` line for it — the task on
-            the run record IS that message, so it renders from there, not from an invented event. */}
-        {run.task ? <UserBubble text={run.task} /> : null}
-
-        {thread.turns.map((turn) => (
-          <Fragment key={turn.id}>
-            {turn.userMessage ? (
-              <UserBubble text={turn.userMessage.text} imageCount={turn.userMessage.imageCount} />
-            ) : null}
-            {groupThreadItems(turn.items).map((block) => (
-              <ThreadBlockView key={block.id} block={block} />
-            ))}
-          </Fragment>
-        ))}
+        <ThreadCardCache runId={run.id}>
+          <ThreadRows runId={run.id} rows={rows} mode={mode} controls={scroll} />
+        </ThreadCardCache>
 
         {thread.turns.length === 0 ? (
-          <p data-slot="thread-empty" className="py-6 text-center text-xs text-soft-foreground">
-            No session events yet.
-          </p>
+          run.status === 'queued' ? (
+            <QueuedPlaceholder run={run} />
+          ) : (
+            <p data-slot="thread-empty" className="py-6 text-center text-xs text-soft-foreground">
+              No session events yet.
+            </p>
+          )
         ) : null}
 
         {/* Closed states read as the body's last line; the WAITING state lives in the dock
@@ -158,11 +189,19 @@ export function ThreadView({ run, thread }: { run: ApiRun; thread: ThreadState }
 
       <AcceptCelebration status={run.status} />
 
-      {/* The dock region (mockup `.dock`): plan dock, paused hint, then the composer. */}
+      {/* The dock region (mockup `.dock`): plan dock, paused hint, then the composer.
+          `bottom: var(--kb)` is the iOS keyboard lift — 0 until the visualViewport watcher
+          publishes an inset. */}
       <div
         data-slot="thread-dock"
-        className="sticky bottom-0 z-10 bg-background px-4 pt-1.5 pb-3 max-md:border-t max-md:border-border md:px-6 md:pb-4"
+        className="sticky bottom-[var(--kb,0px)] z-10 bg-background px-4 pt-1.5 pb-3 max-md:border-t max-md:border-border md:px-6 md:pb-4"
       >
+        {/* The jump pill floats over the thread, just above the dock, centered. */}
+        {scroll.pillVisible ? (
+          <div className="pointer-events-none absolute inset-x-0 -top-12 flex justify-center">
+            <JumpToLatestPill onJump={scroll.jumpToLatest} />
+          </div>
+        ) : null}
         <div className="mx-auto flex w-full max-w-[820px] flex-col gap-2.5">
           {plan !== undefined && plan.length > 0 ? (
             // Keyed by run id: the collapse default re-derives per task (see PlanDock).
@@ -224,21 +263,41 @@ function ContinueAction({ run }: { run: ApiRun }) {
   )
 }
 
+/** The queued run's honest empty state (legacy #351): a queued run has emitted nothing, so
+ *  instead of a blank thread the placeholder names the parked state and its live position in
+ *  the FIFO queue (from the runs list — the same feed the sidebar uses). */
+function QueuedPlaceholder({ run }: { run: ApiRun }) {
+  const runs = useRuns()
+  const position = queuePosition(runs.data ?? [], run.id)
+  return (
+    <div data-slot="queued-state" className="flex flex-col items-center gap-1.5 py-10 text-center">
+      <StatusDot tone="pending" pulse />
+      <p className="text-[13px] font-medium">
+        Waiting for a free agent slot{position !== undefined ? ` — #${position} in queue` : ''}
+      </p>
+      <p className="text-xs text-soft-foreground">
+        {run.workflow} · starts automatically when a slot frees up
+      </p>
+    </div>
+  )
+}
+
 /** One grouped block → its surface. Grouping (context groups, streaks, sub-agent nesting) is
- *  `groupThreadItems`'s — this only maps block kinds to components. */
-function ThreadBlockView({ block }: { block: ThreadBlock }) {
+ *  `groupThreadItems`'s — this only maps block kinds to components. `scope` (the turn's render
+ *  key) namespaces the open-card cache keys, because item ids repeat across sessions. */
+function ThreadBlockView({ block, scope }: { block: ThreadBlock; scope: string }) {
   switch (block.kind) {
     case 'entry':
-      return <ThreadEntryView entry={block.entry} />
+      return <ThreadEntryView entry={block.entry} scope={scope} />
     case 'tool-card':
-      return <ToolCard item={block.item} nested={block.children} />
+      return <ToolCard item={block.item} nested={block.children} cacheKey={`${scope}:${block.id}`} />
     case 'context-group':
-      return <ContextGroup group={block} />
+      return <ContextGroup group={block} scope={scope} />
     case 'streak':
       return (
         <ToolStreak count={block.count}>
           {block.blocks.map((inner) => (
-            <ThreadBlockView key={inner.id} block={inner} />
+            <ThreadBlockView key={inner.id} block={inner} scope={scope} />
           ))}
         </ToolStreak>
       )
@@ -246,7 +305,7 @@ function ThreadBlockView({ block }: { block: ThreadBlock }) {
 }
 
 /** One reducer entry → its block (non-tool entries; tools always arrive as tool-card blocks). */
-function ThreadEntryView({ entry }: { entry: ThreadEntry }) {
+function ThreadEntryView({ entry, scope }: { entry: ThreadEntry; scope: string }) {
   switch (entry.kind) {
     case 'message':
       // Agent-side user echoes (some backends emit them) read as user bubbles too.
@@ -258,7 +317,7 @@ function ThreadEntryView({ entry }: { entry: ThreadEntry }) {
     case 'reasoning':
       return <ReasoningItem text={entry.text} />
     case 'tool':
-      return <ToolCard item={entry} />
+      return <ToolCard item={entry} cacheKey={`${scope}:${entry.id}`} />
     case 'note':
       return <NoteLine note={entry} />
     case 'image':

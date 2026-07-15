@@ -44,3 +44,12 @@ invented:
   `src/workflows/run.ts` `runCheckStep()`. `thread-run.record.json` carries the matching
   `verify` entry in `steps` and `workflowDef` (which therefore no longer equals the stock
   built-in `quick-task` definition).
+
+## Synthetic LARGE transcript (R3 Step 2.4 — virtualization)
+
+`make-large-thread.ts` generates (at test runtime, never checked in) the 250-turn /
+2,506-event / 1,003-row NDJSON that `thread-scroll.e2e.ts` uses to push the thread past the
+~300-row virtualization threshold. It is a legitimate synthetic LOAD, not fake product data:
+every line reuses the verbatim wire shapes of `thread-run.ndjson` above (v2 `turn.*`/`item.*`
+events with their v1 twins on one `seq` clock), repeated. The run record is
+`thread-run.record.json` re-ided with only the fields the scenario needs overridden.

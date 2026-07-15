@@ -21,7 +21,13 @@ import { cn } from '@/lib/utils'
 
 import { Markdown } from './markdown'
 import { splitToolTitle, streakLabel, type ContextGroupBlock } from './thread-groups'
+import { useThreadCardCache } from './thread-open-cards'
+import { isNearBottom } from './thread-scroll'
 import type { ThreadEntry, ThreadImage, ThreadNote } from './thread-state'
+
+// The stick rule lives with the rest of the scroll math now; re-exported because this is
+// where the live tail below consumes it.
+export { isNearBottom }
 
 /**
  * The thread's per-entry building blocks (mockup: docs/mockups/thread.html). Presentational
@@ -107,12 +113,6 @@ const TOOL_ICONS: Record<ToolKind, typeof WrenchIcon> = {
   task: BotIcon,
   plan: ListTodoIcon,
   other: WrenchIcon,
-}
-
-/** Sticky-tail rule for the live output box: stay glued while the reader is near the bottom,
- *  stop the moment they scroll up. Pure so the threshold is table-testable. */
-export function isNearBottom(box: { scrollTop: number; scrollHeight: number; clientHeight: number }): boolean {
-  return box.scrollHeight - box.scrollTop - box.clientHeight < 24
 }
 
 /** Beyond this many lines a finished output clamps behind the fade + "Show all" control. */
@@ -247,9 +247,28 @@ function defaultOpen(item: UiToolItem): boolean {
  * One tool invocation as a shadcn Collapsible card (mockup `.tool-card`, issue #381).
  * Locked (no chevron, trigger disabled) until the item has any detail to show. `nested` is the
  * sub-agent's items (`parentItemId` → this card), rendered indented in the body, one level.
+ *
+ * `cacheKey` (thread only — turn-scoped, since item ids repeat across sessions) remembers the
+ * user's explicit open/close in the per-run open-card cache, so revisiting a thread restores
+ * the cards as left. Without a key or outside a ThreadCardCache, the state is plain local.
  */
-export function ToolCard({ item, nested = [] }: { item: UiToolItem; nested?: ThreadEntry[] }) {
-  const [userOpen, setUserOpen] = useState<boolean | null>(null)
+export function ToolCard({
+  item,
+  nested = [],
+  cacheKey,
+}: {
+  item: UiToolItem
+  nested?: ThreadEntry[]
+  cacheKey?: string
+}) {
+  const cache = useThreadCardCache()
+  const [userOpen, setUserOpenState] = useState<boolean | null>(
+    () => (cacheKey !== undefined ? (cache?.get(cacheKey) ?? null) : null),
+  )
+  const setUserOpen = (open: boolean) => {
+    if (cacheKey !== undefined) cache?.set(cacheKey, open)
+    setUserOpenState(open)
+  }
   const busy = item.status === 'running' || item.status === 'pending'
   const hasDetail =
     (item.output !== undefined && item.output !== '') ||
@@ -330,7 +349,7 @@ export function ToolCard({ item, nested = [] }: { item: UiToolItem; nested?: Thr
           {nested.length > 0 ? (
             <div data-slot="tool-nested" className="flex flex-col gap-2 border-l-2 border-border py-2.5 pr-3 pl-3 ml-4 my-2">
               {nested.map((entry) => (
-                <NestedEntry key={entry.id} entry={entry} />
+                <NestedEntry key={entry.id} entry={entry} scope={cacheKey} />
               ))}
             </div>
           ) : null}
@@ -341,15 +360,15 @@ export function ToolCard({ item, nested = [] }: { item: UiToolItem; nested?: Thr
 }
 
 /** A sub-agent entry inside a Task card — one level deep by design, so nested tools render
- *  without their own children. */
-function NestedEntry({ entry }: { entry: ThreadEntry }) {
+ *  without their own children. `scope` is the parent card's cache key, extended per child. */
+function NestedEntry({ entry, scope }: { entry: ThreadEntry; scope?: string }) {
   switch (entry.kind) {
     case 'message':
       return <AssistantMessage text={entry.text} />
     case 'reasoning':
       return <ReasoningItem text={entry.text} />
     case 'tool':
-      return <ToolCard item={entry} />
+      return <ToolCard item={entry} cacheKey={scope !== undefined ? `${scope}:${entry.id}` : undefined} />
     case 'note':
       return <NoteLine note={entry} />
     case 'image':
@@ -359,7 +378,7 @@ function NestedEntry({ entry }: { entry: ThreadEntry }) {
 
 /** "Explored N files · M searches" — consecutive finished read/search tools, one row,
  *  expandable to the individual cards (mockup `.ctx-group`). */
-export function ContextGroup({ group }: { group: ContextGroupBlock }) {
+export function ContextGroup({ group, scope }: { group: ContextGroupBlock; scope?: string }) {
   return (
     <Collapsible data-slot="ctx-group" className="min-w-0">
       <CollapsibleTrigger className="group flex h-[34px] w-full items-center gap-2 rounded-md px-2 -mx-2 text-left text-[13px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground">
@@ -372,7 +391,7 @@ export function ContextGroup({ group }: { group: ContextGroupBlock }) {
       <CollapsibleContent>
         <div className="flex flex-col gap-1.5 pt-1.5 pl-4">
           {group.tools.map((tool) => (
-            <ToolCard key={tool.id} item={tool} />
+            <ToolCard key={tool.id} item={tool} cacheKey={scope !== undefined ? `${scope}:${tool.id}` : undefined} />
           ))}
         </div>
       </CollapsibleContent>
