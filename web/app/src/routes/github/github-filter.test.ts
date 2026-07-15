@@ -64,12 +64,12 @@ describe('labelChipStyle', () => {
   })
 
   it('falls back to neutral tokens when the color is missing or malformed', () => {
-    expect(labelChipStyle(undefined).color).toBe('var(--soft-foreground)')
-    expect(labelChipStyle('nothex').color).toBe('var(--soft-foreground)')
+    expect(labelChipStyle(undefined).color).toBe('var(--muted-foreground)')
+    expect(labelChipStyle('nothex').color).toBe('var(--muted-foreground)')
   })
 
-  it('lightens a dark color for legibility on a dark chip', () => {
-    // Near-black should not stay near-black as the text color.
-    expect(labelChipStyle('000000').color).not.toBe('#000000')
+  it('blends the ink toward the theme foreground so it reads in both light and dark', () => {
+    // No fixed hex: the color mixes toward `--foreground`, which flips per theme.
+    expect(labelChipStyle('000000').color).toBe('color-mix(in srgb, #000000 50%, var(--foreground))')
   })
 })

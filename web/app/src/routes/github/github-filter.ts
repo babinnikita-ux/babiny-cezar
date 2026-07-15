@@ -38,34 +38,22 @@ export function filterGithubItems(
   })
 }
 
-/** Perceived luminance of a 6-hex color (sRGB, 0–1) — decides light vs dark chip text. */
-function luminance(hex: string): number {
-  const h = hex.replace(/^#/, '')
-  if (h.length !== 6) return 1 // unknown → treat as light so we default to dark text
-  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255) as [number, number, number]
-  return 0.2126 * r + 0.7152 * g + 0.0722 * b
-}
-
 /** Inline style for a label chip tinted like GitHub: the label color as a translucent fill with a
  *  matching border, and readable text. Falls back to neutral tokens when no color is known. */
 export function labelChipStyle(color: string | undefined): CSSProperties {
   if (!color || !/^[0-9a-fA-F]{6}$/.test(color)) {
-    return { borderColor: 'var(--border)', color: 'var(--soft-foreground)' }
+    // `--muted-foreground`, not `--soft-foreground`: the softer token is near-invisible against
+    // the pale chip fill in light mode (the #gh-list low-contrast finding).
+    return { borderColor: 'var(--border)', color: 'var(--muted-foreground)' }
   }
   const solid = `#${color}`
   return {
     backgroundColor: `${solid}22`, // ~13% opacity fill, like GitHub's label pills
     borderColor: `${solid}66`,
-    color: luminance(color) < 0.5 ? `#${lighten(color)}` : solid,
+    // Blend the label color toward the theme's foreground so the text is legible in BOTH themes:
+    // `--foreground` is near-black in light mode (darkens the ink against the pale tint) and
+    // near-white in dark mode (lifts it against the dark tint). One formula, no luminance branch —
+    // the previous JS-computed color only ever targeted dark chips, which washed out in light mode.
+    color: `color-mix(in srgb, ${solid} 50%, var(--foreground))`,
   }
-}
-
-/** Lift a dark label color toward legibility on dark chips (mix halfway to white). */
-function lighten(hex: string): string {
-  const h = hex.replace(/^#/, '')
-  const parts = [0, 2, 4].map((i) => {
-    const v = parseInt(h.slice(i, i + 2), 16)
-    return Math.round(v + (255 - v) * 0.55)
-  })
-  return parts.map((v) => v.toString(16).padStart(2, '0')).join('')
 }

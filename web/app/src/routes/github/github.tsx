@@ -337,7 +337,7 @@ function GithubRow({
             {item.title}
           </span>
         </span>
-        <span className="flex items-center gap-2 pl-[22px] font-mono text-[10.5px] text-soft-foreground">
+        <span className="flex items-center gap-2 pl-[22px] font-mono text-[10.5px] text-muted-foreground">
           <span>#{item.number}</span>
           <span className="min-w-0 truncate">{item.author}</span>
           <span>{shortAge(item.createdAt)}</span>
