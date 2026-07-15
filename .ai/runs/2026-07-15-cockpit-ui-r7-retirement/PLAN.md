@@ -12,7 +12,7 @@
 | Phase | Step | Title | Status | Commit |
 |-------|------|-------|--------|--------|
 | 1 | 1.1 | Delete legacy web app: app.js/style.css/legacy index.html, `?legacy=1`, no-dist fallback → build-hint page | done | pending |
-| 1 | 1.2 | Packaging flip: `files` ships `web/dist` (+ svg), tarball bundle check in the gate; retire the BC waiver | todo | — |
+| 1 | 1.2 | Packaging flip: `files` ships `web/dist` (+ svg), tarball bundle check in the gate; retire the BC waiver | done | pending |
 | 1 | 1.3 | iOS + degradation-matrix e2e sweep: iPhone viewport across every view; forge-off/degraded states where reachable | todo | — |
 | 1 | 1.4 | README refresh: recapture all 6 `docs/screenshots/*.png` against the new UI via agent-browser; prose sweep | todo | — |
 
