@@ -16,6 +16,7 @@ import { createRun } from '@/api/client'
 import { queryKeys } from '@/api/queries'
 import type { GithubItem, Skill, WorkflowDef } from '@/api/types'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Command,
   CommandEmpty,
@@ -70,9 +71,12 @@ export function HandToAgent({
   const queryClient = useQueryClient()
   // A skill deleted since it was toggled must not reach the server (legacy rule).
   const validSkills = selectedSkills.filter((name) => skills.some((skill) => skill.name === name))
+  // Optional custom prompt (#gh-custom-prompt): empty → the default "Fix GitHub issue #N …"
+  // text. Local + reset per item (the route remounts this via key={item.url}).
+  const [prompt, setPrompt] = useState('')
 
   const start = useMutation({
-    mutationFn: () => createRun(githubRunBody(item, workflow, validSkills)),
+    mutationFn: () => createRun(githubRunBody(item, workflow, validSkills, prompt)),
     onSuccess: (created) => {
       // The GitHub tab never starts variants, so the answer is a single record.
       const run = 'runs' in created ? created.runs[0] : created
@@ -119,6 +123,15 @@ export function HandToAgent({
           ))}
         </div>
       ) : null}
+
+      <Textarea
+        data-slot="gh-custom-prompt"
+        aria-label="Custom prompt"
+        value={prompt}
+        onChange={(event) => setPrompt(event.target.value)}
+        placeholder={`Add instructions for the agent… (empty uses the default "${item.kind === 'pr' ? 'Address' : 'Fix'} #${item.number}" prompt)`}
+        className="mt-3 min-h-20 text-[13px]"
+      />
 
       <div className="mt-4 flex flex-wrap items-center gap-2.5">
         <Button

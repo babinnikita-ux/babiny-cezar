@@ -84,4 +84,16 @@ describe('githubRunBody', () => {
   it('nothing selected → quick-task', () => {
     expect(githubRunBody(item(), null, []).workflow).toBe('quick-task')
   })
+
+  it('a custom prompt replaces the auto task text but keeps the routing', () => {
+    expect(githubRunBody(item(), null, [], 'Just triage this, do not fix.').task).toBe(
+      'Just triage this, do not fix.',
+    )
+    // Routing is untouched: workflow run still names the workflow.
+    const wf = githubRunBody(item(), 'ship-it', ['om-fix'], '  Investigate only.  ')
+    expect(wf.workflow).toBe('ship-it')
+    expect(wf.task).toBe('Investigate only.')
+    // Empty/whitespace custom prompt → the default text.
+    expect(githubRunBody(item(), null, [], '   ').task).toContain('Fix GitHub issue')
+  })
 })

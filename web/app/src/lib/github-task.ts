@@ -48,8 +48,12 @@ export function githubRunBody(
   item: GithubItem,
   workflow: string | null,
   skills: readonly string[],
+  customPrompt?: string,
 ): CreateRunInput {
-  if (workflow) return { workflow, task: githubTaskPrompt(item, skills) }
-  if (skills.length) return { steps: skillChainSteps(skills), task: githubTaskPrompt(item) }
-  return { workflow: 'quick-task', task: githubTaskPrompt(item) }
+  // A non-empty custom prompt REPLACES the auto-generated task text (the user's words win); the
+  // workflow/skill routing is unchanged. Empty → the default "Fix GitHub issue #N …" prompt.
+  const custom = customPrompt?.trim()
+  if (workflow) return { workflow, task: custom || githubTaskPrompt(item, skills) }
+  if (skills.length) return { steps: skillChainSteps(skills), task: custom || githubTaskPrompt(item) }
+  return { workflow: 'quick-task', task: custom || githubTaskPrompt(item) }
 }

@@ -190,7 +190,7 @@ export function GithubRoute({ view }: { view: GithubView }) {
               Pull requests · {countLabel(gh.prs.length, isFull)}
             </TabLink>
           </div>
-          <div className="flex items-center gap-2 pb-2.5">
+          <div className="mt-2.5 flex items-center gap-2 pb-3">
             <div className="relative min-w-0 flex-1">
               <SearchIcon
                 aria-hidden="true"
@@ -245,6 +245,7 @@ export function GithubRoute({ view }: { view: GithubView }) {
         {selected ? (
           <GithubDetail item={selected} listPath={listPath} colors={labelColors}>
             <HandToAgent
+              key={selected.url}
               item={selected}
               workflows={workflows.data?.workflows ?? []}
               skills={skills.data ?? []}
