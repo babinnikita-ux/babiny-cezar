@@ -11,11 +11,11 @@
 
 | Phase | Step | Title | Status | Commit |
 |-------|------|-------|--------|--------|
-| 1 | 1.1 | Delete legacy web app: app.js/style.css/legacy index.html, `?legacy=1`, no-dist fallback → build-hint page | done | pending |
-| 1 | 1.2 | Packaging flip: `files` ships `web/dist` (+ svg), tarball bundle check in the gate; retire the BC waiver | done | pending |
-| 1 | 1.3 | iOS + degradation-matrix e2e sweep: iPhone viewport across every view; forge-off/degraded states where reachable | done | pending |
-| 1 | 1.4 | README refresh: recapture all 6 `docs/screenshots/*.png` against the new UI via agent-browser; prose sweep | done | pending |
-| 1 | 1.5 | Stabilize e2e: badge-proof nav labels, settled dnd-kit keyboard reorder | done | pending |
+| 1 | 1.1 | Delete legacy web app: app.js/style.css/legacy index.html, `?legacy=1`, no-dist fallback → build-hint page | done | 6f848d2 |
+| 1 | 1.2 | Packaging flip: `files` ships `web/dist` (+ svg), tarball bundle check in the gate; retire the BC waiver | done | 7b2eefb |
+| 1 | 1.3 | iOS + degradation-matrix e2e sweep: iPhone viewport across every view; forge-off/degraded states where reachable | done | adeb2a4 |
+| 1 | 1.4 | README refresh: recapture all 6 `docs/screenshots/*.png` against the new UI via agent-browser; prose sweep | done | 9552c87 |
+| 1 | 1.5 | Stabilize e2e: badge-proof nav labels, settled dnd-kit keyboard reorder | done | c7da6b9 |
 
 ## Goal
 
