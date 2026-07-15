@@ -45,6 +45,9 @@ const runRecordSchema = z.object({
     .optional(),
   workflow: z.string(),
   task: z.string(),
+  /** URLs of images attached to the initial task prompt, for the thread's first bubble
+   *  (#image-display) — persisted like agent screenshots, served from `/images/`. */
+  taskImages: z.array(z.string()).optional(),
   model: z.string().optional(),
   /** Agent backend this run used — drives "open in CLI" resume command. */
   runner: z.enum(['claude', 'codex', 'opencode']).optional(),

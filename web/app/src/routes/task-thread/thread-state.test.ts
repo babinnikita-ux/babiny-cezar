@@ -113,7 +113,7 @@ describe('reduceThread — v1-only fallback (pre-v2 transcripts)', () => {
     expect(tool.output).toContain('# cezar ⚡')
 
     // Turn 2: opened by the user-message, then the reply and the danger line.
-    expect(turns[1]!.userMessage).toEqual({ text: 'Now summarize it.', imageCount: 0 })
+    expect(turns[1]!.userMessage).toEqual({ text: 'Now summarize it.', imageCount: 0, images: [] })
     expect(kinds(turns[1]!.items)).toEqual(['message', 'note'])
     expect(turns[1]!.items[1]).toMatchObject({ tone: 'danger', text: 'claude exited with code 1' })
   })
@@ -457,7 +457,18 @@ describe('the v1 vocabulary sweep (cezar-code-map §3.2) — every persisted typ
   it('user-message → opens a turn with the bubble', () => {
     const { turns } = reduceThread([line(1, 'user-message', { text: 'do it', imageCount: 1 })])
     expect(turns).toHaveLength(1)
-    expect(turns[0]!.userMessage).toEqual({ text: 'do it', imageCount: 1 })
+    expect(turns[0]!.userMessage).toEqual({ text: 'do it', imageCount: 1, images: [] })
+  })
+
+  it('user-message carries attached image URLs for the bubble (#image-display)', () => {
+    const { turns } = reduceThread([
+      line(1, 'user-message', {
+        text: "there's still error",
+        imageCount: 1,
+        images: ['/api/runs/r1/images/screenshot-1.png'],
+      }),
+    ])
+    expect(turns[0]!.userMessage?.images).toEqual(['/api/runs/r1/images/screenshot-1.png'])
   })
 
   it('image (the URL-bearing v1 line) → a thread image', () => {

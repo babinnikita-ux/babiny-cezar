@@ -35,17 +35,41 @@ export { isNearBottom }
  * is derived here except open/closed UI state.
  */
 
-/** Right-aligned muted bubble — a v1 `user-message` line or the run's initial task. */
-export function UserBubble({ text, imageCount = 0 }: { text: string; imageCount?: number }) {
+/** Right-aligned muted bubble — a v1 `user-message` line or the run's initial task. Renders any
+ *  attached images inline; falls back to a count only when the URLs aren't available (older runs). */
+export function UserBubble({
+  text,
+  imageCount = 0,
+  images = [],
+}: {
+  text: string
+  imageCount?: number
+  images?: readonly string[]
+}) {
+  const missing = imageCount - images.length
   return (
     <div
       data-slot="user-bubble"
       className="max-w-[78%] self-end rounded-2xl rounded-br-md bg-muted px-[15px] py-2.5 text-[13.5px] leading-[1.55] whitespace-pre-wrap md:max-w-[70%]"
     >
       {text}
-      {imageCount > 0 ? (
+      {images.length > 0 ? (
+        <span data-slot="user-images" className="mt-2 flex flex-wrap justify-end gap-1.5">
+          {images.map((url) => (
+            <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="block">
+              <img
+                src={url}
+                alt="attached"
+                loading="lazy"
+                className="max-h-40 max-w-[220px] rounded-md border border-border object-contain"
+              />
+            </a>
+          ))}
+        </span>
+      ) : null}
+      {missing > 0 ? (
         <span className="mt-1 block text-xs text-soft-foreground">
-          {imageCount} image{imageCount > 1 ? 's' : ''} attached
+          {missing} image{missing > 1 ? 's' : ''} attached
         </span>
       ) : null}
     </div>

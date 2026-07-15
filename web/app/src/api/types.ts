@@ -66,6 +66,8 @@ export interface RunRecord {
   diffStat?: DiffStat
   workflow: string
   task: string
+  /** URLs of images attached to the initial task prompt (#image-display). */
+  taskImages?: string[]
   model?: string
   runner?: Runner
   /** Echo of the extra system prompt the run used (POST override or config default). */

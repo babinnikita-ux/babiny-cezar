@@ -54,7 +54,7 @@ export interface ThreadTurn {
   turnId?: string
   /** The v1 `user-message` that opened this turn. The FIRST turn usually has none — the initial
    *  prompt is the run's `task`, which the view renders from the run record. */
-  userMessage?: { text: string; imageCount: number }
+  userMessage?: { text: string; imageCount: number; images: string[] }
   items: ThreadEntry[]
   /** Latest `plan.updated` snapshot seen during this turn (full-replacement semantics). */
   planEntries?: PlanEntry[]
@@ -139,7 +139,7 @@ interface DraftEntry {
 interface DraftTurn {
   id: string
   turnId?: string
-  userMessage?: { text: string; imageCount: number }
+  userMessage?: { text: string; imageCount: number; images: string[] }
   entries: DraftEntry[]
   planEntries?: PlanEntry[]
   completed?: { stopReason: StopReason; costUsd?: number }
@@ -244,6 +244,7 @@ export function reduceThread(events: RunEvent[]): ThreadState {
         turn.userMessage = {
           text: str(event.text) ?? '',
           imageCount: typeof event.imageCount === 'number' ? event.imageCount : 0,
+          images: Array.isArray(event.images) ? event.images.filter((u): u is string => typeof u === 'string') : [],
         }
         break
       }

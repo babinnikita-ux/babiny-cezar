@@ -436,12 +436,19 @@ export class RunManager {
       .filter((b): b is Extract<ContentBlock, { type: 'text' }> => b.type === 'text')
       .map((b) => b.text)
       .join('\n');
-    const imageCount = content.filter((b) => b.type === 'image').length;
+    // Persist the attached images so the thread can render them (not just count them) — the same
+    // on-disk store + `/images/` route the agent's own screenshots use.
+    const images = content
+      .filter((b): b is Extract<ContentBlock, { type: 'image' }> => b.type === 'image')
+      .map((b) => this.persistImage(runId, state, b.source.media_type, b.source.data))
+      .filter((saved): saved is { name: string; url: string } => saved !== null)
+      .map((saved) => saved.url);
     this.store.appendEvent(runId, {
       type: 'user-message',
       stepId: state.currentStepId,
       text,
-      imageCount,
+      imageCount: content.filter((b) => b.type === 'image').length,
+      images,
     });
 
     const delivered = state.session.sendMessage(content);
@@ -760,6 +767,16 @@ export class RunManager {
     const retriesUsed = new Map<string, number>();
     let checkFailure: string | null = null;
     let runError: string | null = null;
+    // Persist the task's attached images so the thread's initial bubble can render them
+    // (#image-display); they still ride the first agent step's opening message below.
+    if (input.images?.length) {
+      const urls = input.images
+        .filter((b): b is Extract<ContentBlock, { type: 'image' }> => b.type === 'image')
+        .map((b) => this.persistImage(runId, state, b.source.media_type, b.source.data))
+        .filter((saved): saved is { name: string; url: string } => saved !== null)
+        .map((saved) => saved.url);
+      if (urls.length) this.store.updateRun(runId, { taskImages: urls });
+    }
     // Task screenshots go with the FIRST agent step's opening message only —
     // later steps and retry loops run in fresh sessions without them.
     let startImages = input.images;

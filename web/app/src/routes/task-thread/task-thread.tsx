@@ -97,12 +97,19 @@ export function buildThreadRows(run: ApiRun, thread: ThreadState): ThreadRow[] {
   const rows: ThreadRow[] = []
   // The initial prompt: the engine writes no v1 `user-message` line for it — the task on
   // the run record IS that message, so it renders from there, not from an invented event.
-  if (run.task) rows.push({ key: 'task', node: <UserBubble text={run.task} /> })
+  if (run.task)
+    rows.push({ key: 'task', node: <UserBubble text={run.task} images={run.taskImages ?? []} /> })
   for (const turn of thread.turns) {
     if (turn.userMessage) {
       rows.push({
         key: `${turn.id}:user`,
-        node: <UserBubble text={turn.userMessage.text} imageCount={turn.userMessage.imageCount} />,
+        node: (
+          <UserBubble
+            text={turn.userMessage.text}
+            imageCount={turn.userMessage.imageCount}
+            images={turn.userMessage.images}
+          />
+        ),
       })
     }
     for (const block of groupThreadItems(turn.items)) {
