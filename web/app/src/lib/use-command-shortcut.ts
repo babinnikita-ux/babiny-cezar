@@ -74,3 +74,41 @@ export function useCommandShortcut(key: string, handler: (event: KeyboardEvent) 
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [key])
 }
+
+/**
+ * Does this keydown mean a bare `key` press — no modifier chord?
+ *
+ * The browser-safe sibling of the command chord: ⌘N/⌘T/⌘W are reserved by the browser and
+ * never reach the page (a page's `preventDefault` cannot claim them), so a browser-usable
+ * "new task" accelerator has to be a lone letter — the `c`-to-create convention (GitHub,
+ * Linear). Any held modifier disqualifies (so it never eats ⌘N in the desktop shell), and —
+ * unlike the chord — a focused editable, INCLUDING the ⌘K palette input, always swallows it:
+ * a bare letter is a keystroke someone is probably typing.
+ */
+export function shouldTriggerKeyShortcut(event: CommandShortcutEvent, key: string): boolean {
+  if (typeof event.key !== 'string' || event.key.toLowerCase() !== key.toLowerCase()) return false
+  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return false
+  if (event.repeat) return false
+  if (isEditableTarget(event.target)) return false
+  return true
+}
+
+/**
+ * Register a global bare-`key` shortcut for the component's lifetime. No `preventDefault` — a
+ * lone letter has no browser default to claim. Mirrors `useCommandShortcut`'s ref plumbing.
+ */
+export function useKeyShortcut(key: string, handler: (event: KeyboardEvent) => void): void {
+  const handlerRef = React.useRef(handler)
+  React.useLayoutEffect(() => {
+    handlerRef.current = handler
+  })
+
+  React.useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!shouldTriggerKeyShortcut(event, key)) return
+      handlerRef.current(event)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [key])
+}

@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   isEditableTarget,
   shouldTriggerCommandShortcut,
+  shouldTriggerKeyShortcut,
   useCommandShortcut,
   type CommandShortcutEvent,
 } from './use-command-shortcut'
@@ -90,6 +91,33 @@ describe('shouldTriggerCommandShortcut — editable-target suppression', () => {
   it('fires from a non-editable element and from a null target', () => {
     expect(shouldTriggerCommandShortcut(keyEvent({ metaKey: true }), 'k')).toBe(true)
     expect(shouldTriggerCommandShortcut(keyEvent({ metaKey: true, target: null }), 'k')).toBe(true)
+  })
+})
+
+describe('shouldTriggerKeyShortcut — bare key, no modifiers', () => {
+  it('fires on the lone key', () => {
+    expect(shouldTriggerKeyShortcut(keyEvent({ key: 'c' }), 'c')).toBe(true)
+  })
+
+  it.each([
+    { name: 'meta', event: { metaKey: true } },
+    { name: 'ctrl', event: { ctrlKey: true } },
+    { name: 'alt', event: { altKey: true } },
+    { name: 'shift', event: { shiftKey: true } },
+    { name: 'repeat', event: { repeat: true } },
+  ])('any modifier or repeat disqualifies ($name)', ({ event }) => {
+    expect(shouldTriggerKeyShortcut(keyEvent({ key: 'c', ...event }), 'c')).toBe(false)
+  })
+
+  it('is case-insensitive', () => {
+    expect(shouldTriggerKeyShortcut(keyEvent({ key: 'C' }), 'c')).toBe(true)
+  })
+
+  it('any editable target swallows it — INCLUDING the palette input', () => {
+    const input = document.createElement('input')
+    input.setAttribute('cmdk-input', '')
+    expect(shouldTriggerKeyShortcut(keyEvent({ key: 'c', target: input }), 'c')).toBe(false)
+    expect(shouldTriggerKeyShortcut(keyEvent({ key: 'c', target: document.createElement('textarea') }), 'c')).toBe(false)
   })
 })
 

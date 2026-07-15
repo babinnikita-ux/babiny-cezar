@@ -253,12 +253,14 @@ function SidebarContent({
           <Link to="/new" onClick={onNavigate}>
             <PlusIcon className="size-[15px]" aria-hidden="true" />
             New task
-            {/* Decorative: the ⌘N accelerator itself is registered in the command palette. */}
+            {/* Decorative: the `c`-to-create accelerator is registered in the command palette.
+                (⌘N is also bound there, but only the desktop shell receives it — the browser
+                reserves ⌘N for a new window — so the chip advertises the one that always works.) */}
             <kbd
               aria-hidden="true"
               className="absolute right-2.5 rounded-[5px] border border-b-2 border-contrast-foreground/25 bg-transparent px-[5px] py-px font-mono text-[10.5px] font-medium text-contrast-foreground/60"
             >
-              ⌘N
+              C
             </kbd>
           </Link>
         </Button>

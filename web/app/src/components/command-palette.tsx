@@ -21,7 +21,7 @@ import { deriveAttention } from '@/lib/attention'
 import { shortAge } from '@/lib/format'
 import { orderSkills } from '@/lib/skills'
 import { runTitle } from '@/lib/task-groups'
-import { useCommandShortcut } from '@/lib/use-command-shortcut'
+import { useCommandShortcut, useKeyShortcut } from '@/lib/use-command-shortcut'
 
 /**
  * The ⌘K command palette (spec, "Cross-cutting"): tasks, views, actions, skills — everything,
@@ -52,13 +52,15 @@ export function CommandPalette() {
   const navigate = useNavigate()
 
   useCommandShortcut('k', () => setOpen((current) => !current))
-  // The sidebar CTA's decorative ⌘N hint is real here: new task from anywhere. Client-side
-  // navigation since R4 Step 1.1 — the React /new composer is the destination now (only full
-  // document loads of /new stay pinned to legacy, for the bookmarklet, until Step 1.3).
-  useCommandShortcut('n', () => {
+  const newTask = React.useCallback(() => {
     setOpen(false)
     navigate('/new')
-  })
+  }, [navigate])
+  // ⌘N works only in the desktop shell — the browser reserves it (new window), so the page
+  // never sees it. `c`-to-create (GitHub/Linear) is the browser-usable accelerator and the one
+  // the hint chips advertise; ⌘N stays registered for the Electron shell where it fires.
+  useCommandShortcut('n', newTask)
+  useKeyShortcut('c', newTask)
 
   React.useEffect(() => {
     const onOpen = () => setOpen(true)
@@ -133,7 +135,7 @@ function PaletteContent({ close }: { close: () => void }) {
           >
             <PlusIcon aria-hidden="true" />
             New task
-            <CommandShortcut>⌘N</CommandShortcut>
+            <CommandShortcut>C</CommandShortcut>
           </CommandItem>
         </CommandGroup>
 

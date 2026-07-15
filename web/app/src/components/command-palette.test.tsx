@@ -174,7 +174,7 @@ describe('opening and closing', () => {
 })
 
 describe('Views group', () => {
-  it('lists the 7 nav destinations plus New task with its ⌘N hint', async () => {
+  it('lists the 7 nav destinations plus New task with its C hint', async () => {
     renderPalette()
     openWith({ metaKey: true })
     await screen.findByRole('dialog')
@@ -188,7 +188,8 @@ describe('Views group', () => {
       '/', '/inbox', '/git', '/github', '/settings/skills', '/workflows', '/settings', '/new',
     ])
     expect(views[7]?.textContent).toContain('New task')
-    expect(views[7]?.textContent).toContain('⌘N')
+    // The chip advertises `c` — ⌘N is browser-reserved and only fires in the desktop shell.
+    expect(views[7]?.textContent).toContain('C')
   })
 
   // R6 Step 1.1: the palette must not offer a GitHub view the sidebar honestly hides.
@@ -224,6 +225,27 @@ describe('Views group', () => {
 
     expect(location()).toBe('/new')
     expect(dialog()).toBeNull()
+  })
+
+  it('bare `c` client-navigates to /new — the browser-usable accelerator', () => {
+    renderPalette()
+
+    fireEvent.keyDown(window, { key: 'c' })
+
+    expect(location()).toBe('/new')
+    expect(dialog()).toBeNull()
+  })
+
+  it('`c` is inert while typing in a field', () => {
+    renderPalette()
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    input.focus()
+
+    fireEvent.keyDown(input, { key: 'c' })
+
+    expect(location()).toBe('/')
+    input.remove()
   })
 })
 
