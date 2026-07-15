@@ -6,6 +6,7 @@ import {
   getGroup,
   getHealth,
   getLaunchKey,
+  getOpenTargets,
   getRepo,
   getRepoChanges,
   getRepoCommit,
@@ -60,6 +61,7 @@ export const queryKeys = {
   /** The Settings → Agents knobs (`GET /api/config`, R6 1.5). */
   config: ['config'] as const,
   github: (params: { limit?: number } = {}) => ['github', params.limit ?? null] as const,
+  openTargets: ['open-targets'] as const,
 } as const
 
 /** Version + update check + repo/branch + tool probes. Feeds the sidebar's repo and version
@@ -68,6 +70,16 @@ export function useHealth() {
   return useQuery({
     queryKey: queryKeys.health,
     queryFn: ({ signal }) => getHealth({ signal }),
+  })
+}
+
+/** The local "Open in…" targets (#open-in). Machine-level and stable, so it caches broadly;
+ *  empty in hosted mode. */
+export function useOpenTargets() {
+  return useQuery({
+    queryKey: queryKeys.openTargets,
+    queryFn: ({ signal }) => getOpenTargets({ signal }),
+    staleTime: 5 * 60_000,
   })
 }
 

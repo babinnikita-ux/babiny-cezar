@@ -46,6 +46,7 @@ import { resolveForge } from './forge/index.js';
 import { fetchGithub } from './github.js';
 import { ensureLaunchKey } from './launch-key.js';
 import { openInTerminal } from './open-in-terminal.js';
+import { detectOpenTargets, openInApp } from './open-in-app.js';
 import { createDraftPr } from './pr.js';
 import { ASSET_CACHE_CONTROL, BUILD_HINT_HTML, assetContentType, isSafeAssetFilename, resolveGetRequest } from './static-ui.js';
 
@@ -704,6 +705,32 @@ export function createApp(deps: ServerDeps): Hono {
       return c.json({ error: 'no terminal emulator found', command: `cd '${cwd}' && ${command}` }, 409);
     }
     return c.json({ opened: true, command });
+  });
+
+  // "Open in…" session takeover (#open-in): the editors/file-manager/terminal
+  // detected on THIS machine. Empty in hosted mode (no local desktop to open).
+  app.get('/api/open-targets', (c) =>
+    c.json({ targets: capabilities().localHandoff ? detectOpenTargets() : [] }),
+  );
+
+  // Open a run's worktree (or the repo root) in the chosen local app.
+  app.post('/api/runs/:id/open-in', async (c) => {
+    const id = c.req.param('id');
+    const run = store.getRun(id);
+    if (!run) return c.json({ error: 'not found' }, 404);
+    if (!capabilities().localHandoff) {
+      return c.json(
+        { error: 'local handoff is disabled — this cockpit runs in hosted mode (CEZ_REMOTE)' },
+        409,
+      );
+    }
+    const body = (await c.req.json().catch(() => ({}))) as { target?: unknown };
+    const target = typeof body.target === 'string' ? body.target : '';
+    if (!target) return c.json({ error: 'target required' }, 400);
+    const dir = run.worktreePath && existsSync(run.worktreePath) ? run.worktreePath : repoRoot;
+    const opened = await openInApp(target, dir);
+    if (!opened) return c.json({ error: `could not open ${target}`, path: dir }, 409);
+    return c.json({ opened: true, path: dir });
   });
 
   // Handoff journal (spec 007): the per-task handoff.md as markdown. 404 only

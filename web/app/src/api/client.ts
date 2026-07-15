@@ -20,6 +20,7 @@ import type {
   MessageInput,
   MessageResponse,
   OpenInCliResponse,
+  OpenTargetsResponse,
   ParsedWorkflow,
   PatchRunInput,
   PickVariantResponse,
@@ -353,6 +354,17 @@ export function pickVariant(groupId: string, runId: string): Promise<PickVariant
  *  exists. On 409 the ApiError's `command` carries the manual `cd … && <resume>` to copy. */
 export function openRunInCli(id: string): Promise<OpenInCliResponse> {
   return mutate<OpenInCliResponse>('POST', runPath(id, '/open-in-cli'))
+}
+
+/** The local editors / file-manager / terminal this machine can open a worktree in (#open-in).
+ *  Empty in hosted mode (CEZ_REMOTE). */
+export function getOpenTargets(opts?: ReadOptions): Promise<OpenTargetsResponse> {
+  return get<OpenTargetsResponse>('/api/open-targets', opts)
+}
+
+/** Open the run's worktree in the chosen local app. 409 with `path` when it could not launch. */
+export function openRunIn(id: string, target: string): Promise<{ opened: boolean; path: string }> {
+  return mutate<{ opened: boolean; path: string }>('POST', runPath(id, '/open-in'), { target })
 }
 
 /** `git add -A && git commit` in the run's worktree (R5). Every predictable git failure —

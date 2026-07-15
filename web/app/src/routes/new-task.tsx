@@ -132,9 +132,11 @@ export function NewTaskRoute() {
   const worktreeToggleShown = hasGit && source.source === 'skill' && variants <= 1
   const worktreeOn = worktreeToggleShown ? (draft.worktree ?? uiState.data?.lastWorktree ?? true) : true
 
-  // Autonomous (#autonomous): the run never pauses for the user. Remembered (draft → last-used
-  // → default off). Offered for every single run (variants aren't interactive anyway).
-  const autonomousOn = draft.autonomous ?? uiState.data?.lastAutonomous ?? false
+  // Autonomous (#autonomous): the run never pauses for the user. An explicit toggle this session
+  // wins; otherwise skills default ON (a skill run is meant to just execute), workflows fall back
+  // to the remembered choice, else off.
+  const autonomousOn =
+    draft.autonomous ?? (source.source === 'skill' ? true : (uiState.data?.lastAutonomous ?? false))
 
   // ---- plan mode (#383 + spec 008) ----------------------------------------------------------
   const [plan, setPlan] = useState<PendingPlan | null>(null)

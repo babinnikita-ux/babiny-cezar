@@ -6,6 +6,7 @@ import {
   CircleStopIcon,
   CopyIcon,
   EllipsisVerticalIcon,
+  ExternalLinkIcon,
   FileTextIcon,
   PencilIcon,
   PlayIcon,
@@ -15,8 +16,8 @@ import {
 import { Fragment, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 
-import { ApiError, archiveRun, cancelRun, continueRun, deleteRun, openRunInCli } from '@/api/client'
-import { queryKeys, usePatchRun, useRunHandoff, useRuns } from '@/api/queries'
+import { ApiError, archiveRun, cancelRun, continueRun, deleteRun, openRunIn, openRunInCli } from '@/api/client'
+import { queryKeys, useOpenTargets, usePatchRun, useRunHandoff, useRuns } from '@/api/queries'
 import type { ApiRun } from '@/api/types'
 import { DiffStatLabel } from '@/components/diff-stat'
 import { TitleEditInput, useTitleEditor } from '@/components/editable-title'
@@ -151,6 +152,7 @@ export function RunHeader({
                 Terminal
               </Button>
             ) : null}
+            <OpenInMenu run={run} />
             <Button
               variant="ghost"
               size="sm"
@@ -194,6 +196,57 @@ export function RunHeader({
 
       <ConfirmDialog run={run} actions={actions} />
     </header>
+  )
+}
+
+/**
+ * "Open in…" session takeover (#open-in): open the run's worktree in a local editor / Finder /
+ * terminal, or copy its path. Renders only when the machine offers targets (empty in hosted mode)
+ * and the run has a worktree — otherwise there's nothing local to open.
+ */
+function OpenInMenu({ run }: { run: ApiRun }) {
+  const targets = useOpenTargets()
+  const open = useMutation({
+    mutationFn: (target: string) => openRunIn(run.id, target),
+    onError: (error: Error) => toast(error.message, { tone: 'danger' }),
+  })
+  const list = targets.data?.targets ?? []
+  if (!run.worktreePath || list.length === 0) return null
+
+  const copyPath = () => {
+    const path = run.worktreePath
+    if (!path) return
+    void navigator.clipboard
+      .writeText(path)
+      .then(() => toast('Worktree path copied'))
+      .catch(() => toast(`Path: ${path}`))
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="sm" title="Open the worktree in an editor, Finder or terminal">
+          <ExternalLinkIcon aria-hidden="true" />
+          Open in…
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {list.map((target) => (
+          <DropdownMenuItem
+            key={target.id}
+            data-target={target.id}
+            onSelect={() => open.mutate(target.id)}
+          >
+            {target.label}
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={copyPath}>
+          <CopyIcon aria-hidden="true" />
+          Copy worktree path
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 

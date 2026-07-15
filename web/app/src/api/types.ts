@@ -546,6 +546,17 @@ export interface SetConfigInput {
 /** The PUT answer: the same shape GET serves (the pre-R6 fields stayed, the rest is additive). */
 export type SetConfigResponse = ConfigResponse
 
+/** A local app a worktree can be opened in (#open-in): editor, file manager, or terminal. */
+export interface OpenTarget {
+  id: string
+  label: string
+}
+
+/** `GET /api/open-targets` — the detected local apps; empty in hosted mode (CEZ_REMOTE). */
+export interface OpenTargetsResponse {
+  targets: OpenTarget[]
+}
+
 // ---- mutation responses ---------------------------------------------------------------------------
 
 /** `POST /api/runs` — one record for ×1, a group for ×2/×3. */
