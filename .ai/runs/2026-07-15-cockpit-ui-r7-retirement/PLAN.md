@@ -15,6 +15,7 @@
 | 1 | 1.2 | Packaging flip: `files` ships `web/dist` (+ svg), tarball bundle check in the gate; retire the BC waiver | done | pending |
 | 1 | 1.3 | iOS + degradation-matrix e2e sweep: iPhone viewport across every view; forge-off/degraded states where reachable | done | pending |
 | 1 | 1.4 | README refresh: recapture all 6 `docs/screenshots/*.png` against the new UI via agent-browser; prose sweep | done | pending |
+| 1 | 1.5 | Stabilize e2e: badge-proof nav labels, settled dnd-kit keyboard reorder | done | pending |
 
 ## Goal
 

@@ -95,8 +95,14 @@ describe('cockpit app shell', () => {
     if (forgeAvailable) {
       browser.waitForFunction(`document.querySelector('[data-slot="sidebar"] nav a[href="/github"]') !== null`)
     }
+    // Read the label without the inbox badge — a populated shared env legitimately has todos,
+    // and the badge digit must not leak into the nav-label assertion.
     const labels = browser.evaluate(
-      `Array.from(document.querySelectorAll('[data-slot="sidebar"] nav a')).map(a => a.textContent.trim())`
+      `Array.from(document.querySelectorAll('[data-slot="sidebar"] nav a')).map(a => {
+        const clone = a.cloneNode(true)
+        clone.querySelector('[data-slot="nav-badge"]')?.remove()
+        return clone.textContent.trim()
+      })`
     )
     expect(labels).toEqual(expectedNavLabels())
 
@@ -285,7 +291,11 @@ describe('mobile shell', () => {
           overlayWidth: overlay.width,
           overlayHeight: overlay.height,
           minLinkHeight: Math.min(...links.map((a) => a.getBoundingClientRect().height)),
-          labels: links.map((a) => a.textContent.trim()),
+          labels: links.map((a) => {
+            const clone = a.cloneNode(true)
+            clone.querySelector('[data-slot="nav-badge"]')?.remove()
+            return clone.textContent.trim()
+          }),
         }
       })()`) as Record<string, number | string[]>
 
