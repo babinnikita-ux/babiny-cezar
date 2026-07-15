@@ -22,8 +22,10 @@ describe('activeNavPath', () => {
     ['/workflows', '/workflows'],
     ['/workflows/ship-it', '/workflows'],
 
-    // The nested Settings area: the most specific item wins.
-    ['/settings/skills', '/settings/skills'],
+    // Skills is its own top-level surface now (was /settings/skills).
+    ['/skills', '/skills'],
+
+    // The nested Settings area: deeper routes fall to the Settings item.
     ['/settings', '/settings'],
     ['/settings/appearance', '/settings'],
     ['/settings/agents', '/settings'],
@@ -52,7 +54,7 @@ describe('activeNavPath', () => {
 describe('activeNavItem', () => {
   it('returns the item, so the mobile bar can title itself', () => {
     expect(activeNavItem('/tasks/abc123')?.label).toBe('Tasks')
-    expect(activeNavItem('/settings/skills')?.label).toBe('Skills')
+    expect(activeNavItem('/skills')?.label).toBe('Skills')
   })
 
   it('returns null off-nav', () => {

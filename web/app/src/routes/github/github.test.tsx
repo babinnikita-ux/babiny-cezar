@@ -407,10 +407,10 @@ describe('the hand-to-agent pickers (#385)', () => {
     // Viewing is read-only: nothing got selected (no chip, no count on the trigger).
     expect(document.querySelectorAll('[data-slot="gh-skill-chip"]')).toHaveLength(0)
     expect(document.querySelector('[data-slot="gh-skills-trigger"]')?.textContent).not.toContain('·')
-    // The escape hatch into the browsable catalog under Settings.
+    // The escape hatch into the browsable Skills catalog.
     expect(
       preview.querySelector('[data-slot="skill-preview-manage"]')?.getAttribute('href'),
-    ).toBe('/settings/skills?skill=om-fix')
+    ).toBe('/skills?skill=om-fix')
   })
 })
 

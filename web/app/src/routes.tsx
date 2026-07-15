@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react'
-import { Route, Routes } from 'react-router'
+import { Navigate, Route, Routes, useLocation } from 'react-router'
 
 import { CompareLoading } from './routes/compare-loading'
 import { GithubLoading } from './routes/github/github-loading'
@@ -7,6 +7,7 @@ import { InboxRoute } from './routes/inbox'
 import { NewTaskRoute } from './routes/new-task'
 import { NotFoundRoute } from './routes/not-found'
 import { RepoGitLoading } from './routes/repo-git/repo-git-loading'
+import { SkillsLoading } from './routes/skills-loading'
 import { WorkflowsLoading } from './routes/workflows/workflows-loading'
 import { GitTabLoading } from './routes/task-git/git-tab-loading'
 import { ThreadLoading } from './routes/task-thread/thread-loading'
@@ -57,6 +58,18 @@ const GithubRoute = lazy(() =>
 const WorkflowsRoute = lazy(() =>
   import('./routes/workflows/workflows').then((m) => ({ default: m.WorkflowsRoute })),
 )
+
+/** Lazy because the skill detail renders the skill body through the same markdown stack the
+ *  thread carries — thread-chunk weight the home screen must not pay (it used to ride the main
+ *  bundle as a static Settings section). */
+const SkillsRoute = lazy(() => import('./routes/skills').then((m) => ({ default: m.SkillsRoute })))
+
+/** `/settings/skills` moved to the top-level `/skills` (out of the Settings shell). Redirect —
+ *  preserving the `?skill=` selection — so pasted links and saved bookmarklets still land. */
+function SettingsSkillsRedirect() {
+  const location = useLocation()
+  return <Navigate to={{ pathname: '/skills', search: location.search }} replace />
+}
 
 /** The route map from the spec's "Routing — every surface is a URL" section.
  *
@@ -192,6 +205,17 @@ export function AppRoutes() {
         }
       />
 
+      {/* The skills catalog (R6 Step 1.4) — its own top-level surface, no settings sub-nav.
+          `/settings/skills` redirects here (below) so pasted links keep working. */}
+      <Route
+        path="/skills"
+        element={
+          <Suspense fallback={<SkillsLoading />}>
+            <SkillsRoute />
+          </Suspense>
+        }
+      />
+
       {/* The follow-up inbox (R6 Step 1.2): light — no markdown stack — so it rides the main
           bundle like the overview does. */}
       <Route path="/inbox" element={<InboxRoute />} />
@@ -219,6 +243,7 @@ export function AppRoutes() {
           from routes/settings/registry.tsx. Hidden sections are NOT routed, so their URLs are
           honest 404s until the section ships (notifications unhides in Step 1.7). */}
       <Route path="/settings" element={<SettingsIndexRoute />} />
+      <Route path="/settings/skills" element={<SettingsSkillsRedirect />} />
       {visibleSettingsSections().map((section) => (
         <Route
           key={section.id}

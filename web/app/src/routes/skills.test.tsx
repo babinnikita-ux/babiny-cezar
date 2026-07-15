@@ -9,7 +9,7 @@ import { Toaster, resetToasts } from '@/components/ui/toaster'
 import { AppRoutes } from '@/routes'
 
 /**
- * Settings → Skills (R6 Step 1.4): the catalog + detail against fixture payloads, the #377
+ * `/skills` (R6 Step 1.4): the catalog + detail against fixture payloads, the #377
  * ordering/bold rendering, the #384 refresh contract (selection and scroll survive), and the
  * bookmarklet panel's protected link generation. The pure rules themselves are pinned in
  * lib/skills.test.ts and lib/bookmarklet.test.ts — this file asserts the SURFACE honors them.
@@ -96,7 +96,7 @@ afterEach(() => {
 describe('the catalog list', () => {
   it('renders project-first with bold project rows and source tags (#377)', async () => {
     serve()
-    renderAt('/settings/skills')
+    renderAt('/skills')
 
     await waitFor(() => expect(rowNames()).toEqual(['om-fix', 'om-review', 'zebra-global']))
     const rows = [...document.querySelectorAll('[data-slot="skill-row"]')]
@@ -110,7 +110,7 @@ describe('the catalog list', () => {
 
   it('the first skill is the default selection: detail shows markdown body, path, used-by', async () => {
     serve()
-    renderAt('/settings/skills')
+    renderAt('/skills')
 
     await waitFor(() => expect(detail()).not.toBeNull())
     const pane = detail()!
@@ -125,7 +125,7 @@ describe('the catalog list', () => {
 
   it('clicking a row selects it via the URL and swaps the detail', async () => {
     serve()
-    renderAt('/settings/skills')
+    renderAt('/skills')
     await waitFor(() => expect(rowNames()).toHaveLength(3))
 
     fireEvent.click(document.querySelector('[data-slot="skill-row"][data-skill="om-review"]')!)
@@ -143,7 +143,7 @@ describe('the catalog list', () => {
 
   it('the filter narrows the rows but never hides the pinned bookmarklet entry', async () => {
     serve()
-    renderAt('/settings/skills')
+    renderAt('/skills')
     await waitFor(() => expect(rowNames()).toHaveLength(3))
 
     fireEvent.change(document.querySelector('[data-slot="skills-filter"]')!, {
@@ -155,7 +155,7 @@ describe('the catalog list', () => {
 
   it('an empty catalog explains where skills come from, and the panel is the fallback surface', async () => {
     serve({ skills: [] })
-    renderAt('/settings/skills')
+    renderAt('/skills')
 
     await waitFor(() =>
       expect(document.querySelector('[data-slot="skill-rows"]')?.textContent).toContain('.ai/skills/'),
@@ -168,7 +168,7 @@ describe('the catalog list', () => {
 describe('refresh (#384: selection and scroll survive)', () => {
   it('POSTs /api/skills/refresh, keeps the selected skill, the row container and its scroll', async () => {
     serve({ refreshed: [...SKILLS, skill({ name: 'team-new', source: 'team' })] })
-    renderAt('/settings/skills?skill=om-review')
+    renderAt('/skills?skill=om-review')
     await waitFor(() => expect(rowNames()).toHaveLength(3))
 
     const rowsBefore = document.querySelector('[data-slot="skill-rows"]')!
@@ -196,7 +196,7 @@ describe('refresh (#384: selection and scroll survive)', () => {
 
   it('a refresh that drops the selected skill falls back to the first skill, never crashes', async () => {
     serve({ refreshed: SKILLS.filter((s) => s.name !== 'om-review') })
-    renderAt('/settings/skills?skill=om-review')
+    renderAt('/skills?skill=om-review')
     await waitFor(() => expect(detail()?.querySelector('h2')?.textContent).toBe('om-review'))
 
     fireEvent.click(document.querySelector('[data-slot="skills-refresh"]')!)
@@ -261,7 +261,7 @@ describe('the bookmarklet panel (spec 011)', () => {
     serve()
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
-    renderAt('/settings/skills?skill=__bm')
+    renderAt('/skills?skill=__bm')
     await waitFor(() =>
       expect(document.querySelectorAll('[data-slot="bm-list"] [data-slot="bm-row"]')).toHaveLength(3),
     )
@@ -278,7 +278,7 @@ describe('the bookmarklet panel (spec 011)', () => {
 
   it('a clicked drag-source link never navigates — it only explains the gesture', async () => {
     serve()
-    renderAt('/settings/skills?skill=__bm')
+    renderAt('/skills?skill=__bm')
     await waitFor(() => expect(document.querySelector('[data-slot="bm-generic"] [data-slot="bm-link"]')).not.toBeNull())
 
     fireEvent.click(document.querySelector('[data-slot="bm-generic"] [data-slot="bm-link"]')!)

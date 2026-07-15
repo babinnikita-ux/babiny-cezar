@@ -274,10 +274,9 @@ function SidebarContent({
           const isActive = item.to === activeTo
           const Icon = item.icon
           // Link, not NavLink, on purpose. NavLink derives `aria-current` from its own prefix
-          // match against `to`, and that rule is wrong here in both directions: it would light
-          // Settings on /settings/skills, and would *not* light Tasks on /tasks/:id — which the
-          // spec requires. `aria-current` cannot be forced past NavLink's own matching, so the
-          // area rule lives in `activeNavPath` and this is a plain Link.
+          // match against `to`, and that rule is wrong here: it would *not* light Tasks on
+          // /tasks/:id — which the spec requires. `aria-current` cannot be forced past NavLink's
+          // own matching, so the area rule lives in `activeNavPath` and this is a plain Link.
           return (
             <Link
               key={item.to}

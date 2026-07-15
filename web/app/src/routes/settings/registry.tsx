@@ -6,7 +6,6 @@ import {
   KeyboardIcon,
   PaletteIcon,
   PlugIcon,
-  SparklesIcon,
 } from 'lucide-react'
 import type { ComponentType, SVGProps } from 'react'
 
@@ -16,7 +15,6 @@ import { AppearanceSection } from './appearance'
 import { BookmarkletsSection } from './bookmarklets-section'
 import { NotificationsSection } from './notifications-section'
 import { ResourcesSection } from './resources-section'
-import { SkillsSection } from './skills-section'
 
 /**
  * The Settings section registry (R6 Step 1.3, spec §"Settings"): the ONE place a section is
@@ -29,7 +27,6 @@ import { SkillsSection } from './skills-section'
  */
 
 export type SettingsSectionId =
-  | 'skills'
   | 'bookmarklets'
   | 'appearance'
   | 'agents'
@@ -65,13 +62,6 @@ function comingSoon(title: string, Icon: ComponentType<SVGProps<SVGSVGElement>>)
 }
 
 export const SETTINGS_SECTIONS: SettingsSection[] = [
-  {
-    id: 'skills',
-    title: 'Skills',
-    description: 'Markdown playbooks agents can follow.',
-    icon: SparklesIcon,
-    component: SkillsSection,
-  },
   {
     id: 'bookmarklets',
     title: 'Bookmarklets',

@@ -70,7 +70,7 @@ describe('AppShell', () => {
       '/inbox',
       '/git',
       '/github',
-      '/settings/skills',
+      '/skills',
       '/workflows',
       '/settings',
     ])
@@ -89,7 +89,7 @@ describe('AppShell', () => {
     const cases: Array<[entry: string, active: string]> = [
       ['/', 'Tasks'],
       ['/git', 'Git'],
-      ['/settings/skills', 'Skills'],
+      ['/skills', 'Skills'],
       // Tasks stays lit while a task thread is open (spec's "Task list & table").
       ['/tasks/abc123', 'Tasks'],
     ]
@@ -206,7 +206,7 @@ describe('AppShell', () => {
     })
 
     it('titles the mobile bar from the active route', () => {
-      renderShell('/settings/skills')
+      renderShell('/skills')
       const bar = document.querySelector('[data-slot="mobile-top-bar"]') as HTMLElement
       expect(within(bar).getByText('Skills')).toBeTruthy()
     })
@@ -361,7 +361,7 @@ describe('AppShell', () => {
     })
 
     it('marks the active nav item inside the drawer too', () => {
-      renderShell('/settings/skills')
+      renderShell('/skills')
       openMenu()
       const current = within(drawer() as HTMLElement).getAllByRole('link', { current: 'page' })
       expect(current).toHaveLength(1)

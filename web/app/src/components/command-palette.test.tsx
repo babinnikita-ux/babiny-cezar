@@ -185,7 +185,7 @@ describe('Views group', () => {
     )
     const views = [...document.querySelectorAll('[data-slot="palette-view"]')]
     expect(views.map((view) => view.getAttribute('data-nav-to'))).toEqual([
-      '/', '/inbox', '/git', '/github', '/settings/skills', '/workflows', '/settings', '/new',
+      '/', '/inbox', '/git', '/github', '/skills', '/workflows', '/settings', '/new',
     ])
     expect(views[7]?.textContent).toContain('New task')
     // The chip advertises `c` — ⌘N is browser-reserved and only fires in the desktop shell.

@@ -12,13 +12,16 @@ import { Input } from '@/components/ui/input'
 import { toast } from '@/components/ui/toaster'
 import { filterSkills, isProjectSkill, orderSkills, skillUsedBy } from '@/lib/skills'
 import { cn } from '@/lib/utils'
-import { BookmarkletPanel } from './bookmarklets-section'
+import { BookmarkletPanel } from './settings/bookmarklets-section'
 
 /**
- * Settings → Skills (R6 Step 1.4, spec §"Skills, Workflows, Inbox"): the legacy Skills tab
- * moved under Settings — catalog + detail + Refresh + the bookmarklet panel — with the two
- * standing feedback items built in:
+ * `/skills` — the skills catalog as its own top-level surface (was `/settings/skills`, moved
+ * out of the Settings shell so it stops carrying the settings sub-nav): catalog + detail +
+ * Refresh + the bookmarklet panel. `/settings/skills` now redirects here (routes.tsx) so pasted
+ * links keep working. Skills are playbooks agents follow, not a knob — so this is a page, not a
+ * settings section.
  *
+ * The two standing feedback items stay built in:
  *  - #377 project-first and bold: the list renders through `orderSkills`/`filterSkills`, the
  *    same pure module every picker uses;
  *  - #384 stable scroll/selection: selection lives in the URL (`?skill=<name>`), the rows are
@@ -32,7 +35,20 @@ import { BookmarkletPanel } from './bookmarklets-section'
 
 const BOOKMARKLETS = '__bm'
 
-export function SkillsSection() {
+export function SkillsRoute() {
+  return (
+    <div data-route="skills" className="flex min-h-full flex-col">
+      {/* Desktop header — below `md` the shell's top bar already says "Skills". */}
+      <header className="sticky top-0 z-10 hidden h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-5 md:flex">
+        <h1 className="text-base font-semibold">Skills</h1>
+        <p className="text-[13px] text-muted-foreground">Markdown playbooks agents can follow.</p>
+      </header>
+      <SkillsCatalog />
+    </div>
+  )
+}
+
+function SkillsCatalog() {
   const skillsQuery = useSkills()
   const workflowsQuery = useWorkflows()
   const [searchParams] = useSearchParams()
@@ -82,8 +98,8 @@ export function SkillsSection() {
         data-slot="skills-list"
         className={cn(
           'w-full flex-col border-border md:flex md:w-[320px] md:shrink-0 md:border-r',
-          // Pin the pane below the shell's sticky h-14 header so the ROWS scroll inside it
-          // (the #384 stable-scroll surface) — `var(--spacing)*14` tracks the density token.
+          // Pin the pane below the sticky h-14 header so the ROWS scroll inside it (the #384
+          // stable-scroll surface) — `var(--spacing)*14` tracks the density token.
           'md:sticky md:top-14 md:max-h-[calc(100dvh-(var(--spacing)*14))]',
           param === null ? 'flex' : 'hidden md:flex',
         )}
@@ -137,7 +153,7 @@ export function SkillsSection() {
         {/* Always visible below the scrollable rows — spec 011's pinned entry. */}
         <div className="shrink-0 border-t border-border p-2">
           <Link
-            to={`/settings/skills?skill=${BOOKMARKLETS}`}
+            to={`/skills?skill=${BOOKMARKLETS}`}
             data-slot="bookmarklets-row"
             aria-current={selection === BOOKMARKLETS ? 'page' : undefined}
             className={cn(
@@ -166,7 +182,7 @@ export function SkillsSection() {
       >
         <div className="min-w-0 flex-1 px-4 py-4 md:px-7 md:py-5">
           <Link
-            to="/settings/skills"
+            to="/skills"
             data-slot="skills-back"
             className="mb-3 inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground md:hidden"
           >
@@ -201,7 +217,7 @@ function SkillRow({ skill, active }: { skill: Skill; active: boolean }) {
   return (
     <li>
       <Link
-        to={`/settings/skills?skill=${encodeURIComponent(skill.name)}`}
+        to={`/skills?skill=${encodeURIComponent(skill.name)}`}
         data-slot="skill-row"
         data-skill={skill.name}
         data-project={project ? 'true' : undefined}

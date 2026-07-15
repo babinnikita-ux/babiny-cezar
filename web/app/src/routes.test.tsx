@@ -79,8 +79,8 @@ describe('route map', () => {
     // and a named deep link are honestly loading.
     ['/workflows', 'workflows', 'Loading workflows…'],
     ['/workflows/ship-it', 'workflows', 'Loading workflows…'],
+    ['/skills', 'skills', 'Skills'],
     ['/settings', 'settings', 'Settings'],
-    ['/settings/skills', 'settings-skills', 'Skills'],
     ['/settings/bookmarklets', 'settings-bookmarklets', 'Bookmarklets'],
     ['/settings/appearance', 'settings-appearance', 'Appearance'],
     ['/settings/agents', 'settings-agents', 'Agents'],

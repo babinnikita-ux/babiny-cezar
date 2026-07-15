@@ -35,7 +35,7 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/inbox', label: 'Inbox', icon: InboxIcon, match: ['/inbox'], badge: true },
   { to: '/git', label: 'Git', icon: GitBranchIcon, match: ['/git'] },
   { to: '/github', label: 'GitHub', icon: GithubIcon, match: ['/github'], forge: true },
-  { to: '/settings/skills', label: 'Skills', icon: SparklesIcon, match: ['/settings/skills'] },
+  { to: '/skills', label: 'Skills', icon: SparklesIcon, match: ['/skills'] },
   { to: '/workflows', label: 'Workflows', icon: WorkflowIcon, match: ['/workflows'] },
   { to: '/settings', label: 'Settings', icon: SettingsIcon, match: ['/settings'] },
 ]
@@ -66,9 +66,9 @@ function inArea(pathname: string, prefix: string): boolean {
  * The `to` of the nav item that owns `pathname`, or null when no item does (e.g. `/new`,
  * which is a full-screen surface with no nav home).
  *
- * Longest matching prefix wins, which is what disambiguates the nested Settings area:
- * `/settings/skills` matches both Skills (16 chars) and Settings (9), and Skills — the more
- * specific item — is the one that should light up. `/settings/agents` only matches Settings.
+ * Longest matching prefix wins, which is what disambiguates nested areas: the `/` root only
+ * matches the exact path (see `inArea`), so every deeper route falls to its own item —
+ * `/settings/agents` lights Settings, `/git/commits` lights Git.
  */
 export function activeNavPath(pathname: string): string | null {
   let best: { to: string; length: number } | null = null

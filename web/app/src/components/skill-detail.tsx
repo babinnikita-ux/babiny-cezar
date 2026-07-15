@@ -116,12 +116,12 @@ export function SkillPreviewDialog({ skill, onClose }: { skill: Skill | null; on
             <SkillDetailBody skill={skill} heading="h3" />
             <p className="mt-5">
               <Link
-                to={`/settings/skills?skill=${encodeURIComponent(skill.name)}`}
+                to={`/skills?skill=${encodeURIComponent(skill.name)}`}
                 data-slot="skill-preview-manage"
                 onClick={onClose}
                 className="text-xs font-semibold text-violet hover:underline"
               >
-                Open in Settings → Skills
+                Open in the Skills catalog
               </Link>
             </p>
           </>
