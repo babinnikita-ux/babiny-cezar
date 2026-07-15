@@ -36,6 +36,7 @@ const ACCENT_OPTIONS: Array<{ value: Accent; label: string; swatch: string }> = 
 const DENSITY_OPTIONS: Array<{ value: Density; label: string }> = [
   { value: 'comfortable', label: 'Comfortable' },
   { value: 'compact', label: 'Compact' },
+  { value: 'ultra', label: 'Compact for real' },
 ]
 
 /** One segmented radio group — the shared chassis of all three controls. */

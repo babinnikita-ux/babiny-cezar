@@ -190,7 +190,7 @@ const uiStateSchema = z
     appearance: z
       .object({
         accent: z.enum(['lime', 'violet']).optional(),
-        density: z.enum(['comfortable', 'compact']).optional(),
+        density: z.enum(['comfortable', 'compact', 'ultra']).optional(),
       })
       .optional(),
   })

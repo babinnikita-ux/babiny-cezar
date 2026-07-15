@@ -27,6 +27,7 @@ describe('normalize', () => {
       expect(normalizeDensity(raw)).toBe('comfortable')
     }
     expect(normalizeDensity('compact')).toBe('compact')
+    expect(normalizeDensity('ultra')).toBe('ultra')
   })
 
   it('normalizeAppearance survives any ui-state shape', () => {

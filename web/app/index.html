@@ -33,8 +33,9 @@
         try {
           if (localStorage.getItem('cez-accent') === 'violet')
             document.documentElement.dataset.accent = 'violet'
-          if (localStorage.getItem('cez-density') === 'compact')
-            document.documentElement.dataset.density = 'compact'
+          var density = localStorage.getItem('cez-density')
+          if (density === 'compact' || density === 'ultra')
+            document.documentElement.dataset.density = density
         } catch (e) {
           // Storage unavailable — lime/comfortable defaults already apply.
         }

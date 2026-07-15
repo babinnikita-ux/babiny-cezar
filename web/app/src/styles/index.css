@@ -203,6 +203,12 @@
   --spacing: 0.21875rem;
 }
 
+/* "Compact for real": one more notch — 3px/unit (~25% tighter than comfortable). Same one-token
+ * lever as compact, just smaller; the type scale still stays untouched. */
+:root[data-density='ultra'] {
+  --spacing: 0.1875rem;
+}
+
 /* ---------- tokens: radius + shadow ----------
  * These two scales are declared in a plain `@theme` (not `@theme inline`) because their token names
  * ARE Tailwind's own namespace keys — one declaration both defines `var(--radius-lg)` for hand-written

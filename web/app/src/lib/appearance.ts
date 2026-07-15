@@ -19,9 +19,10 @@ export const DENSITY_STORAGE_KEY = 'cez-density'
  *  `:root[data-accent="violet"]`). More accents = more token families there, nothing here. */
 export type Accent = 'lime' | 'violet'
 
-/** `compact` shrinks Tailwind v4's one spacing token (`--spacing`, 4px → 3.5px per unit), so
- *  every padding/gap/control height tightens ~12% while type stays full-size. */
-export type Density = 'comfortable' | 'compact'
+/** Density shrinks Tailwind v4's one spacing token (`--spacing`, default 4px/unit) so every
+ *  padding/gap/control height tightens while type stays full-size: `compact` → 3.5px (~12%),
+ *  `ultra` ("Compact for real") → 3px (~25%). See the `:root[data-density]` blocks in index.css. */
+export type Density = 'comfortable' | 'compact' | 'ultra'
 
 export const DEFAULT_ACCENT: Accent = 'lime'
 export const DEFAULT_DENSITY: Density = 'comfortable'
@@ -37,7 +38,7 @@ export function normalizeAccent(raw: unknown): Accent {
 }
 
 export function normalizeDensity(raw: unknown): Density {
-  return raw === 'comfortable' || raw === 'compact' ? raw : DEFAULT_DENSITY
+  return raw === 'comfortable' || raw === 'compact' || raw === 'ultra' ? raw : DEFAULT_DENSITY
 }
 
 /** The `appearance` key of a ui-state payload, defaults filled in. Defensive about shape —
