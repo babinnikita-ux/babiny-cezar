@@ -177,8 +177,10 @@ export function buildCreateRunBody(opts: {
   /** false → run in the repo working tree, no worktree (single runs only). Sent only when
    *  explicitly off; the default (isolated worktree) stays implicit. */
   worktree?: boolean
+  /** true → autonomous run (never pauses for the user). Sent only when on. */
+  autonomous?: boolean
 }): CreateRunInput {
-  const { task, source, model, runner, runnerCount, variants, images, worktree } = opts
+  const { task, source, model, runner, runnerCount, variants, images, worktree, autonomous } = opts
   return {
     task,
     ...(source.source === 'skill'
@@ -190,6 +192,7 @@ export function buildCreateRunBody(opts: {
     images: images.length > 0 ? [...images] : undefined,
     // Off only matters for a single run — variants always isolate.
     worktree: worktree === false && variants <= 1 ? false : undefined,
+    autonomous: autonomous === true ? true : undefined,
   }
 }
 

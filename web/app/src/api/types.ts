@@ -464,6 +464,8 @@ export interface UiState {
   /** The last worktree choice for a single-skill run — remembered so the checkbox re-opens where
    *  you left it. Absent → the default (isolated worktree). */
   lastWorktree?: boolean
+  /** The last autonomous choice — remembered like lastWorktree. Absent → off. */
+  lastAutonomous?: boolean
   runsView?: 'list' | 'table'
   /** Settings → Appearance (redesign R6): accent + density. Theme itself stays in
    *  localStorage (`cez-theme`) — it must pre-paint, and it is per-browser by design. */
@@ -496,6 +498,8 @@ export interface CreateRunInput {
   /** false → run in the repo working tree instead of an isolated worktree (read-only skills).
    *  Omit for the default. Ignored server-side when variants > 1. */
   worktree?: boolean
+  /** true → autonomous run: never parks at "waiting" for the user; auto-continues until done. */
+  autonomous?: boolean
 }
 
 export interface MessageInput {

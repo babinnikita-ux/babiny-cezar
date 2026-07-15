@@ -132,6 +132,10 @@ export function NewTaskRoute() {
   const worktreeToggleShown = hasGit && source.source === 'skill' && variants <= 1
   const worktreeOn = worktreeToggleShown ? (draft.worktree ?? uiState.data?.lastWorktree ?? true) : true
 
+  // Autonomous (#autonomous): the run never pauses for the user. Remembered (draft → last-used
+  // → default off). Offered for every single run (variants aren't interactive anyway).
+  const autonomousOn = draft.autonomous ?? uiState.data?.lastAutonomous ?? false
+
   // ---- plan mode (#383 + spec 008) ----------------------------------------------------------
   const [plan, setPlan] = useState<PendingPlan | null>(null)
   const [planning, setPlanning] = useState(false)
@@ -238,6 +242,7 @@ export function NewTaskRoute() {
         variants,
         images,
         worktree: worktreeOn,
+        autonomous: autonomousOn,
       }),
     )
     // Remember what was actually run so the next visit preselects it (legacy
@@ -247,6 +252,7 @@ export function NewTaskRoute() {
       lastTask: source,
       recentSources: pushRecentSource(recentSources, source),
       ...(worktreeToggleShown ? { lastWorktree: worktreeOn } : {}),
+      lastAutonomous: autonomousOn,
     })
       .then(() => queryClient.invalidateQueries({ queryKey: queryKeys.uiState }))
       .catch(() => {})
@@ -366,6 +372,7 @@ export function NewTaskRoute() {
               {worktreeToggleShown ? (
                 <WorktreeToggle on={worktreeOn} onChange={(on) => update({ worktree: on })} />
               ) : null}
+              <AutonomousToggle on={autonomousOn} onChange={(on) => update({ autonomous: on })} />
               {repo.data ? <BaseBranchPill repo={repo.data} /> : null}
             </>
           }
@@ -425,6 +432,33 @@ function WorktreeToggle({ on, onChange }: { on: boolean; onChange: (on: boolean)
         <SquareIcon aria-hidden="true" className="size-3 shrink-0 text-soft-foreground" />
       )}
       Worktree
+    </button>
+  )
+}
+
+/** Autonomous toggle (#autonomous): checked = the run never pauses for you, auto-continuing
+ *  until the agent is done. No "needs you" is ever raised. */
+function AutonomousToggle({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={on}
+      data-slot="autonomous-toggle"
+      onClick={() => onChange(!on)}
+      title={
+        on
+          ? 'Autonomous — the agent runs to completion without pausing for you'
+          : 'Runs interactively — check to let the agent finish without pausing for you'
+      }
+      className={cn(chipClass, on && 'border-primary/60 text-foreground')}
+    >
+      {on ? (
+        <CheckIcon aria-hidden="true" className="size-3 shrink-0 text-primary" />
+      ) : (
+        <SquareIcon aria-hidden="true" className="size-3 shrink-0 text-soft-foreground" />
+      )}
+      Autonomous
     </button>
   )
 }

@@ -22,6 +22,9 @@ export interface NewTaskDraft {
   /** Worktree opt-out (#worktree-toggle): false runs in the repo working tree. null → the
    *  remembered `lastWorktree` / default (isolated worktree). */
   worktree: boolean | null
+  /** Autonomous (#autonomous): true never pauses for the user. null → remembered
+   *  `lastAutonomous` / default (off). */
+  autonomous: boolean | null
 }
 
 const EMPTY: NewTaskDraft = {
@@ -32,6 +35,7 @@ const EMPTY: NewTaskDraft = {
   variants: 1,
   planFirst: false,
   worktree: null,
+  autonomous: null,
 }
 
 const STORAGE_KEY = 'cez-new-task-draft'
@@ -48,6 +52,7 @@ function normalize(raw: unknown): NewTaskDraft {
     variants: obj.variants === 2 || obj.variants === 3 ? obj.variants : 1,
     planFirst: obj.planFirst === true,
     worktree: typeof obj.worktree === 'boolean' ? obj.worktree : null,
+    autonomous: typeof obj.autonomous === 'boolean' ? obj.autonomous : null,
   }
 }
 

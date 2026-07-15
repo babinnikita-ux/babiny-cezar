@@ -369,8 +369,9 @@ describe('submit', () => {
         lastTask: { source: 'skill', ref: 'om-fix' },
         // The run also lands at the head of the recency list (picker sort)...
         recentSources: [{ source: 'skill', ref: 'om-fix' }],
-        // ...and a single skill run remembers its worktree choice (default on).
+        // ...and a single skill run remembers its worktree + autonomous choices.
         lastWorktree: true,
+        lastAutonomous: false,
       }),
     )
   })

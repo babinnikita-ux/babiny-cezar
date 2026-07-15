@@ -106,6 +106,9 @@ const startRunSchema = z
     // Composer worktree opt-out (#worktree-toggle): false runs in the repo
     // working tree (read-only skills). Ignored when variants > 1.
     worktree: z.boolean().optional(),
+    // Autonomous mode (#autonomous): the run never parks at `waiting` — it
+    // auto-continues until the agent signals done. No "needs you" is raised.
+    autonomous: z.boolean().optional(),
     // Per-run system-prompt override (R2 2.3) — programmatic callers only
     // (bookmarklets, scripts); deliberately NOT a composer-UI control. Wins
     // over the config.json default; whitespace-only degrades to absent.
@@ -175,6 +178,7 @@ const uiStateSchema = z
       .max(50)
       .optional(),
     lastWorktree: z.boolean().optional(),
+    lastAutonomous: z.boolean().optional(),
     // Runs area presentation (#348): the sidebar-list + detail pane, or the
     // full-width table ("task manager") view.
     runsView: z.enum(['list', 'table']).optional(),
@@ -503,6 +507,7 @@ export function createApp(deps: ServerDeps): Hono {
       images,
       systemPrompt: parsed.data.systemPrompt,
       worktree: parsed.data.worktree,
+      autonomous: parsed.data.autonomous,
     };
     const variants = parsed.data.variants ?? 1;
     if (variants > 1) {

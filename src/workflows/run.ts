@@ -57,7 +57,16 @@ interface ActiveRun {
   autosaveTimer?: NodeJS.Timeout;
   /** Running counter for persisted agent screenshots (`screenshot-<n>.png`). */
   imageSeq?: number;
+  /** Autonomous mode (#autonomous): never park at `waiting` — auto-nudge the agent to keep
+   *  going until it signals done or the safety cap is hit. */
+  autonomous?: boolean;
+  autoContinues?: number;
 }
+
+/** Safety cap on autonomous auto-continues per run — stops a stuck agent from nudging forever. */
+const MAX_AUTO_CONTINUES = 40;
+const AUTONOMOUS_NUDGE =
+  'Continue working autonomously until the task is fully complete. Do not ask me for confirmation or clarification — make reasonable assumptions and proceed. When everything is done, end the session with your done signal.';
 
 export interface StartRunInput {
   task: string;
@@ -76,6 +85,10 @@ export interface StartRunInput {
    *  don't need a branch. Undefined/`true` keeps the default per-task worktree.
    *  Ignored for variants (they always isolate). */
   worktree?: boolean;
+  /** Autonomous mode (#autonomous): the run never parks at `waiting` for the
+   *  user — turn-ends auto-continue until the agent signals done or the safety
+   *  cap is hit. No "needs you" is ever raised. */
+  autonomous?: boolean;
 }
 
 /**
@@ -532,11 +545,29 @@ export class RunManager {
           return;
         }
         if (sessionOpen) {
-          this.store.updateRun(runId, { status: 'waiting' });
-          this.store.updateStep(runId, stepId, { status: 'waiting' });
-          this.waiting.add(runId);
-          this.armIdleTimer(runId, state);
-          void this.pump();
+          // Autonomous (#autonomous): never hand the ball back to the user. Nudge the agent to
+          // keep going (bounded by MAX_AUTO_CONTINUES) instead of parking at `waiting`.
+          const autoContinued =
+            state.autonomous &&
+            (state.autoContinues ?? 0) < MAX_AUTO_CONTINUES &&
+            !state.cancelled &&
+            (() => {
+              const sent = state.session?.sendMessage([{ type: 'text', text: AUTONOMOUS_NUDGE }]);
+              if (!sent) return false;
+              state.autoContinues = (state.autoContinues ?? 0) + 1;
+              this.store.appendEvent(runId, {
+                type: 'note',
+                message: `autonomous — continuing without pausing (${state.autoContinues}/${MAX_AUTO_CONTINUES})`,
+              });
+              return true;
+            })();
+          if (!autoContinued) {
+            this.store.updateRun(runId, { status: 'waiting' });
+            this.store.updateStep(runId, stepId, { status: 'waiting' });
+            this.waiting.add(runId);
+            this.armIdleTimer(runId, state);
+            void this.pump();
+          }
         }
         appendHandoffHeartbeat(this.dataDir, runId, `turn complete — status=${sessionOpen ? 'waiting' : 'running'}`);
       }
@@ -606,7 +637,13 @@ export class RunManager {
   // ---- execution -----------------------------------------------------------
 
   private async execute(runId: string, workflow: WorkflowDef, input: StartRunInput): Promise<void> {
-    const state: ActiveRun = { cancelled: false, interrupt: () => undefined, cwd: this.repoRoot };
+    const state: ActiveRun = {
+      cancelled: false,
+      interrupt: () => undefined,
+      cwd: this.repoRoot,
+      autonomous: input.autonomous === true,
+      autoContinues: 0,
+    };
     this.active.set(runId, state);
     this.starting.delete(runId);
     const emit = (event: { type: string; stepId?: string; [k: string]: unknown }) =>
