@@ -205,9 +205,9 @@ describe('refresh (#384: selection and scroll survive)', () => {
 })
 
 describe('the bookmarklet panel (spec 011)', () => {
-  it('generates the protected /new links from the launch key; auto arms per-skill links only', async () => {
+  it('is a first-class Settings page that generates protected links and auto-arms per-skill links only', async () => {
     serve()
-    renderAt('/settings/skills?skill=__bm')
+    renderAt('/settings/bookmarklets')
 
     await waitFor(() => expect(document.querySelector('[data-slot="bookmarklet-panel"]')).not.toBeNull())
     // The key landed in the links (the panel is its one legitimate DOM use).

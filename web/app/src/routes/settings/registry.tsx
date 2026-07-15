@@ -1,5 +1,6 @@
 import {
   BellIcon,
+  BookmarkIcon,
   BotIcon,
   GaugeIcon,
   KeyboardIcon,
@@ -12,6 +13,7 @@ import type { ComponentType, SVGProps } from 'react'
 import { CenteredState } from '@/components/centered-state'
 import { AgentsSection } from './agents-section'
 import { AppearanceSection } from './appearance'
+import { BookmarkletsSection } from './bookmarklets-section'
 import { NotificationsSection } from './notifications-section'
 import { ResourcesSection } from './resources-section'
 import { SkillsSection } from './skills-section'
@@ -28,6 +30,7 @@ import { SkillsSection } from './skills-section'
 
 export type SettingsSectionId =
   | 'skills'
+  | 'bookmarklets'
   | 'appearance'
   | 'agents'
   | 'resources'
@@ -68,6 +71,13 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     description: 'Markdown playbooks agents can follow.',
     icon: SparklesIcon,
     component: SkillsSection,
+  },
+  {
+    id: 'bookmarklets',
+    title: 'Bookmarklets',
+    description: 'Launch skills from a GitHub PR or issue.',
+    icon: BookmarkIcon,
+    component: BookmarkletsSection,
   },
   {
     id: 'appearance',
