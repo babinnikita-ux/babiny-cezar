@@ -110,17 +110,32 @@ export async function autosaveCommit(dir: string): Promise<boolean> {
   const status = await git(dir, ['status', '--porcelain']);
   if (!status.ok || !status.stdout.trim()) return false;
   await git(dir, ['add', '-A']);
+  // Commit as the CURRENT git user, so the branch's commits (and any PR opened from it) are
+  // attributed to the real author and pass CLA / attribution checks. The old hardcoded
+  // `cezar <cezar@local>` identity made every autosave look like a non-GitHub user. Fall back to
+  // that identity ONLY when the machine has no git identity configured — otherwise `git commit`
+  // would fail and the autosave (the run's recovery point) would be lost.
+  const identityArgs = (await gitHasIdentity(dir))
+    ? []
+    : ['-c', 'user.name=cezar', '-c', 'user.email=cezar@local'];
   const commit = await git(dir, [
-    '-c',
-    'user.name=cezar',
-    '-c',
-    'user.email=cezar@local',
+    ...identityArgs,
     'commit',
     '--no-verify',
     '-m',
     'cezar autosave',
   ]);
   return commit.ok;
+}
+
+/** Does this repo/worktree resolve a git author identity (name + email)? Ambient config wins so
+ *  autosave commits carry the user's own identity — see autosaveCommit. */
+async function gitHasIdentity(dir: string): Promise<boolean> {
+  const [name, email] = await Promise.all([
+    git(dir, ['config', 'user.name']),
+    git(dir, ['config', 'user.email']),
+  ]);
+  return name.ok && name.stdout.trim() !== '' && email.ok && email.stdout.trim() !== '';
 }
 
 /**
