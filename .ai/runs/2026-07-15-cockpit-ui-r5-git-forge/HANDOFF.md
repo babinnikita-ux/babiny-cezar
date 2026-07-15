@@ -1,15 +1,15 @@
-# Handoff — R5
+# Handoff — R5 (COMPLETE)
 
-## State
+## State (final)
 
-Steps 1.1–1.5 done (`e1fc7bd`..`57d9fdc`), checkpoint 1 green (typecheck · build · 1628/1628 unit · 109/109 e2e). Next: **Step 1.6** (Files tab — `task-files.tsx` is a stub panel waiting to be filled; the server API `GET /api/runs/:id/files` landed in 1.2), then 1.7 (Repo view rebuild).
+All 7 Steps done (`e1fc7bd`..`84e6837`), pushed. Final gate green: typecheck · build · 1673/1673 unit · 118/118 e2e. See `final-gate-checks.md`.
 
-## Anchors
+## Next concrete action
 
-- Server: `src/server/forge/` (driver seam), `src/server/git-changes.ts` (all git plumbing — helpers take `(dir, base)`), `src/server/capabilities.ts`.
-- Web: `web/app/src/components/diff/` (facade — consumers never import an engine), `web/app/src/lib/git-actions.ts` (pure policy), `web/app/src/routes/task-git/` (Changes tab + Files stub).
-- Health now carries `forge` + `capabilities.localHandoff`; UI mirrors in `api/types.ts` with drift guards in `src/server/api-types.test.ts`.
+**Phase R6 (Views + Settings)** as a new run folder, same branch/PR #396 — spec steps 19–20: GitHub tab (cmdk dropdowns for workflow/skills #385, project-first ordering #377, forge gating), Inbox restyle; Workflows builder on dnd-kit; Skills under Settings (+ ordering, bookmarklets); Settings shell (registry: skills/appearance/agents) + notifications toggle.
 
-## Rules (unchanged)
+## Carry-forwards
 
-One Step = one commit; flip the Tasks row in the same commit, Commit stays `pending` (dispatcher backfills). Tests mandatory. Agent-browser seam only for e2e. No raw hex outside styles/index.css; no `dark:` variant. Never --no-verify/force-push.
+- Reuse seams extracted in 1.7: `components/tab-link.tsx`, `routes/task-git/diff-controls.tsx`, `lib/use-desktop.ts`.
+- Forge gating pattern: `health.forge.available` gates both UI rows and the `/api/github` fetch.
+- All prior gotchas hold (R1/R4 handoffs; SSE pagehide discipline; agent-browser seam).
