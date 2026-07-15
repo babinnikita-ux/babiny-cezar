@@ -296,6 +296,18 @@ export interface RepoCommitPayload {
   stat: { adds: number; dels: number; files: number }
 }
 
+/** A commit a run made on its worktree branch (`GET /api/runs/:id/commits`). */
+export interface RunCommit {
+  sha: string
+  subject: string
+  author: string
+  when: string
+}
+
+export interface RunCommitsResponse {
+  commits: RunCommit[]
+}
+
 /** `POST /api/repo/branch` — switch to an existing branch or create one (from `from` or HEAD)
  *  and switch. Every predictable git failure (invalid name, unknown `from`, dirty-tree
  *  checkout conflict) is a 409 whose ApiError speaks git's words. */

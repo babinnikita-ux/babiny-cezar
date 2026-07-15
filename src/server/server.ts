@@ -34,6 +34,7 @@ import { getBranches, getCommit, getDiff, getLog, getRepoInfo, getStatus } from 
 import {
   collectChanges,
   collectCommitChanges,
+  collectRunCommits,
   commitAll,
   createOrSwitchBranch,
   imageMimeType,
@@ -805,6 +806,28 @@ export function createApp(deps: ServerDeps): Hono {
     const result = await collectChanges(worktree, run.baseBranch ?? 'HEAD');
     if (!result.ok) return c.json({ error: result.error }, 409);
     return c.json(result.changes);
+  });
+
+  // The run's own commits (<base>..HEAD on the worktree branch) — the Commits tab.
+  app.get('/api/runs/:id/commits', async (c) => {
+    const run = store.getRun(c.req.param('id'));
+    if (!run) return c.json({ error: 'not found' }, 404);
+    const worktree = worktreeOf(run);
+    if (!worktree) return c.json({ error: NO_WORKTREE }, 409);
+    const result = await collectRunCommits(worktree, run.baseBranch ?? 'HEAD');
+    if (!result.ok) return c.json({ error: result.error }, 409);
+    return c.json({ commits: result.commits });
+  });
+
+  // One of the run's commits, structured like the Changes tab (reuses collectCommitChanges).
+  app.get('/api/runs/:id/commit/:sha', async (c) => {
+    const run = store.getRun(c.req.param('id'));
+    if (!run) return c.json({ error: 'not found' }, 404);
+    const worktree = worktreeOf(run);
+    if (!worktree) return c.json({ error: NO_WORKTREE }, 409);
+    const result = await collectCommitChanges(worktree, c.req.param('sha'));
+    if (!result.ok) return c.json({ error: result.error }, 409);
+    return c.json(result.commit);
   });
 
   // Files tab: directory listing (path omitted or a dir) or file content

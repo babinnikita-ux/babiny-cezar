@@ -67,7 +67,7 @@ import { useFinishRun } from './use-finish-run'
  */
 /** Which run-detail tab this header instance sits above — drives the active underline.
  *  A prop rather than a route match so the header stays testable with a bare render. */
-export type RunTab = 'session' | 'changes' | 'files'
+export type RunTab = 'session' | 'changes' | 'commits' | 'files'
 
 export function RunHeader({
   run,
@@ -123,6 +123,9 @@ export function RunHeader({
           </TabLink>
           <TabLink to={`/tasks/${run.id}/changes`} active={tab === 'changes'}>
             Changes
+          </TabLink>
+          <TabLink to={`/tasks/${run.id}/commits`} active={tab === 'commits'}>
+            Commits
           </TabLink>
           <TabLink to={`/tasks/${run.id}/files`} active={tab === 'files'}>
             Files

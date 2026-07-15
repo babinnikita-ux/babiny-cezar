@@ -120,7 +120,7 @@ const toolbarAction = (id: string) =>
 // ---- the route -------------------------------------------------------------------------------
 
 describe('the Changes tab route', () => {
-  it('renders the run header with the Changes tab active and all three tabs deep-linkable', async () => {
+  it('renders the run header with the Changes tab active and all tabs deep-linkable', async () => {
     stubFetch()
     renderChangesRoute()
     await waitFor(() => expect(document.querySelector('[data-slot="run-header"]')).not.toBeNull())
@@ -133,6 +133,7 @@ describe('the Changes tab route', () => {
     expect(tabs).toEqual([
       { text: 'Session', href: '/tasks/r1', current: null },
       { text: 'Changes', href: '/tasks/r1/changes', current: 'page' },
+      { text: 'Commits', href: '/tasks/r1/commits', current: null },
       { text: 'Files', href: '/tasks/r1/files', current: null },
     ])
   })

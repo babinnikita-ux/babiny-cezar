@@ -36,6 +36,9 @@ const TaskChangesRoute = lazy(() =>
 const TaskFilesRoute = lazy(() =>
   import('./routes/task-git/task-files').then((m) => ({ default: m.TaskFilesRoute })),
 )
+const TaskCommitsRoute = lazy(() =>
+  import('./routes/task-git/task-commits').then((m) => ({ default: m.TaskCommitsRoute })),
+)
 
 /** Lazy because the repo view renders through the `<Diff>` facade and the Shiki singleton —
  *  the same heavy chunk the task git tabs ride; the home screen must not pay for it. */
@@ -91,6 +94,22 @@ export function AppRoutes() {
         element={
           <Suspense fallback={<GitTabLoading tab="files" />}>
             <TaskFilesRoute />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/tasks/:id/commits"
+        element={
+          <Suspense fallback={<GitTabLoading tab="changes" />}>
+            <TaskCommitsRoute />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/tasks/:id/commits/:sha"
+        element={
+          <Suspense fallback={<GitTabLoading tab="changes" />}>
+            <TaskCommitsRoute />
           </Suspense>
         }
       />

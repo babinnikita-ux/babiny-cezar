@@ -9,6 +9,7 @@ import type { RunManager } from '../workflows/run.js';
 import {
   FILE_CONTENT_CAP,
   collectChanges,
+  collectRunCommits,
   commitAll,
   imageMimeType,
   pushCurrentBranch,
@@ -108,6 +109,47 @@ describe('collectChanges — structured diff vs base', () => {
     if (!result.ok) return;
     expect(result.changes.files[0]?.patch.length).toBeLessThan(300);
     expect(result.changes.files[0]?.patch).toContain('… (patch truncated)');
+  });
+});
+
+describe('collectRunCommits — the run branch commits since base', () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'cez-runcommits-'));
+    initRepo(dir);
+  });
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('lists only the branch commits past the merge-base, newest first', async () => {
+    writeFileSync(join(dir, 'a.txt'), 'a\n');
+    g(dir, 'add', '-A');
+    g(dir, 'commit', '-m', 'base');
+    g(dir, 'checkout', '-b', 'task');
+    writeFileSync(join(dir, 'b.txt'), 'b\n');
+    g(dir, 'add', '-A');
+    g(dir, 'commit', '-m', 'first task commit');
+    writeFileSync(join(dir, 'c.txt'), 'c\n');
+    g(dir, 'add', '-A');
+    g(dir, 'commit', '-m', 'second task commit');
+
+    const result = await collectRunCommits(dir, 'main');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.commits.map((commit) => commit.subject)).toEqual([
+      'second task commit',
+      'first task commit',
+    ]);
+    // The base commit is excluded, and every commit carries a full sha + author.
+    expect(result.commits.every((c) => /^[0-9a-f]{40}$/.test(c.sha) && c.author === 'cezar-test')).toBe(true);
+  });
+
+  it('is empty (not an error) when the branch has no commits past base', async () => {
+    writeFileSync(join(dir, 'a.txt'), 'a\n');
+    g(dir, 'add', '-A');
+    g(dir, 'commit', '-m', 'base');
+    g(dir, 'checkout', '-b', 'task');
+    const result = await collectRunCommits(dir, 'main');
+    expect(result).toEqual({ ok: true, commits: [] });
   });
 });
 

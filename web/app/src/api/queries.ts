@@ -8,6 +8,8 @@ import {
   getLaunchKey,
   getOpenTargets,
   getRepo,
+  getRunCommit,
+  getRunCommits,
   getRepoChanges,
   getRepoCommit,
   getRun,
@@ -44,6 +46,8 @@ export const queryKeys = {
     changes: (id: string) => ['runs', 'changes', id] as const,
     file: (id: string, path: string) => ['runs', 'files', id, path] as const,
     handoff: (id: string) => ['runs', 'handoff', id] as const,
+    commits: (id: string) => ['runs', 'commits', id] as const,
+    commit: (id: string, sha: string) => ['runs', 'commit', id, sha] as const,
   },
   groups: {
     detail: (groupId: string) => ['groups', groupId] as const,
@@ -145,6 +149,28 @@ export function useGroup(groupId: string | undefined) {
     queryKey: queryKeys.groups.detail(groupId ?? ''),
     queryFn: ({ signal }) => getGroup(groupId as string, { signal }),
     enabled: Boolean(groupId),
+  })
+}
+
+/** A run's commit list (Commits tab). Polls while active so new commits appear as the agent
+ *  autosaves. A 409 ("no worktree") is a real answer retries can't change. */
+export function useRunCommits(id: string | undefined, live = false) {
+  return useQuery({
+    queryKey: queryKeys.runs.commits(id ?? ''),
+    queryFn: ({ signal }) => getRunCommits(id as string, { signal }),
+    enabled: Boolean(id),
+    retry: false,
+    refetchInterval: live ? 5000 : false,
+  })
+}
+
+/** One of a run's commits, structured like the Changes tab. */
+export function useRunCommit(id: string | undefined, sha: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.runs.commit(id ?? '', sha ?? ''),
+    queryFn: ({ signal }) => getRunCommit(id as string, sha as string, { signal }),
+    enabled: Boolean(id) && Boolean(sha),
+    retry: false,
   })
 }
 

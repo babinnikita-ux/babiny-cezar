@@ -224,6 +224,38 @@ function assemblePayload(
   };
 }
 
+// ---- run commit log ---------------------------------------------------------
+
+export interface RunCommit {
+  sha: string;
+  subject: string;
+  author: string;
+  /** Relative time ("3 hours ago"), git's `%cr`. */
+  when: string;
+}
+
+export type RunCommitsResult = { ok: true; commits: RunCommit[] } | { ok: false; error: string };
+
+/**
+ * The commits a run made on its worktree branch: `<merge-base>..HEAD`, newest first — the same
+ * range `collectChanges` diffs, so the commit list and the aggregate Changes tab always agree on
+ * what "this task's work" means. Empty (not an error) when the branch has no commits past base.
+ */
+export async function collectRunCommits(dir: string, baseBranch: string): Promise<RunCommitsResult> {
+  const mergeBase = await git(dir, ['merge-base', baseBranch, 'HEAD']);
+  const base = mergeBase.ok && mergeBase.stdout.trim() ? mergeBase.stdout.trim() : baseBranch;
+  const log = await git(dir, ['log', '--pretty=format:%H%x1f%s%x1f%an%x1f%cr', `${base}..HEAD`]);
+  if (!log.ok) return { ok: false, error: gitReason(log, 'git log failed') };
+  const commits = log.stdout
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [sha = '', subject = '', author = '', when = ''] = line.split('\x1f');
+      return { sha, subject, author, when };
+    });
+  return { ok: true, commits };
+}
+
 // ---- commit diffs -----------------------------------------------------------
 
 /** `GET /api/repo/commit/:sha?structured=1` — one commit's metadata plus the same

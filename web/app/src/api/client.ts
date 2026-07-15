@@ -28,6 +28,7 @@ import type {
   RemoveTodoResponse,
   RepoBranchResponse,
   RepoCommitPayload,
+  RunCommitsResponse,
   RepoResponse,
   RunRecord,
   WorktreeEntry,
@@ -231,6 +232,16 @@ export function getRepoChanges(opts?: ReadOptions): Promise<ChangesPayload> {
  *  additive, the text-blob answer stays for the legacy UI. 409 + reason for unknown shas. */
 export function getRepoCommit(sha: string, opts?: ReadOptions): Promise<RepoCommitPayload> {
   return get<RepoCommitPayload>(`/api/repo/commit/${encodeURIComponent(sha)}?structured=1`, opts)
+}
+
+/** A run's own commits (`<base>..HEAD`, newest first) for the task's Commits tab. */
+export function getRunCommits(id: string, opts?: ReadOptions): Promise<RunCommitsResponse> {
+  return get<RunCommitsResponse>(runPath(id, '/commits'), opts)
+}
+
+/** One of a run's commits, structured like the Changes tab. 409 for unknown shas. */
+export function getRunCommit(id: string, sha: string, opts?: ReadOptions): Promise<RepoCommitPayload> {
+  return get<RepoCommitPayload>(runPath(id, `/commit/${encodeURIComponent(sha)}`), opts)
 }
 
 /** Issues + PRs via the logged-in `gh`. Degrades to `{ available: false, reason }` server-side —
