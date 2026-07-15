@@ -71,18 +71,30 @@ describe('GET /api/health — forge + capabilities', () => {
   });
 
   // getRepoInfo needs a resolvable HEAD — an empty commit is enough.
-  const initRepo = (remote: string) => {
+  const initRepo = (remote: string, remoteName = 'origin') => {
     execFileSync('git', ['init', '-q'], { cwd: repoRoot });
     execFileSync(
       'git',
       ['-c', 'user.email=t@test', '-c', 'user.name=t', 'commit', '--allow-empty', '-q', '-m', 'init'],
       { cwd: repoRoot },
     );
-    execFileSync('git', ['remote', 'add', 'origin', remote], { cwd: repoRoot });
+    execFileSync('git', ['remote', 'add', remoteName, remote], { cwd: repoRoot });
   };
 
   it('reports the GitHub forge for a repo with a github.com remote', async () => {
     initRepo('https://github.com/acme/demo.git');
+    const body = await health();
+    expect(body.forge).toEqual({ kind: 'github', available: true });
+  });
+
+  it('reports the GitHub forge for an SSH (scp-like) origin remote', async () => {
+    initRepo('git@github.com:acme/demo.git');
+    const body = await health();
+    expect(body.forge).toEqual({ kind: 'github', available: true });
+  });
+
+  it('reports the GitHub forge when the only remote is not named origin', async () => {
+    initRepo('git@github.com:acme/demo.git', 'github');
     const body = await health();
     expect(body.forge).toEqual({ kind: 'github', available: true });
   });

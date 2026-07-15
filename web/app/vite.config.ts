@@ -7,8 +7,11 @@ import { defineConfig } from 'vite'
 const appDir = dirname(fileURLToPath(import.meta.url))
 const webDir = resolve(appDir, '..')
 
-// The cockpit server (src/server/server.ts) owns /api on port 4321 and serves the built app from web/dist.
-const API_TARGET = 'http://127.0.0.1:4321'
+// The cockpit server (src/server/server.ts) owns /api and serves the built app from web/dist.
+// `npm run dev` (scripts/dev.mjs) picks a free port and pins both processes to it via
+// CEZ_API_PORT, so a stray cockpit already sitting on 4321 (another repo, an older install)
+// can never end up behind the proxy. Standalone `npm run dev:web` keeps the 4321 default.
+const API_TARGET = `http://127.0.0.1:${process.env.CEZ_API_PORT ?? 4321}`
 
 export default defineConfig({
   root: appDir,

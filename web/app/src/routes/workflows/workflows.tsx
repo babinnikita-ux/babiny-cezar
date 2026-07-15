@@ -48,7 +48,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
-import { isProjectSkill } from '@/lib/skills'
+import { isProjectSkill, orderSkills } from '@/lib/skills'
 import { cn } from '@/lib/utils'
 import {
   WB_MAX_STEPS,
@@ -737,7 +737,8 @@ function Palette({
     )
   }
   const needle = query.trim().toLowerCase()
-  const shown = skills.filter(
+  // Project skills first (the #377 ordering rule) — same as every other skill list.
+  const shown = orderSkills(skills).filter(
     (skill) =>
       needle === '' ||
       skill.name.toLowerCase().includes(needle) ||

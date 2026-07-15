@@ -488,13 +488,12 @@ function SourcePill({
             <CommandInput placeholder="search skills & workflows…" />
             <CommandList data-slot="source-menu" className="max-h-72">
               <CommandEmpty>Nothing matches.</CommandEmpty>
+              {/* Project skills lead, Global trails everything — the closer a skill lives
+                  to the repo, the more likely it's the one being picked. */}
               {project.length > 0 ? (
                 <CommandGroup heading="Project skills">
                   {project.map((skill) => skillItem(skill, true))}
                 </CommandGroup>
-              ) : null}
-              {global.length > 0 ? (
-                <CommandGroup heading="Global">{global.map((skill) => skillItem(skill, false))}</CommandGroup>
               ) : null}
               {workflows.length > 0 ? (
                 <CommandGroup heading="Workflows">
@@ -523,6 +522,9 @@ function SourcePill({
                     )
                   })}
                 </CommandGroup>
+              ) : null}
+              {global.length > 0 ? (
+                <CommandGroup heading="Global">{global.map((skill) => skillItem(skill, false))}</CommandGroup>
               ) : null}
             </CommandList>
           </Command>

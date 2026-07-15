@@ -333,7 +333,7 @@ describe('picker data flows', () => {
     await pillReady('om-fix')
   })
 
-  it('the source menu groups: Project skills (bold), Global, Workflows', async () => {
+  it('the source menu groups: Project skills (bold), Workflows, Global last', async () => {
     serve()
     renderNewTask()
     await pillReady()
@@ -342,10 +342,10 @@ describe('picker data flows', () => {
 
     const options = [...document.querySelectorAll('[data-slot="source-option"]')]
     expect(options.map((o) => o.getAttribute('data-source-ref'))).toEqual([
-      'om-fix', 'deploy', 'quick-task', 'fix-and-verify',
+      'om-fix', 'quick-task', 'fix-and-verify', 'deploy',
     ])
     const headings = [...document.querySelectorAll('[cmdk-group-heading]')].map((h) => h.textContent)
-    expect(headings).toEqual(['Project skills', 'Global', 'Workflows'])
+    expect(headings).toEqual(['Project skills', 'Workflows', 'Global'])
   })
 })
 

@@ -346,7 +346,9 @@ git-ignored automatically; your workflows and skills stay committable.
 
 ```bash
 npm install
-npm run dev          # tsx src/index.ts — the server, live-reloaded
+npm run dev          # server (API :4321) + Vite dev server, opens the cockpit in the browser
+npm run dev:server   # tsx src/index.ts — the API server alone
+npm run dev:web      # Vite dev server alone (proxies /api to :4321)
 npm run build        # tsc → dist/, vite build → web/dist/, then the pack gate
 npm run typecheck    # server + web (tsc --noEmit)
 npm test             # vitest — server + cockpit unit suites
