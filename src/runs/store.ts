@@ -105,6 +105,11 @@ const MAX_RUNS_KEPT = 300;
 const MAX_ARCHIVED_KEPT = 500;
 
 const PR_URL_RE = /https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/\d+/;
+// The transcript auto-link is convenience only (the cockpit's own `gh pr create` path sets the
+// URL authoritatively). Adopt a PR URL ONLY when the agent actually CREATED one — a task that
+// reviews or merely references an existing PR must not get mislabeled with its number (#fake-pr).
+const CREATED_PR_RE =
+  /\b(?:gh\s+pr\s+create|pull\s*request\s+created|created\s+(?:a\s+)?(?:draft\s+)?(?:pr|pull\s*request)|opened\s+(?:a\s+)?(?:draft\s+)?pull\s*request)\b/i;
 
 /**
  * File-backed run store: `runs.json` index (atomic tmp+rename writes, the
@@ -276,7 +281,7 @@ export class RunStore extends EventEmitter {
         .filter((s): s is string => typeof s === 'string')
         .join(' ');
       const match = PR_URL_RE.exec(haystack);
-      if (match) this.updateRun(runId, { pullRequestUrl: match[0] });
+      if (match && CREATED_PR_RE.test(haystack)) this.updateRun(runId, { pullRequestUrl: match[0] });
     }
     return full;
   }

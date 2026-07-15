@@ -68,3 +68,46 @@ describe('RunStore — titleSummary + diffStat (#389)', () => {
     expect(seen.at(-1)?.titleSummary).toBe('A real summary of the turn');
   });
 });
+
+describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
+  let dataDir: string;
+  beforeEach(() => {
+    dataDir = mkdtempSync(join(tmpdir(), 'cez-store-'));
+  });
+  afterEach(() => {
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  const freshRun = () => {
+    const store = RunStore.open(dataDir);
+    const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
+    return { store, run };
+  };
+
+  it('does NOT adopt a PR URL the agent merely reviewed/referenced', () => {
+    const { store, run } = freshRun();
+    store.appendEvent(run.id, {
+      type: 'result',
+      result: 'Reviewed https://github.com/open-mercato/cezar/pull/1 — looks good, no changes needed.',
+    } as never);
+    expect(store.getRun(run.id)?.pullRequestUrl).toBeUndefined();
+  });
+
+  it('adopts a PR URL when the agent actually created one', () => {
+    const { store, run } = freshRun();
+    store.appendEvent(run.id, {
+      type: 'result',
+      result: 'Opened a draft pull request: https://github.com/open-mercato/cezar/pull/42',
+    } as never);
+    expect(store.getRun(run.id)?.pullRequestUrl).toBe('https://github.com/open-mercato/cezar/pull/42');
+  });
+
+  it('recognizes the raw `gh pr create` output form', () => {
+    const { store, run } = freshRun();
+    store.appendEvent(run.id, {
+      type: 'result',
+      result: '$ gh pr create --draft\nhttps://github.com/open-mercato/cezar/pull/7',
+    } as never);
+    expect(store.getRun(run.id)?.pullRequestUrl).toBe('https://github.com/open-mercato/cezar/pull/7');
+  });
+});
