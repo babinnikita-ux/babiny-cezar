@@ -11,7 +11,7 @@
 
 | Phase | Step | Title | Status | Commit |
 |-------|------|-------|--------|--------|
-| 1 | 1.1 | GitHub tab: issues/PRs + detail, cmdk workflow/skill dropdowns (#385), forge gating | todo | — |
+| 1 | 1.1 | GitHub tab: issues/PRs + detail, cmdk workflow/skill dropdowns (#385), forge gating | done | pending |
 | 1 | 1.2 | Inbox restyle: cards, status dots, Run/Dismiss, CenteredState empty (badge logic unchanged) | todo | — |
 | 1 | 1.3 | Settings shell (registry-driven) + Appearance section (theme/accent/density, ui-state.json additive) | todo | — |
 | 1 | 1.4 | Skills under Settings: catalog + detail + refresh + bookmarklets, project-first (#377), stable scroll (#384) | todo | — |

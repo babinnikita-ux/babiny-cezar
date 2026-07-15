@@ -1,7 +1,5 @@
 import {
   BotIcon,
-  CircleDotIcon,
-  GitPullRequestIcon,
   InboxIcon,
   PaletteIcon,
   SettingsIcon,
@@ -11,8 +9,8 @@ import {
 import { Suspense, lazy } from 'react'
 import { Route, Routes } from 'react-router'
 
-import { GithubIcon } from './components/icons'
 import { CompareLoading } from './routes/compare-loading'
+import { GithubLoading } from './routes/github/github-loading'
 import { NewTaskRoute } from './routes/new-task'
 import { NotFoundRoute } from './routes/not-found'
 import { Placeholder } from './routes/placeholder'
@@ -48,6 +46,12 @@ const TaskFilesRoute = lazy(() =>
  *  the same heavy chunk the task git tabs ride; the home screen must not pay for it. */
 const RepoGitRoute = lazy(() =>
   import('./routes/repo-git/repo-git').then((m) => ({ default: m.RepoGitRoute })),
+)
+
+/** Lazy because the GitHub detail pane renders issue/PR bodies through the same markdown
+ *  stack the thread carries — thread-chunk weight the home screen must not pay. */
+const GithubRoute = lazy(() =>
+  import('./routes/github/github').then((m) => ({ default: m.GithubRoute })),
 )
 
 /** The route map from the spec's "Routing — every surface is a URL" section.
@@ -133,9 +137,41 @@ export function AppRoutes() {
           </Suspense>
         }
       />
-      <Route path="/github" element={<Placeholder route="github" title="GitHub" icon={<GithubIcon />} />} />
-      <Route path="/github/issues/:n" element={<Placeholder route="github-issue" title="Issue" icon={<CircleDotIcon />} />} />
-      <Route path="/github/prs/:n" element={<Placeholder route="github-pr" title="Pull request" icon={<GitPullRequestIcon />} />} />
+      {/* The GitHub tab (R6 Step 1.1): issues and PRs are separate list URLs, each item a
+          deep link. The nav item is forge-gated in the shell; the routes stay reachable so a
+          pasted link renders the honest unavailable explainer instead of a 404. */}
+      <Route
+        path="/github"
+        element={
+          <Suspense fallback={<GithubLoading />}>
+            <GithubRoute view="issues" />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/github/prs"
+        element={
+          <Suspense fallback={<GithubLoading />}>
+            <GithubRoute view="prs" />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/github/issues/:n"
+        element={
+          <Suspense fallback={<GithubLoading />}>
+            <GithubRoute view="issues" />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/github/prs/:n"
+        element={
+          <Suspense fallback={<GithubLoading />}>
+            <GithubRoute view="prs" />
+          </Suspense>
+        }
+      />
 
       <Route path="/inbox" element={<Placeholder route="inbox" title="Inbox" icon={<InboxIcon />} />} />
       <Route path="/workflows" element={<Placeholder route="workflows" title="Workflows" icon={<WorkflowIcon />} />} />

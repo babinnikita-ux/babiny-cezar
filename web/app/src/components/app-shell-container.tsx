@@ -54,6 +54,10 @@ export function AppShellContainer({ children }: { children: ReactNode }) {
         // `?? null` rather than `?? 0`: no badge while the inbox is unknown, and no badge when it
         // is known to be empty — AppShell renders neither for a falsy count.
         inboxCount={todos.data?.length ?? null}
+        // Hidden until health confirms the forge driver (R6 Step 1.1) — same honesty rule as
+        // the chips: the nav must not claim a GitHub tab it cannot back. The Tools menu's
+        // forge note says why it is absent.
+        forgeAvailable={health.data?.forge?.available === true}
         taskQuickList={<TaskQuickListContainer />}
         toolsMenu={<ToolsMenu health={health.data} />}
       >

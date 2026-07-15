@@ -221,9 +221,14 @@ export function useSendMessage(id: string) {
   })
 }
 
-export function useGithub(params: { limit?: number } = {}) {
+/** Issues + PRs through the forge (`/api/github`). `enabled` exists for the GitHub tab's
+ *  legacy two-shot load: the background everything-open fetch (limit 1000) waits until the
+ *  fast default batch has proven the forge reachable — no point paying the big `gh` call
+ *  twice just to learn "unavailable" twice. */
+export function useGithub(params: { limit?: number } = {}, enabled = true) {
   return useQuery({
     queryKey: queryKeys.github(params),
     queryFn: ({ signal }) => getGithub({ limit: params.limit }, { signal }),
+    enabled,
   })
 }

@@ -4,7 +4,7 @@ import { MemoryRouter, useLocation } from 'react-router'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
-import type { RunRecord, Skill } from '@/api/types'
+import type { HealthResponse, RunRecord, Skill } from '@/api/types'
 import { CommandPalette, orderRuns } from '@/components/command-palette'
 import { orderSkills } from '@/lib/skills'
 import { ThemeProvider } from '@/components/theme-provider'
@@ -61,6 +61,19 @@ function skill(overrides: Partial<Skill> & { name: string; source: Skill['source
   return { body: '', path: `/skills/${overrides.source}/${overrides.name}.md`, ...overrides }
 }
 
+/** Health with/without a working forge — what gates the Views group's GitHub row (R6 1.1). */
+function health(forgeAvailable: boolean): HealthResponse {
+  return {
+    version: '0.0.0-test',
+    repoRoot: '/repo',
+    repo: { root: '/repo', branch: 'main' },
+    checks: [],
+    defaultRunner: 'claude',
+    forge: forgeAvailable ? { kind: 'github', available: true } : null,
+    capabilities: { localHandoff: true },
+  }
+}
+
 function serve(routes: Record<string, unknown>): void {
   fetchMock.mockImplementation(async (input) => {
     const path = String(input)
@@ -82,9 +95,10 @@ function renderPalette({
   runs = [] as RunRecord[],
   skills = [] as Skill[],
   theme,
-}: { runs?: RunRecord[]; skills?: Skill[]; theme?: Theme } = {}) {
+  forge = true,
+}: { runs?: RunRecord[]; skills?: Skill[]; theme?: Theme; forge?: boolean } = {}) {
   if (theme) localStorage.setItem(THEME_STORAGE_KEY, theme)
-  serve({ '/api/runs': runs, '/api/skills': skills })
+  serve({ '/api/runs': runs, '/api/skills': skills, '/api/health': health(forge) })
   render(
     <QueryClientProvider client={createQueryClient()}>
       <ThemeProvider>
@@ -165,12 +179,31 @@ describe('Views group', () => {
     openWith({ metaKey: true })
     await screen.findByRole('dialog')
 
+    // The GitHub row waits on the health answer (forge gate) — settle before asserting.
+    await waitFor(() =>
+      expect(document.querySelectorAll('[data-slot="palette-view"]')).toHaveLength(8),
+    )
     const views = [...document.querySelectorAll('[data-slot="palette-view"]')]
     expect(views.map((view) => view.getAttribute('data-nav-to'))).toEqual([
       '/', '/inbox', '/git', '/github', '/settings/skills', '/workflows', '/settings', '/new',
     ])
     expect(views[7]?.textContent).toContain('New task')
     expect(views[7]?.textContent).toContain('⌘N')
+  })
+
+  // R6 Step 1.1: the palette must not offer a GitHub view the sidebar honestly hides.
+  it('drops the GitHub view when health reports no forge', async () => {
+    renderPalette({ forge: false })
+    openWith({ metaKey: true })
+    await screen.findByRole('dialog')
+
+    await waitFor(() =>
+      expect(document.querySelectorAll('[data-slot="palette-view"]')).toHaveLength(7),
+    )
+    const targets = [...document.querySelectorAll('[data-slot="palette-view"]')].map((view) =>
+      view.getAttribute('data-nav-to'),
+    )
+    expect(targets).not.toContain('/github')
   })
 
   it('navigates to the selected view and closes', async () => {

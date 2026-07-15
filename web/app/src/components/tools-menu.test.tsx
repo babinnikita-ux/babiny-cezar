@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HealthResponse } from '@/api/types'
 import { AppShell } from './app-shell'
 import { ThemeProvider } from './theme-provider'
-import { ToolsMenu, toolsTooltip } from './tools-menu'
+import { ToolsMenu, forgeNote, toolsTooltip } from './tools-menu'
 
 afterEach(cleanup)
 
@@ -170,6 +170,39 @@ describe('ToolsMenu', () => {
     fireEvent.click(settings)
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
     expect(screen.getByTestId('location').textContent).toBe('/settings/agents')
+  })
+})
+
+/** The env-chips popover is where the spec's degradation table says the missing-GitHub hint
+ *  lives (R6 Step 1.1) — the note must explain the hidden tab, in the server's own words. */
+describe('forgeNote', () => {
+  it('is null while the forge works — nothing to explain', () => {
+    expect(forgeNote({ ...HEALTH, forge: { kind: 'github', available: true } })).toBeNull()
+  })
+
+  it('a null forge explains the hidden tab as a missing GitHub remote', () => {
+    expect(forgeNote(HEALTH)).toContain('No GitHub remote detected')
+    expect(forgeNote(HEALTH)).toContain('GitHub tab is hidden')
+  })
+
+  it('an unavailable driver carries the server reason verbatim', () => {
+    const note = forgeNote({
+      ...HEALTH,
+      forge: { kind: 'github', available: false, reason: 'gh not logged in' },
+    })
+    expect(note).toContain('gh not logged in')
+    expect(note).toContain('GitHub tab is hidden')
+  })
+
+  it('renders in the open menu when the forge is absent, and not when it works', async () => {
+    const { unmount } = renderMenu(HEALTH)
+    let menu = await openMenu()
+    expect(within(menu).getByText(/No GitHub remote detected/)).toBeTruthy()
+    unmount()
+
+    renderMenu({ ...HEALTH, forge: { kind: 'github', available: true } })
+    menu = await openMenu()
+    expect(menu.querySelector('[data-slot="forge-note"]')).toBeNull()
   })
 })
 

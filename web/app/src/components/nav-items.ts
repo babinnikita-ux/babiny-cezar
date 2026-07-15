@@ -19,6 +19,9 @@ export type NavItem = {
   match: string[]
   /** Step 4.2 fills the Inbox count; the slot exists so the row's geometry is final now. */
   badge?: boolean
+  /** Forge-gated (R6 Step 1.1): the item exists only while `/api/health` reports the forge
+   *  driver available — see `visibleNavItems`. */
+  forge?: boolean
 }
 
 /** The sidebar nav from the spec's "App shell & navigation" section, in mockup order.
@@ -31,11 +34,23 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/', label: 'Tasks', icon: ListChecksIcon, match: ['/', '/tasks', '/compare'] },
   { to: '/inbox', label: 'Inbox', icon: InboxIcon, match: ['/inbox'], badge: true },
   { to: '/git', label: 'Git', icon: GitBranchIcon, match: ['/git'] },
-  { to: '/github', label: 'GitHub', icon: GithubIcon, match: ['/github'] },
+  { to: '/github', label: 'GitHub', icon: GithubIcon, match: ['/github'], forge: true },
   { to: '/settings/skills', label: 'Skills', icon: SparklesIcon, match: ['/settings/skills'] },
   { to: '/workflows', label: 'Workflows', icon: WorkflowIcon, match: ['/workflows'] },
   { to: '/settings', label: 'Settings', icon: SettingsIcon, match: ['/settings'] },
 ]
+
+/**
+ * The nav items a surface should actually render (spec §"GitHub tab (forge tab)"): the
+ * forge-gated GitHub item drops out — nav item AND tab — unless the health payload reports
+ * the driver available. `false` while health is still unknown, on the shell's honesty rule:
+ * the nav must not claim a GitHub tab exists before the server has said so (the Tools menu's
+ * forge note explains the absence). Both the sidebar and the ⌘K palette's Views group render
+ * through this, so the two can never disagree.
+ */
+export function visibleNavItems(forgeAvailable: boolean): NavItem[] {
+  return forgeAvailable ? NAV_ITEMS : NAV_ITEMS.filter((item) => !item.forge)
+}
 
 /** Does `pathname` sit inside the area rooted at `prefix`?
  *

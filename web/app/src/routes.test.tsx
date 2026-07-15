@@ -61,9 +61,12 @@ describe('route map', () => {
     ['/git/commits', 'repo-git', 'Loading repository…'],
     ['/git/commits/abc1234', 'repo-git', 'Loading repository…'],
     ['/git/branches', 'repo-git', 'Loading repository…'],
-    ['/github', 'github', 'GitHub'],
-    ['/github/issues/42', 'github-issue', 'Issue'],
-    ['/github/prs/7', 'github-pr', 'Pull request'],
+    // The real GitHub tab (R6 Step 1.1): with fetch never answering every github URL is
+    // honestly loading — lists and item deep links included.
+    ['/github', 'github', 'Loading GitHub…'],
+    ['/github/prs', 'github', 'Loading GitHub…'],
+    ['/github/issues/42', 'github', 'Loading GitHub…'],
+    ['/github/prs/7', 'github', 'Loading GitHub…'],
     ['/inbox', 'inbox', 'Inbox'],
     ['/workflows', 'workflows', 'Workflows'],
     ['/workflows/ship-it', 'workflow', 'Workflow'],

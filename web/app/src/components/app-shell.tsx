@@ -8,7 +8,7 @@ import { StatusDot } from '@/components/status-dot'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
-import { NAV_ITEMS, activeNavItem, activeNavPath } from '@/components/nav-items'
+import { activeNavItem, activeNavPath, visibleNavItems, type NavItem } from '@/components/nav-items'
 import { cn } from '@/lib/utils'
 
 /** Tailwind's `md`. The drawer is the `<md` affordance, so this must stay in step with the
@@ -38,6 +38,10 @@ export type AppShellProps = {
   taskQuickList?: ReactNode
   /** Step 4.2's Tools dropdown trigger. */
   toolsMenu?: ReactNode
+  /** Forge gating (R6 Step 1.1): `false` drops the GitHub nav item — see `visibleNavItems`.
+   *  Defaults to shown so the presentational shell stays renderable alone; the container
+   *  passes the health payload's truth. */
+  forgeAvailable?: boolean
 }
 
 /**
@@ -64,6 +68,7 @@ export function AppShell({
   latestVersion = null,
   taskQuickList,
   toolsMenu,
+  forgeAvailable = true,
 }: AppShellProps) {
   const { pathname } = useLocation()
   const activeTo = activeNavPath(pathname)
@@ -92,6 +97,7 @@ export function AppShell({
 
   const nav = {
     activeTo,
+    items: visibleNavItems(forgeAvailable),
     repo,
     inboxCount,
     version,
@@ -132,6 +138,7 @@ export function AppShell({
 
 type NavProps = {
   activeTo: string | null
+  items: NavItem[]
   repo: RepoChip | null
   inboxCount: number | null
   version: string | null
@@ -201,6 +208,7 @@ function MobileNavDrawer({ onNavigate, ...props }: NavProps & { onNavigate: () =
  */
 function SidebarContent({
   activeTo,
+  items,
   repo,
   inboxCount,
   version,
@@ -257,7 +265,7 @@ function SidebarContent({
       </div>
 
       <nav aria-label="Main" className="px-2.5 py-1.5">
-        {NAV_ITEMS.map((item) => {
+        {items.map((item) => {
           const isActive = item.to === activeTo
           const Icon = item.icon
           // Link, not NavLink, on purpose. NavLink derives `aria-current` from its own prefix

@@ -76,6 +76,15 @@ describe('AppShell', () => {
     ])
   })
 
+  // R6 Step 1.1: no forge, no GitHub tab — the nav item disappears entirely (spec's
+  // degradation table), it does not render disabled.
+  it('drops the GitHub item when the forge is unavailable', () => {
+    renderShell('/', { forgeAvailable: false })
+    const links = within(nav()).getAllByRole('link')
+    expect(links.map((a) => a.getAttribute('href'))).not.toContain('/github')
+    expect(links).toHaveLength(NAV_ITEMS.length - 1)
+  })
+
   describe('active nav state follows the current route', () => {
     const cases: Array<[entry: string, active: string]> = [
       ['/', 'Tasks'],

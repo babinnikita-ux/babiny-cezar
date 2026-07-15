@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { NAV_ITEMS, activeNavItem, activeNavPath } from './nav-items'
+import { NAV_ITEMS, activeNavItem, activeNavPath, visibleNavItems } from './nav-items'
 
 /** Which nav item owns a URL. This is the rule that decides what the user sees lit up, and it
  *  is not a plain equality check — items own areas, and the Settings area nests. */
@@ -79,5 +79,18 @@ describe('NAV_ITEMS', () => {
     for (const item of NAV_ITEMS) {
       expect(activeNavPath(item.to)).toBe(item.to)
     }
+  })
+})
+
+/** The forge gate (R6 Step 1.1): the GitHub item — and ONLY the GitHub item — exists exactly
+ *  while health reports the forge driver available. */
+describe('visibleNavItems', () => {
+  it('with the forge available, the full nav renders', () => {
+    expect(visibleNavItems(true)).toEqual(NAV_ITEMS)
+  })
+
+  it('without a forge, exactly the GitHub item drops out', () => {
+    const labels = visibleNavItems(false).map((item) => item.label)
+    expect(labels).toEqual(['Tasks', 'Inbox', 'Git', 'Skills', 'Workflows', 'Settings'])
   })
 })
