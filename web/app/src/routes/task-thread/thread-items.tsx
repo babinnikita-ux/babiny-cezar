@@ -16,6 +16,7 @@ import {
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { ZoomableImage } from '@/components/zoomable-image'
 import type { FileDiff, ToolKind, UiToolItem } from '@/protocol/ui-events'
 import { cn } from '@/lib/utils'
 
@@ -56,14 +57,12 @@ export function UserBubble({
       {images.length > 0 ? (
         <span data-slot="user-images" className="mt-2 flex flex-wrap justify-end gap-1.5">
           {images.map((url) => (
-            <a key={url} href={url} target="_blank" rel="noopener noreferrer" className="block">
-              <img
-                src={url}
-                alt="attached"
-                loading="lazy"
-                className="max-h-40 max-w-[220px] rounded-md border border-border object-contain"
-              />
-            </a>
+            <ZoomableImage
+              key={url}
+              src={url}
+              alt="attached"
+              className="max-h-40 max-w-[220px] rounded-md border border-border object-contain"
+            />
           ))}
         </span>
       ) : null}
@@ -442,14 +441,13 @@ export function ToolStreak({ count, children }: { count: number; children: React
   )
 }
 
-/** A persisted run image (served by the cockpit itself — never an external origin). */
+/** A persisted run image (served by the cockpit itself — never an external origin). Click to zoom. */
 export function ImageItem({ image }: { image: ThreadImage }) {
   return (
-    <img
+    <ZoomableImage
       data-slot="thread-image"
       src={image.url}
       alt={image.name ?? 'image from the agent session'}
-      loading="lazy"
       className="max-h-72 max-w-full self-start rounded-lg border border-border"
     />
   )

@@ -285,6 +285,7 @@ describe('session git API routes', () => {
     for (const req of [
       app.request(`/api/runs/${bare.id}/changes`),
       app.request(`/api/runs/${bare.id}/files`),
+      app.request(`/api/runs/${bare.id}/commits`),
       commit(bare.id, { message: 'x' }),
       app.request(`/api/runs/${bare.id}/git/push`, { method: 'POST' }),
     ]) {
@@ -292,6 +293,28 @@ describe('session git API routes', () => {
       expect(res.status).toBe(409);
       expect(((await res.json()) as { error: string }).error).toContain('no worktree');
     }
+  });
+
+  it('GET /commits lists the run branch commits; /commit/:sha gives a structured diff', async () => {
+    // A commit on the task branch past the base.
+    writeFileSync(join(worktree, 'feature.txt'), 'feature\n');
+    g(worktree, 'add', '-A');
+    g(worktree, 'commit', '-m', 'add feature');
+
+    const list = await app.request(`/api/runs/${run.id}/commits`);
+    expect(list.status).toBe(200);
+    const { commits } = (await list.json()) as { commits: Array<{ sha: string; subject: string }> };
+    expect(commits).toHaveLength(1);
+    expect(commits[0]?.subject).toBe('add feature');
+
+    const sha = commits[0]!.sha;
+    const diff = await app.request(`/api/runs/${run.id}/commit/${sha}`);
+    expect(diff.status).toBe(200);
+    const commit = (await diff.json()) as { files: Array<{ path: string; status: string }> };
+    expect(commit.files[0]).toMatchObject({ path: 'feature.txt', status: 'added' });
+
+    // Unknown run id → 404 (not 409), like the other run-scoped routes.
+    expect((await app.request('/api/runs/nope/commits')).status).toBe(404);
   });
 
   it('GET /files lists and reads inside the worktree, 409s traversal', async () => {

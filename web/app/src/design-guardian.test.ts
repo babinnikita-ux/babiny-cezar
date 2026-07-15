@@ -67,8 +67,10 @@ const RULES: Rule[] = [
     why: 'use surface/foreground tokens so both themes work; bg/text-white/black bypass them',
     pattern: /\b(?:bg|text)-(?:white|black)\b/g,
     applies: styleSources,
-    // The shadcn overlay scrims (dialog, sheet) are deliberately bg-black/50 in both themes.
-    allowed: (rel) => rel.startsWith('src/components/ui/'),
+    // The shadcn overlay scrims (dialog, sheet) and the image lightbox scrim are deliberately
+    // bg-black/xx in both themes — a dark backdrop is theme-agnostic by design.
+    allowed: (rel) =>
+      rel.startsWith('src/components/ui/') || rel === 'src/components/zoomable-image.tsx',
   },
   {
     name: 'no-native-dialogs',
