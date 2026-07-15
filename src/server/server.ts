@@ -31,7 +31,13 @@ import { isV2WireEventType } from '../runs/ui-event-sink.js';
 import type { RunManager } from '../workflows/run.js';
 import { removeWorktree, worktreeDiff, worktreeDiffStat } from '../git-worktree.js';
 import { getBranches, getCommit, getDiff, getLog, getRepoInfo, getStatus } from './git.js';
-import { collectChanges, commitAll, pushCurrentBranch, readWorktreePath } from './git-changes.js';
+import {
+  collectChanges,
+  commitAll,
+  createOrSwitchBranch,
+  pushCurrentBranch,
+  readWorktreePath,
+} from './git-changes.js';
 import { loadConfig } from '../config.js';
 import { resolveCapabilities } from './capabilities.js';
 import { resolveForge } from './forge/index.js';
@@ -1037,6 +1043,37 @@ export function createApp(deps: ServerDeps): Hono {
     } catch (err) {
       return c.text(`(git show failed: ${err instanceof Error ? err.message : String(err)})`);
     }
+  });
+
+  // Structured sibling of the text-blob /api/repo/diff above (protected
+  // surface, untouched): the same {files, stat} shape the session /changes
+  // route serves, here for the MAIN working tree's uncommitted changes vs
+  // HEAD (redesign R5 Step 1.3 — §"Git/session API additions").
+  app.get('/api/repo/changes', async (c) => {
+    const info = await getRepoInfo(repoRoot);
+    if (!info) return c.json({ error: 'not a git repository' }, 409);
+    const result = await collectChanges(info.root, 'HEAD');
+    if (!result.ok) return c.json({ error: result.error }, 409);
+    return c.json(result.changes);
+  });
+
+  // Repo view branch actions: switch to an existing branch, or create one
+  // (from `from` or HEAD) and switch. Predictable git failures — invalid
+  // name, unknown `from`, dirty-tree checkout conflict — are 409 + reason.
+  const repoBranchSchema = z.object({
+    name: z.string().trim().min(1).max(200),
+    from: z.string().trim().min(1).max(200).optional(),
+  });
+  app.post('/api/repo/branch', async (c) => {
+    const info = await getRepoInfo(repoRoot);
+    if (!info) return c.json({ error: 'not a git repository' }, 409);
+    const parsed = repoBranchSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.issues.map((i) => i.message).join('; ') }, 400);
+    }
+    const result = await createOrSwitchBranch(info.root, parsed.data.name, parsed.data.from);
+    if (!result.ok) return c.json({ error: result.error }, 409);
+    return c.json({ branch: result.branch, created: result.created });
   });
 
   // ---- SPA catch-all -------------------------------------------------------

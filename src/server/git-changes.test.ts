@@ -291,6 +291,131 @@ describe('session git API routes', () => {
   });
 });
 
+describe('repo git API routes (R5 Step 1.3 — main working tree)', () => {
+  let repoRoot: string;
+  let app: Hono;
+  let store: RunStore;
+
+  beforeEach(() => {
+    repoRoot = mkdtempSync(join(tmpdir(), 'cez-repoapi-'));
+    initRepo(repoRoot);
+    // The RunStore lives inside the repo (.ai/cezar) — ignore it so it never
+    // shows up in /api/repo/changes.
+    writeFileSync(join(repoRoot, '.gitignore'), '.ai/\n');
+    writeFileSync(join(repoRoot, 'base.txt'), 'base\n');
+    g(repoRoot, 'add', '-A');
+    g(repoRoot, 'commit', '-m', 'base');
+    store = RunStore.open(join(repoRoot, '.ai/cezar'));
+    app = createApp({
+      repoRoot,
+      store,
+      manager: {} as unknown as RunManager, // these routes never touch it
+      version: '0.0.0-test',
+    });
+  });
+
+  afterEach(() => {
+    store.flush();
+    rmSync(repoRoot, { recursive: true, force: true });
+  });
+
+  const branch = (body: unknown) =>
+    app.request('/api/repo/branch', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  it('GET /api/repo/changes reports uncommitted main-tree changes vs HEAD', async () => {
+    writeFileSync(join(repoRoot, 'base.txt'), 'base changed\n');
+    writeFileSync(join(repoRoot, 'new.txt'), 'brand new\n');
+
+    const res = await app.request('/api/repo/changes');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as ChangesPayload;
+    const byPath = new Map(body.files.map((f) => [f.path, f]));
+    expect(byPath.get('base.txt')).toMatchObject({ status: 'modified', adds: 1, dels: 1 });
+    expect(byPath.get('new.txt')).toMatchObject({ status: 'added', adds: 1, dels: 0 });
+    expect(byPath.get('new.txt')?.patch).toContain('+brand new');
+    expect(body.stat).toEqual({ adds: 2, dels: 1, files: 2 });
+  });
+
+  it('GET /api/repo/changes on a clean tree is an all-zero payload, not an error', async () => {
+    const res = await app.request('/api/repo/changes');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as ChangesPayload;
+    expect(body.files).toEqual([]);
+    expect(body.stat).toEqual({ adds: 0, dels: 0, files: 0 });
+  });
+
+  it('POST /api/repo/branch creates a branch from HEAD and switches to it', async () => {
+    const res = await branch({ name: 'feature' });
+    expect(res.status).toBe(200);
+    expect((await res.json()) as object).toEqual({ branch: 'feature', created: true });
+    expect(g(repoRoot, 'rev-parse', '--abbrev-ref', 'HEAD').trim()).toBe('feature');
+  });
+
+  it('POST /api/repo/branch creates from an explicit start point', async () => {
+    const mainSha = g(repoRoot, 'rev-parse', 'HEAD').trim();
+    // Move ahead on a side branch so `from: main` is not just HEAD.
+    g(repoRoot, 'checkout', '-b', 'side');
+    writeFileSync(join(repoRoot, 'side.txt'), 'side\n');
+    g(repoRoot, 'add', '-A');
+    g(repoRoot, 'commit', '-m', 'side work');
+
+    const res = await branch({ name: 'from-main', from: 'main' });
+    expect(res.status).toBe(200);
+    expect((await res.json()) as object).toEqual({ branch: 'from-main', created: true });
+    expect(g(repoRoot, 'rev-parse', 'HEAD').trim()).toBe(mainSha);
+  });
+
+  it('POST /api/repo/branch switches to an existing branch without recreating it', async () => {
+    g(repoRoot, 'checkout', '-b', 'existing');
+    g(repoRoot, 'checkout', 'main');
+
+    const res = await branch({ name: 'existing' });
+    expect(res.status).toBe(200);
+    expect((await res.json()) as object).toEqual({ branch: 'existing', created: false });
+    expect(g(repoRoot, 'rev-parse', '--abbrev-ref', 'HEAD').trim()).toBe('existing');
+  });
+
+  it('an invalid branch name is a 409 with a reason (git check-ref-format rules)', async () => {
+    for (const name of ['bad..name', 'has space', 'trailing.lock', '-dash']) {
+      const res = await branch({ name });
+      expect(res.status).toBe(409);
+      expect(((await res.json()) as { error: string }).error).toContain('invalid branch name');
+    }
+    expect(g(repoRoot, 'rev-parse', '--abbrev-ref', 'HEAD').trim()).toBe('main');
+  });
+
+  it('an unknown start point is a 409 with a reason', async () => {
+    const res = await branch({ name: 'ok-name', from: 'no-such-ref' });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toContain('unknown start point');
+  });
+
+  it('a dirty-tree checkout conflict is a 409 with git’s own reason', async () => {
+    g(repoRoot, 'checkout', '-b', 'other');
+    writeFileSync(join(repoRoot, 'base.txt'), 'other version\n');
+    g(repoRoot, 'add', '-A');
+    g(repoRoot, 'commit', '-m', 'diverge');
+    g(repoRoot, 'checkout', 'main');
+    writeFileSync(join(repoRoot, 'base.txt'), 'uncommitted local edit\n');
+
+    const res = await branch({ name: 'other' });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error.toLowerCase()).toContain('local changes');
+    expect(g(repoRoot, 'rev-parse', '--abbrev-ref', 'HEAD').trim()).toBe('main');
+  });
+
+  it('a bad body is a 400 (missing, blank, or non-JSON)', async () => {
+    expect((await branch({})).status).toBe(400);
+    expect((await branch({ name: '   ' })).status).toBe(400);
+    const res = await app.request('/api/repo/branch', { method: 'POST', body: 'not json' });
+    expect(res.status).toBe(400);
+  });
+});
+
 describe('commitAll / pushCurrentBranch — direct degradation paths', () => {
   it('commitAll on a non-repo dir fails with a reason, never throws', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'cez-norepo-'));

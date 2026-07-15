@@ -311,6 +311,44 @@ export async function readWorktreePath(
   return { kind: 'file', path: display, size: info.size, binary: false, tooLarge: false, content };
 }
 
+// ---- branches -------------------------------------------------------------
+
+export type BranchResult =
+  | { ok: true; branch: string; created: boolean }
+  | { ok: false; error: string };
+
+/**
+ * Repo-view branch action (`POST /api/repo/branch`): switch to `name` when it
+ * already exists locally, otherwise create it from `from` (or HEAD) and switch.
+ * Name validation is delegated to `git check-ref-format --branch` — git's own
+ * rules, not a reimplementation. Predictable failures (invalid name, unknown
+ * `from`, dirty-tree checkout conflict) come back as `{ ok:false, error }`.
+ */
+export async function createOrSwitchBranch(
+  dir: string,
+  name: string,
+  from?: string,
+): Promise<BranchResult> {
+  const check = await git(dir, ['check-ref-format', '--branch', name]);
+  if (!check.ok) return { ok: false, error: `invalid branch name: ${name}` };
+
+  const exists = await git(dir, ['rev-parse', '--verify', '--quiet', `refs/heads/${name}`]);
+  if (exists.ok) {
+    const sw = await git(dir, ['checkout', name]);
+    if (!sw.ok) return { ok: false, error: gitReason(sw, `git checkout ${name} failed`) };
+    return { ok: true, branch: name, created: false };
+  }
+
+  if (from) {
+    // `--quiet` keeps git silent on failure, so supply our own reason.
+    const start = await git(dir, ['rev-parse', '--verify', '--quiet', `${from}^{commit}`]);
+    if (!start.ok) return { ok: false, error: `unknown start point: ${from}` };
+  }
+  const create = await git(dir, from ? ['checkout', '-b', name, from] : ['checkout', '-b', name]);
+  if (!create.ok) return { ok: false, error: gitReason(create, `git checkout -b ${name} failed`) };
+  return { ok: true, branch: name, created: true };
+}
+
 // ---- commit & push ------------------------------------------------------------
 
 export type CommitResult = { ok: true; sha: string } | { ok: false; error: string };
