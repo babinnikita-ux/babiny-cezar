@@ -8,7 +8,7 @@ import {
 import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 
-import { createRun, putConfig, putUiState } from '@/api/client'
+import { createRun, postPlan, putConfig, putUiState } from '@/api/client'
 import { queryKeys, useHealth, useRepo, useSkills, useUiState, useWorkflows } from '@/api/queries'
 import type { ImageInput, RepoResponse, Runner, Skill, WorkflowDef } from '@/api/types'
 import { TwinkleBackdrop } from '@/components/centered-state'
@@ -47,16 +47,19 @@ import {
   type TaskSource,
 } from './new-task-form'
 import { parseNewTaskParams } from './new-task-params'
+import { buildPlannedRunBody, pendingPlanOf, type PendingPlan } from './new-task-plan'
+import { PlanReview } from './plan-review'
 
 /**
  * `/new` — the full-screen new-task hero (spec §"New task (full-screen, #386)"; visual
  * contract docs/mockups/new-task.html): centered composer card on the twinkle surface, the
  * picker pill row inside the card below the textarea, suggested-task ghost chips underneath.
+ * In plan-first mode (#383, the `Start | Plan first` segment) submit runs `POST /api/plan`
+ * and opens the review overlay (plan-review.tsx) instead of starting a run.
  *
- * Still to come here: the live plan-first toggle + plan review overlay (Step 1.2 — the segment
- * below is the shell, honestly disabled), and `auto=1` bookmarklet auto-start (Step 1.3 — the
- * param is parsed and deliberately ignored; full document loads of /new stay pinned to the
- * legacy page until that step proves parity).
+ * Still to come here: `auto=1` bookmarklet auto-start (Step 1.3 — the param is parsed and
+ * deliberately ignored; full document loads of /new stay pinned to the legacy page until that
+ * step proves parity).
  */
 export function NewTaskRoute() {
   const [search] = useSearchParams()
@@ -102,10 +105,28 @@ export function NewTaskRoute() {
   const hasGit = health.data === undefined || health.data.repo !== null
   const variants = hasGit ? draft.variants : 1
 
+  // ---- plan mode (#383 + spec 008) ----------------------------------------------------------
+  const [plan, setPlan] = useState<PendingPlan | null>(null)
+  const [planning, setPlanning] = useState(false)
+  const [starting, setStarting] = useState(false)
+
   const submit = async (text: string, images: ImageInput[]) => {
     if (!sourcesReady) {
       // Rejection restores the draft — nothing typed is lost to a race with the pickers.
       throw new Error('Still loading workflows and skills — try again in a second.')
+    }
+    if (draft.planFirst) {
+      // Plan mode: submit means PLAN. A rejection propagates — the composer toasts and
+      // restores the draft; a success restores the text ourselves (the composer already
+      // cleared optimistically) so Discard hands back exactly what was typed.
+      setPlanning(true)
+      try {
+        setPlan(pendingPlanOf(text, images, await postPlan(text)))
+        update({ text })
+      } finally {
+        setPlanning(false)
+      }
+      return
     }
     const created = await createRun(
       buildCreateRunBody({
@@ -126,6 +147,34 @@ export function NewTaskRoute() {
     clearDraftText()
     void queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
     navigate(startedRunPath(created))
+  }
+
+  /** ▶ Start on the reviewed plan: the (possibly edited) steps go INLINE, with the composer's
+   *  current picker choices — legacy `startPlannedRun` semantics on the new surface. */
+  const startPlanned = async () => {
+    if (plan === null || plan.steps.length === 0 || starting) return
+    setStarting(true)
+    try {
+      const created = await createRun(
+        buildPlannedRunBody({
+          task: plan.task,
+          steps: plan.steps,
+          model,
+          runner,
+          runnerCount: runners.length,
+          variants,
+          images: plan.images,
+        }),
+      )
+      clearDraftText()
+      setPlan(null)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
+      navigate(startedRunPath(created))
+    } catch (error) {
+      toast(error instanceof Error ? error.message : String(error), { tone: 'danger' })
+    } finally {
+      setStarting(false)
+    }
   }
 
   return (
@@ -152,7 +201,7 @@ export function NewTaskRoute() {
           autoFocus
           placeholder="Describe a task for the agent — / for skills…"
           ariaLabel="Describe a task for the agent"
-          sendAriaLabel="Start task"
+          sendAriaLabel={draft.planFirst ? 'Plan task' : 'Start task'}
           autocompleteSkills
           footerStart={
             <>
@@ -193,7 +242,11 @@ export function NewTaskRoute() {
           }
           footerEnd={
             <>
-              <ModeSegment />
+              <ModeSegment
+                planFirst={draft.planFirst}
+                planning={planning}
+                onModeChange={(planFirst) => update({ planFirst })}
+              />
               <kbd
                 aria-hidden="true"
                 className="rounded-[5px] border border-b-2 border-border bg-card px-[5px] py-px font-mono text-[10.5px] font-medium text-muted-foreground"
@@ -206,6 +259,16 @@ export function NewTaskRoute() {
 
         <SuggestedChips onPick={(text) => update({ text })} />
       </div>
+
+      {plan !== null ? (
+        <PlanReview
+          plan={plan}
+          starting={starting}
+          onStepsChange={(steps) => setPlan((current) => (current ? { ...current, steps } : current))}
+          onStart={() => void startPlanned()}
+          onDiscard={() => setPlan(null)}
+        />
+      ) : null}
     </div>
   )
 }
@@ -462,9 +525,19 @@ function BaseBranchPill({ repo }: { repo: RepoResponse }) {
   )
 }
 
-/** The `Start | Plan first` segment (#383). Step 1.2 wires plan mode + the review overlay;
- *  until then the second segment is honestly disabled rather than silently doing "Start". */
-function ModeSegment() {
+/** The `Start | Plan first` segment (#383): a real toggle with an UNMISTAKABLE selected state.
+ *  "Start" selected keeps the quiet card fill; "Plan first" selected takes the mockup's
+ *  contrast fill + focus ring (`.seg .plan-active`) — plan mode must never be ambient. The
+ *  active plan segment doubles as the busy indicator while `POST /api/plan` is in flight. */
+function ModeSegment({
+  planFirst,
+  planning,
+  onModeChange,
+}: {
+  planFirst: boolean
+  planning: boolean
+  onModeChange: (planFirst: boolean) => void
+}) {
   return (
     <div
       data-slot="mode-seg"
@@ -475,20 +548,33 @@ function ModeSegment() {
       <button
         type="button"
         role="radio"
-        aria-checked="true"
-        className="h-6 rounded-md bg-card px-2 text-xs font-semibold text-foreground shadow-xs"
+        aria-checked={!planFirst}
+        onClick={() => onModeChange(false)}
+        className={cn(
+          'h-6 rounded-md px-2 text-xs transition-colors',
+          !planFirst
+            ? 'bg-card font-semibold text-foreground shadow-xs'
+            : 'font-medium text-muted-foreground hover:text-foreground',
+        )}
       >
         Start
       </button>
       <button
         type="button"
         role="radio"
-        aria-checked="false"
-        disabled
-        title="Plan-first mode arrives with the plan review overlay — the next step of the redesign."
-        className="h-6 rounded-md px-2 text-xs font-medium text-muted-foreground opacity-60"
+        aria-checked={planFirst}
+        aria-busy={planning || undefined}
+        data-slot="mode-plan"
+        onClick={() => onModeChange(true)}
+        className={cn(
+          'h-6 rounded-md px-2 text-xs transition-colors',
+          planFirst
+            ? 'bg-contrast font-semibold text-contrast-foreground ring-2 ring-ring/55'
+            : 'font-medium text-muted-foreground hover:text-foreground',
+          planning && 'animate-pulse',
+        )}
       >
-        Plan first
+        {planning ? 'Planning…' : 'Plan first'}
       </button>
     </div>
   )

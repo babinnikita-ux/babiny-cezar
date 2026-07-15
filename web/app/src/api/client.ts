@@ -16,8 +16,11 @@ import type {
   OpenInCliResponse,
   PatchRunInput,
   PickVariantResponse,
+  PlanResponse,
   RepoResponse,
   RunRecord,
+  SaveWorkflowInput,
+  SaveWorkflowResponse,
   SetConfigInput,
   SetConfigResponse,
   Skill,
@@ -287,6 +290,20 @@ export function sendMessage(id: string, message: MessageInput): Promise<MessageR
     text: message.text ?? '',
     images: message.images ?? [],
   })
+}
+
+// ---- plan mode (spec 008) -------------------------------------------------------------------
+
+/** Chain-from-prompt: the planner proposes 1–5 steps for the task. Degraded answers come back
+ *  as a one-step plan with `fallback: true`, never as an error — only transport/validation fail. */
+export function postPlan(task: string): Promise<PlanResponse> {
+  return mutate<PlanResponse>('POST', '/api/plan', { task })
+}
+
+/** Save an approved plan as a reusable chain. A 409 carries `exists: true` on the ApiError —
+ *  ask the user, then retry with `overwrite: true`. */
+export function createWorkflow(input: SaveWorkflowInput): Promise<SaveWorkflowResponse> {
+  return mutate<SaveWorkflowResponse>('POST', '/api/workflows', input)
 }
 
 // ---- prefs ---------------------------------------------------------------------------------

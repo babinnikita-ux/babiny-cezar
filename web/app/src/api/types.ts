@@ -238,6 +238,29 @@ export interface WorkflowsResponse {
   issues: WorkflowLoadIssue[]
 }
 
+/** `POST /api/plan` (spec 008): the proposed chain for a task. Never a hard failure server-side —
+ *  a missing CLI, a timeout or an unparseable answer degrade to the one-step quick-task plan
+ *  with `fallback: true`, which the UI surfaces as a dim note. */
+export interface PlanResponse {
+  steps: WorkflowStepDef[]
+  rationale: string
+  fallback: boolean
+}
+
+/** `POST /api/workflows`: save a chain as `.ai/cezar/workflows/<slug>.yaml`. Without `overwrite`
+ *  an existing file answers 409 with `exists: true` (see ApiError) — the UI confirms, then
+ *  retries with `overwrite: true`. */
+export interface SaveWorkflowInput {
+  name: string
+  steps: WorkflowStepDef[]
+  overwrite?: boolean
+}
+
+export interface SaveWorkflowResponse {
+  path: string
+  name: string
+}
+
 // ---- skills (src/skills.ts) -----------------------------------------------------------------
 
 export interface Skill {

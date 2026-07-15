@@ -16,9 +16,19 @@ export interface NewTaskDraft {
   runner: Runner | null
   model: string | null
   variants: number
+  /** The `Start | Plan first` toggle (#383). Sticky like the pickers: plan-first is a way of
+   *  working, not a per-task whim — it survives navigation with the rest of the draft. */
+  planFirst: boolean
 }
 
-const EMPTY: NewTaskDraft = { text: '', source: null, runner: null, model: null, variants: 1 }
+const EMPTY: NewTaskDraft = {
+  text: '',
+  source: null,
+  runner: null,
+  model: null,
+  variants: 1,
+  planFirst: false,
+}
 
 let draft: NewTaskDraft = { ...EMPTY }
 

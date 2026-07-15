@@ -91,6 +91,23 @@ const REPO: RepoResponse = {
 
 const REPO_NO_GIT: RepoResponse = { info: null, status: [], log: [], branches: [], baseBranch: null }
 
+/** The shape `POST /api/plan` answers (spec 008) — three steps so reorder/remove are provable. */
+const PLAN = {
+  steps: [
+    { id: 'implement', name: 'Implement', prompt: '{{task}}' },
+    { id: 'verify', name: 'Verify', command: 'npm test' },
+    { id: 'review', name: 'Review', skill: 'om-fix', prompt: 'Review the changes for {{task}}' },
+  ],
+  rationale: 'Implement, verify with tests, then review.',
+  fallback: false,
+}
+
+const FALLBACK_PLAN = {
+  steps: [{ id: 'task', name: 'Do the task', prompt: '{{task}}' }],
+  rationale: 'planner unavailable — single-step plan',
+  fallback: true,
+}
+
 // ---- harness ---------------------------------------------------------------------------------
 
 type Recorded = { method: string; url: string; body?: unknown }
@@ -103,6 +120,10 @@ function serve(overrides: {
   repo?: RepoResponse
   uiState?: Record<string, unknown>
   createRun?: unknown
+  /** `POST /api/plan` — a payload, or a handler for delayed/failing answers. */
+  plan?: unknown | (() => Promise<Response>)
+  /** `POST /api/workflows` — answers in call order (409-then-201 for the overwrite flow). */
+  saveWorkflow?: Array<{ status: number; body: unknown }>
 } = {}) {
   const data = {
     health: HEALTH,
@@ -111,9 +132,12 @@ function serve(overrides: {
     repo: REPO,
     uiState: {},
     createRun: { id: 'r1' },
+    plan: PLAN,
+    saveWorkflow: [{ status: 201, body: { path: '.ai/cezar/workflows/my-chain.yaml', name: 'my chain' } }],
     ...overrides,
   }
   requests = []
+  let saves = 0
   const json = (payload: unknown, status = 200) =>
     new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } })
   vi.stubGlobal(
@@ -125,7 +149,15 @@ function serve(overrides: {
       requests.push({ method, url, body })
       if (url === '/api/health') return json(data.health)
       if (url === '/api/skills') return json(data.skills)
-      if (url === '/api/workflows') return json(data.workflows)
+      if (url === '/api/workflows' && method === 'GET') return json(data.workflows)
+      if (url === '/api/workflows' && method === 'POST') {
+        const answer = data.saveWorkflow[Math.min(saves, data.saveWorkflow.length - 1)]!
+        saves += 1
+        return json(answer.body, answer.status)
+      }
+      if (url === '/api/plan' && method === 'POST') {
+        return typeof data.plan === 'function' ? (data.plan as () => Promise<Response>)() : json(data.plan)
+      }
       if (url === '/api/repo') return json(data.repo)
       if (url === '/api/ui-state' && method === 'GET') return json(data.uiState)
       if (url === '/api/ui-state' && method === 'PUT') return json(body ?? {})
@@ -417,5 +449,243 @@ describe('drafts and prefill', () => {
 
     renderNewTask()
     expect(textarea().value).toBe('')
+  })
+})
+
+// ---- plan mode (#383 + spec 008) ----------------------------------------------------------------
+
+const planToggle = () => screen.getByRole('radio', { name: /Plan first|Planning…/ })
+const startToggle = () => screen.getByRole('radio', { name: 'Start' })
+const stepIds = () =>
+  [...document.querySelectorAll('[data-slot="plan-step"]')].map((el) =>
+    el.getAttribute('data-step-id'),
+  )
+
+/** Toggle plan mode, type, submit — resolves once the review overlay is up. */
+async function planTask(text = 'Tighten the flaky suite') {
+  await pillReady()
+  fireEvent.click(planToggle())
+  fireEvent.change(textarea(), { target: { value: text } })
+  fireEvent.click(screen.getByRole('button', { name: 'Plan task' }))
+  await screen.findByText('Proposed chain')
+}
+
+describe('the Start | Plan first toggle', () => {
+  it('flips the selected state (#383): aria-checked moves, the submit becomes "Plan task"', async () => {
+    serve()
+    renderNewTask()
+    await pillReady()
+
+    expect(startToggle().getAttribute('aria-checked')).toBe('true')
+    expect(planToggle().getAttribute('aria-checked')).toBe('false')
+    expect(screen.queryByRole('button', { name: 'Start task' })).not.toBeNull()
+
+    fireEvent.click(planToggle())
+    expect(planToggle().getAttribute('aria-checked')).toBe('true')
+    expect(startToggle().getAttribute('aria-checked')).toBe('false')
+    // The selected plan segment takes the contrast fill — the unmistakable state.
+    expect(planToggle().className).toContain('bg-contrast')
+    expect(screen.queryByRole('button', { name: 'Plan task' })).not.toBeNull()
+
+    fireEvent.click(startToggle())
+    expect(planToggle().getAttribute('aria-checked')).toBe('false')
+    expect(startToggle().getAttribute('aria-checked')).toBe('true')
+  })
+
+  it('persists in the draft store across unmount/remount', async () => {
+    serve()
+    const first = renderNewTask()
+    await pillReady()
+    fireEvent.click(planToggle())
+    first.unmount()
+
+    renderNewTask()
+    await pillReady()
+    expect(planToggle().getAttribute('aria-checked')).toBe('true')
+  })
+})
+
+describe('the plan flow', () => {
+  it('submit in plan mode POSTs /api/plan (never /api/runs) and opens the review overlay', async () => {
+    serve()
+    renderNewTask()
+    await planTask('Tighten the flaky suite')
+
+    expect(requests.find((r) => r.url === '/api/plan')?.body).toEqual({
+      task: 'Tighten the flaky suite',
+    })
+    expect(requests.some((r) => r.url === '/api/runs' && r.method === 'POST')).toBe(false)
+
+    // Task line, rationale, numbered cards with skill/check badges and hints.
+    expect(document.querySelector('[data-slot="plan-task"]')?.textContent).toBe(
+      'Tighten the flaky suite',
+    )
+    expect(screen.getByText('Implement, verify with tests, then review.')).toBeTruthy()
+    expect(stepIds()).toEqual(['implement', 'verify', 'review'])
+    expect(document.querySelector('[data-slot="plan-badge-check"]')).not.toBeNull()
+    expect(document.querySelector('[data-slot="plan-badge-skill"]')?.textContent).toBe('om-fix')
+    expect(screen.getByText('npm test')).toBeTruthy()
+  })
+
+  it('a degraded answer shows the fallback note instead of a rationale', async () => {
+    serve({ plan: FALLBACK_PLAN })
+    renderNewTask()
+    await planTask()
+    expect(document.querySelector('[data-slot="plan-fallback"]')?.textContent).toBe(
+      'planner unavailable — single-step plan',
+    )
+    expect(document.querySelector('[data-slot="plan-rationale"]')).toBeNull()
+    expect(stepIds()).toEqual(['task'])
+  })
+
+  it('shows the busy state while planning: "Planning…" on the segment, submit disabled', async () => {
+    let release!: () => void
+    serve({
+      plan: () =>
+        new Promise<Response>((resolve) => {
+          release = () =>
+            resolve(
+              new Response(JSON.stringify(PLAN), {
+                status: 200,
+                headers: { 'content-type': 'application/json' },
+              }),
+            )
+        }),
+    })
+    renderNewTask()
+    await pillReady()
+    fireEvent.click(planToggle())
+    fireEvent.change(textarea(), { target: { value: 'slow plan' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Plan task' }))
+
+    await screen.findByText('Planning…')
+    expect((screen.getByRole('button', { name: 'Plan task' }) as HTMLButtonElement).disabled).toBe(true)
+
+    release()
+    await screen.findByText('Proposed chain')
+    expect(screen.queryByText('Planning…')).toBeNull()
+  })
+
+  it('✕ removes a step and ↑/↓ reorder (the touch-honest path)', async () => {
+    serve()
+    renderNewTask()
+    await planTask()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove step 2' }))
+    expect(stepIds()).toEqual(['implement', 'review'])
+
+    fireEvent.click(screen.getByRole('button', { name: 'Move step 2 up' }))
+    expect(stepIds()).toEqual(['review', 'implement'])
+
+    // Edges are disabled — the first card cannot move up, the last cannot move down.
+    expect((screen.getByRole('button', { name: 'Move step 1 up' }) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByRole('button', { name: 'Move step 2 down' }) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('removing everything leaves the honest empty line and disables Start + Save', async () => {
+    serve({ plan: FALLBACK_PLAN })
+    renderNewTask()
+    await planTask()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove step 1' }))
+
+    expect(screen.getByText('(no steps left — discard and plan again)')).toBeTruthy()
+    expect((document.querySelector('[data-slot="plan-start"]') as HTMLButtonElement).disabled).toBe(true)
+    expect((document.querySelector('[data-slot="plan-save"]') as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('▶ Start posts the EDITED steps inline — the exact wire payload — and navigates', async () => {
+    serve({ createRun: { id: 'planned-1' } })
+    renderNewTask()
+    await planTask('Tighten the flaky suite')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove step 2' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Move step 2 up' }))
+    fireEvent.click(document.querySelector('[data-slot="plan-start"]') as HTMLElement)
+
+    await waitFor(() =>
+      expect(requests.some((r) => r.url === '/api/runs' && r.method === 'POST')).toBe(true),
+    )
+    expect(postedBody()).toEqual({
+      task: 'Tighten the flaky suite',
+      steps: [
+        { id: 'review', name: 'Review', skill: 'om-fix', prompt: 'Review the changes for {{task}}' },
+        { id: 'implement', name: 'Implement', prompt: '{{task}}' },
+      ],
+    })
+    await waitFor(() => expect(location()).toBe('/tasks/planned-1'))
+  })
+
+  it('Discard closes the overlay and hands back the draft untouched', async () => {
+    serve()
+    renderNewTask()
+    await planTask('keep this text')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+    await waitFor(() => expect(screen.queryByText('Proposed chain')).toBeNull())
+    expect(textarea().value).toBe('keep this text')
+    expect(requests.some((r) => r.url === '/api/runs' && r.method === 'POST')).toBe(false)
+  })
+})
+
+describe('save as chain', () => {
+  it('asks for the name in a dialog and posts { name, steps } — no overwrite key uninvited', async () => {
+    serve()
+    renderNewTask()
+    await planTask()
+
+    fireEvent.click(document.querySelector('[data-slot="plan-save"]') as HTMLElement)
+    const nameInput = await screen.findByLabelText('Chain name')
+    fireEvent.change(nameInput, { target: { value: '  my chain  ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(requests.some((r) => r.url === '/api/workflows' && r.method === 'POST')).toBe(true),
+    )
+    expect(requests.find((r) => r.url === '/api/workflows' && r.method === 'POST')?.body).toEqual({
+      name: 'my chain',
+      steps: PLAN.steps,
+    })
+    // Dialog closes on success; the review itself stays open (start is a separate decision).
+    await waitFor(() => expect(screen.queryByLabelText('Chain name')).toBeNull())
+    expect(screen.getByText('Proposed chain')).toBeTruthy()
+    await screen.findByText('Saved — my-chain.yaml')
+  })
+
+  it('a 409 opens the overwrite confirm; Yes retries with overwrite: true', async () => {
+    serve({
+      saveWorkflow: [
+        { status: 409, body: { error: 'workflow file already exists: x.yaml', exists: true } },
+        { status: 201, body: { path: '.ai/cezar/workflows/my-chain.yaml', name: 'my chain' } },
+      ],
+    })
+    renderNewTask()
+    await planTask()
+
+    fireEvent.click(document.querySelector('[data-slot="plan-save"]') as HTMLElement)
+    fireEvent.change(await screen.findByLabelText('Chain name'), { target: { value: 'my chain' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await screen.findByText('Overwrite “my chain”?')
+    fireEvent.click(screen.getByRole('button', { name: 'Overwrite' }))
+
+    await waitFor(() => {
+      const saves = requests.filter((r) => r.url === '/api/workflows' && r.method === 'POST')
+      expect(saves).toHaveLength(2)
+      expect(saves[1]?.body).toEqual({ name: 'my chain', steps: PLAN.steps, overwrite: true })
+    })
+    await waitFor(() => expect(screen.queryByLabelText('Chain name')).toBeNull())
+  })
+
+  it('a non-409 failure surfaces the server message and keeps the dialog open', async () => {
+    serve({ saveWorkflow: [{ status: 400, body: { error: 'step 2: needs prompt or command' } }] })
+    renderNewTask()
+    await planTask()
+
+    fireEvent.click(document.querySelector('[data-slot="plan-save"]') as HTMLElement)
+    fireEvent.change(await screen.findByLabelText('Chain name'), { target: { value: 'bad' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await screen.findByText('step 2: needs prompt or command')
+    expect(screen.getByLabelText('Chain name')).toBeTruthy()
   })
 })
