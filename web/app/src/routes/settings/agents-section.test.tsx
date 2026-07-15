@@ -37,6 +37,8 @@ function serve({
     defaultRunner: 'claude',
     systemPrompt: null,
     defaultModels: {},
+    maxParallel: 2,
+    memoryLimitMb: null,
     ...config,
   }
   const json = (payload: unknown, status = 200) =>

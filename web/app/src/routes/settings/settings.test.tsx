@@ -66,7 +66,7 @@ afterEach(() => {
 describe('the section registry', () => {
   it('declares the spec §Settings sections, later ones hidden', () => {
     const byId = new Map(SETTINGS_SECTIONS.map((s) => [s.id, s]))
-    for (const id of ['skills', 'appearance', 'agents', 'notifications']) {
+    for (const id of ['skills', 'appearance', 'agents', 'resources', 'notifications']) {
       expect(byId.get(id as never)?.hidden).toBeUndefined()
     }
     // Listed in the registry but hidden until implemented (later phases).
@@ -77,6 +77,7 @@ describe('the section registry', () => {
       'skills',
       'appearance',
       'agents',
+      'resources',
       'notifications',
     ])
   })
@@ -87,19 +88,19 @@ describe('the settings shell', () => {
     renderAt('/settings/appearance')
     const nav = document.querySelector('[data-slot="settings-nav"]')!
     const ids = [...nav.querySelectorAll('[data-section]')].map((el) => el.getAttribute('data-section'))
-    expect(ids).toEqual(['skills', 'appearance', 'agents', 'notifications'])
+    expect(ids).toEqual(['skills', 'appearance', 'agents', 'resources', 'notifications'])
     // The active section is marked for assistive tech, not just by color.
     expect(nav.querySelector('[aria-current="page"]')?.getAttribute('data-section')).toBe('appearance')
     // The mobile pill row renders through the same registry — the two can never disagree.
     const pills = document.querySelector('[data-slot="settings-nav-mobile"]')!
-    expect([...pills.querySelectorAll('[data-section]')].length).toBe(4)
+    expect([...pills.querySelectorAll('[data-section]')].length).toBe(5)
   })
 
   it('/settings is the registry as an index — one card per visible section', () => {
     renderAt('/settings')
     const index = document.querySelector('[data-slot="settings-index"]')!
     const ids = [...index.querySelectorAll('[data-section]')].map((el) => el.getAttribute('data-section'))
-    expect(ids).toEqual(['skills', 'appearance', 'agents', 'notifications'])
+    expect(ids).toEqual(['skills', 'appearance', 'agents', 'resources', 'notifications'])
     expect(index.querySelector('[data-section="appearance"]')?.getAttribute('href')).toBe(
       '/settings/appearance',
     )

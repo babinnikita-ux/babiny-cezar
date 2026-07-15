@@ -1,6 +1,7 @@
 import {
   BellIcon,
   BotIcon,
+  GaugeIcon,
   KeyboardIcon,
   PaletteIcon,
   PlugIcon,
@@ -12,6 +13,7 @@ import { CenteredState } from '@/components/centered-state'
 import { AgentsSection } from './agents-section'
 import { AppearanceSection } from './appearance'
 import { NotificationsSection } from './notifications-section'
+import { ResourcesSection } from './resources-section'
 import { SkillsSection } from './skills-section'
 
 /**
@@ -28,6 +30,7 @@ export type SettingsSectionId =
   | 'skills'
   | 'appearance'
   | 'agents'
+  | 'resources'
   | 'mcp'
   | 'notifications'
   | 'keyboard'
@@ -79,6 +82,13 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     description: 'Default runner, models and system prompt.',
     icon: BotIcon,
     component: AgentsSection,
+  },
+  {
+    id: 'resources',
+    title: 'Resources',
+    description: 'Parallel tasks and per-task memory limit.',
+    icon: GaugeIcon,
+    component: ResourcesSection,
   },
   {
     id: 'mcp',

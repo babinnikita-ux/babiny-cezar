@@ -25,6 +25,13 @@ const configSchema = z.object({
   /** How many tasks may run at once (spec 006). Non-git dirs always run 1. */
   maxParallel: z.number().int().min(1).max(16).default(2),
   /**
+   * Per-task memory ceiling in MiB (whole process tree). When a running task's
+   * RSS crosses this the engine pauses it with a warning and lets the queue
+   * advance (#memory-guard). 0 / unset = no limit. `.catch(undefined)` keeps
+   * the key additive-safe: a bad value degrades to "no limit".
+   */
+  memoryLimitMb: z.number().int().min(0).max(1_048_576).optional().catch(undefined),
+  /**
    * Which agent backend a task uses unless overridden per task (GUI) or per
    * step (workflow). The GUI only offers runners actually installed; this is
    * the preselected default. Also the runner the chain planner uses.

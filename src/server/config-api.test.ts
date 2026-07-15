@@ -54,6 +54,8 @@ describe('the config API', () => {
       defaultRunner: 'claude',
       systemPrompt: null,
       defaultModels: {},
+      maxParallel: 2,
+      memoryLimitMb: null,
     });
   });
 
@@ -107,6 +109,8 @@ describe('the config API', () => {
       defaultRunner: 'claude',
       systemPrompt: 'Be brief.',
       defaultModels: { claude: 'opus' },
+      maxParallel: 5,
+      memoryLimitMb: null,
     });
   });
 

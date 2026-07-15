@@ -517,6 +517,10 @@ export interface ConfigResponse {
   defaultRunner: Runner
   systemPrompt: string | null
   defaultModels: RunnerModels
+  /** How many tasks run at once (1–16). */
+  maxParallel: number
+  /** Per-task memory ceiling in MiB (whole process tree); null = no limit. */
+  memoryLimitMb: number | null
 }
 
 /** `PUT /api/config` (Settings → Agents; the Repo tab's base-branch picker). `baseBranch: null`
@@ -528,6 +532,9 @@ export interface SetConfigInput {
   defaultRunner?: Runner
   systemPrompt?: string | null
   defaultModels?: Partial<Record<Runner, string | null>>
+  maxParallel?: number
+  /** null or 0 clears the ceiling back to "no limit". */
+  memoryLimitMb?: number | null
 }
 
 /** The PUT answer: the same shape GET serves (the pre-R6 fields stayed, the rest is additive). */

@@ -1037,6 +1037,8 @@ export function createApp(deps: ServerDeps): Hono {
     defaultRunner: config.defaultRunner,
     systemPrompt: config.systemPrompt ?? null,
     defaultModels: config.defaultModels ?? {},
+    maxParallel: config.maxParallel,
+    memoryLimitMb: config.memoryLimitMb ?? null,
   });
   app.get('/api/config', async (c) => c.json(configAnswer(await loadConfig(repoRoot))));
 
@@ -1058,6 +1060,10 @@ export function createApp(deps: ServerDeps): Hono {
     defaultModels: z
       .object({ claude: modelPresetSchema, codex: modelPresetSchema, opencode: modelPresetSchema })
       .optional(),
+    // Concurrency + memory guard (Settings → Resources). maxParallel clamps to
+    // the schema's 1–16; memoryLimitMb null/0 clears the ceiling.
+    maxParallel: z.number().int().min(1).max(16).optional(),
+    memoryLimitMb: z.number().int().min(0).max(1_048_576).nullable().optional(),
   });
   app.put('/api/config', async (c) => {
     const parsed = setConfigSchema.safeParse(await c.req.json().catch(() => null));
@@ -1083,6 +1089,15 @@ export function createApp(deps: ServerDeps): Hono {
         delete raw.systemPrompt;
       } else {
         raw.systemPrompt = parsed.data.systemPrompt;
+      }
+    }
+    if (parsed.data.maxParallel !== undefined) raw.maxParallel = parsed.data.maxParallel;
+    if (parsed.data.memoryLimitMb !== undefined) {
+      // null or 0 both mean "no ceiling" — drop the key back to the default.
+      if (parsed.data.memoryLimitMb === null || parsed.data.memoryLimitMb === 0) {
+        delete raw.memoryLimitMb;
+      } else {
+        raw.memoryLimitMb = parsed.data.memoryLimitMb;
       }
     }
     if (parsed.data.defaultModels !== undefined) {
