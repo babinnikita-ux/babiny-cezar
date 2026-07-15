@@ -69,8 +69,11 @@ export interface DraftPrInput {
 
 export interface ForgeDriver {
   readonly kind: ForgeKind;
-  /** Cheap, cached availability probe — safe to call from `GET /api/health`. */
+  /** Cheap, cached availability probe. May shell out (used by the GitHub tab). */
   detect(): Promise<ForgeAvailability>;
+  /** Non-blocking availability for the health path: cached result, or null while warming — never
+   *  shells out on the read (keeps /api/health under the bookmarklet's latency budget). */
+  detectCached(): ForgeAvailability | null;
   listIssues(opts?: ForgeListOptions): Promise<ForgeItem[]>;
   listPRs(opts?: ForgeListOptions): Promise<ForgeItem[]>;
   /** Draft-PR creation for the review gate (spec 009). Never throws. */

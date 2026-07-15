@@ -66,6 +66,10 @@ export function useRunEvents(runId: string | undefined): RunEvent[] {
     // arrives between renders, and dedup must not race React's batching.
     let maxSeq = 0
     let source: EventSource | null = null
+    let reopenTimer: ReturnType<typeof setTimeout> | undefined
+    let disposed = false
+    const CLOSED = 2 // EventSource.CLOSED, spelled literally like global-events.tsx
+    const REOPEN_DELAY_MS = 1_500
 
     const onFrame = (event: Event) => {
       const parsed = parseRunEvent((event as MessageEvent<string>).data)
@@ -74,25 +78,61 @@ export function useRunEvents(runId: string | undefined): RunEvent[] {
       setEvents((current) => [...current, parsed])
     }
 
+    const reopenLater = (): void => {
+      if (disposed || reopenTimer !== undefined) return
+      reopenTimer = setTimeout(() => {
+        reopenTimer = undefined
+        if (!disposed) open()
+      }, REOPEN_DELAY_MS)
+    }
+
     const open = (): void => {
       source?.close()
       source = new Source(`/api/runs/${encodeURIComponent(runId)}/events`)
       for (const name of RUN_EVENT_NAMES) source.addEventListener(name, onFrame)
+      source.addEventListener('error', () => {
+        // Ordinary drops leave the socket CONNECTING and the browser retries on its own; CLOSED
+        // means it gave up for good (what a restarting server produces), so nothing would reopen
+        // it — the transcript would silently freeze while the header (global stream) keeps
+        // updating, looking live over stale content. Reopen; `maxSeq` swallows the replay.
+        if (source?.readyState === CLOSED) reopenLater()
+      })
+    }
+
+    // The phone-in-a-pocket case: a frozen background tab can leave the stream dead for an hour
+    // with no error handler ever firing. On return, reopen if it's closed — whatever is on screen
+    // is about to be trusted (the thread is the app's primary view, same threat model as the
+    // global stream). #minor-run-sse-recovery.
+    const onVisibilityChange = (): void => {
+      if (document.visibilityState !== 'visible') return
+      if (!source || source.readyState === CLOSED) {
+        clearTimeout(reopenTimer)
+        reopenTimer = undefined
+        open()
+      }
     }
 
     // Same bfcache discipline as the global stream: a full navigation parks this document with
     // its socket open and starves the per-origin pool. Close on pagehide; a bfcache restore
     // reopens, and `maxSeq` swallows the replayed prefix.
-    const onPageHide = (): void => source?.close()
+    const onPageHide = (): void => {
+      clearTimeout(reopenTimer)
+      reopenTimer = undefined
+      source?.close()
+    }
     const onPageShow = (event: PageTransitionEvent): void => {
       if (event.persisted) open()
     }
 
+    document.addEventListener('visibilitychange', onVisibilityChange)
     window.addEventListener('pagehide', onPageHide)
     window.addEventListener('pageshow', onPageShow)
     open()
 
     return () => {
+      disposed = true
+      clearTimeout(reopenTimer)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
       window.removeEventListener('pagehide', onPageHide)
       window.removeEventListener('pageshow', onPageShow)
       source?.close()

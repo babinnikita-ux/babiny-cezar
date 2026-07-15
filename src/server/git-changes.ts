@@ -1,5 +1,7 @@
 import { execFile } from 'node:child_process';
-import { lstat, open, readFile, readdir, stat } from 'node:fs/promises';
+import { rmSync } from 'node:fs';
+import { lstat, open, readFile, readdir, realpath, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
 
 /**
@@ -22,13 +24,19 @@ interface GitResult {
   stderr: string;
 }
 
-/** Run git, never throw — degradation is the caller's policy. */
-function git(cwd: string, args: string[]): Promise<GitResult> {
+/** Run git, never throw — degradation is the caller's policy. `env` overrides (e.g. a scratch
+ *  `GIT_INDEX_FILE`) merge over the process env. */
+function git(cwd: string, args: string[], env?: Record<string, string>): Promise<GitResult> {
   return new Promise((resolvePromise) => {
     execFile(
       'git',
       args,
-      { cwd, maxBuffer: 32 * 1024 * 1024, encoding: 'utf8' },
+      {
+        cwd,
+        maxBuffer: 32 * 1024 * 1024,
+        encoding: 'utf8',
+        ...(env ? { env: { ...process.env, ...env } } : {}),
+      },
       (err, stdout, stderr) => resolvePromise({ ok: !err, stdout: stdout ?? '', stderr: stderr ?? '' }),
     );
   });
@@ -168,21 +176,44 @@ function statusWord(letter: string): ChangedFile['status'] {
 export async function collectChanges(
   dir: string,
   baseBranch: string,
-  patchCap = PATCH_CAP,
+  opts: { patchCap?: number; intentToAdd?: boolean } = {},
 ): Promise<ChangesResult> {
-  await git(dir, ['add', '-N', '.']); // intent-to-add: untracked files show up
-  const mergeBase = await git(dir, ['merge-base', baseBranch, 'HEAD']);
-  const base = mergeBase.ok && mergeBase.stdout.trim() ? mergeBase.stdout.trim() : baseBranch;
+  const patchCap = opts.patchCap ?? PATCH_CAP;
+  // `git add -N .` (intent-to-add) makes untracked files appear in the diff, but it MUTATES the
+  // index — fine in a task worktree cezar owns, but forbidden on the user's real main tree (a
+  // read-only GET must never stage files, #major-index-mutation). When `intentToAdd` is false we
+  // build a SCRATCH index (GIT_INDEX_FILE) seeded from HEAD + intent-to-add, so untracked files
+  // still show WITHOUT touching the user's real index.
+  let env: Record<string, string> | undefined;
+  let scratchIndex: string | undefined;
+  try {
+    if (opts.intentToAdd === false) {
+      scratchIndex = join(tmpdir(), `cez-scratch-index-${process.pid}-${scratchSeq++}`);
+      env = { GIT_INDEX_FILE: scratchIndex };
+      await git(dir, ['read-tree', 'HEAD'], env); // seed with tracked files; harmless if no HEAD
+      await git(dir, ['add', '-N', '.'], env);
+    } else {
+      await git(dir, ['add', '-N', '.']);
+    }
+    const mergeBase = await git(dir, ['merge-base', baseBranch, 'HEAD']);
+    const base = mergeBase.ok && mergeBase.stdout.trim() ? mergeBase.stdout.trim() : baseBranch;
 
-  const nameStatus = await git(dir, ['diff', '--name-status', '-z', '-M', base]);
-  if (!nameStatus.ok) return { ok: false, error: gitReason(nameStatus, 'git diff failed') };
-  const numstat = await git(dir, ['diff', '--numstat', '-z', '-M', base]);
-  if (!numstat.ok) return { ok: false, error: gitReason(numstat, 'git diff failed') };
-  const patchOut = await git(dir, ['diff', '--patch', '-M', '--no-color', base]);
-  if (!patchOut.ok) return { ok: false, error: gitReason(patchOut, 'git diff failed') };
+    const nameStatus = await git(dir, ['diff', '--name-status', '-z', '-M', base], env);
+    if (!nameStatus.ok) return { ok: false, error: gitReason(nameStatus, 'git diff failed') };
+    const numstat = await git(dir, ['diff', '--numstat', '-z', '-M', base], env);
+    if (!numstat.ok) return { ok: false, error: gitReason(numstat, 'git diff failed') };
+    const patchOut = await git(dir, ['diff', '--patch', '-M', '--no-color', base], env);
+    if (!patchOut.ok) return { ok: false, error: gitReason(patchOut, 'git diff failed') };
 
-  return { ok: true, changes: assemblePayload(nameStatus.stdout, numstat.stdout, patchOut.stdout, patchCap) };
+    return { ok: true, changes: assemblePayload(nameStatus.stdout, numstat.stdout, patchOut.stdout, patchCap) };
+  } finally {
+    if (scratchIndex) rmSync(scratchIndex, { force: true });
+  }
 }
+
+/** Monotonic suffix for scratch index files, so concurrent /api/repo/changes calls never share
+ *  one (each is cleaned up in the finally above). */
+let scratchSeq = 0;
 
 /** The three raw `git diff` listings (name-status, numstat, patch) → the `{files, stat}`
  *  payload. Shared by the working-tree diff above and the commit diff below — the listings
@@ -393,6 +424,21 @@ export async function readWorktreePath(
   }
   if (info.isSymbolicLink()) {
     return { kind: 'invalid', error: `symlinks are not served: ${display}` };
+  }
+  // Intermediate symlinked DIRECTORIES: `resolve()` never follows links and the `lstat` above
+  // only guards the final component, so a path through a symlinked dir (e.g. `link/secret.txt`
+  // where `link -> /etc`) would otherwise be served. Resolve the whole chain and re-check
+  // containment against the real root (#blocker-symlink-traversal).
+  let realTarget: string;
+  let realRoot: string;
+  try {
+    realTarget = await realpath(target);
+    realRoot = await realpath(rootAbs);
+  } catch {
+    return { kind: 'missing', error: `no such file or directory in the worktree: ${relPath || '/'}` };
+  }
+  if (realTarget !== realRoot && !realTarget.startsWith(realRoot + sep)) {
+    return { kind: 'invalid', error: `path escapes the worktree: ${relPath}` };
   }
 
   if (info.isDirectory()) {

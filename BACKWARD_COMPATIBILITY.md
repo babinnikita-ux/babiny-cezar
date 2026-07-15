@@ -22,11 +22,13 @@ Consumed by the bundled React cockpit (`web/dist`, shipped in lockstep — low r
 - Meta: `GET /api/health` (the **only** CORS-open route — bookmarklets probe it cross-origin; its shape `{version, latestVersion, repoRoot, repo, checks, defaultRunner}` is the most externally-depended-on JSON in the app), `GET /api/launch-key`
 - Skills: `GET /api/skills`, `POST /api/skills/refresh`
 - Workflows: `GET/POST /api/workflows`, `DELETE /api/workflows/:name`, `POST /api/workflows/parse`, `POST /api/plan`
-- Runs: `GET/POST /api/runs`, `GET /api/runs/:id`, `POST /api/runs/:id/{cancel,messages,finish,continue,open-in-cli,pr,archive,remove-worktree}`, `POST /api/runs/archive-finished`, `DELETE /api/runs/:id`, `GET /api/runs/:id/{handoff,diff,events}`, `GET /api/runs/:id/images/:file`
+- Runs: `GET/POST /api/runs`, `GET /api/runs/:id`, `PATCH /api/runs/:id`, `POST /api/runs/:id/{cancel,messages,finish,continue,open-in-cli,open-in,pr,archive,remove-worktree,git/commit,git/push}`, `POST /api/runs/archive-finished`, `DELETE /api/runs/:id`, `GET /api/runs/:id/{handoff,diff,changes,files,commits,events}`, `GET /api/runs/:id/commit/:sha`, `GET /api/runs/:id/images/:file`
+- Open-in: `GET /api/open-targets`
 - Variants: `GET /api/groups/:groupId`, `POST /api/groups/:groupId/pick`
 - Inbox: `GET /api/todos`, `DELETE /api/todos/:id`, `POST /api/todos/:id/start`
 - SSE: `GET /api/events` (global), `GET /api/runs/:id/events` (replay + live, dedup by `seq`)
-- Repo/GitHub: `GET /api/github`, `GET /api/repo`, `GET /api/repo/diff`, `GET /api/repo/commit/:sha`, `PUT /api/config`, `GET/PUT /api/ui-state`
+- Repo/GitHub: `GET /api/github`, `GET /api/repo`, `GET /api/repo/{diff,changes}`, `GET /api/repo/commit/:sha`, `POST /api/repo/branch`, `GET/PUT /api/config`, `GET/PUT /api/ui-state`
+- SSE event names: `run-event` (v1), `ui-event` (v2 dotted types)
 
 Breaking: removing/renaming a route; making a previously optional body field required; removing a response field; changing an SSE event name (`run`, `run-event`, `run-deleted`, `todos`, `usage`, `ping`) or the `seq` dedup contract; narrowing `/api/health` CORS or its fields; changing `/new` query parameters (breaks saved bookmarklets). Required path: additive first; if removal is unavoidable, keep the old route/field answering for one minor release and note it in the CHANGELOG. `/api/health` and `/new` deserve extra caution — they live in users' browsers, not in this repo.
 

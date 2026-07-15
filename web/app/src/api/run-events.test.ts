@@ -124,6 +124,23 @@ describe('useRunEvents — subscription', () => {
 
     expect(result.current.map((event) => event.type)).toEqual(['plan.updated'])
   })
+
+  it('reopens a CLOSED stream on return-to-visible; the replay dedups (#minor-run-sse-recovery)', () => {
+    const { result } = renderHook(() => useRunEvents('run-1'))
+    const first = FakeEventSource.last
+    first.emit('run-event', line(1, 'stdout', { text: 'a' }))
+
+    // A frozen tab (or a server restart) left the socket dead with no error handler firing.
+    first.close() // readyState → CLOSED
+    act(() => document.dispatchEvent(new Event('visibilitychange'))) // jsdom is 'visible' by default
+
+    expect(FakeEventSource.instances).toHaveLength(2)
+    const second = FakeEventSource.last
+    // The server replays the whole file on reconnect: seq 1 (already seen) is swallowed, seq 2 lands.
+    second.emit('run-event', line(1, 'stdout', { text: 'a' }))
+    second.emit('run-event', line(2, 'stdout', { text: 'b' }))
+    expect(result.current.map((event) => event.seq)).toEqual([1, 2])
+  })
 })
 
 describe('useRunEvents — seq dedup uses `>`', () => {

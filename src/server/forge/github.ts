@@ -362,6 +362,22 @@ async function detectGithub(repoRoot: string): Promise<ForgeAvailability> {
   return result;
 }
 
+/**
+ * Non-blocking availability for `GET /api/health` (#major-health-latency): returns the cached
+ * probe immediately, or `null` while kicking off a background probe to warm it. It NEVER shells
+ * out to `gh` on the request that reads it, so health stays under the bookmarklet's 800 ms port
+ * budget (a `gh repo view` round-trip is ~500–650 ms on its own). `null` is contract-safe — the
+ * whole `forge` field is additive, so "unknown until warm" is a valid answer.
+ */
+export function detectGithubCached(repoRoot: string): ForgeAvailability | null {
+  if (process.env.CEZ_DRY_RUN === '1') return { available: true };
+  if (detectCache && detectCache.repoRoot === repoRoot && Date.now() - detectCache.at < CACHE_MS) {
+    return detectCache.result;
+  }
+  void detectGithub(repoRoot).catch(() => {}); // warm the cache off the request path
+  return null;
+}
+
 /** owner/repo parsed out of the origin remote — feeds `viewUrl`. */
 export interface GithubRepoRef {
   owner: string;
@@ -378,6 +394,7 @@ export function createGithubDriver(repoRoot: string, repoRef: GithubRepoRef | nu
     kind: 'github',
 
     detect: () => detectGithub(repoRoot),
+    detectCached: () => detectGithubCached(repoRoot),
 
     listIssues: async (opts) => (await fetchGithub(repoRoot, opts?.refresh, opts?.limit)).issues,
 

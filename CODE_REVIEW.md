@@ -50,7 +50,7 @@ How to review a diff in this repository. Applies to humans and to the `om-code-r
 
 - Comments cite the spec or issue that motivated the code (`spec 006`, `#348`); non-obvious behavior in the diff should too.
 - No new **server runtime** dependencies without strong justification — that dependency budget remains hono, @hono/node-server, yaml, and zod. Browser packages are build-time dependencies and must remain locked, bundle-measured, and absent from the installed CLI's runtime dependency graph.
-- Web UI changes belong under `web/app/` and follow the accepted React 19 + Vite + Tailwind v4 + shadcn/ui architecture. Keep `web/dist` reproducible from source, preserve light/dark/system themes and mobile/accessibility behavior, and add unit/component tests for changed behavior. Until redesign phase R7, do not break the legacy fallback; until R4, every New task affordance must document-navigate to the legacy `/new` composer.
+- Web UI changes belong under `web/app/` and follow the accepted React 19 + Vite + Tailwind v4 + shadcn/ui architecture. Keep `web/dist` reproducible from source, preserve light/dark/system themes and mobile/accessibility behavior, and add unit/component tests for changed behavior. (The legacy vanilla UI was retired in R7; the React cockpit is the only UI, and `/new` is the React composer.)
 - User-facing errors are one human-readable line (the `createDraftPr` pattern), not stack traces.
 
 ## Severity guidance

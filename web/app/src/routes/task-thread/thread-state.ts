@@ -283,7 +283,19 @@ export function reduceThread(events: RunEvent[]): ThreadState {
       case 'item.started':
       case 'item.updated':
       case 'item.completed': {
-        if (!isRecord(event.item) || typeof event.item.kind !== 'string') break
+        // Validate the discriminant AND the id before trusting the cast: an unknown `kind` would
+        // render a blank row, and a missing `id` would key every such item to the same
+        // `${turn}:undefined` (duplicate React keys) — #minor-item-ingress-guard.
+        if (!isRecord(event.item)) break
+        const kind = event.item.kind
+        const id = event.item.id
+        if (
+          (kind !== 'message' && kind !== 'reasoning' && kind !== 'tool') ||
+          typeof id !== 'string' ||
+          id === ''
+        ) {
+          break
+        }
         const item = event.item as unknown as UiItem
         const located = itemsById.get(item.id)
         upsertV2(located?.turn ?? currentTurn(), item)

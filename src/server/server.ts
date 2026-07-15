@@ -312,7 +312,9 @@ export function createApp(deps: ServerDeps): Hono {
       repo,
       checks,
       defaultRunner: config.defaultRunner,
-      forge: forge ? { kind: forge.kind, ...(await forge.detect()) } : null,
+      // Non-blocking: cached availability or null-until-warm — health must never pay a `gh`
+      // shell-out (the bookmarklet aborts its port probe at 800 ms). See detectGithubCached.
+      forge: forge ? { kind: forge.kind, ...(forge.detectCached() ?? {}) } : null,
       capabilities: capabilities(),
     });
   });
@@ -1229,7 +1231,8 @@ export function createApp(deps: ServerDeps): Hono {
   app.get('/api/repo/changes', async (c) => {
     const info = await getRepoInfo(repoRoot);
     if (!info) return c.json({ error: 'not a git repository' }, 409);
-    const result = await collectChanges(info.root, 'HEAD');
+    // The user's REAL working tree — never stage into their index (a GET must not write).
+    const result = await collectChanges(info.root, 'HEAD', { intentToAdd: false });
     if (!result.ok) return c.json({ error: result.error }, 409);
     return c.json(result.changes);
   });
@@ -1268,6 +1271,11 @@ export function createApp(deps: ServerDeps): Hono {
 
 export function startServer(deps: ServerDeps, port: number): ServerType {
   const app = createApp(deps);
+  // SECURITY: default to loopback. This server executes agents locally and its endpoints are
+  // same-origin-trusted (only /api/health is CORS-open); binding to a non-loopback host would
+  // expose an agent-executing box to the network. `bindHost` exists only for a deliberate
+  // hosted/VPS deployment (which also flips CEZ_REMOTE to gate the local-handoff endpoints) —
+  // src/index.ts never passes it, so the loopback guarantee holds for the normal CLI.
   return serve({ fetch: app.fetch, port, hostname: deps.bindHost ?? '127.0.0.1' });
 }
 

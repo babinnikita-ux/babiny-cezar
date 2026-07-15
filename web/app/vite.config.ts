@@ -23,7 +23,7 @@ export default defineConfig({
     alias: { '@': resolve(appDir, 'src') },
   },
   build: {
-    // Sibling of the legacy UI files (web/index.html, app.js, style.css), which stay untouched.
+    // The built cockpit lives in web/dist (the legacy UI files were removed in R7).
     outDir: resolve(webDir, 'dist'),
     emptyOutDir: true,
   },

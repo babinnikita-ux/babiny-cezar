@@ -104,11 +104,32 @@ describe('collectChanges — structured diff vs base', () => {
     g(dir, 'commit', '-m', 'base');
     writeFileSync(join(dir, 'a.txt'), `${'x'.repeat(500)}\n`.repeat(20));
 
-    const result = await collectChanges(dir, 'main', 200);
+    const result = await collectChanges(dir, 'main', { patchCap: 200 });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.changes.files[0]?.patch.length).toBeLessThan(300);
     expect(result.changes.files[0]?.patch).toContain('… (patch truncated)');
+  });
+
+  it('intentToAdd:false never stages into the index (#major-index-mutation)', async () => {
+    writeFileSync(join(dir, 'tracked.txt'), 'a\n');
+    g(dir, 'add', '-A');
+    g(dir, 'commit', '-m', 'base');
+    writeFileSync(join(dir, 'untracked.txt'), 'scratch\n');
+
+    // The read-only main-tree path must NOT run `git add -N` — the file stays untracked.
+    const result = await collectChanges(dir, 'main', { intentToAdd: false });
+    expect(result.ok).toBe(true);
+    const status = execFileSync('git', ['status', '--porcelain', 'untracked.txt'], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+    expect(status.startsWith('??')).toBe(true); // still untracked, not `A ` (intent-to-add)
+
+    // Default (worktree) behavior still surfaces the untracked file's diff.
+    const withAdd = await collectChanges(dir, 'main');
+    expect(withAdd.ok).toBe(true);
+    if (withAdd.ok) expect(withAdd.changes.files.some((f) => f.path === 'untracked.txt')).toBe(true);
   });
 });
 
@@ -206,6 +227,20 @@ describe('readWorktreePath — Files tab browsing', () => {
     symlinkSync('/etc', join(dir, 'link'));
     expect((await readWorktreePath(dir, 'link')).kind).toBe('invalid');
     expect((await readWorktreePath(dir, 'nope.txt')).kind).toBe('missing');
+  });
+
+  it('rejects reads THROUGH an intermediate symlinked directory (#blocker-symlink-traversal)', async () => {
+    // A secret file outside the worktree, reached via a symlinked directory inside it.
+    const outside = mkdtempSync(join(tmpdir(), 'cez-secret-'));
+    writeFileSync(join(outside, 'credentials.txt'), 'SECRET\n');
+    symlinkSync(outside, join(dir, 'linkdir'));
+
+    // Before the fix this returned the file's contents from OUTSIDE the worktree.
+    const viaLink = await readWorktreePath(dir, 'linkdir/credentials.txt');
+    expect(viaLink.kind).toBe('invalid');
+    if (viaLink.kind === 'invalid') expect(viaLink.error).toContain('escapes the worktree');
+
+    rmSync(outside, { recursive: true, force: true });
   });
 });
 
