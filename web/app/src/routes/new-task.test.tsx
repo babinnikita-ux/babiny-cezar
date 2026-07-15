@@ -362,6 +362,8 @@ describe('submit', () => {
     expect(postedBody()).toEqual({
       task: 'Fix the flaky worktree test',
       steps: [{ id: 'task', name: 'om-fix', skill: 'om-fix', prompt: '{{task}}' }],
+      // Skills default to autonomous (#autonomous).
+      autonomous: true,
     })
     await waitFor(() => expect(location()).toBe('/tasks/run-9'))
     await waitFor(() =>
@@ -369,9 +371,10 @@ describe('submit', () => {
         lastTask: { source: 'skill', ref: 'om-fix' },
         // The run also lands at the head of the recency list (picker sort)...
         recentSources: [{ source: 'skill', ref: 'om-fix' }],
-        // ...and a single skill run remembers its worktree + autonomous choices.
+        // ...and a single skill run remembers its worktree + autonomous choices
+        // (skills default autonomous on).
         lastWorktree: true,
-        lastAutonomous: false,
+        lastAutonomous: true,
       }),
     )
   })
@@ -411,6 +414,7 @@ describe('submit', () => {
       steps: [{ id: 'task', name: 'om-fix', skill: 'om-fix', prompt: '{{task}}' }],
       model: 'sonnet',
       variants: 2,
+      autonomous: true,
     })
     await waitFor(() => expect(location()).toBe('/tasks/v-a'))
   })
