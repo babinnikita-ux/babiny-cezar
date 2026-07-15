@@ -373,7 +373,7 @@ describe('CodexAppServerRunner v2 wiring (against the bundled mock app-server)',
     );
     await session.result;
 
-    // v1 stays intact (the legacy UI depends on it).
+    // v1 stays intact (old NDJSON recordings must keep replaying).
     const v1Types = v1.map((e) => e.type);
     expect(v1Types).toContain('session');
     expect(v1Types).toContain('text');

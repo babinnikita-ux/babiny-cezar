@@ -253,9 +253,9 @@ describe('the bookmarklet contract on full /new loads (spec 011, Step 1.3)', () 
     expect(await runCount()).toBe(before)
   }, 90_000)
 
-  it('/new?legacy=1 still forces the legacy page on this server too', () => {
+  it('/new?legacy=1 serves the React shell on this server too — the hatch retired in R7', () => {
     browser.goto(`${baseUrl}/new?legacy=1`)
-    browser.waitForFunction(`document.getElementById('brand') !== null`)
-    expect(browser.evaluate(`document.getElementById('root') === null`)).toBe(true)
+    browser.waitForFunction(`document.getElementById('root') !== null`)
+    expect(browser.evaluate(`document.getElementById('brand') === null`)).toBe(true)
   })
 })

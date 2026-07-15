@@ -481,7 +481,7 @@ describe('OpencodeServerRunner v2 wiring (against the bundled mock server)', () 
     );
     await session.result;
 
-    // v1 stays intact (the legacy UI depends on it) — including its
+    // v1 stays intact (old NDJSON recordings must keep replaying) — including its
     // HTTP-response-synthesized turn-end.
     const v1Types = v1.map((e) => e.type);
     expect(v1Types).toContain('session');

@@ -1,32 +1,20 @@
 /** Which browser UI a request for `/` gets.
  *
- *  Two UIs coexist until phase R7 retires the legacy one (spec
- *  `.ai/specs/2026-07-14-cockpit-ui-redesign.md`): the React cockpit built to
- *  `web/dist`, and the vanilla `web/index.html` + `/app.js` + `/style.css`.
+ *  The React cockpit built to `web/dist` is the only web UI — the legacy
+ *  vanilla page (`web/app.js` + friends) was deleted in phase R7 of the spec
+ *  `.ai/specs/2026-07-14-cockpit-ui-redesign.md`. A checkout without a build
+ *  gets a small built-in hint page (`build-hint`), never a 404.
  */
-export type IndexTarget = 'dist' | 'legacy';
+export type IndexTarget = 'dist' | 'build-hint';
 
-export interface IndexResolution {
-  target: IndexTarget;
-  /** True when the built app is missing — the caller logs a one-line build hint. */
-  hint: boolean;
-}
-
-/** Pick the UI for `/`, given whether the build exists and whether the caller
- *  asked for the legacy escape hatch (`?legacy=1`).
+/** Pick the response for `/`, given whether the build exists.
  *
- *  The built app wins when it is there; a checkout that never ran
- *  `npm run build:web` still gets a working cockpit (the legacy one), because
- *  `npx cezar-cli` must never need a build step on the user's machine.
+ *  The published tarball always ships `web/dist`, so `build-hint` is a dev-only
+ *  state (a fresh checkout that never ran `npm run build:web`) — the spec's
+ *  degradation matrix answers it with a plain "run the build" page.
  */
-export function resolveIndexHtml(opts: { distExists: boolean; legacyRequested: boolean }): IndexResolution {
-  const { distExists, legacyRequested } = opts;
-  return {
-    target: distExists && !legacyRequested ? 'dist' : 'legacy',
-    // Only worth saying when the build is what's missing — an explicit
-    // ?legacy=1 is a choice, not a misconfiguration.
-    hint: !distExists && !legacyRequested,
-  };
+export function resolveIndexHtml(opts: { distExists: boolean }): IndexTarget {
+  return opts.distExists ? 'dist' : 'build-hint';
 }
 
 /** `passthrough` = not the SPA's to answer: `/api/*` keeps its JSON/SSE behavior
@@ -34,20 +22,10 @@ export function resolveIndexHtml(opts: { distExists: boolean; legacyRequested: b
  *  served by them. */
 export type GetTarget = IndexTarget | 'passthrough';
 
-export interface GetResolution {
-  target: GetTarget;
-  hint: boolean;
-}
-
 /** Paths owned by routes registered before the catch-all: the built app's
- *  hashed bundles and the legacy page's own assets (which `?legacy=1` needs). */
+ *  hashed bundles and the favicon. */
 function isStaticAsset(path: string): boolean {
-  return (
-    path.startsWith('/assets/') ||
-    path === '/app.js' ||
-    path === '/style.css' ||
-    path === '/open-mercato.svg'
-  );
+  return path.startsWith('/assets/') || path === '/open-mercato.svg';
 }
 
 /** Decide what any GET gets, so every route in the spec's map (`/tasks/:id/changes`,
@@ -58,21 +36,40 @@ function isStaticAsset(path: string): boolean {
  *  the 404 (it is the only side that knows the route map). Everything the server
  *  itself owns — `/api/*` and the static files above — passes through untouched.
  */
-export function resolveGetRequest(opts: {
-  path: string;
-  distExists: boolean;
-  legacyRequested: boolean;
-}): GetResolution {
-  const { path, distExists, legacyRequested } = opts;
+export function resolveGetRequest(opts: { path: string; distExists: boolean }): GetTarget {
+  const { path, distExists } = opts;
   if (path === '/api' || path.startsWith('/api/') || isStaticAsset(path)) {
-    return { target: 'passthrough', hint: false };
+    return 'passthrough';
   }
-  // /new is no longer special (R4 Step 1.3): the React composer carries the full
-  // bookmarklet auto-start contract (`/new?skill=&ref=&auto=1&key=`,
-  // BACKWARD_COMPATIBILITY.md), so saved bookmarklets land on the shell like any
-  // other route. `?legacy=1` still forces the legacy page, everywhere.
-  return resolveIndexHtml({ distExists, legacyRequested });
+  return resolveIndexHtml({ distExists });
 }
+
+/** The dev fallback page served for every shell route when `web/dist` is
+ *  missing (spec degradation matrix: "run `npm run dev:web` or
+ *  `npm run build:web`"). Built into the server so it needs no files on disk. */
+export const BUILD_HINT_HTML = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cezar — build the cockpit</title>
+<style>
+  body { margin: 0; display: grid; place-items: center; min-height: 100dvh;
+         font: 15px/1.6 system-ui, sans-serif; background: #101014; color: #e8e8ea; }
+  main { max-width: 34rem; padding: 2rem; }
+  code { font-family: ui-monospace, monospace; background: #1c1c22; border-radius: 6px; padding: 2px 6px; }
+  p { color: #a0a0aa; }
+</style>
+</head>
+<body>
+<main>
+  <h1>The cockpit isn&rsquo;t built yet</h1>
+  <p>This checkout has no <code>web/dist</code>. Run <code>npm run build:web</code>
+  and reload — or use <code>npm run dev:web</code> for the live dev server.</p>
+</main>
+</body>
+</html>
+`;
 
 const ASSET_TYPES: Record<string, string> = {
   js: 'text/javascript; charset=utf-8',

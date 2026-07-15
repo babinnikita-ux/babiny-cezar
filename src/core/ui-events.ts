@@ -1,7 +1,7 @@
 /**
  * Normalized agent-event protocol v2 — the shared vocabulary every runner
  * emits ALONGSIDE the v1 `AgentEvent` stream (never replacing it; mixed
- * NDJSON files stay valid and the legacy UI renders unknown types as notes).
+ * NDJSON files stay valid — old recordings must keep replaying).
  *
  * Contract sources (authoritative, in this order):
  *  - `.ai/analysis/cockpit-ui-redesign/agent-event-protocols.md` §7 (schema)

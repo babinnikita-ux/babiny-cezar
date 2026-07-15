@@ -248,8 +248,8 @@ function SidebarContent({
         <Button asChild variant="contrast" className="relative w-full justify-center">
           {/* A Router Link since R4 Step 1.1: the React /new composer is real, so deliberate
               New task affordances stay inside the SPA. Full document loads of /new (the
-              bookmarklet contract) still get the legacy page until Step 1.3 proves auto-start
-              parity — that pin lives in the server (static-ui.ts), not here. */}
+              bookmarklet contract) land on the shell like any route (static-ui.ts) — the
+              React composer has owned auto-start parity since R4 Step 1.3. */}
           <Link to="/new" onClick={onNavigate}>
             <PlusIcon className="size-[15px]" aria-hidden="true" />
             New task

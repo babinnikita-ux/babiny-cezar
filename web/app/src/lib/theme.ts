@@ -40,12 +40,10 @@ export function readStoredTheme(): Theme {
   }
 }
 
-/* We store `'system'` in the shared key even though the legacy page only understands
- * `'dark' | 'light'`. That degrades correctly: legacy does
- * `dataset.theme = localStorage.getItem('cez-theme') || 'dark'`, and its light palette is gated on
- * `:root[data-theme="light"]`, so an unknown value paints legacy dark — the same default. Storing
- * a resolved `'dark'`/`'light'` instead would silently destroy the user's `system` choice the
- * moment they visited `?legacy=1`. */
+/* We store `'system'` in the key the legacy page shared (it only understood
+ * `'dark' | 'light'`; retired in R7, but the key and value set stay so existing
+ * browsers keep their choice). Storing a resolved `'dark'`/`'light'` instead
+ * would silently destroy the user's `system` preference. */
 export function writeStoredTheme(theme: Theme): void {
   try {
     localStorage.setItem(THEME_STORAGE_KEY, theme)

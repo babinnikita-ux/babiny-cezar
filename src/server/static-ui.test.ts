@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   ASSET_CACHE_CONTROL,
+  BUILD_HINT_HTML,
   assetContentType,
   isSafeAssetFilename,
   resolveGetRequest,
@@ -10,25 +11,16 @@ import {
 } from './static-ui.js';
 
 describe('resolveIndexHtml', () => {
-  const cases: Array<{
-    name: string;
-    distExists: boolean;
-    legacyRequested: boolean;
-    target: IndexTarget;
-    hint: boolean;
-  }> = [
-    { name: 'built app present → the React cockpit', distExists: true, legacyRequested: false, target: 'dist', hint: false },
-    { name: '?legacy=1 escapes to the old UI even when built', distExists: true, legacyRequested: true, target: 'legacy', hint: false },
-    { name: 'never built → the old UI still works, with a hint', distExists: false, legacyRequested: false, target: 'legacy', hint: true },
-    { name: 'never built + ?legacy=1 → the old UI, no hint (it was asked for)', distExists: false, legacyRequested: true, target: 'legacy', hint: false },
+  const cases: Array<{ name: string; distExists: boolean; target: IndexTarget }> = [
+    { name: 'built app present → the React cockpit', distExists: true, target: 'dist' },
+    // R7 deleted the legacy page: a build-less checkout gets the built-in hint
+    // page (spec degradation matrix), never a 404 and never the old UI.
+    { name: 'never built → the built-in build-hint page', distExists: false, target: 'build-hint' },
   ];
 
   for (const c of cases) {
     it(c.name, () => {
-      expect(resolveIndexHtml({ distExists: c.distExists, legacyRequested: c.legacyRequested })).toEqual({
-        target: c.target,
-        hint: c.hint,
-      });
+      expect(resolveIndexHtml({ distExists: c.distExists })).toBe(c.target);
     });
   }
 });
@@ -38,7 +30,6 @@ describe('resolveGetRequest', () => {
     name: string;
     path: string;
     distExists?: boolean;
-    legacyRequested?: boolean;
     target: GetTarget;
   }> = [
     // Deep links cold-load: every route in the spec's map is the SPA's, not a 404.
@@ -48,12 +39,11 @@ describe('resolveGetRequest', () => {
     { name: '/settings/skills → the shell', path: '/settings/skills', target: 'dist' },
     // react-router owns the 404 — it is the only side that knows the route map.
     { name: '/nope → the shell, which renders the 404 route', path: '/nope', target: 'dist' },
-    // /new lost its R1-era legacy pin in R4 Step 1.3: the React composer now carries the
-    // bookmarklet auto-start contract (?skill=&ref=&auto=1&key=), so a full load of /new
-    // is the shell like any other route.
-    { name: '/new with the build → the shell (React composer owns the bookmarklet contract)', path: '/new', target: 'dist' },
-    { name: '/new without the build → the legacy page', path: '/new', distExists: false, target: 'legacy' },
-    { name: '/new?legacy=1 → the legacy page (saved bookmarklets keep an escape hatch)', path: '/new', legacyRequested: true, target: 'legacy' },
+    // The React composer carries the full bookmarklet auto-start contract
+    // (?skill=&ref=&auto=1&key=, BACKWARD_COMPATIBILITY.md) since R4 Step 1.3,
+    // and R7 removed the ?legacy=1 escape hatch with the page it pointed at.
+    { name: '/new → the shell (React composer owns the bookmarklet contract)', path: '/new', target: 'dist' },
+    { name: '/new?legacy=1 has no special meaning — the query is not the path', path: '/new', target: 'dist' },
 
     // Never shadow the API: an unknown /api path must 404 as JSON, not as HTML.
     { name: '/api/runs → passthrough', path: '/api/runs', target: 'passthrough' },
@@ -65,37 +55,37 @@ describe('resolveGetRequest', () => {
 
     // The static routes registered before the catch-all keep their files.
     { name: '/assets/index-abc123.js → passthrough', path: '/assets/index-abc123.js', target: 'passthrough' },
-    { name: '/app.js (legacy) → passthrough', path: '/app.js', target: 'passthrough' },
-    { name: '/style.css (legacy) → passthrough', path: '/style.css', target: 'passthrough' },
-    { name: '/open-mercato.svg → passthrough', path: '/open-mercato.svg', target: 'passthrough' },
+    { name: '/open-mercato.svg (favicon) → passthrough', path: '/open-mercato.svg', target: 'passthrough' },
     // Passthrough is about ownership, not about the build being there.
-    { name: '/app.js with no build → still passthrough', path: '/app.js', distExists: false, target: 'passthrough' },
+    { name: '/assets/x.js with no build → still passthrough', path: '/assets/x.js', distExists: false, target: 'passthrough' },
+    // R7: the legacy asset routes are gone — these are SPA paths like any other.
+    { name: '/app.js → the shell (legacy route retired in R7)', path: '/app.js', target: 'dist' },
+    { name: '/style.css → the shell (legacy route retired in R7)', path: '/style.css', target: 'dist' },
 
-    // No build → the legacy page, never a 404: `npx cezar-cli` is zero-config.
-    { name: '/tasks/x with no build → the legacy page', path: '/tasks/x', distExists: false, target: 'legacy' },
-    { name: '/ with no build → the legacy page', path: '/', distExists: false, target: 'legacy' },
+    // No build → the hint page, never a 404: the URL still answers with help.
+    { name: '/tasks/x with no build → the build-hint page', path: '/tasks/x', distExists: false, target: 'build-hint' },
+    { name: '/ with no build → the build-hint page', path: '/', distExists: false, target: 'build-hint' },
+    { name: '/new with no build → the build-hint page', path: '/new', distExists: false, target: 'build-hint' },
+    // An /api or asset caller is not a person who could run `npm run build:web`.
+    { name: '/api/runs with no build → passthrough, not the hint', path: '/api/runs', distExists: false, target: 'passthrough' },
   ];
 
   for (const c of cases) {
     it(c.name, () => {
-      expect(
-        resolveGetRequest({
-          path: c.path,
-          distExists: c.distExists ?? true,
-          legacyRequested: c.legacyRequested ?? false,
-        }).target,
-      ).toBe(c.target);
+      expect(resolveGetRequest({ path: c.path, distExists: c.distExists ?? true })).toBe(c.target);
     });
   }
+});
 
-  it('hints about the missing build only for requests it actually serves', () => {
-    const opts = { distExists: false, legacyRequested: false };
-    expect(resolveGetRequest({ path: '/tasks/x', ...opts }).hint).toBe(true);
-    // An /api or asset caller is not a person who could run `npm run build:web`.
-    expect(resolveGetRequest({ path: '/api/runs', ...opts }).hint).toBe(false);
-    expect(resolveGetRequest({ path: '/assets/index-abc123.js', ...opts }).hint).toBe(false);
-    // /new behaves like every other shell route now: no build → legacy + the hint.
-    expect(resolveGetRequest({ path: '/new', ...opts }).hint).toBe(true);
+describe('BUILD_HINT_HTML', () => {
+  it('is a self-contained page naming both build commands', () => {
+    // The spec's degradation matrix: "run `npm run dev:web` or `npm run build:web`".
+    expect(BUILD_HINT_HTML).toContain('npm run build:web');
+    expect(BUILD_HINT_HTML).toContain('npm run dev:web');
+    expect(BUILD_HINT_HTML).toContain('<!doctype html>');
+    // Built into the server: no external asset may be needed to render it.
+    expect(BUILD_HINT_HTML).not.toContain('src=');
+    expect(BUILD_HINT_HTML).not.toContain('href=');
   });
 });
 

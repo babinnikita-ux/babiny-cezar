@@ -32,8 +32,9 @@ const MAX_DELTA_BUFFER = 64_000;
 /**
  * v2 lines share the NDJSON file and the store's event bus with v1, but ride
  * a DIFFERENT SSE event name (`ui-event` vs `run-event`) so the legacy UI —
- * which knows only `run-event` and JSON-dumps unknown types into the
- * transcript — never sees them. The discriminator is the dotted namespace:
+ * which knew only `run-event` and JSON-dumped unknown types into the
+ * transcript; retired in R7, but the name split stays as wire shape — never
+ * saw them. The discriminator is the dotted namespace:
  * every v2 type on the wire is dotted (`item.started`, `turn.completed`, …)
  * and no v1 type is. v2's only undotted type, `image`, never reaches the
  * store: the sink drops it in favor of the v1 image pipeline (which persists

@@ -47,7 +47,7 @@ import { fetchGithub } from './github.js';
 import { ensureLaunchKey } from './launch-key.js';
 import { openInTerminal } from './open-in-terminal.js';
 import { createDraftPr } from './pr.js';
-import { ASSET_CACHE_CONTROL, assetContentType, isSafeAssetFilename, resolveGetRequest } from './static-ui.js';
+import { ASSET_CACHE_CONTROL, BUILD_HINT_HTML, assetContentType, isSafeAssetFilename, resolveGetRequest } from './static-ui.js';
 
 export interface ServerDeps {
   repoRoot: string;
@@ -233,18 +233,18 @@ export function createApp(deps: ServerDeps): Hono {
     const distIndex = join(distDir, 'index.html');
     // existsSync per request, like the reads below: `npm run build:web` in a
     // running cockpit takes effect on the next reload, no restart.
-    const { target, hint } = resolveGetRequest({
-      path: c.req.path,
-      distExists: existsSync(distIndex),
-      legacyRequested: c.req.query('legacy') === '1',
-    });
+    const target = resolveGetRequest({ path: c.req.path, distExists: existsSync(distIndex) });
     if (target === 'passthrough') return undefined;
-    if (hint && !hintLogged) {
-      hintLogged = true;
-      console.log('cezar: serving the legacy UI — run `npm run build:web` to use the new cockpit');
+    if (target === 'build-hint') {
+      // Dev-only state (the tarball ships web/dist): serve the built-in hint
+      // page instead of the app — the legacy fallback UI was deleted in R7.
+      if (!hintLogged) {
+        hintLogged = true;
+        console.log('cezar: web/dist is missing — run `npm run build:web` to build the cockpit');
+      }
+      return new Response(BUILD_HINT_HTML, { headers: { 'content-type': HTML_TYPE } });
     }
-    const file = target === 'dist' ? distIndex : join(webDir, 'index.html');
-    return new Response(readFileSync(file), { headers: { 'content-type': HTML_TYPE } });
+    return new Response(readFileSync(distIndex), { headers: { 'content-type': HTML_TYPE } });
   };
 
   // Hashed bundles/fonts of the built app. Vite fingerprints every name, so
@@ -262,9 +262,7 @@ export function createApp(deps: ServerDeps): Hono {
     });
   });
 
-  // The legacy page's own assets — unchanged, so ?legacy=1 keeps working.
-  app.get('/app.js', staticFile('app.js', 'text/javascript; charset=utf-8'));
-  app.get('/style.css', staticFile('style.css', 'text/css; charset=utf-8'));
+  // The favicon web/app/index.html points at (`../open-mercato.svg`).
   app.get('/open-mercato.svg', staticFile('open-mercato.svg', 'image/svg+xml'));
 
   // ---- meta ----------------------------------------------------------------
@@ -917,12 +915,13 @@ export function createApp(deps: ServerDeps): Hono {
       let replaying = true;
       let maxSeq = 0;
       const buffered: RunEvent[] = [];
-      // One endpoint, two SSE event names: v1 lines stay `run-event` (what
-      // the legacy UI listens to and renders — its default branch JSON-dumps
-      // unknown types into the transcript, so v2 must not ride that name);
-      // protocol-v2 lines (dotted types, persisted snapshots AND ephemeral
-      // coalesced deltas) ride `ui-event`, which only v2-aware clients
-      // subscribe to. EventSource ignores names it has no listener for.
+      // One endpoint, two SSE event names: v1 lines stay `run-event` (the name
+      // the legacy UI listened to — its default branch JSON-dumped unknown
+      // types into the transcript, which is why v2 never rode that name; the
+      // split outlives the R7 retirement as wire shape); protocol-v2 lines
+      // (dotted types, persisted snapshots AND ephemeral coalesced deltas)
+      // ride `ui-event`, which only v2-aware clients subscribe to.
+      // EventSource ignores names it has no listener for.
       const writeEvent = (event: RunEvent) =>
         stream.writeSSE({
           event: isV2WireEventType(event.type) ? 'ui-event' : 'run-event',
@@ -1163,8 +1162,8 @@ export function createApp(deps: ServerDeps): Hono {
   // cold-loads and survives a refresh instead of 404ing. `/api/*` and the static
   // files above resolve to `passthrough` and fall through to Hono's own 404 —
   // an unknown API path must never answer with HTML.
-  // Without a web/dist build this serves the legacy page, so `npx cezar-cli`
-  // stays zero-config; `?legacy=1` forces it either way (the R7 escape hatch).
+  // Without a web/dist build this serves the built-in build-hint page (dev-only
+  // state — the published tarball ships web/dist), never a 404.
   app.get('*', (c) => serveShell(c) ?? c.notFound());
 
   return app;

@@ -451,7 +451,7 @@ describe('global SSE stream', () => {
   })
 })
 
-describe('legacy cockpit', () => {
+describe('legacy cockpit retirement (R7)', () => {
   it('the React shell New task CTA stays in the SPA — the React composer, not legacy (R4 1.1)', () => {
     browser.goto(baseUrl + '/')
     browser.click('[data-slot="sidebar"] a[href="/new"]')
@@ -463,15 +463,14 @@ describe('legacy cockpit', () => {
     expect(browser.evaluate('document.getElementById("root") !== null')).toBe(true)
   })
 
-  it('still serves the legacy UI at /?legacy=1', () => {
+  it('/?legacy=1 serves the React shell — the escape hatch retired with the page (R7 1.1)', () => {
     browser.goto(baseUrl + '/?legacy=1')
 
-    // #brand is legacy-only markup from web/index.html — it exists in no React template.
-    expect(browser.isVisible('#brand')).toBe(true)
-    expect(browser.text('#brand .brand-name')).toBe('cezar')
-    expect(browser.evaluate('document.getElementById("root") === null')).toBe(true)
-
-    browser.screenshot(`${artifactsDir}/legacy-shell.png`)
+    // #brand was legacy-only markup from the deleted web/index.html — it exists
+    // in no React template, so its absence proves the old page cannot come back.
+    expect(browser.evaluate('document.getElementById("root") !== null')).toBe(true)
+    expect(browser.evaluate('document.getElementById("brand") === null')).toBe(true)
+    browser.waitForFunction(`document.querySelector('[data-slot="sidebar"]') !== null`)
   })
 
   it('serves the React shell for a full load of /new — the R1 legacy pin is gone (R4 1.3)', () => {
@@ -489,10 +488,11 @@ describe('legacy cockpit', () => {
     expect(browser.url()).toBe(baseUrl + '/new')
   })
 
-  it('/new?legacy=1 still forces the legacy page (the R7 escape hatch)', () => {
+  it('/new?legacy=1 serves the React shell too — no route treats the query specially', () => {
     browser.goto(baseUrl + '/new?legacy=1')
 
-    expect(browser.isVisible('#brand')).toBe(true)
-    expect(browser.evaluate('document.getElementById("root") === null')).toBe(true)
+    expect(browser.evaluate('document.getElementById("root") !== null')).toBe(true)
+    expect(browser.evaluate('document.getElementById("brand") === null')).toBe(true)
+    browser.waitForFunction(`document.querySelector('[data-route="new"]') !== null`)
   })
 })
