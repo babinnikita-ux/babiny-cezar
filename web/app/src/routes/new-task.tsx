@@ -134,9 +134,11 @@ export function NewTaskRoute() {
 
   // Autonomous (#autonomous): the run never pauses for the user. An explicit toggle this session
   // wins; otherwise skills default ON (a skill run is meant to just execute), workflows fall back
-  // to the remembered choice, else off.
-  const autonomousOn =
-    draft.autonomous ?? (source.source === 'skill' ? true : (uiState.data?.lastAutonomous ?? false))
+  // to the remembered choice, else off. Plan-first forces it OFF (and disables the toggle):
+  // planning is inherently interactive, so the run must be able to hand the ball back.
+  const autonomousOn = draft.planFirst
+    ? false
+    : (draft.autonomous ?? (source.source === 'skill' ? true : (uiState.data?.lastAutonomous ?? false)))
 
   // ---- plan mode (#383 + spec 008) ----------------------------------------------------------
   const [plan, setPlan] = useState<PendingPlan | null>(null)
@@ -224,7 +226,8 @@ export function NewTaskRoute() {
     if (draft.planFirst) {
       // Plan mode: submit means PLAN. A rejection propagates — the composer toasts and
       // restores the draft; a success restores the text ourselves (the composer already
-      // cleared optimistically) so Discard hands back exactly what was typed.
+      // cleared optimistically) so Discard hands back exactly what was typed. The review
+      // overlay is deliberate: it's where steps are edited and saved as a reusable chain.
       setPlanning(true)
       try {
         setPlan(pendingPlanOf(text, images, await postPlan(text)))
@@ -374,7 +377,11 @@ export function NewTaskRoute() {
               {worktreeToggleShown ? (
                 <WorktreeToggle on={worktreeOn} onChange={(on) => update({ worktree: on })} />
               ) : null}
-              <AutonomousToggle on={autonomousOn} onChange={(on) => update({ autonomous: on })} />
+              <AutonomousToggle
+                on={autonomousOn}
+                disabled={draft.planFirst}
+                onChange={(on) => update({ autonomous: on })}
+              />
               {repo.data ? <BaseBranchPill repo={repo.data} /> : null}
             </>
           }
@@ -440,20 +447,31 @@ function WorktreeToggle({ on, onChange }: { on: boolean; onChange: (on: boolean)
 
 /** Autonomous toggle (#autonomous): checked = the run never pauses for you, auto-continuing
  *  until the agent is done. No "needs you" is ever raised. */
-function AutonomousToggle({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
+function AutonomousToggle({
+  on,
+  disabled,
+  onChange,
+}: {
+  on: boolean
+  disabled?: boolean
+  onChange: (on: boolean) => void
+}) {
   return (
     <button
       type="button"
       role="checkbox"
       aria-checked={on}
+      disabled={disabled}
       data-slot="autonomous-toggle"
       onClick={() => onChange(!on)}
       title={
-        on
-          ? 'Autonomous — the agent runs to completion without pausing for you'
-          : 'Runs interactively — check to let the agent finish without pausing for you'
+        disabled
+          ? 'Plan-first runs are interactive — autonomous is unavailable'
+          : on
+            ? 'Autonomous — the agent runs to completion without pausing for you'
+            : 'Runs interactively — check to let the agent finish without pausing for you'
       }
-      className={cn(chipClass, on && 'border-primary/60 text-foreground')}
+      className={cn(chipClass, on && !disabled && 'border-primary/60 text-foreground')}
     >
       {on ? (
         <CheckIcon aria-hidden="true" className="size-3 shrink-0 text-primary" />

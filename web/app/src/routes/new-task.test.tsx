@@ -641,6 +641,20 @@ describe('the Start | Plan first toggle', () => {
     expect(startToggle().getAttribute('aria-checked')).toBe('true')
   })
 
+  it('disables the Autonomous toggle in plan mode (planning is interactive)', async () => {
+    serve()
+    renderNewTask()
+    await pillReady()
+    const autonomous = () =>
+      document.querySelector('[data-slot="autonomous-toggle"]') as HTMLButtonElement
+
+    // Off plan mode the toggle is interactive.
+    expect(autonomous().disabled).toBe(false)
+    fireEvent.click(planToggle())
+    expect(autonomous().disabled).toBe(true)
+    expect(autonomous().getAttribute('aria-checked')).toBe('false')
+  })
+
   it('persists in the draft store across unmount/remount', async () => {
     serve()
     const first = renderNewTask()
