@@ -109,9 +109,10 @@ describe('route map', () => {
   })
 
   // Every placeholder now speaks through the shared template — one grammar for every stub.
+  // (/inbox graduated to a real view in R6 1.2 — /workflows is the exemplar until 1.6.)
   it('placeholders render as neutral CenteredStates', () => {
-    renderAt('/inbox')
-    const state = document.querySelector('[data-route="inbox"] [data-slot="centered-state"]')
+    renderAt('/workflows')
+    const state = document.querySelector('[data-route="workflows"] [data-slot="centered-state"]')
     expect(state).not.toBeNull()
     expect(state?.getAttribute('data-tone')).toBe('neutral')
     // A stub is not a hero surface: no decorative backdrop.

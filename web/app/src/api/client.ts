@@ -21,6 +21,7 @@ import type {
   PatchRunInput,
   PickVariantResponse,
   PlanResponse,
+  RemoveTodoResponse,
   RepoBranchResponse,
   RepoCommitPayload,
   RepoResponse,
@@ -31,6 +32,7 @@ import type {
   SetConfigInput,
   SetConfigResponse,
   Skill,
+  StartTodoResponse,
   TodoItem,
   UiState,
   WorkflowsResponse,
@@ -312,6 +314,18 @@ export function patchRun(id: string, patch: PatchRunInput): Promise<RunRecord> {
 /** Deletes the run, its transcript, its worktree and its branch. 409 while it is still active. */
 export function deleteRun(id: string): Promise<DeleteRunResponse> {
   return mutate<DeleteRunResponse>('DELETE', runPath(id))
+}
+
+/** Inbox "Dismiss" (spec 007): check the follow-up off — the server deletes the entry. */
+export function removeTodo(id: string): Promise<RemoveTodoResponse> {
+  return mutate<RemoveTodoResponse>('DELETE', `/api/todos/${encodeURIComponent(id)}`)
+}
+
+/** Inbox "Run" (spec 007): the server turns the entry into a task — a one-off single-step
+ *  workflow around the suggested skill when it exists, plain quick-task otherwise — and
+ *  answers 201 with the new run. 409 when the entry was already started. */
+export function startTodo(id: string): Promise<StartTodoResponse> {
+  return mutate<StartTodoResponse>('POST', `/api/todos/${encodeURIComponent(id)}/start`)
 }
 
 /** "Pick this one" (spec 010): the winner rests at `review` for the gate; the losers are

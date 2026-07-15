@@ -1,6 +1,5 @@
 import {
   BotIcon,
-  InboxIcon,
   PaletteIcon,
   SettingsIcon,
   SparklesIcon,
@@ -11,6 +10,7 @@ import { Route, Routes } from 'react-router'
 
 import { CompareLoading } from './routes/compare-loading'
 import { GithubLoading } from './routes/github/github-loading'
+import { InboxRoute } from './routes/inbox'
 import { NewTaskRoute } from './routes/new-task'
 import { NotFoundRoute } from './routes/not-found'
 import { Placeholder } from './routes/placeholder'
@@ -173,7 +173,9 @@ export function AppRoutes() {
         }
       />
 
-      <Route path="/inbox" element={<Placeholder route="inbox" title="Inbox" icon={<InboxIcon />} />} />
+      {/* The follow-up inbox (R6 Step 1.2): light — no markdown stack — so it rides the main
+          bundle like the overview does. */}
+      <Route path="/inbox" element={<InboxRoute />} />
       <Route path="/workflows" element={<Placeholder route="workflows" title="Workflows" icon={<WorkflowIcon />} />} />
       <Route path="/workflows/:name" element={<Placeholder route="workflow" title="Workflow" icon={<WorkflowIcon />} />} />
 

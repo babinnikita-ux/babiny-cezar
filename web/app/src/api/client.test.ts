@@ -25,7 +25,9 @@ import {
   patchRun,
   pickVariant,
   putUiState,
+  removeTodo,
   sendMessage,
+  startTodo,
 } from './client'
 
 /** The one seam under test: every call must go through `fetch` and nothing else. */
@@ -150,6 +152,9 @@ describe('request shapes', () => {
       body: { text: 'keep going' },
     },
     { name: 'deleteRun', call: () => deleteRun('run-1'), path: '/api/runs/run-1', method: 'DELETE' },
+    // Inbox actions (R6 1.2): the exact legacy endpoints, ids URL-encoded like every other path.
+    { name: 'removeTodo', call: () => removeTodo('todo/1'), path: '/api/todos/todo%2F1', method: 'DELETE' },
+    { name: 'startTodo', call: () => startTodo('todo/1'), path: '/api/todos/todo%2F1/start', method: 'POST' },
     {
       name: 'openRunInCli',
       call: () => openRunInCli('run-1'),

@@ -390,6 +390,16 @@ export interface TodoItem {
   startedTaskId?: string
 }
 
+/** `DELETE /api/todos/:id` — Dismiss checks the entry off. */
+export interface RemoveTodoResponse {
+  removed: boolean
+}
+
+/** `POST /api/todos/:id/start` — Run turns the entry into a task (201 with the new run). */
+export interface StartTodoResponse {
+  run: RunRecord
+}
+
 // ---- GitHub tab (src/server/github.ts) --------------------------------------------------------
 
 export interface GithubItem {
