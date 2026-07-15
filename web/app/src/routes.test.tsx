@@ -83,6 +83,7 @@ describe('route map', () => {
     ['/settings/skills', 'settings-skills', 'Skills'],
     ['/settings/appearance', 'settings-appearance', 'Appearance'],
     ['/settings/agents', 'settings-agents', 'Agents'],
+    ['/settings/notifications', 'settings-notifications', 'Notifications'],
   ]
 
   for (const [url, route, title] of cases) {
@@ -100,14 +101,13 @@ describe('route map', () => {
     expect(screen.queryByRole('heading', { name: 'Loading task…' })).toBeNull()
   })
 
-  // Hidden registry sections (mcp/notifications/keyboard) are deliberately NOT routed —
+  // Hidden registry sections (mcp/keyboard) are deliberately NOT routed —
   // their URLs stay honest 404s until the section ships (registry.tsx `hidden`).
   const unknown = [
     '/nope-404',
     '/tasks',
     '/settings/nope',
     '/settings/mcp',
-    '/settings/notifications',
     '/settings/keyboard',
     '/tasks/abc123/nope',
     '/compare',

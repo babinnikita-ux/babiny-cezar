@@ -6,6 +6,7 @@ import { GlobalEventsProvider } from './api/global-events'
 import { createQueryClient } from './api/query-client'
 import { AppShellContainer } from './components/app-shell-container'
 import { AppearanceProvider } from './components/appearance-provider'
+import { RunNotifications } from './components/run-notifications'
 import { ThemeProvider } from './components/theme-provider'
 import { Toaster } from './components/ui/toaster'
 import { AppRoutes } from './routes'
@@ -31,6 +32,10 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <GlobalEventsProvider>
+        {/* Beside the stream on purpose: it watches the run-list cache the stream patches
+            (and reconciliation refetches), turning attention transitions into browser
+            notifications when the tab is hidden (R6 1.7). Renders nothing. */}
+        <RunNotifications />
         <ThemeProvider>
           {/* Beside ThemeProvider on purpose: appearance (accent/density) is the ui-state.json
               half of the same boot contract — mirror pre-paints, server truth reconciles. */}

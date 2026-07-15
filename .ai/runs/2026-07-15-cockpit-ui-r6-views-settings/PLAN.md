@@ -17,7 +17,7 @@
 | 1 | 1.4 | Skills under Settings: catalog + detail + refresh + bookmarklets, project-first (#377), stable scroll (#384) | done | 32b3484 |
 | 1 | 1.5 | Agents section: default runner, model presets, system prompt (single edit place), base branch | done | e4eadf2 |
 | 1 | 1.6 | Workflows builder on dnd-kit + shadcn: canvas, palette drag, YAML import/export/preview, 8-step limit | done | pending |
-| 1 | 1.7 | Notifications: browser Notification via deriveAttention (off by default) + Settings toggle | todo | — |
+| 1 | 1.7 | Notifications: browser Notification via deriveAttention (off by default) + Settings toggle | done | pending |
 
 ## Goal
 

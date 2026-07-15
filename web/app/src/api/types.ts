@@ -460,6 +460,9 @@ export interface UiState {
   /** Settings → Appearance (redesign R6): accent + density. Theme itself stays in
    *  localStorage (`cez-theme`) — it must pre-paint, and it is per-browser by design. */
   appearance?: { accent?: 'lime' | 'violet'; density?: 'comfortable' | 'compact' }
+  /** Settings → Notifications (redesign R6 1.7): the browser-notification toggle. Off unless
+   *  literally `true`. Permission itself is per-browser and never persisted. */
+  notifications?: { enabled?: boolean }
   [key: string]: unknown
 }
 

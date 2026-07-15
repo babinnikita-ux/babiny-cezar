@@ -11,6 +11,7 @@ import type { ComponentType, SVGProps } from 'react'
 import { CenteredState } from '@/components/centered-state'
 import { AgentsSection } from './agents-section'
 import { AppearanceSection } from './appearance'
+import { NotificationsSection } from './notifications-section'
 import { SkillsSection } from './skills-section'
 
 /**
@@ -19,7 +20,7 @@ import { SkillsSection } from './skills-section'
  * section later is one entry here — no layout work, no route wiring.
  *
  * `hidden` sections are declared but not routed and not listed: they exist so the plan is
- * visible in code (`mcp`, `keyboard` — later phases; `notifications` unhides in Step 1.7)
+ * visible in code (`mcp`, `keyboard` — later phases; `notifications` unhid in Step 1.7)
  * and so unhiding is a one-word diff.
  */
 
@@ -92,8 +93,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     title: 'Notifications',
     description: 'Browser notifications when an agent needs you.',
     icon: BellIcon,
-    component: comingSoon('Notifications', BellIcon),
-    hidden: true, // Step 1.7 unhides this with the real toggle.
+    component: NotificationsSection,
   },
   {
     id: 'keyboard',
