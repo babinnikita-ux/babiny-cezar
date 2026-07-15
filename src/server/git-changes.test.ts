@@ -473,6 +473,86 @@ describe('repo git API routes (R5 Step 1.3 — main working tree)', () => {
     const res = await app.request('/api/repo/branch', { method: 'POST', body: 'not json' });
     expect(res.status).toBe(400);
   });
+
+  // ---- GET /api/repo/commit/:sha (R5 Step 1.7 — structured sibling) ----------
+
+  it('GET /api/repo/commit/:sha without the flag keeps the legacy text-blob shape', async () => {
+    const sha = g(repoRoot, 'rev-parse', 'HEAD').trim();
+    const res = await app.request(`/api/repo/commit/${sha}`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/plain');
+    const text = await res.text();
+    expect(text).toContain(`commit ${sha}`);
+    expect(text).toContain('base');
+  });
+
+  it('?structured=1 answers {sha, subject, author, when, files, stat} with per-file patches', async () => {
+    writeFileSync(join(repoRoot, 'base.txt'), 'base changed\n');
+    writeFileSync(join(repoRoot, 'new.txt'), 'brand new\n');
+    g(repoRoot, 'add', '-A');
+    g(repoRoot, 'commit', '-m', 'second: edit + add');
+    const sha = g(repoRoot, 'rev-parse', 'HEAD').trim();
+
+    const res = await app.request(`/api/repo/commit/${sha}?structured=1`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      sha: string;
+      subject: string;
+      author: string;
+      when: string;
+      files: Array<{ path: string; status: string; adds: number; dels: number; patch: string }>;
+      stat: { adds: number; dels: number; files: number };
+    };
+    expect(body.sha).toBe(sha);
+    expect(body.subject).toBe('second: edit + add');
+    expect(body.author).toBe('cezar-test');
+    expect(body.when.length).toBeGreaterThan(0);
+    const byPath = new Map(body.files.map((f) => [f.path, f]));
+    expect(byPath.get('base.txt')).toMatchObject({ status: 'modified', adds: 1, dels: 1 });
+    expect(byPath.get('new.txt')).toMatchObject({ status: 'added', adds: 1, dels: 0 });
+    expect(byPath.get('new.txt')?.patch).toContain('+brand new');
+    expect(body.stat).toEqual({ adds: 2, dels: 1, files: 2 });
+  });
+
+  it('?structured=1 handles the root commit (no parent) and abbreviated shas', async () => {
+    const full = g(repoRoot, 'rev-parse', 'HEAD').trim();
+    const res = await app.request(`/api/repo/commit/${full.slice(0, 8)}?structured=1`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { sha: string; files: Array<{ path: string }> };
+    // The abbreviation resolves to the full sha, and --root diffs the initial commit.
+    expect(body.sha).toBe(full);
+    expect(body.files.map((f) => f.path).sort()).toEqual(['.gitignore', 'base.txt']);
+  });
+
+  it('?structured=1 answers zero files for a merge commit — no invented side', async () => {
+    g(repoRoot, 'checkout', '-b', 'feature');
+    writeFileSync(join(repoRoot, 'feature.txt'), 'feature work\n');
+    g(repoRoot, 'add', '-A');
+    g(repoRoot, 'commit', '-m', 'feature work');
+    g(repoRoot, 'checkout', 'main');
+    writeFileSync(join(repoRoot, 'main.txt'), 'main work\n');
+    g(repoRoot, 'add', '-A');
+    g(repoRoot, 'commit', '-m', 'main work');
+    g(repoRoot, 'merge', '--no-ff', '-m', 'merge feature', 'feature');
+    const sha = g(repoRoot, 'rev-parse', 'HEAD').trim();
+
+    const res = await app.request(`/api/repo/commit/${sha}?structured=1`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { subject: string; files: unknown[]; stat: { files: number } };
+    expect(body.subject).toBe('merge feature');
+    expect(body.files).toEqual([]);
+    expect(body.stat.files).toBe(0);
+  });
+
+  it('?structured=1 with an unknown or invalid sha is a 409 with a reason, never HTML', async () => {
+    const unknown = await app.request('/api/repo/commit/deadbeefdeadbeef?structured=1');
+    expect(unknown.status).toBe(409);
+    expect(((await unknown.json()) as { error: string }).error.length).toBeGreaterThan(0);
+
+    const invalid = await app.request('/api/repo/commit/not-a-sha?structured=1');
+    expect(invalid.status).toBe(409);
+    expect(((await invalid.json()) as { error: string }).error).toContain('not a commit hash');
+  });
 });
 
 describe('commitAll / pushCurrentBranch — direct degradation paths', () => {

@@ -279,6 +279,27 @@ export interface RepoResponse {
   baseBranch: string | null
 }
 
+/** `GET /api/repo/commit/:sha?structured=1` (R5 Step 1.7) — one commit's metadata plus the
+ *  same `{files, stat}` shape the /changes routes serve. 409 (+ reason) for unknown shas;
+ *  a merge commit honestly answers zero files. The bare route keeps its legacy text shape. */
+export interface RepoCommitPayload {
+  sha: string
+  subject: string
+  author: string
+  /** Relative time ("3 hours ago") — same `%cr` format as the /api/repo log. */
+  when: string
+  files: ChangedFile[]
+  stat: { adds: number; dels: number; files: number }
+}
+
+/** `POST /api/repo/branch` — switch to an existing branch or create one (from `from` or HEAD)
+ *  and switch. Every predictable git failure (invalid name, unknown `from`, dirty-tree
+ *  checkout conflict) is a 409 whose ApiError speaks git's words. */
+export interface RepoBranchResponse {
+  branch: string
+  created: boolean
+}
+
 // ---- workflows (src/workflows/types.ts, src/workflows/load.ts) ------------------------------
 
 export interface WorkflowStepDef {

@@ -1,12 +1,10 @@
 import {
   EllipsisVerticalIcon,
   ExternalLinkIcon,
-  GitBranchIcon,
   GitCommitHorizontalIcon,
   GitPullRequestIcon,
   SquareTerminalIcon,
   UploadIcon,
-  WrapTextIcon,
 } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 
@@ -21,7 +19,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import type { GitAction, GitActionBar, GitActionId } from '@/lib/git-actions'
-import { cn } from '@/lib/utils'
+
+import { BranchChip, DiffViewToggles } from './diff-controls'
 
 /**
  * The Changes tab's toolbar (spec #390). Deliberately DUMB about git: it renders whatever
@@ -55,42 +54,14 @@ export function GitToolbar({
       data-slot="git-toolbar"
       className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b border-border px-4 py-2 md:px-6"
     >
-      {branch ? (
-        <span
-          data-slot="branch-chip"
-          className="flex min-w-0 items-center gap-1 rounded-sm border border-border bg-card px-1.5 py-px font-mono text-[11px] font-medium"
-        >
-          <GitBranchIcon aria-hidden="true" className="size-3 shrink-0" />
-          <span className="truncate">{branch}</span>
-        </span>
-      ) : null}
+      {branch ? <BranchChip branch={branch} /> : null}
       {stat ? <AnimatedDiffStat stat={stat} /> : null}
 
       <span className="ml-auto flex items-center gap-1">
         {/* View toggles — layout preferences, not git actions, so not the policy's business.
             Hidden below md: phones force unified+wrap (the parent owns that rule). */}
         <span className="hidden items-center gap-1 md:flex">
-          <span
-            data-slot="diff-mode-toggle"
-            role="group"
-            aria-label="Diff layout"
-            className="flex items-center rounded-md border border-border p-0.5"
-          >
-            <ModeButton current={mode} value="unified" onModeChange={onModeChange} />
-            <ModeButton current={mode} value="split" onModeChange={onModeChange} />
-          </span>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            data-slot="wrap-toggle"
-            aria-pressed={wrap}
-            aria-label="Wrap long lines"
-            title="Wrap long lines"
-            className={cn(wrap && 'bg-muted text-foreground')}
-            onClick={() => onWrapChange(!wrap)}
-          >
-            <WrapTextIcon aria-hidden="true" />
-          </Button>
+          <DiffViewToggles mode={mode} wrap={wrap} onModeChange={onModeChange} onWrapChange={onWrapChange} />
         </span>
 
         {bar.secondary.map((action) => (
@@ -166,32 +137,6 @@ function ActionButton({
       {ACTION_ICONS[action.id]}
       {action.label}
     </Button>
-  )
-}
-
-function ModeButton({
-  current,
-  value,
-  onModeChange,
-}: {
-  current: DiffMode
-  value: DiffMode
-  onModeChange: (mode: DiffMode) => void
-}) {
-  const active = current === value
-  return (
-    <button
-      type="button"
-      data-mode={value}
-      aria-pressed={active}
-      onClick={() => onModeChange(value)}
-      className={cn(
-        'rounded-[5px] px-2 py-0.5 text-[11px] font-medium capitalize',
-        active ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground',
-      )}
-    >
-      {value}
-    </button>
   )
 }
 

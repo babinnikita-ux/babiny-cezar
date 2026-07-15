@@ -181,15 +181,26 @@ export async function collectChanges(
   const patchOut = await git(dir, ['diff', '--patch', '-M', '--no-color', base]);
   if (!patchOut.ok) return { ok: false, error: gitReason(patchOut, 'git diff failed') };
 
-  const statuses = parseNameStatusZ(nameStatus.stdout);
-  const counts = parseNumstatZ(numstat.stdout);
-  const patches = splitPatch(patchOut.stdout);
+  return { ok: true, changes: assemblePayload(nameStatus.stdout, numstat.stdout, patchOut.stdout, patchCap) };
+}
+
+/** The three raw `git diff` listings (name-status, numstat, patch) → the `{files, stat}`
+ *  payload. Shared by the working-tree diff above and the commit diff below — the listings
+ *  come out in git's path order either way, so index-matching the patch sections is safe;
+ *  a length mismatch degrades to "no patch". */
+function assemblePayload(
+  nameStatusOut: string,
+  numstatOut: string,
+  patchOut: string,
+  patchCap: number,
+): ChangesPayload {
+  const statuses = parseNameStatusZ(nameStatusOut);
+  const counts = parseNumstatZ(numstatOut);
+  const patches = splitPatch(patchOut);
   const countByPath = new Map(counts.map((entry) => [entry.path, entry]));
 
   const files: ChangedFile[] = statuses.map((entry, idx) => {
     const count = countByPath.get(entry.path);
-    // All three listings come out in git's path order, so index-matching the
-    // patch sections is safe; a length mismatch degrades to "no patch".
     let patch = patches.length === statuses.length ? (patches[idx] ?? '') : '';
     if (patch.length > patchCap) patch = `${patch.slice(0, patchCap)}\n… (patch truncated)`;
     return {
@@ -204,16 +215,59 @@ export async function collectChanges(
   });
 
   return {
-    ok: true,
-    changes: {
-      files,
-      stat: {
-        adds: files.reduce((sum, f) => sum + f.adds, 0),
-        dels: files.reduce((sum, f) => sum + f.dels, 0),
-        files: files.length,
-      },
+    files,
+    stat: {
+      adds: files.reduce((sum, f) => sum + f.adds, 0),
+      dels: files.reduce((sum, f) => sum + f.dels, 0),
+      files: files.length,
     },
   };
+}
+
+// ---- commit diffs -----------------------------------------------------------
+
+/** `GET /api/repo/commit/:sha?structured=1` — one commit's metadata plus the same
+ *  structured `{files, stat}` shape the working-tree routes serve (R5 Step 1.7). The
+ *  legacy text-blob answer of that route is a protected surface and stays untouched. */
+export interface CommitPayload {
+  sha: string;
+  subject: string;
+  author: string;
+  /** Relative time ("3 hours ago") — same `%cr` format the /api/repo log uses. */
+  when: string;
+  files: ChangedFile[];
+  stat: { adds: number; dels: number; files: number };
+}
+
+export type CommitChangesResult = { ok: true; commit: CommitPayload } | { ok: false; error: string };
+
+/**
+ * Structured diff of ONE commit vs its first parent (`--root` covers the initial commit).
+ * A merge commit honestly answers zero files — `git diff-tree` shows no diff for merges
+ * without `-m`/`-c`, and inventing one side's diff would misattribute the changes.
+ * Unknown/invalid shas degrade to `{ ok:false, error }` for the route's 409.
+ */
+export async function collectCommitChanges(
+  dir: string,
+  sha: string,
+  patchCap = PATCH_CAP,
+): Promise<CommitChangesResult> {
+  if (!/^[0-9a-f]{4,40}$/i.test(sha)) return { ok: false, error: `not a commit hash: ${sha}` };
+
+  const meta = await git(dir, ['show', '-s', '--format=%H%x1f%s%x1f%an%x1f%cr', `${sha}^{commit}`]);
+  if (!meta.ok) return { ok: false, error: gitReason(meta, `unknown commit: ${sha}`) };
+  const [fullSha = '', subject = '', author = '', when = ''] = meta.stdout.trim().split('\x1f');
+
+  const common = ['diff-tree', '--no-commit-id', '--root', '-r', '-M'];
+  const nameStatus = await git(dir, [...common, '--name-status', '-z', fullSha]);
+  if (!nameStatus.ok) return { ok: false, error: gitReason(nameStatus, 'git diff-tree failed') };
+  const numstat = await git(dir, [...common, '--numstat', '-z', fullSha]);
+  if (!numstat.ok) return { ok: false, error: gitReason(numstat, 'git diff-tree failed') };
+  const patchOut = await git(dir, [...common, '--patch', '--no-color', fullSha]);
+  if (!patchOut.ok) return { ok: false, error: gitReason(patchOut, 'git diff-tree failed') };
+
+  const payload = assemblePayload(nameStatus.stdout, numstat.stdout, patchOut.stdout, patchCap);
+  return { ok: true, commit: { sha: fullSha, subject, author, when, ...payload } };
 }
 
 // ---- worktree file browsing ---------------------------------------------------

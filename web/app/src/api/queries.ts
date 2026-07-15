@@ -5,6 +5,8 @@ import {
   getGroup,
   getHealth,
   getRepo,
+  getRepoChanges,
+  getRepoCommit,
   getRun,
   getRunChanges,
   getRunDiff,
@@ -47,6 +49,10 @@ export const queryKeys = {
   workflows: ['workflows'] as const,
   skills: ['skills'] as const,
   repo: ['repo'] as const,
+  /** Children of `repo` on purpose: invalidating `queryKeys.repo` (a branch switch, a new
+   *  commit) prefix-matches the working-tree diff and every cached commit diff too. */
+  repoChanges: ['repo', 'changes'] as const,
+  repoCommit: (sha: string) => ['repo', 'commit', sha] as const,
   uiState: ['ui-state'] as const,
   github: (params: { limit?: number } = {}) => ['github', params.limit ?? null] as const,
 } as const
@@ -162,6 +168,27 @@ export function useRepo() {
   return useQuery({
     queryKey: queryKeys.repo,
     queryFn: ({ signal }) => getRepo({ signal }),
+  })
+}
+
+/** The main working tree's structured diff behind the repo view's Changes section (R5 1.7).
+ *  Same 409 stance as `useRunChanges`: "not a git repository" is an answer, not a hiccup. */
+export function useRepoChanges() {
+  return useQuery({
+    queryKey: queryKeys.repoChanges,
+    queryFn: ({ signal }) => getRepoChanges({ signal }),
+    retry: false,
+  })
+}
+
+/** One commit's structured diff (R5 repo view). A 409 ("unknown commit") is an answer retries
+ *  cannot change. Cached per sha — commit history is immutable, so revisits are free. */
+export function useRepoCommit(sha: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.repoCommit(sha ?? ''),
+    queryFn: ({ signal }) => getRepoCommit(sha as string, { signal }),
+    enabled: Boolean(sha),
+    retry: false,
   })
 }
 

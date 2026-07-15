@@ -10,6 +10,8 @@ import type {
   GroupResponse as WebGroupResponse,
   GroupVariant as WebGroupVariant,
   PickVariantResponse as WebPickVariantResponse,
+  RepoBranchResponse as WebRepoBranchResponse,
+  RepoCommitPayload as WebRepoCommitPayload,
   LogEntry as WebLogEntry,
   ProcessUsage as WebProcessUsage,
   RepoInfo as WebRepoInfo,
@@ -70,7 +72,7 @@ import type { WorkflowLoadIssue, loadWorkflows } from '../workflows/load.js';
 import type { WorkflowDef, WorkflowStepDef } from '../workflows/types.js';
 import type { Capabilities } from './capabilities.js';
 import type { ForgeAvailability, ForgeKind } from './forge/index.js';
-import type { ChangedFile, ChangesPayload, DirEntry } from './git-changes.js';
+import type { BranchResult, ChangedFile, ChangesPayload, CommitPayload, DirEntry } from './git-changes.js';
 import type { GithubData, GithubItem } from './github.js';
 import type { LogEntry, RepoInfo, StatusEntry } from './git.js';
 import type { GroupResponse, GroupVariant, PickVariantResponse } from './server.js';
@@ -129,6 +131,13 @@ const guards = {
   worktreeDirEntry: true satisfies Exact<DirEntry, WebWorktreeDirEntry>,
   capabilities: true satisfies Exact<Capabilities, WebCapabilities>,
   forgeInfo: true satisfies Exact<{ kind: ForgeKind } & ForgeAvailability, WebForgeInfo>,
+  // Repo view (R5 Step 1.7): the structured commit diff and the branch action's answer
+  // (the `/api/repo/branch` route serializes the ok-arm of BranchResult minus its `ok`).
+  repoCommitPayload: true satisfies Exact<CommitPayload, WebRepoCommitPayload>,
+  repoBranchResponse: true satisfies Exact<
+    Omit<Extract<BranchResult, { ok: true }>, 'ok'>,
+    WebRepoBranchResponse
+  >,
 
   // ---- protocol v2 (`web/app/src/protocol/` mirrors `src/core/ui-events.ts` +
   // `src/core/tool-display.ts`). The full unions are guarded, not just spot fields:

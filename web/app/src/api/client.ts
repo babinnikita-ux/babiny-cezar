@@ -21,6 +21,8 @@ import type {
   PatchRunInput,
   PickVariantResponse,
   PlanResponse,
+  RepoBranchResponse,
+  RepoCommitPayload,
   RepoResponse,
   RunRecord,
   WorktreeEntry,
@@ -202,6 +204,18 @@ export function getRepo(opts?: ReadOptions): Promise<RepoResponse> {
   return get<RepoResponse>('/api/repo', opts)
 }
 
+/** The main working tree's structured uncommitted diff vs HEAD (R5 repo view). 409 (as an
+ *  ApiError with the reason) when the server runs outside a git repository. */
+export function getRepoChanges(opts?: ReadOptions): Promise<ChangesPayload> {
+  return get<ChangesPayload>('/api/repo/changes', opts)
+}
+
+/** One commit's structured diff (R5 repo view): `?structured=1` on the legacy commit route —
+ *  additive, the text-blob answer stays for the legacy UI. 409 + reason for unknown shas. */
+export function getRepoCommit(sha: string, opts?: ReadOptions): Promise<RepoCommitPayload> {
+  return get<RepoCommitPayload>(`/api/repo/commit/${encodeURIComponent(sha)}?structured=1`, opts)
+}
+
 /** Issues + PRs via the logged-in `gh`. Degrades to `{ available: false, reason }` server-side —
  *  an unreachable forge is a hint in the tab, not an ApiError. */
 export function getGithub(
@@ -331,6 +345,13 @@ export function sendMessage(id: string, message: MessageInput): Promise<MessageR
     text: message.text ?? '',
     images: message.images ?? [],
   })
+}
+
+/** Repo-view branch action (R5): switch to an existing branch, or create one (from `from` or
+ *  HEAD) and switch. Invalid names, unknown start points and dirty-tree checkout conflicts
+ *  all come back as 409 whose ApiError carries git's own reason. */
+export function createRepoBranch(input: { name: string; from?: string }): Promise<RepoBranchResponse> {
+  return mutate<RepoBranchResponse>('POST', '/api/repo/branch', input)
 }
 
 // ---- plan mode (spec 008) -------------------------------------------------------------------

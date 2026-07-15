@@ -13,7 +13,7 @@ import {
   Trash2Icon,
 } from 'lucide-react'
 import { Fragment, useState, type ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { useNavigate } from 'react-router'
 
 import { ApiError, archiveRun, cancelRun, continueRun, deleteRun, openRunInCli } from '@/api/client'
 import { queryKeys, usePatchRun, useRunHandoff, useRuns } from '@/api/queries'
@@ -21,6 +21,7 @@ import type { ApiRun } from '@/api/types'
 import { DiffStatLabel } from '@/components/diff-stat'
 import { TitleEditInput, useTitleEditor } from '@/components/editable-title'
 import { Pill } from '@/components/pill'
+import { TabLink } from '@/components/tab-link'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,7 +45,6 @@ import { deriveAttention } from '@/lib/attention'
 import { compactTokens } from '@/lib/format'
 import { queuePositions, runTitle } from '@/lib/task-groups'
 import { formatCost } from '@/lib/tasks-table'
-import { cn } from '@/lib/utils'
 
 import { Markdown } from './markdown'
 import { finishTitle, resumeHint, runActionFlags } from './run-actions'
@@ -354,25 +354,6 @@ function MetaRow({ run }: { run: ApiRun }) {
         </Fragment>
       ))}
     </div>
-  )
-}
-
-/** One tab (mockup `.tab`). Since R5 the header renders on all three run-detail surfaces
- *  (Session | Changes | Files) — `RunHeader`'s `tab` prop says which underline is active. */
-function TabLink({ to, active = false, children }: { to: string; active?: boolean; children: ReactNode }) {
-  return (
-    <Link
-      to={to}
-      aria-current={active ? 'page' : undefined}
-      className={cn(
-        '-mb-px flex h-8 items-center rounded-t-md border-b-2 px-3 text-[13px] font-medium',
-        active
-          ? 'border-foreground font-semibold text-foreground'
-          : 'border-transparent text-muted-foreground hover:bg-muted hover:text-foreground',
-      )}
-    >
-      {children}
-    </Link>
   )
 }
 

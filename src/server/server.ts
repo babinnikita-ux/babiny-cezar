@@ -33,6 +33,7 @@ import { removeWorktree, worktreeDiff, worktreeDiffStat } from '../git-worktree.
 import { getBranches, getCommit, getDiff, getLog, getRepoInfo, getStatus } from './git.js';
 import {
   collectChanges,
+  collectCommitChanges,
   commitAll,
   createOrSwitchBranch,
   imageMimeType,
@@ -1052,8 +1053,18 @@ export function createApp(deps: ServerDeps): Hono {
   });
 
   // One commit's message + stat + patch — the Repo view expands it inline.
+  // `?structured=1` is the ADDITIVE sibling (R5 Step 1.7): the new repo view's commit-diff
+  // shape `{sha, subject, author, when, files, stat}` with 409 + reason on failure. The
+  // legacy text answer below is a protected surface (BACKWARD_COMPATIBILITY.md §2) — its
+  // shape, including the in-band failure sentences, stays exactly as it was.
   app.get('/api/repo/commit/:sha', async (c) => {
     const info = await getRepoInfo(repoRoot);
+    if (c.req.query('structured') === '1') {
+      if (!info) return c.json({ error: 'not a git repository' }, 409);
+      const result = await collectCommitChanges(info.root, c.req.param('sha'));
+      if (!result.ok) return c.json({ error: result.error }, 409);
+      return c.json(result.commit);
+    }
     if (!info) return c.text('not a git repository');
     try {
       return c.text(await getCommit(info.root, c.req.param('sha')));

@@ -1,7 +1,6 @@
 import {
   BotIcon,
   CircleDotIcon,
-  GitBranchIcon,
   GitPullRequestIcon,
   InboxIcon,
   PaletteIcon,
@@ -17,6 +16,7 @@ import { CompareLoading } from './routes/compare-loading'
 import { NewTaskRoute } from './routes/new-task'
 import { NotFoundRoute } from './routes/not-found'
 import { Placeholder } from './routes/placeholder'
+import { RepoGitLoading } from './routes/repo-git/repo-git-loading'
 import { GitTabLoading } from './routes/task-git/git-tab-loading'
 import { ThreadLoading } from './routes/task-thread/thread-loading'
 import { TasksOverviewRoute } from './routes/tasks-overview'
@@ -42,6 +42,12 @@ const TaskChangesRoute = lazy(() =>
 )
 const TaskFilesRoute = lazy(() =>
   import('./routes/task-git/task-files').then((m) => ({ default: m.TaskFilesRoute })),
+)
+
+/** Lazy because the repo view renders through the `<Diff>` facade and the Shiki singleton —
+ *  the same heavy chunk the task git tabs ride; the home screen must not pay for it. */
+const RepoGitRoute = lazy(() =>
+  import('./routes/repo-git/repo-git').then((m) => ({ default: m.RepoGitRoute })),
 )
 
 /** The route map from the spec's "Routing — every surface is a URL" section.
@@ -93,7 +99,40 @@ export function AppRoutes() {
         }
       />
 
-      <Route path="/git" element={<Placeholder route="git" title="Git" icon={<GitBranchIcon />} />} />
+      {/* The repo view (R5 Step 1.7): each segment is a URL — /git (working-tree changes),
+          /git/commits (+ /:sha for one commit's diff), /git/branches. */}
+      <Route
+        path="/git"
+        element={
+          <Suspense fallback={<RepoGitLoading />}>
+            <RepoGitRoute tab="changes" />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/git/commits"
+        element={
+          <Suspense fallback={<RepoGitLoading />}>
+            <RepoGitRoute tab="commits" />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/git/commits/:sha"
+        element={
+          <Suspense fallback={<RepoGitLoading />}>
+            <RepoGitRoute tab="commits" />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/git/branches"
+        element={
+          <Suspense fallback={<RepoGitLoading />}>
+            <RepoGitRoute tab="branches" />
+          </Suspense>
+        }
+      />
       <Route path="/github" element={<Placeholder route="github" title="GitHub" icon={<GithubIcon />} />} />
       <Route path="/github/issues/:n" element={<Placeholder route="github-issue" title="Issue" icon={<CircleDotIcon />} />} />
       <Route path="/github/prs/:n" element={<Placeholder route="github-pr" title="Pull request" icon={<GitPullRequestIcon />} />} />

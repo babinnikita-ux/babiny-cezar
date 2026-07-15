@@ -55,7 +55,12 @@ describe('route map', () => {
     ['/tasks/abc123/files', 'task-files', 'Loading files…'],
     // The real compare view (Step R3 2.3): with fetch never answering it is honestly loading.
     ['/compare/grp-1', 'compare', 'Loading variants…'],
-    ['/git', 'git', 'Git'],
+    // The real repo view (R5 Step 1.7): with fetch never answering it is honestly loading —
+    // and every segment is its own URL, commit deep links included.
+    ['/git', 'repo-git', 'Loading repository…'],
+    ['/git/commits', 'repo-git', 'Loading repository…'],
+    ['/git/commits/abc1234', 'repo-git', 'Loading repository…'],
+    ['/git/branches', 'repo-git', 'Loading repository…'],
     ['/github', 'github', 'GitHub'],
     ['/github/issues/42', 'github-issue', 'Issue'],
     ['/github/prs/7', 'github-pr', 'Pull request'],
@@ -102,8 +107,8 @@ describe('route map', () => {
 
   // Every placeholder now speaks through the shared template — one grammar for every stub.
   it('placeholders render as neutral CenteredStates', () => {
-    renderAt('/git')
-    const state = document.querySelector('[data-route="git"] [data-slot="centered-state"]')
+    renderAt('/inbox')
+    const state = document.querySelector('[data-route="inbox"] [data-slot="centered-state"]')
     expect(state).not.toBeNull()
     expect(state?.getAttribute('data-tone')).toBe('neutral')
     // A stub is not a hero surface: no decorative backdrop.

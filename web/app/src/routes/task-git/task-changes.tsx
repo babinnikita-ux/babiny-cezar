@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { FileDiffIcon, GitCommitHorizontalIcon } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams } from 'react-router'
 
 import { ApiError, createRunPr, getRunFile, openRunInCli, pushRun } from '@/api/client'
@@ -10,6 +10,7 @@ import { CenteredState } from '@/components/centered-state'
 import { Diff, type DiffMode } from '@/components/diff'
 import { toast } from '@/components/ui/toaster'
 import { gitActionPolicy, type GitActionId } from '@/lib/git-actions'
+import { useIsDesktop } from '@/lib/use-desktop'
 
 import { lastSessionId } from '../task-thread/run-actions'
 import { RunHeader } from '../task-thread/run-header'
@@ -36,22 +37,6 @@ export function TaskChangesRoute() {
   if (run.isPending) return <GitTabLoading tab="changes" />
   if (run.isError) return <GitTabLoadError tab="changes" error={run.error} />
   return <ChangesView run={run.data} />
-}
-
-/** md-and-up, live: the forced-mobile rule must follow a rotation/resize, not the first
- *  render. jsdom (no matchMedia) counts as desktop, same convention as plan-dock.ts. */
-function useIsDesktop(): boolean {
-  const [desktop, setDesktop] = useState(
-    () => typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 768px)').matches,
-  )
-  useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return
-    const query = window.matchMedia('(min-width: 768px)')
-    const onChange = (event: MediaQueryListEvent) => setDesktop(event.matches)
-    query.addEventListener('change', onChange)
-    return () => query.removeEventListener('change', onChange)
-  }, [])
-  return desktop
 }
 
 function ChangesView({ run }: { run: ApiRun }) {
