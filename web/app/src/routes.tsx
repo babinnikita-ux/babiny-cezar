@@ -1,10 +1,4 @@
-import {
-  BotIcon,
-  PaletteIcon,
-  SettingsIcon,
-  SparklesIcon,
-  WorkflowIcon,
-} from 'lucide-react'
+import { WorkflowIcon } from 'lucide-react'
 import { Suspense, lazy } from 'react'
 import { Route, Routes } from 'react-router'
 
@@ -17,6 +11,8 @@ import { Placeholder } from './routes/placeholder'
 import { RepoGitLoading } from './routes/repo-git/repo-git-loading'
 import { GitTabLoading } from './routes/task-git/git-tab-loading'
 import { ThreadLoading } from './routes/task-thread/thread-loading'
+import { visibleSettingsSections } from './routes/settings/registry'
+import { SettingsIndexRoute, SettingsSectionRoute } from './routes/settings/settings-shell'
 import { TasksOverviewRoute } from './routes/tasks-overview'
 
 /** Lazy ON PURPOSE: the thread view carries the markdown stack (Streamdown + remark/rehype,
@@ -179,10 +175,17 @@ export function AppRoutes() {
       <Route path="/workflows" element={<Placeholder route="workflows" title="Workflows" icon={<WorkflowIcon />} />} />
       <Route path="/workflows/:name" element={<Placeholder route="workflow" title="Workflow" icon={<WorkflowIcon />} />} />
 
-      <Route path="/settings" element={<Placeholder route="settings" title="Settings" icon={<SettingsIcon />} />} />
-      <Route path="/settings/skills" element={<Placeholder route="settings-skills" title="Skills" icon={<SparklesIcon />} />} />
-      <Route path="/settings/appearance" element={<Placeholder route="settings-appearance" title="Appearance" icon={<PaletteIcon />} />} />
-      <Route path="/settings/agents" element={<Placeholder route="settings-agents" title="Agents" icon={<BotIcon />} />} />
+      {/* Settings (R6 Step 1.3): registry-driven — the section list, nav and routes all come
+          from routes/settings/registry.tsx. Hidden sections are NOT routed, so their URLs are
+          honest 404s until the section ships (notifications unhides in Step 1.7). */}
+      <Route path="/settings" element={<SettingsIndexRoute />} />
+      {visibleSettingsSections().map((section) => (
+        <Route
+          key={section.id}
+          path={`/settings/${section.id}`}
+          element={<SettingsSectionRoute section={section} />}
+        />
+      ))}
 
       <Route path="*" element={<NotFoundRoute />} />
     </Routes>

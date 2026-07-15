@@ -4,7 +4,9 @@ import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from './api/query-client'
+import { AppearanceProvider } from './components/appearance-provider'
 import { ListViewProvider } from './components/list-view'
+import { ThemeProvider } from './components/theme-provider'
 import { AppRoutes } from './routes'
 import { resetDraft } from './routes/new-task-draft'
 
@@ -23,15 +25,20 @@ afterEach(() => {
 })
 
 /** Cold-load the router at a URL, exactly as a pasted deep link would — under the same providers
- *  the app shell supplies (the overview at `/` needs the query cache and the shared list view). */
+ *  the app shell supplies (the overview at `/` needs the query cache and the shared list view;
+ *  the Settings appearance section reads the theme and appearance contexts). */
 function renderAt(entry: string) {
   render(
     <QueryClientProvider client={createQueryClient()}>
-      <MemoryRouter initialEntries={[entry]}>
-        <ListViewProvider>
-          <AppRoutes />
-        </ListViewProvider>
-      </MemoryRouter>
+      <ThemeProvider>
+        <AppearanceProvider>
+          <MemoryRouter initialEntries={[entry]}>
+            <ListViewProvider>
+              <AppRoutes />
+            </ListViewProvider>
+          </MemoryRouter>
+        </AppearanceProvider>
+      </ThemeProvider>
     </QueryClientProvider>,
   )
 }
@@ -91,7 +98,18 @@ describe('route map', () => {
     expect(screen.queryByRole('heading', { name: 'Loading task…' })).toBeNull()
   })
 
-  const unknown = ['/nope-404', '/tasks', '/settings/nope', '/tasks/abc123/nope', '/compare']
+  // Hidden registry sections (mcp/notifications/keyboard) are deliberately NOT routed —
+  // their URLs stay honest 404s until the section ships (registry.tsx `hidden`).
+  const unknown = [
+    '/nope-404',
+    '/tasks',
+    '/settings/nope',
+    '/settings/mcp',
+    '/settings/notifications',
+    '/settings/keyboard',
+    '/tasks/abc123/nope',
+    '/compare',
+  ]
   for (const url of unknown) {
     it(`${url} → the 404 route`, () => {
       renderAt(url)

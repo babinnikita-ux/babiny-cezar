@@ -27,6 +27,17 @@
         } catch (e) {
           // Storage or matchMedia unavailable — the default dark tokens already apply.
         }
+        // Accent + density before first paint, from the localStorage MIRROR of ui-state.json
+        // (src/lib/appearance.ts owns the contract; keep the two in sync). Defaults are the
+        // absence of the attribute, so only the known deviations are stamped.
+        try {
+          if (localStorage.getItem('cez-accent') === 'violet')
+            document.documentElement.dataset.accent = 'violet'
+          if (localStorage.getItem('cez-density') === 'compact')
+            document.documentElement.dataset.density = 'compact'
+        } catch (e) {
+          // Storage unavailable — lime/comfortable defaults already apply.
+        }
       })()
     </script>
   </head>

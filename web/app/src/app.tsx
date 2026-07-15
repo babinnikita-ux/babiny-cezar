@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router'
 import { GlobalEventsProvider } from './api/global-events'
 import { createQueryClient } from './api/query-client'
 import { AppShellContainer } from './components/app-shell-container'
+import { AppearanceProvider } from './components/appearance-provider'
 import { ThemeProvider } from './components/theme-provider'
 import { Toaster } from './components/ui/toaster'
 import { AppRoutes } from './routes'
@@ -31,13 +32,17 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <GlobalEventsProvider>
         <ThemeProvider>
-          <BrowserRouter>
-            <AppShellContainer>
-              <AppRoutes />
-            </AppShellContainer>
-            {/* One toast outlet for the whole app — `toast()` is a module-level call. */}
-            <Toaster />
-          </BrowserRouter>
+          {/* Beside ThemeProvider on purpose: appearance (accent/density) is the ui-state.json
+              half of the same boot contract — mirror pre-paints, server truth reconciles. */}
+          <AppearanceProvider>
+            <BrowserRouter>
+              <AppShellContainer>
+                <AppRoutes />
+              </AppShellContainer>
+              {/* One toast outlet for the whole app — `toast()` is a module-level call. */}
+              <Toaster />
+            </BrowserRouter>
+          </AppearanceProvider>
         </ThemeProvider>
       </GlobalEventsProvider>
     </QueryClientProvider>

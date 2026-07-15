@@ -168,6 +168,15 @@ const uiStateSchema = z
     // Runs area presentation (#348): the sidebar-list + detail pane, or the
     // full-width table ("task manager") view.
     runsView: z.enum(['list', 'table']).optional(),
+    // Settings → Appearance (redesign R6): accent + density. ADDITIVE — the theme itself
+    // stays in the browser (`cez-theme` localStorage, pre-paint). The cockpit always PUTs
+    // the whole object because the top-level merge below is shallow.
+    appearance: z
+      .object({
+        accent: z.enum(['lime', 'violet']).optional(),
+        density: z.enum(['comfortable', 'compact']).optional(),
+      })
+      .optional(),
   })
   .passthrough();
 

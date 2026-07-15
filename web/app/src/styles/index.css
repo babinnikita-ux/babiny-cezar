@@ -92,8 +92,10 @@
   --contrast: #ebebeb;
   --contrast-foreground: #171717;
 
-  /* accents */
-  --primary: #a8f372;
+  /* accents — `--accent-lime` is the stable name for the brand lime; `--primary` points at
+   * whichever accent family is active (Settings → Appearance swaps it via [data-accent]). */
+  --accent-lime: #a8f372;
+  --primary: var(--accent-lime);
   --primary-foreground: #0d0d0d;
   --violet: #8f86e8;
   /* Text/icons printed *on* --violet (the Inbox count badge). White in both themes — the violet
@@ -174,6 +176,31 @@
   --syn-num: #b91c1c;
   --syn-punc: #6b7280;
   --syn-var: #111827;
+}
+
+/* ---------- appearance: accent + density (Settings → Appearance, redesign R6) ----------
+ * `data-accent` / `data-density` land on <html> before first paint (the index.html pre-paint
+ * script reads the localStorage mirror; ui-state.json is the authoritative store — see
+ * src/lib/appearance.ts). The default (lime / comfortable) is the ABSENCE of the attribute,
+ * so these blocks only name the deviations.
+ */
+
+/* Violet accent: the `--primary` family swaps onto the existing violet tokens. An accent is
+ * exactly a `--primary` family swap — a new accent = a new block here + one entry in
+ * ACCENT_OPTIONS (routes/settings/appearance.tsx). */
+:root[data-accent='violet'] {
+  --primary: var(--violet);
+  --primary-foreground: var(--violet-foreground);
+  --ring: var(--violet);
+}
+
+/* Compact density: Tailwind v4's whole numeric spacing scale keys off ONE token (`--spacing`,
+ * default 0.25rem — every `p-4`/`gap-2`/`h-14` is `calc(var(--spacing) * n)`), so shrinking it
+ * to 3.5px/unit tightens paddings, gaps and control heights ~12% across the cockpit while the
+ * type scale stays untouched. Declared on :root[…] (unlayered) so it outranks the
+ * `@layer theme` default. */
+:root[data-density='compact'] {
+  --spacing: 0.21875rem;
 }
 
 /* ---------- tokens: radius + shadow ----------

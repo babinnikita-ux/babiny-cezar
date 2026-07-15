@@ -437,6 +437,9 @@ export interface GithubData {
 export interface UiState {
   lastTask?: { source: 'workflow' | 'skill'; ref: string }
   runsView?: 'list' | 'table'
+  /** Settings → Appearance (redesign R6): accent + density. Theme itself stays in
+   *  localStorage (`cez-theme`) — it must pre-paint, and it is per-browser by design. */
+  appearance?: { accent?: 'lime' | 'violet'; density?: 'comfortable' | 'compact' }
   [key: string]: unknown
 }
 
