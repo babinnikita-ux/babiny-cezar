@@ -61,9 +61,9 @@ describe('model presets (legacy MODELS_BY_RUNNER, mirrored faithfully)', () => {
     }
   })
 
-  it('claude: tier aliases + pinned versions', () => {
+  it('claude: tier aliases + pinned versions, newest (Fable 5) first', () => {
     expect(modelsForRunner('claude').map((m) => m.id)).toEqual([
-      '', 'opus', 'sonnet', 'haiku', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5',
+      '', 'opus', 'sonnet', 'haiku', 'claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5',
     ])
   })
 
@@ -73,9 +73,9 @@ describe('model presets (legacy MODELS_BY_RUNNER, mirrored faithfully)', () => {
     ])
   })
 
-  it('opencode: provider/model ids', () => {
+  it('opencode: provider/model ids, newest Anthropic + OpenAI', () => {
     expect(modelsForRunner('opencode').map((m) => m.id)).toEqual([
-      '', 'anthropic/claude-sonnet-4-5', 'openai/gpt-5.1', 'openai/gpt-5.1-codex',
+      '', 'anthropic/claude-opus-4-8', 'anthropic/claude-sonnet-5', 'openai/gpt-5.1', 'openai/gpt-5.1-codex',
     ])
   })
 
