@@ -4,6 +4,7 @@ import {
   getGithub,
   getGroup,
   getHealth,
+  getLaunchKey,
   getRepo,
   getRepoChanges,
   getRepoCommit,
@@ -48,6 +49,7 @@ export const queryKeys = {
   todos: ['todos'] as const,
   workflows: ['workflows'] as const,
   skills: ['skills'] as const,
+  launchKey: ['launch-key'] as const,
   repo: ['repo'] as const,
   /** Children of `repo` on purpose: invalidating `queryKeys.repo` (a branch switch, a new
    *  commit) prefix-matches the working-tree diff and every cached commit diff too. */
@@ -161,6 +163,18 @@ export function useSkills(enabled = true) {
     queryKey: queryKeys.skills,
     queryFn: ({ signal }) => getSkills({ signal }),
     enabled,
+  })
+}
+
+/** The bookmarklet auto-start secret (spec 011). Mounted ONLY by the Settings → Skills
+ *  bookmarklet panel, which bakes it into the generated `javascript:` links exactly like the
+ *  legacy generator did. The key never renders as text and never goes back into a URL bar. */
+export function useLaunchKey() {
+  return useQuery({
+    queryKey: queryKeys.launchKey,
+    queryFn: ({ signal }) => getLaunchKey({ signal }),
+    // The key is stable for the server's lifetime — refetching it buys nothing.
+    staleTime: Infinity,
   })
 }
 

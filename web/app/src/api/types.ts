@@ -201,8 +201,10 @@ export interface HealthResponse {
   capabilities: Capabilities
 }
 
-/** `GET /api/launch-key` — the bookmarklet auto-start secret (spec 011). Fetched only to
- *  COMPARE against the `?key=` query param; the value must never reach the DOM. */
+/** `GET /api/launch-key` — the bookmarklet auto-start secret (spec 011). Fetched to COMPARE
+ *  against the `?key=` query param (/new deep link) and to bake into the `javascript:` links
+ *  the Settings → Skills bookmarklet panel generates (the legacy generator's exact use). The
+ *  value never renders as text, never logs, and never goes back into the address bar. */
 export interface LaunchKeyResponse {
   key: string
 }

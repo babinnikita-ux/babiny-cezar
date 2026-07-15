@@ -76,6 +76,11 @@ const RULES: Rule[] = [
     // Bare or window./globalThis.-qualified calls; `foo.confirm(` (someone's API) stays legal.
     pattern: /(?<![\w$.])(?:window\.|globalThis\.)?(?:confirm|alert|prompt)\s*\(/g,
     applies: codeSources,
+    // The bookmarklet generator's `alert(` lives inside the javascript: PROGRAM STRING it
+    // emits (spec 011, ported verbatim from web/app.js). That program runs on github.com,
+    // where the cockpit's toaster does not exist — alert() is its only honest surface. The
+    // cockpit's own code in that file never calls a native dialog.
+    allowed: (rel) => rel === 'src/lib/bookmarklet.ts',
   },
   {
     name: 'no-dark-variant',

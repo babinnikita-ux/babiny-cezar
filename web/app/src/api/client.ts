@@ -198,6 +198,12 @@ export function getSkills(opts?: ReadOptions): Promise<Skill[]> {
   return get<Skill[]>('/api/skills', opts)
 }
 
+/** Refresh the team skills repos (spec 005: clone/fetch, degrade quietly offline) and answer
+ *  the merged catalog — the Settings → Skills "Refresh" button. */
+export function refreshSkills(): Promise<Skill[]> {
+  return mutate<Skill[]>('POST', '/api/skills/refresh')
+}
+
 export function getTodos(opts?: ReadOptions): Promise<TodoItem[]> {
   return get<TodoItem[]>('/api/todos', opts)
 }

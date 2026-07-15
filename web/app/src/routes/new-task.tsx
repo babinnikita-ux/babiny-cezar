@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   CheckIcon,
   ChevronDownIcon,
+  EyeIcon,
   SparklesIcon,
   WorkflowIcon,
 } from 'lucide-react'
@@ -13,6 +14,7 @@ import { queryKeys, useHealth, useRepo, useSkills, useUiState, useWorkflows } fr
 import type { ImageInput, RepoResponse, Runner, Skill, WorkflowDef } from '@/api/types'
 import { TwinkleBackdrop } from '@/components/centered-state'
 import { Composer } from '@/components/composer/composer'
+import { SkillPreviewDialog } from '@/components/skill-detail'
 import {
   Command,
   CommandEmpty,
@@ -404,6 +406,7 @@ function SourcePill({
   onPick: (source: TaskSource) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [preview, setPreview] = useState<Skill | null>(null)
   const project = skills.filter(isProjectSkill)
   const global = skills.filter((skill) => !isProjectSkill(skill))
   const pick = (next: TaskSource) => {
@@ -432,79 +435,98 @@ function SourcePill({
             {skill.description}
           </span>
         ) : null}
-        {selected ? <CheckIcon aria-hidden="true" className="ml-auto size-3.5 shrink-0 text-primary" /> : null}
+        {/* Read-only "View skill" (spec §Skills) — the Settings catalog's detail component
+            as a dialog. stopPropagation: viewing must not pick the source. */}
+        <button
+          type="button"
+          data-slot="source-skill-view"
+          aria-label={`View skill ${skill.name}`}
+          title="View skill"
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            setPreview(skill)
+          }}
+          className="ml-auto shrink-0 rounded-sm p-0.5 text-soft-foreground transition-colors hover:text-foreground"
+        >
+          <EyeIcon aria-hidden="true" className="size-3.5" />
+        </button>
+        {selected ? <CheckIcon aria-hidden="true" className="size-3.5 shrink-0 text-primary" /> : null}
       </CommandItem>
     )
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          data-slot="source-pill"
-          aria-label="Choose a skill or workflow"
-          disabled={!ready}
-          className={cn(chipClass, 'border-foreground/60 font-mono text-[11.5px] font-semibold text-foreground')}
+    <>
+      <SkillPreviewDialog skill={preview} onClose={() => setPreview(null)} />
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            data-slot="source-pill"
+            aria-label="Choose a skill or workflow"
+            disabled={!ready}
+            className={cn(chipClass, 'border-foreground/60 font-mono text-[11.5px] font-semibold text-foreground')}
+          >
+            {source.source === 'skill' ? (
+              <SparklesIcon aria-hidden="true" className="size-3 shrink-0 text-violet" />
+            ) : (
+              <WorkflowIcon aria-hidden="true" className="size-3 shrink-0 text-violet" />
+            )}
+            <span className="max-w-44 truncate">{ready ? source.ref : '…'}</span>
+            {chevron}
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          sideOffset={8}
+          className="w-[336px] max-w-[calc(100vw-2rem)] p-0"
         >
-          {source.source === 'skill' ? (
-            <SparklesIcon aria-hidden="true" className="size-3 shrink-0 text-violet" />
-          ) : (
-            <WorkflowIcon aria-hidden="true" className="size-3 shrink-0 text-violet" />
-          )}
-          <span className="max-w-44 truncate">{ready ? source.ref : '…'}</span>
-          {chevron}
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        sideOffset={8}
-        className="w-[336px] max-w-[calc(100vw-2rem)] p-0"
-      >
-        <Command>
-          <CommandInput placeholder="search skills & workflows…" />
-          <CommandList data-slot="source-menu" className="max-h-72">
-            <CommandEmpty>Nothing matches.</CommandEmpty>
-            {project.length > 0 ? (
-              <CommandGroup heading="Project skills">
-                {project.map((skill) => skillItem(skill, true))}
-              </CommandGroup>
-            ) : null}
-            {global.length > 0 ? (
-              <CommandGroup heading="Global">{global.map((skill) => skillItem(skill, false))}</CommandGroup>
-            ) : null}
-            {workflows.length > 0 ? (
-              <CommandGroup heading="Workflows">
-                {workflows.map((workflow) => {
-                  const selected = source.source === 'workflow' && source.ref === workflow.name
-                  return (
-                    <CommandItem
-                      key={workflow.name}
-                      value={`workflow ${workflow.name}`}
-                      keywords={workflow.description ? [workflow.description] : undefined}
-                      data-slot="source-option"
-                      data-source-kind="workflow"
-                      data-source-ref={workflow.name}
-                      onSelect={() => pick({ source: 'workflow', ref: workflow.name })}
-                    >
-                      <span className="shrink-0 font-mono text-xs">{workflow.name}</span>
-                      {workflow.description ? (
-                        <span className="min-w-0 flex-1 truncate text-xs text-soft-foreground">
-                          {workflow.description}
-                        </span>
-                      ) : null}
-                      {selected ? (
-                        <CheckIcon aria-hidden="true" className="ml-auto size-3.5 shrink-0 text-primary" />
-                      ) : null}
-                    </CommandItem>
-                  )
-                })}
-              </CommandGroup>
-            ) : null}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+          <Command>
+            <CommandInput placeholder="search skills & workflows…" />
+            <CommandList data-slot="source-menu" className="max-h-72">
+              <CommandEmpty>Nothing matches.</CommandEmpty>
+              {project.length > 0 ? (
+                <CommandGroup heading="Project skills">
+                  {project.map((skill) => skillItem(skill, true))}
+                </CommandGroup>
+              ) : null}
+              {global.length > 0 ? (
+                <CommandGroup heading="Global">{global.map((skill) => skillItem(skill, false))}</CommandGroup>
+              ) : null}
+              {workflows.length > 0 ? (
+                <CommandGroup heading="Workflows">
+                  {workflows.map((workflow) => {
+                    const selected = source.source === 'workflow' && source.ref === workflow.name
+                    return (
+                      <CommandItem
+                        key={workflow.name}
+                        value={`workflow ${workflow.name}`}
+                        keywords={workflow.description ? [workflow.description] : undefined}
+                        data-slot="source-option"
+                        data-source-kind="workflow"
+                        data-source-ref={workflow.name}
+                        onSelect={() => pick({ source: 'workflow', ref: workflow.name })}
+                      >
+                        <span className="shrink-0 font-mono text-xs">{workflow.name}</span>
+                        {workflow.description ? (
+                          <span className="min-w-0 flex-1 truncate text-xs text-soft-foreground">
+                            {workflow.description}
+                          </span>
+                        ) : null}
+                        {selected ? (
+                          <CheckIcon aria-hidden="true" className="ml-auto size-3.5 shrink-0 text-primary" />
+                        ) : null}
+                      </CommandItem>
+                    )
+                  })}
+                </CommandGroup>
+              ) : null}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </>
   )
 }
 

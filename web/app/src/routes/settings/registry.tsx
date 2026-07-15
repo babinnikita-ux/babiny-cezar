@@ -10,6 +10,7 @@ import type { ComponentType, SVGProps } from 'react'
 
 import { CenteredState } from '@/components/centered-state'
 import { AppearanceSection } from './appearance'
+import { SkillsSection } from './skills-section'
 
 /**
  * The Settings section registry (R6 Step 1.3, spec §"Settings"): the ONE place a section is
@@ -61,7 +62,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     title: 'Skills',
     description: 'Markdown playbooks agents can follow.',
     icon: SparklesIcon,
-    component: comingSoon('Skills', SparklesIcon), // Step 1.4 replaces this with the catalog.
+    component: SkillsSection,
   },
   {
     id: 'appearance',

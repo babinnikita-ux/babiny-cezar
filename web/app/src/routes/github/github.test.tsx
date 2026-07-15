@@ -383,6 +383,35 @@ describe('the hand-to-agent pickers (#385)', () => {
       expect(document.querySelectorAll('[data-slot="gh-skill-chip"]')).toHaveLength(1),
     )
   })
+
+  it('the eye opens the read-only skill preview (shared detail component) without toggling the row', async () => {
+    stubFetch()
+    await openDetail()
+
+    fireEvent.click(document.querySelector('[data-slot="gh-skills-trigger"]')!)
+    await waitFor(() =>
+      expect(document.querySelectorAll('[data-slot="gh-skill-option"]')).toHaveLength(3),
+    )
+
+    fireEvent.click(
+      document.querySelector('[data-slot="gh-skill-option"][data-skill="om-fix"] [data-slot="gh-skill-view"]')!,
+    )
+    // The Settings catalog's detail component, as a dialog — name, source tag, path.
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="skill-preview"] [data-slot="skill-detail"]')).not.toBeNull(),
+    )
+    const preview = document.querySelector('[data-slot="skill-preview"]')!
+    expect(preview.textContent).toContain('om-fix')
+    expect(preview.textContent).toContain('project fixer')
+    expect(preview.querySelector('[data-slot="skill-path"]')?.textContent).toContain('/p/om-fix.md')
+    // Viewing is read-only: nothing got selected (no chip, no count on the trigger).
+    expect(document.querySelectorAll('[data-slot="gh-skill-chip"]')).toHaveLength(0)
+    expect(document.querySelector('[data-slot="gh-skills-trigger"]')?.textContent).not.toContain('·')
+    // The escape hatch into the browsable catalog under Settings.
+    expect(
+      preview.querySelector('[data-slot="skill-preview-manage"]')?.getAttribute('href'),
+    ).toBe('/settings/skills?skill=om-fix')
+  })
 })
 
 describe('the hand-to-agent run (legacy three-way body)', () => {

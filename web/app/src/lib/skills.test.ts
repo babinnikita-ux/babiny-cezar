@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import type { Skill } from '@/api/types'
+import type { Skill, WorkflowDef } from '@/api/types'
 
-import { filterSkills, fuzzyMatch, isProjectSkill, orderSkills } from './skills'
+import { filterSkills, fuzzyMatch, isProjectSkill, orderSkills, skillUsedBy } from './skills'
 
 const skill = (over: Partial<Skill> & Pick<Skill, 'name' | 'source'>): Skill => ({
   body: '',
@@ -75,5 +75,30 @@ describe('filterSkills (#380: filter without re-sorting — project-first surviv
 
   it('no match → empty, never a throw', () => {
     expect(filterSkills(skills, 'zzz')).toEqual([])
+  })
+})
+
+describe('skillUsedBy (the detail pane’s "Used by" breadcrumbs)', () => {
+  const workflows: WorkflowDef[] = [
+    {
+      name: 'fix-and-verify',
+      source: 'file',
+      steps: [
+        { id: 'fix', name: 'Fix', skill: 'om-fix' },
+        { id: 'verify', skill: 'om-fix' }, // unnamed step → the id stands in
+        { id: 'check', command: 'npm test' },
+      ],
+    },
+    { name: 'ship-it', source: 'file', steps: [{ id: 'review', name: 'Review', skill: 'om-review' }] },
+    { name: 'quick-task', source: 'built-in', steps: [] },
+  ]
+
+  it('lists every referencing step as "workflow › step", ids standing in for names', () => {
+    expect(skillUsedBy(workflows, 'om-fix')).toEqual(['fix-and-verify › Fix', 'fix-and-verify › verify'])
+    expect(skillUsedBy(workflows, 'om-review')).toEqual(['ship-it › Review'])
+  })
+
+  it('an unreferenced skill answers an empty list', () => {
+    expect(skillUsedBy(workflows, 'om-unused')).toEqual([])
   })
 })

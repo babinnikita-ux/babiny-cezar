@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   CheckIcon,
   ChevronDownIcon,
+  EyeIcon,
   PlayIcon,
   SparklesIcon,
   WorkflowIcon,
@@ -25,6 +26,7 @@ import {
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { toast } from '@/components/ui/toaster'
+import { SkillPreviewDialog } from '@/components/skill-detail'
 import { githubRunBody } from '@/lib/github-task'
 import { isProjectSkill } from '@/lib/skills'
 import { cn } from '@/lib/utils'
@@ -222,7 +224,9 @@ function WorkflowPicker({
 
 /**
  * The skills dropdown: multi-select — toggling keeps it open, because picking a chain is
- * several toggles — grouped Project skills (bold) before Global, per #377.
+ * several toggles — grouped Project skills (bold) before Global, per #377. Every row carries
+ * a read-only "View skill" eye (spec §Skills): it opens the SAME detail component the
+ * Settings catalog renders, as a dialog, without toggling the row.
  */
 function SkillsPicker({
   skills,
@@ -234,6 +238,7 @@ function SkillsPicker({
   onToggle: (name: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [preview, setPreview] = useState<Skill | null>(null)
   const project = skills.filter(isProjectSkill)
   const global = skills.filter((skill) => !isProjectSkill(skill))
 
@@ -254,42 +259,58 @@ function SkillsPicker({
         {skill.description ? (
           <span className="min-w-0 flex-1 truncate text-xs text-soft-foreground">{skill.description}</span>
         ) : null}
-        {isSelected ? (
-          <CheckIcon aria-hidden="true" className="ml-auto size-3.5 shrink-0 text-primary" />
-        ) : null}
+        <button
+          type="button"
+          data-slot="gh-skill-view"
+          aria-label={`View skill ${skill.name}`}
+          title="View skill"
+          // stopPropagation: the eye must never toggle the row it sits on.
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            setPreview(skill)
+          }}
+          className="ml-auto shrink-0 rounded-sm p-0.5 text-soft-foreground transition-colors hover:text-foreground"
+        >
+          <EyeIcon aria-hidden="true" className="size-3.5" />
+        </button>
+        {isSelected ? <CheckIcon aria-hidden="true" className="size-3.5 shrink-0 text-primary" /> : null}
       </CommandItem>
     )
   }
 
   if (skills.length === 0) return null
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <button
-          type="button"
-          data-slot="gh-skills-trigger"
-          aria-label="Choose skills"
-          className={cn(triggerClass, selected.length > 0 && 'border-foreground/60 font-semibold text-foreground')}
-        >
-          <SparklesIcon aria-hidden="true" className="size-3 shrink-0 text-violet" />
-          skills{selected.length > 0 ? ` · ${selected.length}` : ''}
-          <ChevronDownIcon aria-hidden="true" className="size-2.5 shrink-0 text-soft-foreground" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" sideOffset={8} className="w-[336px] max-w-[calc(100vw-2rem)] p-0">
-        <Command>
-          <CommandInput placeholder="search skills…" />
-          <CommandList data-slot="gh-skill-menu" className="max-h-64">
-            <CommandEmpty>Nothing matches.</CommandEmpty>
-            {project.length > 0 ? (
-              <CommandGroup heading="Project skills">{project.map((skill) => skillItem(skill, true))}</CommandGroup>
-            ) : null}
-            {global.length > 0 ? (
-              <CommandGroup heading="Global">{global.map((skill) => skillItem(skill, false))}</CommandGroup>
-            ) : null}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+    <>
+      <SkillPreviewDialog skill={preview} onClose={() => setPreview(null)} />
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            data-slot="gh-skills-trigger"
+            aria-label="Choose skills"
+            className={cn(triggerClass, selected.length > 0 && 'border-foreground/60 font-semibold text-foreground')}
+          >
+            <SparklesIcon aria-hidden="true" className="size-3 shrink-0 text-violet" />
+            skills{selected.length > 0 ? ` · ${selected.length}` : ''}
+            <ChevronDownIcon aria-hidden="true" className="size-2.5 shrink-0 text-soft-foreground" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" sideOffset={8} className="w-[336px] max-w-[calc(100vw-2rem)] p-0">
+          <Command>
+            <CommandInput placeholder="search skills…" />
+            <CommandList data-slot="gh-skill-menu" className="max-h-64">
+              <CommandEmpty>Nothing matches.</CommandEmpty>
+              {project.length > 0 ? (
+                <CommandGroup heading="Project skills">{project.map((skill) => skillItem(skill, true))}</CommandGroup>
+              ) : null}
+              {global.length > 0 ? (
+                <CommandGroup heading="Global">{global.map((skill) => skillItem(skill, false))}</CommandGroup>
+              ) : null}
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    </>
   )
 }

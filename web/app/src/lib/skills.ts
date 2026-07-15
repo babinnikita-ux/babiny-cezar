@@ -1,4 +1,4 @@
-import type { Skill } from '@/api/types'
+import type { Skill, WorkflowDef } from '@/api/types'
 
 /**
  * The shared skill presentation rules (#377/#380): the ⌘K palette, the composer's `/`
@@ -11,8 +11,9 @@ import type { Skill } from '@/api/types'
  *  and `team` come from outside it. */
 const PROJECT_SKILL_SOURCES: ReadonlySet<Skill['source']> = new Set(['ai', 'cezar', 'agents'])
 
-/** Project skills render emphasized (bold) wherever skills are listed. */
-export function isProjectSkill(skill: Skill): boolean {
+/** Project skills render emphasized (bold) wherever skills are listed. Accepts anything
+ *  carrying a `source` so tag components need not conjure a whole Skill. */
+export function isProjectSkill(skill: Pick<Skill, 'source'>): boolean {
   return PROJECT_SKILL_SOURCES.has(skill.source)
 }
 
@@ -39,6 +40,18 @@ export function fuzzyMatch(candidate: string, query: string): boolean {
     at += 1
   }
   return true
+}
+
+/** Workflows referencing a skill, as "workflow › step" breadcrumbs — the skill detail's
+ *  "Used by" list (legacy `skillUsedBy`, ported). Steps fall back to their id when unnamed. */
+export function skillUsedBy(workflows: readonly WorkflowDef[], name: string): string[] {
+  const out: string[] = []
+  for (const workflow of workflows) {
+    for (const step of workflow.steps ?? []) {
+      if (step.skill === name) out.push(`${workflow.name} › ${step.name ?? step.id}`)
+    }
+  }
+  return out
 }
 
 /** The `/` autocomplete's list for a typed query: ordered project-first, then filtered in
