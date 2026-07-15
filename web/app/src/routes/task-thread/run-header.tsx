@@ -45,7 +45,7 @@ import { toast } from '@/components/ui/toaster'
 import { deriveAttention } from '@/lib/attention'
 import { compactTokens } from '@/lib/format'
 import { queuePositions, runTitle } from '@/lib/task-groups'
-import { formatCost } from '@/lib/tasks-table'
+import { formatCost, workflowLabel } from '@/lib/tasks-table'
 
 import { Markdown } from './markdown'
 import { finishTitle, resumeHint, runActionFlags } from './run-actions'
@@ -357,7 +357,9 @@ function EditableTitle({ run }: { run: ApiRun }) {
 /** workflow · runner · model · branch chip · ± · tokens · cost (mockup `.meta-row`). Each part
  *  renders only when the record carries it — absence is absence, not a placeholder. */
 function MetaRow({ run }: { run: ApiRun }) {
-  const parts: ReactNode[] = [<span key="workflow">{run.workflow}</span>]
+  // `workflowLabel` so an inline chain shows its first step's name, not the bare "(planned)"
+  // placeholder — which reads like a status next to the live status pill.
+  const parts: ReactNode[] = [<span key="workflow">{workflowLabel(run)}</span>]
   // Runner only when it is a choice worth noting — Claude is the default everywhere.
   if (run.runner && run.runner !== 'claude') parts.push(<span key="runner">{run.runner}</span>)
   if (run.model) parts.push(<span key="model">{run.model}</span>)

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { detectOpenTargets, openInApp } from './open-in-app.js';
+import { agentCliRunner, detectOpenTargets, openInApp } from './open-in-app.js';
 
 describe('detectOpenTargets', () => {
   it('always offers a file manager and a terminal, first', () => {
@@ -15,5 +15,16 @@ describe('detectOpenTargets', () => {
 describe('openInApp', () => {
   it('rejects an unknown target instead of launching anything', async () => {
     expect(await openInApp('not-a-real-editor', process.cwd())).toBe(false);
+  });
+});
+
+describe('agentCliRunner', () => {
+  it('maps cli:<runner> ids to the runner, and rejects everything else', () => {
+    expect(agentCliRunner('cli:claude')).toBe('claude');
+    expect(agentCliRunner('cli:codex')).toBe('codex');
+    expect(agentCliRunner('cli:opencode')).toBe('opencode');
+    expect(agentCliRunner('vscode')).toBeNull();
+    expect(agentCliRunner('terminal')).toBeNull();
+    expect(agentCliRunner('cli:bogus')).toBeNull();
   });
 });

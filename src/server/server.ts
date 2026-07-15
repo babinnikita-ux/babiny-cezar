@@ -46,7 +46,7 @@ import { resolveForge } from './forge/index.js';
 import { fetchGithub } from './github.js';
 import { ensureLaunchKey } from './launch-key.js';
 import { openInTerminal } from './open-in-terminal.js';
-import { detectOpenTargets, openInApp } from './open-in-app.js';
+import { agentCliRunner, detectOpenTargets, openInApp } from './open-in-app.js';
 import { createDraftPr } from './pr.js';
 import { ASSET_CACHE_CONTROL, BUILD_HINT_HTML, assetContentType, isSafeAssetFilename, resolveGetRequest } from './static-ui.js';
 
@@ -728,6 +728,22 @@ export function createApp(deps: ServerDeps): Hono {
     const target = typeof body.target === 'string' ? body.target : '';
     if (!target) return c.json({ error: 'target required' }, 400);
     const dir = run.worktreePath && existsSync(run.worktreePath) ? run.worktreePath : repoRoot;
+
+    // Coding-agent CLI handoff (#cli-handoff): open a terminal in the worktree that resumes THIS
+    // run's session when the chosen CLI is the run's own runner (and a session exists), or starts
+    // a fresh CLI there otherwise. Same terminal launcher the Terminal button uses.
+    const cliRunner = agentCliRunner(target);
+    if (cliRunner) {
+      const sessionId = [...run.steps].reverse().find((s) => s.sessionId)?.sessionId;
+      const command =
+        sessionId && cliRunner === run.runner ? resumeCommand(cliRunner, sessionId) : cliRunner;
+      const opened = await openInTerminal(dir, command);
+      if (!opened) {
+        return c.json({ error: 'no terminal emulator found', command: `cd '${dir}' && ${command}` }, 409);
+      }
+      return c.json({ opened: true, path: dir, command });
+    }
+
     const opened = await openInApp(target, dir);
     if (!opened) return c.json({ error: `could not open ${target}`, path: dir }, 409);
     return c.json({ opened: true, path: dir });

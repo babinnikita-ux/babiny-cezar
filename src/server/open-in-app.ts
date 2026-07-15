@@ -77,8 +77,23 @@ function editorAvailable(editor: EditorDef): boolean {
   return false;
 }
 
-/** The open targets available on this machine: the file manager, a terminal, and every detected
- *  editor. Order is stable so the menu never reshuffles between requests. */
+/** Coding-agent CLIs a session can be handed off to (#cli-handoff). Selecting one opens a
+ *  terminal that resumes THIS run's session when the runner matches, or launches a fresh CLI in
+ *  the worktree otherwise. The actual command is built server-side (needs the run's session). */
+const AGENT_CLIS: Array<{ runner: 'claude' | 'codex' | 'opencode'; label: string; bin: string; envBin?: string }> = [
+  { runner: 'claude', label: 'Claude CLI', bin: 'claude', envBin: process.env.CEZ_CLAUDE_BIN },
+  { runner: 'codex', label: 'Codex CLI', bin: 'codex', envBin: process.env.CEZ_CODEX_BIN },
+  { runner: 'opencode', label: 'OpenCode', bin: 'opencode', envBin: process.env.CEZ_OPENCODE_BIN },
+];
+
+/** The runner behind a `cli:<runner>` open target, or null when the id isn't a CLI handoff. */
+export function agentCliRunner(targetId: string): 'claude' | 'codex' | 'opencode' | null {
+  const match = AGENT_CLIS.find((c) => `cli:${c.runner}` === targetId);
+  return match ? match.runner : null;
+}
+
+/** The open targets available on this machine: the file manager, a terminal, every detected
+ *  editor, and every installed coding-agent CLI. Order is stable so the menu never reshuffles. */
 export function detectOpenTargets(): OpenTarget[] {
   const targets: OpenTarget[] = [
     { id: 'finder', label: FILE_MANAGER_LABEL },
@@ -86,6 +101,11 @@ export function detectOpenTargets(): OpenTarget[] {
   ];
   for (const editor of EDITORS) {
     if (editorAvailable(editor)) targets.push({ id: editor.id, label: editor.label });
+  }
+  for (const cli of AGENT_CLIS) {
+    if ((cli.envBin && existsSync(cli.envBin)) || onPath(cli.bin)) {
+      targets.push({ id: `cli:${cli.runner}`, label: cli.label });
+    }
   }
   return targets;
 }
