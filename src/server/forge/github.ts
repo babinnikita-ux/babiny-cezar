@@ -34,11 +34,15 @@ export interface GithubData {
   syncedAt?: string;
   issues: GithubItem[];
   prs: GithubItem[];
+  /** Repo-wide map of label name → 6-hex color (no `#`), so the UI can tint chips like GitHub
+   *  does. Additive (BACKWARD_COMPATIBILITY): absent on old payloads, chips fall back to neutral. */
+  labelColors?: Record<string, string>;
 }
 
 // `gh … --json` output — validated at the boundary, extras stripped.
 const ghAuthor = z.object({ login: z.string() }).nullish();
-const ghLabel = z.object({ name: z.string() });
+// `color` is the 6-hex GitHub label color (no `#`), '' when gh omits it.
+const ghLabel = z.object({ name: z.string(), color: z.string().default('') });
 const ghIssueSchema = z.object({
   number: z.number(),
   title: z.string(),
@@ -108,35 +112,46 @@ export async function fetchGithub(repoRoot: string, refresh = false, limit = 30)
       gh(repoRoot, ['issue', 'list', '--limit', String(capped), '--json', fields], timeout),
       gh(repoRoot, ['pr', 'list', '--limit', String(capped), '--json', `${fields},isDraft,additions,deletions,statusCheckRollup`], timeout),
     ]);
+    // One repo-wide label→color map, filled as we flatten each item's labels.
+    const labelColors: Record<string, string> = {};
+    const recordColor = (l: { name: string; color: string }) => {
+      if (l.color && !labelColors[l.name]) labelColors[l.name] = l.color;
+    };
     const issues = z.array(ghIssueSchema).parse(JSON.parse(issuesOut)).map(
-      (i): GithubItem => ({
-        kind: 'issue',
-        number: i.number,
-        title: i.title,
-        author: i.author?.login ?? '?',
-        createdAt: i.createdAt,
-        labels: i.labels.map((l) => l.name),
-        body: (i.body ?? '').slice(0, 8_000),
-        url: i.url,
-        comments: 0,
-      }),
+      (i): GithubItem => {
+        i.labels.forEach(recordColor);
+        return {
+          kind: 'issue',
+          number: i.number,
+          title: i.title,
+          author: i.author?.login ?? '?',
+          createdAt: i.createdAt,
+          labels: i.labels.map((l) => l.name),
+          body: (i.body ?? '').slice(0, 8_000),
+          url: i.url,
+          comments: 0,
+        };
+      },
     );
     const prs = z.array(ghPrSchema).parse(JSON.parse(prsOut)).map(
-      (p): GithubItem => ({
-        kind: 'pr',
-        number: p.number,
-        title: p.title,
-        author: p.author?.login ?? '?',
-        createdAt: p.createdAt,
-        labels: [...p.labels.map((l) => l.name), ...(p.isDraft ? ['draft'] : [])],
-        body: (p.body ?? '').slice(0, 8_000),
-        url: p.url,
-        comments: 0,
-        isDraft: p.isDraft,
-        additions: p.additions,
-        deletions: p.deletions,
-        checks: rollupToChecks(p.statusCheckRollup),
-      }),
+      (p): GithubItem => {
+        p.labels.forEach(recordColor);
+        return {
+          kind: 'pr',
+          number: p.number,
+          title: p.title,
+          author: p.author?.login ?? '?',
+          createdAt: p.createdAt,
+          labels: [...p.labels.map((l) => l.name), ...(p.isDraft ? ['draft'] : [])],
+          body: (p.body ?? '').slice(0, 8_000),
+          url: p.url,
+          comments: 0,
+          isDraft: p.isDraft,
+          additions: p.additions,
+          deletions: p.deletions,
+          checks: rollupToChecks(p.statusCheckRollup),
+        };
+      },
     );
     const data: GithubData = {
       available: true,
@@ -144,6 +159,7 @@ export async function fetchGithub(repoRoot: string, refresh = false, limit = 30)
       syncedAt: new Date().toISOString(),
       issues,
       prs,
+      labelColors,
     };
     cache = { at: Date.now(), limit: capped, data };
     return data;
@@ -183,6 +199,16 @@ function mockGithub(): GithubData {
       mk({ kind: 'pr', number: 128, title: 'Fix flaky auth test in CI', labels: ['tests'], checks: 'passing', additions: 6, deletions: 3, body: 'Loosens the timing assertion in refresh.test.ts to a realistic budget.' }),
       mk({ kind: 'pr', number: 124, title: 'Rate limit /api/runs', labels: ['server', 'draft'], isDraft: true, checks: 'failing', additions: 118, deletions: 7, comments: 4, body: 'Draft: token-bucket middleware on the runs router. Still needs the config surface and README docs before review.' }),
     ],
+    labelColors: {
+      bug: 'd73a4a',
+      auth: '5319e7',
+      enhancement: 'a2eeef',
+      cli: '0e8a16',
+      'flaky-test': 'fbca04',
+      tests: 'c5def5',
+      server: '1d76db',
+      draft: '6a737d',
+    },
   };
 }
 

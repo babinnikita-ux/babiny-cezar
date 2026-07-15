@@ -1,10 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeftIcon,
+  CheckIcon,
   CircleDotIcon,
   ExternalLinkIcon,
   GitPullRequestIcon,
   RefreshCwIcon,
+  SearchIcon,
+  TagIcon,
   TriangleAlertIcon,
 } from 'lucide-react'
 import { useState, type DragEvent, type ReactNode } from 'react'
@@ -17,12 +20,15 @@ import { CenteredState } from '@/components/centered-state'
 import { GithubIcon } from '@/components/icons'
 import { TabLink } from '@/components/tab-link'
 import { Button } from '@/components/ui/button'
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { toast } from '@/components/ui/toaster'
 import { shortAge } from '@/lib/format'
 import { githubTaskPrompt } from '@/lib/github-task'
 import { cn } from '@/lib/utils'
 
 import { Markdown } from '../task-thread/markdown'
+import { allLabels, filterGithubItems, labelChipStyle } from './github-filter'
 import { GithubLoading } from './github-loading'
 import { HandToAgent } from './hand-to-agent'
 
@@ -80,6 +86,9 @@ export function GithubRoute({ view }: { view: GithubView }) {
   const [workflow, setWorkflow] = useState<string | null>(null)
   const [selectedSkills, setSelectedSkills] = useState<readonly string[]>([])
   const [queued, setQueued] = useState<ReadonlyMap<string, string>>(new Map())
+  // List filtering (#gh-filter): free-text search (by #id or any text) + a label narrow.
+  const [query, setQuery] = useState('')
+  const [labelFilter, setLabelFilter] = useState<readonly string[]>([])
 
   if (!gh) {
     if (fast.isError) {
@@ -126,10 +135,17 @@ export function GithubRoute({ view }: { view: GithubView }) {
     )
   }
 
-  const items = view === 'issues' ? gh.issues : gh.prs
+  const allItems = view === 'issues' ? gh.issues : gh.prs
+  const labelColors = gh.labelColors ?? {}
+  const labelOptions = allLabels(allItems)
+  const items = filterGithubItems(allItems, { query, labels: labelFilter })
+  const filtering = query.trim() !== '' || labelFilter.length > 0
   const number = n === undefined ? null : Number.parseInt(n, 10)
-  // No URL selection → the first item, like the legacy tab (rendered, not navigated-to).
-  const selected = number === null ? (items[0] ?? null) : (items.find((item) => item.number === number) ?? null)
+  // No URL selection → the first item, like the legacy tab (rendered, not navigated-to). The
+  // selection may point at an item outside the current filter — keep resolving it from the full
+  // list so a deep link to #N still opens even while a filter is active.
+  const selected =
+    number === null ? (items[0] ?? null) : (allItems.find((item) => item.number === number) ?? null)
   const listPath = view === 'issues' ? '/github' : '/github/prs'
 
   return (
@@ -174,11 +190,36 @@ export function GithubRoute({ view }: { view: GithubView }) {
               Pull requests · {countLabel(gh.prs.length, isFull)}
             </TabLink>
           </div>
+          <div className="flex items-center gap-2 pb-2.5">
+            <div className="relative min-w-0 flex-1">
+              <SearchIcon
+                aria-hidden="true"
+                className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-soft-foreground"
+              />
+              <input
+                type="search"
+                data-slot="gh-search"
+                aria-label={`Search ${view}`}
+                placeholder="Search #id, title, author…"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                className="w-full rounded-md border border-input bg-card py-1 pr-2 pl-7 text-[13px] outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              />
+            </div>
+            <LabelFilter
+              options={labelOptions}
+              colors={labelColors}
+              selected={labelFilter}
+              onChange={setLabelFilter}
+            />
+          </div>
         </header>
 
         {items.length === 0 ? (
           <p className="px-4 py-4 text-sm text-soft-foreground">
-            No open {view === 'issues' ? 'issues' : 'pull requests'}.
+            {filtering
+              ? `No ${view === 'issues' ? 'issues' : 'pull requests'} match your filter.`
+              : `No open ${view === 'issues' ? 'issues' : 'pull requests'}.`}
           </p>
         ) : (
           <ul data-slot="gh-rows" className="flex flex-col gap-0.5 px-2 py-2">
@@ -187,6 +228,7 @@ export function GithubRoute({ view }: { view: GithubView }) {
                 key={item.url}
                 item={item}
                 view={view}
+                colors={labelColors}
                 active={selected?.url === item.url}
                 queued={queued.has(item.url)}
               />
@@ -201,7 +243,7 @@ export function GithubRoute({ view }: { view: GithubView }) {
         className={cn('min-w-0 flex-1 flex-col', n === undefined ? 'hidden md:flex' : 'flex')}
       >
         {selected ? (
-          <GithubDetail item={selected} listPath={listPath}>
+          <GithubDetail item={selected} listPath={listPath} colors={labelColors}>
             <HandToAgent
               item={selected}
               workflows={workflows.data?.workflows ?? []}
@@ -240,11 +282,13 @@ function countLabel(count: number, isFull: boolean): string {
 function GithubRow({
   item,
   view,
+  colors,
   active,
   queued,
 }: {
   item: GithubItem
   view: GithubView
+  colors: Record<string, string>
   active: boolean
   queued: boolean
 }) {
@@ -295,18 +339,104 @@ function GithubRow({
             </span>
           ) : null}
         </span>
+        {item.labels.length > 0 ? (
+          <span className="flex flex-wrap gap-1 pl-[22px]">
+            {item.labels.map((label) => (
+              <LabelChip key={label} label={label} color={colors[label]} />
+            ))}
+          </span>
+        ) : null}
       </Link>
     </li>
+  )
+}
+
+/** The label narrow: a searchable multi-select of the labels present in the current list. Selected
+ *  labels AND together (GitHub semantics), handled by `filterGithubItems`. */
+function LabelFilter({
+  options,
+  colors,
+  selected,
+  onChange,
+}: {
+  options: readonly string[]
+  colors: Record<string, string>
+  selected: readonly string[]
+  onChange: (labels: string[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const toggle = (label: string) =>
+    onChange(selected.includes(label) ? selected.filter((l) => l !== label) : [...selected, label])
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          data-slot="gh-label-filter"
+          disabled={options.length === 0}
+          className={cn(
+            'flex shrink-0 items-center gap-1 rounded-md border border-input bg-card px-2 py-1 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50',
+            selected.length > 0 && 'border-primary/60 text-foreground',
+          )}
+        >
+          <TagIcon aria-hidden="true" className="size-3.5" />
+          {selected.length > 0 ? `Labels · ${selected.length}` : 'Labels'}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" sideOffset={6} className="w-60 p-0">
+        <Command>
+          <CommandInput placeholder="Filter labels…" />
+          <CommandList className="max-h-64">
+            <CommandEmpty>No labels.</CommandEmpty>
+            {selected.length > 0 ? (
+              <CommandItem value="__clear__" onSelect={() => onChange([])} className="text-soft-foreground">
+                Clear {selected.length} filter{selected.length > 1 ? 's' : ''}
+              </CommandItem>
+            ) : null}
+            {options.map((label) => {
+              const on = selected.includes(label)
+              return (
+                <CommandItem key={label} value={label} onSelect={() => toggle(label)}>
+                  <span
+                    aria-hidden="true"
+                    className="size-2.5 shrink-0 rounded-full border"
+                    style={labelChipStyle(colors[label])}
+                  />
+                  <span className="min-w-0 flex-1 truncate">{label}</span>
+                  {on ? <CheckIcon aria-hidden="true" className="size-3.5 shrink-0 text-primary" /> : null}
+                </CommandItem>
+              )
+            })}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+/** A single label pill, tinted with its GitHub color (or neutral when unknown). */
+function LabelChip({ label, color }: { label: string; color: string | undefined }) {
+  return (
+    <span
+      data-slot="gh-label"
+      data-label={label}
+      style={labelChipStyle(color)}
+      className="rounded-full border px-1.5 py-px text-[10px] font-medium"
+    >
+      {label}
+    </span>
   )
 }
 
 function GithubDetail({
   item,
   listPath,
+  colors,
   children,
 }: {
   item: GithubItem
   listPath: string
+  colors: Record<string, string>
   children: ReactNode
 }) {
   const kindWord = item.kind === 'pr' ? 'pull request' : 'issue'
@@ -357,13 +487,7 @@ function GithubDetail({
       {item.labels.length > 0 || item.checks ? (
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
           {item.labels.map((label) => (
-            <span
-              key={label}
-              data-slot="gh-label"
-              className="rounded-full border border-border bg-muted px-2 py-px text-[11px] font-medium text-muted-foreground"
-            >
-              {label}
-            </span>
+            <LabelChip key={label} label={label} color={colors[label]} />
           ))}
           {item.checks ? <ChecksBadge checks={item.checks} /> : null}
         </div>

@@ -448,6 +448,8 @@ export interface GithubData {
   syncedAt?: string
   issues: GithubItem[]
   prs: GithubItem[]
+  /** Repo-wide label name → 6-hex color (no `#`); lets chips tint like GitHub. Additive. */
+  labelColors?: Record<string, string>
 }
 
 // ---- GUI prefs (`PUT /api/ui-state`) -----------------------------------------------------------
