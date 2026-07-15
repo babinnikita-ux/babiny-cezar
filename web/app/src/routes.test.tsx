@@ -6,11 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createQueryClient } from './api/query-client'
 import { ListViewProvider } from './components/list-view'
 import { AppRoutes } from './routes'
+import { resetDraft } from './routes/new-task-draft'
 
 // The `/` overview fetches `/api/runs` on mount. A never-answering fetch keeps every route
 // honestly in its loading state — this file is about the URL map, not about data.
 beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(() => new Promise<never>(() => {})))
+  // The /new draft store is a module singleton by design — isolate it per test.
+  resetDraft()
 })
 
 // Explicit rather than relying on RTL's auto-cleanup, which only runs when vitest `globals` is on.
@@ -43,7 +46,8 @@ function routeName(): string | null {
 describe('route map', () => {
   const cases: Array<[url: string, route: string, title: string]> = [
     ['/', 'tasks', 'Tasks'],
-    ['/new', 'new', 'New task'],
+    // The real full-screen composer (R4 Step 1.1): the hero title is the page heading.
+    ['/new', 'new', 'What should the agent work on?'],
     // The real thread view (Step R3.1): with fetch never answering it is honestly loading.
     ['/tasks/abc123', 'task-thread', 'Loading task…'],
     ['/tasks/abc123/changes', 'task-changes', 'Changes'],
@@ -107,26 +111,29 @@ describe('route map', () => {
 })
 
 /** The bookmarklet contract (spec 011), protected by BACKWARD_COMPATIBILITY.md:
- *  `/new?skill=&ref=&auto=1&key=`. The params must survive the move off the
- *  legacy page — the composer (Step R4) is what will finally consume them. */
+ *  `/new?skill=&ref=&auto=1&key=`. Since R4 Step 1.1 the params PREFILL the real composer
+ *  (`auto=1` is still parsed but deliberately inert until Step 1.3 proves auto-start parity).
+ *  The deeper prefill flows live in routes/new-task.test.tsx; this file keeps the URL contract. */
 describe('/new query params', () => {
-  it('parses the full bookmarklet deep link', () => {
+  const textarea = () =>
+    screen.getByLabelText('Describe a task for the agent') as HTMLTextAreaElement
+
+  it('prefills the composer from the bookmarklet deep link', () => {
     renderAt('/new?skill=om-code-review&ref=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fpull%2F1&auto=1&key=s3cret')
-    expect(screen.getByTestId('new-task-param-skill').textContent).toBe('om-code-review')
-    expect(screen.getByTestId('new-task-param-ref').textContent).toBe('https://github.com/o/r/pull/1')
-    expect(screen.getByTestId('new-task-param-auto').textContent).toBe('true')
+    expect(routeName()).toBe('new')
+    expect(textarea().value).toBe('https://github.com/o/r/pull/1')
   })
 
-  it('renders without params', () => {
+  it('renders an empty composer without params', () => {
     renderAt('/new')
     expect(routeName()).toBe('new')
-    expect(screen.getByTestId('new-task-param-skill').textContent).toBe('')
-    expect(screen.getByTestId('new-task-param-auto').textContent).toBe('false')
+    expect(textarea().value).toBe('')
   })
 
-  it('never prints the launch key, only whether one arrived', () => {
+  it('never prints the launch key anywhere on the page', () => {
     renderAt('/new?key=s3cret')
-    expect(screen.getByTestId('new-task-param-key').textContent).toBe('present')
+    expect(routeName()).toBe('new')
     expect(document.body.textContent).not.toContain('s3cret')
+    expect(textarea().value).toBe('')
   })
 })

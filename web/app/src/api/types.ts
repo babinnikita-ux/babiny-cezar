@@ -343,6 +343,18 @@ export interface PatchRunInput {
   title?: string
 }
 
+/** `PUT /api/config` (the base-branch picker; legacy Repo tab). `baseBranch: null` clears the
+ *  setting back to "current checkout". Merged into the raw config.json server-side. */
+export interface SetConfigInput {
+  baseBranch?: string | null
+  defaultRunner?: Runner
+}
+
+export interface SetConfigResponse {
+  baseBranch: string | null
+  defaultRunner: Runner
+}
+
 // ---- mutation responses ---------------------------------------------------------------------------
 
 /** `POST /api/runs` — one record for ×1, a group for ×2/×3. */

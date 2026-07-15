@@ -1,0 +1,421 @@
+import { QueryClientProvider } from '@tanstack/react-query'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { createQueryClient } from '@/api/query-client'
+import type { HealthResponse, RepoResponse, Skill, WorkflowsResponse } from '@/api/types'
+import { resetToasts, Toaster } from '@/components/ui/toaster'
+
+import { resetDraft } from './new-task-draft'
+import { NewTaskRoute } from './new-task'
+
+/**
+ * The /new screen against a mocked API: picker data flows (runner hidden on single-backend
+ * hosts, model presets switching per runner, variants gated on git), the EXACT submit bodies
+ * (workflow vs skill vs variants — the wire contract with POST /api/runs), lastTask
+ * persistence, draft survival across unmounts, ?skill/?ref prefill, and the suggested chips.
+ */
+
+beforeAll(() => {
+  // cmdk scrolls the selected item into view; jsdom has no scrollIntoView.
+  Element.prototype.scrollIntoView = vi.fn()
+})
+
+beforeEach(() => {
+  resetDraft()
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  )
+})
+
+afterEach(() => {
+  cleanup()
+  resetToasts()
+  vi.unstubAllGlobals()
+})
+
+// ---- fixtures --------------------------------------------------------------------------------
+
+const HEALTH: HealthResponse = {
+  version: '0.1.3',
+  repoRoot: '/repo',
+  repo: { root: '/repo', branch: 'main' },
+  defaultRunner: 'claude',
+  checks: [
+    { name: 'claude', available: true, version: '2.0.44' },
+    { name: 'git', available: true, version: '2.43.0' },
+  ],
+}
+
+const HEALTH_MULTI: HealthResponse = {
+  ...HEALTH,
+  checks: [
+    { name: 'claude', available: true },
+    { name: 'codex', available: true },
+    { name: 'git', available: true },
+  ],
+}
+
+const HEALTH_NO_GIT: HealthResponse = {
+  ...HEALTH,
+  repo: null,
+  checks: [{ name: 'claude', available: true }],
+}
+
+const SKILLS: Skill[] = [
+  { name: 'om-fix', description: 'Fix an issue end to end', body: '', path: '/p/om-fix.md', source: 'ai' },
+  { name: 'deploy', description: 'Deploy from anywhere', body: '', path: '/g/deploy.md', source: 'global' },
+]
+
+const WORKFLOWS: WorkflowsResponse = {
+  workflows: [
+    { name: 'quick-task', description: 'Single step, no gates', source: 'built-in', steps: [] },
+    { name: 'fix-and-verify', source: 'built-in', steps: [] },
+  ],
+  issues: [],
+}
+
+const REPO: RepoResponse = {
+  info: { root: '/repo', branch: 'main' },
+  status: [],
+  log: [],
+  branches: ['main', 'develop'],
+  baseBranch: null,
+}
+
+const REPO_NO_GIT: RepoResponse = { info: null, status: [], log: [], branches: [], baseBranch: null }
+
+// ---- harness ---------------------------------------------------------------------------------
+
+type Recorded = { method: string; url: string; body?: unknown }
+let requests: Recorded[]
+
+function serve(overrides: {
+  health?: HealthResponse
+  skills?: Skill[]
+  workflows?: WorkflowsResponse
+  repo?: RepoResponse
+  uiState?: Record<string, unknown>
+  createRun?: unknown
+} = {}) {
+  const data = {
+    health: HEALTH,
+    skills: SKILLS,
+    workflows: WORKFLOWS,
+    repo: REPO,
+    uiState: {},
+    createRun: { id: 'r1' },
+    ...overrides,
+  }
+  requests = []
+  const json = (payload: unknown, status = 200) =>
+    new Response(JSON.stringify(payload), { status, headers: { 'content-type': 'application/json' } })
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input)
+      const method = init?.method ?? 'GET'
+      const body = init?.body ? (JSON.parse(String(init.body)) as unknown) : undefined
+      requests.push({ method, url, body })
+      if (url === '/api/health') return json(data.health)
+      if (url === '/api/skills') return json(data.skills)
+      if (url === '/api/workflows') return json(data.workflows)
+      if (url === '/api/repo') return json(data.repo)
+      if (url === '/api/ui-state' && method === 'GET') return json(data.uiState)
+      if (url === '/api/ui-state' && method === 'PUT') return json(body ?? {})
+      if (url === '/api/runs' && method === 'POST') return json(data.createRun, 201)
+      if (url === '/api/config' && method === 'PUT')
+        return json({ baseBranch: (body as { baseBranch: string | null }).baseBranch, defaultRunner: 'claude' })
+      return json({ error: `unmocked ${method} ${url}` }, 404)
+    }),
+  )
+}
+
+function LocationProbe() {
+  const location = useLocation()
+  return <output data-testid="location">{location.pathname + location.search}</output>
+}
+
+function renderNewTask(entry = '/new') {
+  return render(
+    <QueryClientProvider client={createQueryClient()}>
+      <MemoryRouter initialEntries={[entry]}>
+        <Routes>
+          <Route path="/new" element={<NewTaskRoute />} />
+          <Route path="*" element={<div data-testid="elsewhere" />} />
+        </Routes>
+        <LocationProbe />
+        <Toaster />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
+
+const textarea = () => screen.getByLabelText('Describe a task for the agent') as HTMLTextAreaElement
+const sourcePill = () => screen.getByRole('button', { name: 'Choose a skill or workflow' })
+const location = () => screen.getByTestId('location').textContent
+
+/** The pickers resolve once workflows+skills+ui-state answered — wait for the real label. */
+async function pillReady(label = 'om-fix') {
+  await waitFor(() => expect(sourcePill().textContent).toContain(label))
+}
+
+const startTask = async () => {
+  fireEvent.click(screen.getByRole('button', { name: 'Start task' }))
+  await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.url === '/api/runs')).toBe(true))
+}
+
+const postedBody = () => requests.find((r) => r.method === 'POST' && r.url === '/api/runs')?.body
+
+// ---- the hero surface -------------------------------------------------------------------------
+
+describe('the hero surface', () => {
+  it('renders the mockup hero: title, subtitle, twinkles, and focus lands in the textarea', async () => {
+    serve()
+    renderNewTask()
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('What should the agent work on?')
+    expect(screen.getByText('Runs in an isolated worktree — review everything before it lands.')).toBeTruthy()
+    expect(document.querySelector('[data-route="new"] [data-slot="twinkle-backdrop"]')).not.toBeNull()
+    // ⌘N drops you here to type — the caret must already be in the box.
+    expect(document.activeElement).toBe(textarea())
+    await pillReady()
+  })
+
+  it('suggested chips fill the textarea (and only fill — no fetch, no navigation)', async () => {
+    serve()
+    renderNewTask()
+    await pillReady()
+    const chips = document.querySelectorAll('[data-slot="suggested-chip"]')
+    expect(chips.length).toBe(3)
+    fireEvent.click(chips[0] as HTMLElement)
+    expect(textarea().value).toContain('failing or flaky test')
+    expect(requests.some((r) => r.method === 'POST')).toBe(false)
+    expect(location()).toBe('/new')
+  })
+})
+
+// ---- picker data flows ------------------------------------------------------------------------
+
+describe('picker data flows', () => {
+  it('hides the runner pill on a single-backend host (legacy rule)', async () => {
+    serve()
+    renderNewTask()
+    await pillReady()
+    expect(document.querySelector('[data-slot="runner-pill"]')).toBeNull()
+    expect(document.querySelector('[data-slot="model-pill"]')).not.toBeNull()
+  })
+
+  it('shows the runner pill with >1 backend, and switching runner swaps the model presets', async () => {
+    serve({ health: HEALTH_MULTI })
+    renderNewTask()
+    await pillReady()
+
+    const runnerPill = () => document.querySelector('[data-slot="runner-pill"]') as HTMLElement
+    await waitFor(() => expect(runnerPill()).not.toBeNull())
+    expect(runnerPill().textContent).toContain('claude')
+
+    // claude's presets first…
+    fireEvent.pointerDown(document.querySelector('[data-slot="model-pill"]') as HTMLElement)
+    let options = await screen.findAllByRole('menuitemradio')
+    expect(options.map((o) => o.textContent)).toEqual(
+      expect.arrayContaining([expect.stringContaining('opus'), expect.stringContaining('sonnet')]),
+    )
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryAllByRole('menuitemradio')).toHaveLength(0))
+
+    // …pick codex…
+    fireEvent.pointerDown(runnerPill())
+    options = await screen.findAllByRole('menuitemradio')
+    fireEvent.click(options.find((o) => o.textContent?.includes('codex')) as HTMLElement)
+    await waitFor(() => expect(runnerPill().textContent).toContain('codex'))
+    // …the model reset to auto and the presets are codex's now.
+    expect((document.querySelector('[data-slot="model-pill"]') as HTMLElement).textContent).toContain('auto')
+    fireEvent.pointerDown(document.querySelector('[data-slot="model-pill"]') as HTMLElement)
+    options = await screen.findAllByRole('menuitemradio')
+    const labels = options.map((o) => o.textContent ?? '')
+    expect(labels.some((l) => l.includes('gpt-5.1-codex'))).toBe(true)
+    expect(labels.some((l) => l.includes('opus'))).toBe(false)
+  })
+
+  it('gates variants on git: no repo → pill disabled with the honest reason, base pill gone', async () => {
+    serve({ health: HEALTH_NO_GIT, repo: REPO_NO_GIT })
+    renderNewTask()
+    await pillReady()
+    const pill = document.querySelector('[data-slot="variants-pill"]') as HTMLButtonElement
+    expect(pill.disabled).toBe(true)
+    expect(pill.title).toContain('need a git repository')
+    expect(document.querySelector('[data-slot="base-pill"]')).toBeNull()
+  })
+
+  it('base branch pill shows config default (falling back to the checkout) and PUTs /api/config', async () => {
+    serve({ repo: { ...REPO, baseBranch: 'develop' } })
+    renderNewTask()
+    await pillReady()
+    const basePill = () => document.querySelector('[data-slot="base-pill"]') as HTMLElement
+    await waitFor(() => expect(basePill()).not.toBeNull())
+    expect(basePill().textContent).toContain('base: develop')
+
+    fireEvent.pointerDown(basePill())
+    const options = await screen.findAllByRole('menuitemradio')
+    expect(options.map((o) => o.textContent)).toEqual([
+      expect.stringContaining('current checkout (main)'),
+      expect.stringContaining('main'),
+      expect.stringContaining('develop'),
+    ])
+    fireEvent.click(options[0] as HTMLElement)
+    await waitFor(() =>
+      expect(requests.some((r) => r.method === 'PUT' && r.url === '/api/config')).toBe(true),
+    )
+    expect(requests.find((r) => r.url === '/api/config')?.body).toEqual({ baseBranch: null })
+  })
+
+  it('preselects the persisted lastTask when it still exists', async () => {
+    serve({ uiState: { lastTask: { source: 'workflow', ref: 'fix-and-verify' } } })
+    renderNewTask()
+    await pillReady('fix-and-verify')
+  })
+
+  it('falls back to the first skill when lastTask names something gone', async () => {
+    serve({ uiState: { lastTask: { source: 'skill', ref: 'deleted-skill' } } })
+    renderNewTask()
+    await pillReady('om-fix')
+  })
+
+  it('the source menu groups: Project skills (bold), Global, Workflows', async () => {
+    serve()
+    renderNewTask()
+    await pillReady()
+    fireEvent.click(sourcePill())
+    await screen.findByPlaceholderText('search skills & workflows…')
+
+    const options = [...document.querySelectorAll('[data-slot="source-option"]')]
+    expect(options.map((o) => o.getAttribute('data-source-ref'))).toEqual([
+      'om-fix', 'deploy', 'quick-task', 'fix-and-verify',
+    ])
+    const headings = [...document.querySelectorAll('[cmdk-group-heading]')].map((h) => h.textContent)
+    expect(headings).toEqual(['Project skills', 'Global', 'Workflows'])
+  })
+})
+
+// ---- submit bodies (the wire contract) ---------------------------------------------------------
+
+describe('submit', () => {
+  it('a SKILL source posts the one-step inline chain and persists lastTask, then navigates', async () => {
+    serve({ createRun: { id: 'run-9' } })
+    renderNewTask()
+    await pillReady('om-fix')
+    fireEvent.change(textarea(), { target: { value: 'Fix the flaky worktree test' } })
+    await startTask()
+
+    expect(postedBody()).toEqual({
+      task: 'Fix the flaky worktree test',
+      steps: [{ id: 'task', name: 'om-fix', skill: 'om-fix', prompt: '{{task}}' }],
+    })
+    await waitFor(() => expect(location()).toBe('/tasks/run-9'))
+    await waitFor(() =>
+      expect(requests.find((r) => r.method === 'PUT' && r.url === '/api/ui-state')?.body).toEqual({
+        lastTask: { source: 'skill', ref: 'om-fix' },
+      }),
+    )
+  })
+
+  it('a WORKFLOW source posts { workflow, task }', async () => {
+    serve({ uiState: { lastTask: { source: 'workflow', ref: 'quick-task' } } })
+    renderNewTask()
+    await pillReady('quick-task')
+    fireEvent.change(textarea(), { target: { value: 'Ship it' } })
+    await startTask()
+
+    expect(postedBody()).toEqual({ task: 'Ship it', workflow: 'quick-task' })
+  })
+
+  it('picking a model and ×2 variants rides along; {runs} answer navigates to the FIRST variant', async () => {
+    serve({ createRun: { runs: [{ id: 'v-a' }, { id: 'v-b' }] } })
+    renderNewTask()
+    await pillReady()
+
+    fireEvent.pointerDown(document.querySelector('[data-slot="model-pill"]') as HTMLElement)
+    let options = await screen.findAllByRole('menuitemradio')
+    fireEvent.click(options.find((o) => o.textContent?.includes('sonnet')) as HTMLElement)
+    await waitFor(() => expect(screen.queryAllByRole('menuitemradio')).toHaveLength(0))
+
+    fireEvent.pointerDown(document.querySelector('[data-slot="variants-pill"]') as HTMLElement)
+    options = await screen.findAllByRole('menuitemradio')
+    fireEvent.click(options.find((o) => o.textContent?.includes('×2')) as HTMLElement)
+    await waitFor(() =>
+      expect((document.querySelector('[data-slot="variants-pill"]') as HTMLElement).textContent).toContain('×2'),
+    )
+
+    fireEvent.change(textarea(), { target: { value: 'Race two attempts' } })
+    await startTask()
+
+    expect(postedBody()).toEqual({
+      task: 'Race two attempts',
+      steps: [{ id: 'task', name: 'om-fix', skill: 'om-fix', prompt: '{{task}}' }],
+      model: 'sonnet',
+      variants: 2,
+    })
+    await waitFor(() => expect(location()).toBe('/tasks/v-a'))
+  })
+
+  it('single-backend hosts never send `runner` (the server defaults it)', async () => {
+    serve()
+    renderNewTask()
+    await pillReady()
+    fireEvent.change(textarea(), { target: { value: 'no runner key' } })
+    await startTask()
+    expect((postedBody() as Record<string, unknown>).runner).toBeUndefined()
+  })
+})
+
+// ---- drafts & prefill ---------------------------------------------------------------------------
+
+describe('drafts and prefill', () => {
+  it('text and picker choices survive an unmount/remount (navigation away and back)', async () => {
+    serve()
+    const first = renderNewTask()
+    await pillReady()
+    fireEvent.change(textarea(), { target: { value: 'half-written thought' } })
+    fireEvent.click(sourcePill())
+    await screen.findByPlaceholderText('search skills & workflows…')
+    fireEvent.click(document.querySelector('[data-source-ref="fix-and-verify"]') as HTMLElement)
+    await pillReady('fix-and-verify')
+    first.unmount()
+
+    renderNewTask()
+    await pillReady('fix-and-verify')
+    expect(textarea().value).toBe('half-written thought')
+  })
+
+  it('?skill=&ref= prefill: ref becomes the text, the skill is selected — beating the draft', async () => {
+    serve()
+    const first = renderNewTask()
+    await pillReady()
+    fireEvent.change(textarea(), { target: { value: 'stale draft' } })
+    first.unmount()
+
+    renderNewTask('/new?skill=deploy&ref=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F5&auto=1&key=whatever')
+    await pillReady('deploy')
+    expect(textarea().value).toBe('https://github.com/o/r/issues/5')
+    // auto=1 is parsed but INERT this step (Step 1.3 proves auto-start parity first).
+    expect(requests.some((r) => r.method === 'POST' && r.url === '/api/runs')).toBe(false)
+  })
+
+  it('submit spends the draft text', async () => {
+    serve()
+    renderNewTask()
+    await pillReady()
+    fireEvent.change(textarea(), { target: { value: 'send me' } })
+    await startTask()
+    await waitFor(() => expect(screen.queryByTestId('elsewhere')).not.toBeNull())
+
+    renderNewTask()
+    expect(textarea().value).toBe('')
+  })
+})

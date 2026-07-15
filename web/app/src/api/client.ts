@@ -18,6 +18,8 @@ import type {
   PickVariantResponse,
   RepoResponse,
   RunRecord,
+  SetConfigInput,
+  SetConfigResponse,
   Skill,
   TodoItem,
   UiState,
@@ -292,4 +294,10 @@ export function sendMessage(id: string, message: MessageInput): Promise<MessageR
 /** Merges server-side (the stored object spread under the patch) and answers the merged state. */
 export function putUiState(patch: UiState): Promise<UiState> {
   return mutate<UiState>('PUT', '/api/ui-state', patch)
+}
+
+/** Set/clear the agents' base branch (and default runner). Merged into the raw config.json
+ *  server-side so unrelated user keys survive. */
+export function putConfig(patch: SetConfigInput): Promise<SetConfigResponse> {
+  return mutate<SetConfigResponse>('PUT', '/api/config', patch)
 }

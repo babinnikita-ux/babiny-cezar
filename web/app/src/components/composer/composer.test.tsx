@@ -1,5 +1,6 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import * as React from 'react'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
@@ -351,5 +352,87 @@ describe('disabled state', () => {
   it('the mic is hidden entirely when the Web Speech API is absent — no fake button', () => {
     renderComposer()
     expect(screen.queryByText('Dictation')).toBeNull()
+  })
+})
+
+describe('host seams (R4: the /new hero)', () => {
+  it('controlled value: the parent owns the text, and every edit flows through onValueChange', async () => {
+    const changes: string[] = []
+    stubSkillsFetch()
+    const onSubmit = vi.fn(() => Promise.resolve({}))
+    const { rerender } = render(
+      <QueryClientProvider client={createQueryClient()}>
+        <Composer onSubmit={onSubmit} value="from the draft" onValueChange={(t) => changes.push(t)} />
+        <Toaster />
+      </QueryClientProvider>,
+    )
+    const textarea = screen.getByLabelText('Reply to the agent') as HTMLTextAreaElement
+    expect(textarea.value).toBe('from the draft')
+
+    type(textarea, 'edited')
+    expect(changes).toEqual(['edited'])
+    // Still parent-owned: without a rerender the visible value stays the prop's.
+    rerender(
+      <QueryClientProvider client={createQueryClient()}>
+        <Composer onSubmit={onSubmit} value="edited" onValueChange={(t) => changes.push(t)} />
+        <Toaster />
+      </QueryClientProvider>,
+    )
+    // The optimistic clear on send reaches the parent too.
+    fireEvent.keyDown(screen.getByLabelText('Reply to the agent'), { key: 'Enter' })
+    expect(changes).toEqual(['edited', ''])
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith('edited', []))
+  })
+
+  it('a rejected send restores the draft through onValueChange (controlled mode loses nothing)', async () => {
+    const changes: string[] = []
+    stubSkillsFetch()
+    const onSubmit = vi.fn(() => Promise.reject(new Error('server said no')))
+    // A REAL controlled parent: state wired both ways, like the /new draft store.
+    function Host() {
+      const [text, setText] = React.useState('precious words')
+      return (
+        <Composer
+          onSubmit={onSubmit}
+          value={text}
+          onValueChange={(next) => {
+            changes.push(next)
+            setText(next)
+          }}
+        />
+      )
+    }
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <Host />
+        <Toaster />
+      </QueryClientProvider>,
+    )
+    fireEvent.keyDown(screen.getByLabelText('Reply to the agent'), { key: 'Enter' })
+    // Optimistic clear, then the restore once the server rejected.
+    await waitFor(() => expect(changes).toEqual(['', 'precious words']))
+    expect((screen.getByLabelText('Reply to the agent') as HTMLTextAreaElement).value).toBe('precious words')
+  })
+
+  it('renders footerStart and footerEnd in the footer bar, and honors sendAriaLabel', () => {
+    renderComposer({
+      footerStart: <button type="button">a pill</button>,
+      footerEnd: <kbd>⌘↵</kbd>,
+      sendAriaLabel: 'Start task',
+    })
+    expect(document.querySelector('[data-slot="composer-footer-start"]')?.textContent).toBe('a pill')
+    expect(document.querySelector('[data-slot="composer-footer-end"]')?.textContent).toBe('⌘↵')
+    expect(screen.getByLabelText('Start task')).toBeTruthy()
+    expect(screen.queryByLabelText('Send')).toBeNull()
+  })
+
+  it('autoFocus puts the caret in the textarea on mount (⌘N lands ready to type)', () => {
+    const { textarea } = renderComposer({ autoFocus: true })
+    expect(document.activeElement).toBe(textarea)
+  })
+
+  it('without autoFocus the composer never steals focus', () => {
+    const { textarea } = renderComposer()
+    expect(document.activeElement).not.toBe(textarea)
   })
 })

@@ -238,20 +238,21 @@ function SidebarContent({
 
       <div className="px-2.5 pt-1 pb-2">
         <Button asChild variant="contrast" className="relative w-full justify-center">
-          {/* Until R4 ships the React composer, /new must be a document navigation: the server
-              deliberately serves the working legacy composer for a full request. A Router Link
-              would stay inside this bundle and dead-end on NewTaskRoute's placeholder. */}
-          <a href="/new" onClick={onNavigate}>
+          {/* A Router Link since R4 Step 1.1: the React /new composer is real, so deliberate
+              New task affordances stay inside the SPA. Full document loads of /new (the
+              bookmarklet contract) still get the legacy page until Step 1.3 proves auto-start
+              parity — that pin lives in the server (static-ui.ts), not here. */}
+          <Link to="/new" onClick={onNavigate}>
             <PlusIcon className="size-[15px]" aria-hidden="true" />
             New task
-            {/* Decorative: the ⌘N accelerator itself is registered in Step 4.3. */}
+            {/* Decorative: the ⌘N accelerator itself is registered in the command palette. */}
             <kbd
               aria-hidden="true"
               className="absolute right-2.5 rounded-[5px] border border-b-2 border-contrast-foreground/25 bg-transparent px-[5px] py-px font-mono text-[10.5px] font-medium text-contrast-foreground/60"
             >
               ⌘N
             </kbd>
-          </a>
+          </Link>
         </Button>
       </div>
 

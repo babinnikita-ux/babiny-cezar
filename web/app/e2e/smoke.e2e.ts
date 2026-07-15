@@ -430,14 +430,15 @@ describe('global SSE stream', () => {
 })
 
 describe('legacy cockpit', () => {
-  it('hands the React shell New task CTA to the working legacy composer', () => {
+  it('the React shell New task CTA stays in the SPA — the React composer, not legacy (R4 1.1)', () => {
     browser.goto(baseUrl + '/')
     browser.click('[data-slot="sidebar"] a[href="/new"]')
-    browser.waitForFunction(`document.getElementById('brand') !== null`)
+    // Client-side navigation: the React /new hero renders and no legacy markup ever loads.
+    browser.waitForFunction(`document.querySelector('[data-route="new"]') !== null`)
 
     expect(browser.url()).toBe(baseUrl + '/new')
-    expect(browser.isVisible('#brand')).toBe(true)
-    expect(browser.evaluate('document.getElementById("root") === null')).toBe(true)
+    expect(browser.evaluate('document.getElementById("brand") === null')).toBe(true)
+    expect(browser.evaluate('document.getElementById("root") !== null')).toBe(true)
   })
 
   it('still serves the legacy UI at /?legacy=1', () => {

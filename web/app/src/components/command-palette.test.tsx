@@ -13,7 +13,6 @@ import { THEME_STORAGE_KEY, type Theme } from '@/lib/theme'
 afterEach(cleanup)
 
 const fetchMock = vi.fn<typeof fetch>()
-const documentNavigateMock = vi.fn<(href: string) => void>()
 
 beforeAll(() => {
   // cmdk scrolls the selected item into view; jsdom has no scrollIntoView.
@@ -42,7 +41,6 @@ beforeEach(() => {
 
 afterEach(() => {
   fetchMock.mockReset()
-  documentNavigateMock.mockReset()
   vi.unstubAllGlobals()
 })
 
@@ -91,7 +89,7 @@ function renderPalette({
     <QueryClientProvider client={createQueryClient()}>
       <ThemeProvider>
         <MemoryRouter initialEntries={['/']}>
-          <CommandPalette onDocumentNavigate={documentNavigateMock} />
+          <CommandPalette />
           <LocationProbe />
           <input data-testid="outside-input" aria-label="outside" />
         </MemoryRouter>
@@ -186,13 +184,12 @@ describe('Views group', () => {
     await waitFor(() => expect(dialog()).toBeNull())
   })
 
-  it('⌘N performs a document navigation to the legacy /new composer', () => {
+  it('⌘N client-navigates to the React /new composer (R4 Step 1.1)', () => {
     renderPalette()
 
     fireEvent.keyDown(window, { key: 'n', metaKey: true })
 
-    expect(documentNavigateMock).toHaveBeenCalledWith('/new')
-    expect(location()).toBe('/')
+    expect(location()).toBe('/new')
     expect(dialog()).toBeNull()
   })
 })
@@ -263,15 +260,14 @@ describe('Actions group', () => {
     await waitFor(() => expect(dialog()).toBeNull())
   })
 
-  it('offers New task as a document-navigation action too', async () => {
+  it('offers New task as an action too — client navigation to /new', async () => {
     renderPalette()
     openWith({ metaKey: true })
     await screen.findByRole('dialog')
 
     fireEvent.click(document.querySelector('[data-action="new-task"]') as HTMLElement)
 
-    expect(documentNavigateMock).toHaveBeenCalledWith('/new')
-    expect(location()).toBe('/')
+    expect(location()).toBe('/new')
   })
 })
 
@@ -295,15 +291,14 @@ describe('Skills group', () => {
     expect(names).toEqual(['project-review', 'project-fix', 'project-plan', 'global-deploy', 'team-release'])
   })
 
-  it('selecting a skill document-navigates to the bookmarklet-compatible /new?skill=…', async () => {
+  it('selecting a skill client-navigates to the prefilling /new?skill=…', async () => {
     renderPalette({ skills: MIXED })
     openWith({ metaKey: true })
     await screen.findByText('project-review')
 
     fireEvent.click(document.querySelector('[data-skill="project-review"]') as HTMLElement)
 
-    expect(documentNavigateMock).toHaveBeenCalledWith('/new?skill=project-review')
-    expect(location()).toBe('/')
+    expect(location()).toBe('/new?skill=project-review')
     await waitFor(() => expect(dialog()).toBeNull())
   })
 

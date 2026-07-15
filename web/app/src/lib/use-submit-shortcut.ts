@@ -41,3 +41,12 @@ export function isSubmitShortcut(event: SubmitShortcutEvent): boolean {
   if (event.isComposing) return false
   return true
 }
+
+/** The kbd hint next to a submit button, in the platform's own symbols (spec: "kbd hints
+ *  render the platform's symbol"): ⌘↵ on Apple hardware, Ctrl+↵ everywhere else. The platform
+ *  string is injectable for tests; the default reads the browser's. */
+export function submitShortcutHint(
+  platform: string = typeof navigator === 'undefined' ? '' : navigator.platform,
+): string {
+  return /mac|iphone|ipad|ipod/i.test(platform) ? '⌘↵' : 'Ctrl+↵'
+}

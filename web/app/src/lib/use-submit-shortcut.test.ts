@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { isSubmitShortcut, type SubmitShortcutEvent } from './use-submit-shortcut'
+import { isSubmitShortcut, submitShortcutHint, type SubmitShortcutEvent } from './use-submit-shortcut'
 
 const event = (overrides: Partial<SubmitShortcutEvent> = {}): SubmitShortcutEvent => ({
   key: 'Enter',
@@ -31,4 +31,17 @@ describe('isSubmitShortcut — the spec matrix (Enter / Shift+Enter / ⌘↵ / C
       expect(isSubmitShortcut(input)).toBe(sends)
     })
   }
+})
+
+describe('submitShortcutHint — the platform’s own symbols', () => {
+  it.each([
+    ['MacIntel', '⌘↵'],
+    ['iPhone', '⌘↵'],
+    ['iPad', '⌘↵'],
+    ['Win32', 'Ctrl+↵'],
+    ['Linux x86_64', 'Ctrl+↵'],
+    ['', 'Ctrl+↵'],
+  ])('%s → %s', (platform, hint) => {
+    expect(submitShortcutHint(platform)).toBe(hint)
+  })
 })

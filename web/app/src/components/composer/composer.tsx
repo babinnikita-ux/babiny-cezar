@@ -46,6 +46,21 @@ export interface ComposerProps {
   /** Deliver the message. Rejection = the message did NOT land: the composer toasts the error
    *  and restores the draft (nothing the user typed is ever lost). */
   onSubmit: (text: string, images: ImageInput[]) => Promise<unknown>
+  /**
+   * Controlled text (pass BOTH or neither): the /new host owns the draft so it survives
+   * navigation (spec: "Queued form state survives navigation"). Every internal edit — typing,
+   * completions, the optimistic clear, the on-error restore — flows through `onValueChange`.
+   */
+  value?: string
+  onValueChange?: (text: string) => void
+  /** Focus the textarea on mount — the /new hero, where typing is the whole point of arriving. */
+  autoFocus?: boolean
+  /** Rendered in the footer bar after the paperclip — the /new picker pill row. */
+  footerStart?: ReactNode
+  /** Rendered between Dictation and the send button — the /new mode segment + kbd hint. */
+  footerEnd?: ReactNode
+  /** The send button's accessible name. */
+  sendAriaLabel?: string
   disabled?: boolean
   /** Shown as the placeholder while disabled — e.g. the legacy "Session closed — Continue to
    *  reopen." */
@@ -73,6 +88,12 @@ const QUICK_REPLIES: Record<string, string> = { KeyA: 'Yes, approved.', KeyC: 'C
 
 export function Composer({
   onSubmit,
+  value,
+  onValueChange,
+  autoFocus = false,
+  footerStart,
+  footerEnd,
+  sendAriaLabel = 'Send',
   disabled = false,
   disabledReason = 'Session closed — Continue to reopen.',
   disabledAction,
@@ -82,7 +103,19 @@ export function Composer({
   quickReplies = false,
   getMentionCandidates,
 }: ComposerProps) {
-  const [text, setText] = useState('')
+  // Optionally controlled: `value` (when given) shadows the internal state, and every write is
+  // mirrored to both — updater functions resolve against whichever is authoritative right now.
+  const [internalText, setInternalText] = useState('')
+  const text = value ?? internalText
+  const textRef = useRef(text)
+  textRef.current = text
+  const onValueChangeRef = useRef(onValueChange)
+  onValueChangeRef.current = onValueChange
+  const setText = useCallback((next: string | ((current: string) => string)) => {
+    const resolved = typeof next === 'function' ? next(textRef.current) : next
+    setInternalText(resolved)
+    onValueChangeRef.current?.(resolved)
+  }, [])
   const [images, setImages] = useState<PendingImage[]>([])
   const [busy, setBusy] = useState(false)
   const [trigger, setTrigger] = useState<TriggerState | null>(null)
@@ -95,6 +128,11 @@ export function Composer({
 
   const skills = useSkills(autocompleteSkills && skillsWanted)
   const dictation = useDictation((message) => toast(message, { tone: 'danger' }))
+
+  // On-mount only, by design: re-focusing on a later `autoFocus` flip would steal focus mid-visit.
+  useEffect(() => {
+    if (autoFocus) textareaRef.current?.focus()
+  }, []) // deliberately not [autoFocus]
 
   // ---- autocomplete ------------------------------------------------------------------------
 
@@ -389,39 +427,52 @@ export function Composer({
               onInsertAndSend={() => insertTranscript(true)}
             />
           ) : (
-            <div className="flex items-center gap-1 px-2 pt-1.5 pb-2">
+            // The footer may WRAP (the /new pill row on narrow widths), but the trailing
+            // controls stay one unbreakable group so the send button never strands alone.
+            <div className="flex flex-wrap items-center gap-1 gap-y-1.5 px-2 pt-1.5 pb-2">
               <AttachButton disabled={disabled} onFiles={addFiles} />
-              <div className="flex-1" />
-              {disabled && disabledAction ? (
-                <div data-slot="composer-disabled-action" className="mr-1">
-                  {disabledAction}
+              {footerStart ? (
+                <div data-slot="composer-footer-start" className="flex min-w-0 flex-wrap items-center gap-1">
+                  {footerStart}
                 </div>
               ) : null}
-              {dictation.supported ? (
+              <div className="ml-auto flex items-center gap-1">
+                {disabled && disabledAction ? (
+                  <div data-slot="composer-disabled-action" className="mr-1">
+                    {disabledAction}
+                  </div>
+                ) : null}
+                {dictation.supported ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    disabled={disabled}
+                    aria-label="Start dictation"
+                    title="Dictation"
+                    className="h-8 gap-1.5 px-2.5 text-xs font-medium text-muted-foreground"
+                    onClick={dictation.start}
+                  >
+                    <MicIcon aria-hidden="true" className="size-3.5" />
+                    Dictation
+                  </Button>
+                ) : null}
+                {footerEnd ? (
+                  <div data-slot="composer-footer-end" className="flex items-center gap-1.5">
+                    {footerEnd}
+                  </div>
+                ) : null}
                 <Button
                   type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={disabled}
-                  aria-label="Start dictation"
-                  title="Dictation"
-                  className="h-8 gap-1.5 px-2.5 text-xs font-medium text-muted-foreground"
-                  onClick={dictation.start}
+                  size="icon-sm"
+                  aria-label={sendAriaLabel}
+                  disabled={disabled || busy || (text.trim() === '' && images.length === 0)}
+                  className="size-8"
+                  onClick={submitDraft}
                 >
-                  <MicIcon aria-hidden="true" className="size-3.5" />
-                  Dictation
+                  <ArrowUpIcon aria-hidden="true" />
                 </Button>
-              ) : null}
-              <Button
-                type="button"
-                size="icon-sm"
-                aria-label="Send"
-                disabled={disabled || busy || (text.trim() === '' && images.length === 0)}
-                className="size-8"
-                onClick={submitDraft}
-              >
-                <ArrowUpIcon aria-hidden="true" />
-              </Button>
+              </div>
             </div>
           )}
         </div>
