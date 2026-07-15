@@ -111,17 +111,26 @@ describe('route map', () => {
 })
 
 /** The bookmarklet contract (spec 011), protected by BACKWARD_COMPATIBILITY.md:
- *  `/new?skill=&ref=&auto=1&key=`. Since R4 Step 1.1 the params PREFILL the real composer
- *  (`auto=1` is still parsed but deliberately inert until Step 1.3 proves auto-start parity).
- *  The deeper prefill flows live in routes/new-task.test.tsx; this file keeps the URL contract. */
+ *  `/new?skill=&ref=&auto=1&key=`. Since R4 Step 1.3 `auto=1` arms the real unattended start
+ *  (the full matrix lives in routes/new-task.test.tsx); this file keeps the URL contract. */
 describe('/new query params', () => {
   const textarea = () =>
     screen.getByLabelText('Describe a task for the agent') as HTMLTextAreaElement
 
-  it('prefills the composer from the bookmarklet deep link', () => {
-    renderAt('/new?skill=om-code-review&ref=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fpull%2F1&auto=1&key=s3cret')
+  it('prefills the composer from a non-auto deep link', () => {
+    renderAt('/new?skill=om-code-review&ref=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fpull%2F1')
     expect(routeName()).toBe('new')
     expect(textarea().value).toBe('https://github.com/o/r/pull/1')
+  })
+
+  it('an armed auto=1 link shows the starting surface, never the composer mid-flight', () => {
+    // fetch never answers here, so the key check is honestly in flight: no composer to type
+    // into, no run POSTed, and the key nowhere in the DOM.
+    renderAt('/new?skill=om-code-review&ref=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fpull%2F1&auto=1&key=s3cret')
+    expect(routeName()).toBe('new')
+    expect(document.querySelector('[data-slot="auto-starting"]')).not.toBeNull()
+    expect(screen.queryByLabelText('Describe a task for the agent')).toBeNull()
+    expect(document.body.textContent).not.toContain('s3cret')
   })
 
   it('renders an empty composer without params', () => {

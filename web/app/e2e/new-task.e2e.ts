@@ -1,5 +1,5 @@
 import { execFileSync, spawn, type ChildProcess } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -8,12 +8,13 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { AgentBrowser } from './agent-browser'
 
 /**
- * The full-screen /new composer (R4 Step 1.1) end-to-end against a LIVE dry-run server: client
- * navigation from the sidebar CTA reaches the REACT hero (a full document load of /new still
- * serves legacy until Step 1.3 — so landing on `[data-route="new"]` after the click IS the
- * proof of client-side routing), the cmdk source dropdown lists this repo's project skills
- * first, picking one + typing + submitting starts a real run — and the API readback pins the
- * created run to the exact skill-chain shape plus the persisted `lastTask`.
+ * The full-screen /new composer (R4 Steps 1.1 + 1.3) end-to-end against a LIVE dry-run server:
+ * client navigation from the sidebar CTA reaches the React hero, the cmdk source dropdown lists
+ * this repo's project skills first, picking one + typing + submitting starts a real run — and
+ * the API readback pins the created run to the exact skill-chain shape plus the persisted
+ * `lastTask`. The second describe proves the protected bookmarklet contract (spec 011,
+ * BACKWARD_COMPATIBILITY.md) on full document loads of /new, with the REAL launch key read
+ * from `.ai/cezar/launch-key` — the documented on-disk contract.
  */
 
 const artifactsDir = resolve(import.meta.dirname, '../../../.ai/qa/artifacts_e2e')
@@ -98,8 +99,6 @@ describe('the full-screen /new against a live dry-run server', () => {
     browser.goto(`${baseUrl}/`)
     browser.waitForFunction(`document.querySelector('[data-slot="sidebar"] a[href="/new"]') !== null`)
     browser.click('[data-slot="sidebar"] a[href="/new"]')
-    // The React route rendering (rather than the legacy page loading) proves the navigation
-    // stayed client-side — the server still answers full /new loads with legacy.
     browser.waitForFunction(`document.querySelector('[data-route="new"]') !== null`)
     expect(browser.url()).toBe(`${baseUrl}/new`)
     expect(browser.text('h1')).toBe('What should the agent work on?')
@@ -201,5 +200,62 @@ describe('the full-screen /new against a live dry-run server', () => {
     browser.waitForFunction(`document.querySelector('[data-route="new"]') !== null`)
     browser.screenshot(`${artifactsDir}/new-task-hero-iphone.png`, { viewport: true })
     browser.setViewport(1440, 900)
+  })
+})
+
+describe('the bookmarklet contract on full /new loads (spec 011, Step 1.3)', () => {
+  const runCount = async (): Promise<number> =>
+    ((await (await fetch(`${baseUrl}/api/runs`)).json()) as unknown[]).length
+
+  it('auto=1 with the REAL launch key starts a run unattended and lands in its thread', async () => {
+    // The documented on-disk contract: the server bakes this secret into the bookmarklets it
+    // generates; only a page holding it may start runs. Read it exactly where users can.
+    const key = readFileSync(join(dataRoot, '.ai/cezar/launch-key'), 'utf8').trim()
+    expect(key).not.toBe('')
+    const before = await runCount()
+
+    browser.goto(
+      `${baseUrl}/new?skill=lint-fix&ref=hello&auto=1&key=${encodeURIComponent(key)}`,
+    )
+    // Unattended: no clicks from here — the cockpit takes us to the thread by itself.
+    browser.waitForFunction(`location.pathname.startsWith('/tasks/')`)
+
+    const runId = (browser.evaluate(`location.pathname.split('/').pop()`) as string) ?? ''
+    const record = (await (await fetch(`${baseUrl}/api/runs/${runId}`)).json()) as {
+      task: string
+      workflowDef?: { steps?: Array<Record<string, unknown>> }
+    }
+    expect(record.task).toBe('hello')
+    expect(record.workflowDef?.steps).toEqual([
+      expect.objectContaining({ id: 'task', name: 'lint-fix', skill: 'lint-fix', prompt: '{{task}}' }),
+    ])
+    expect(await runCount()).toBe(before + 1)
+  }, 90_000)
+
+  it('a wrong key only prefills — the composer, a toast, and NOT one run more', async () => {
+    const before = await runCount()
+
+    browser.goto(`${baseUrl}/new?skill=lint-fix&ref=hello&auto=1&key=definitely-wrong`)
+    browser.waitForFunction(`document.querySelector('[data-route="new"] [data-slot="composer"]') !== null`)
+
+    // Prefilled, blocked, and honest about it.
+    expect(browser.evaluate(`document.querySelector('[data-slot="composer"] textarea').value`)).toBe('hello')
+    browser.waitForFunction(
+      `document.querySelector('[data-slot="source-pill"]')?.textContent.includes('lint-fix')`,
+    )
+    browser.waitForFunction(`document.querySelector('[data-slot="toast"]') !== null`)
+    expect(browser.text('[data-slot="toast"]')).toContain('Auto-start blocked')
+    browser.screenshot(`${artifactsDir}/new-task-bookmarklet-blocked.png`)
+
+    // The key (right or wrong) never survives in the URL, and no run started.
+    browser.waitForFunction(`location.search === ''`)
+    expect(browser.url()).toBe(`${baseUrl}/new`)
+    expect(await runCount()).toBe(before)
+  }, 90_000)
+
+  it('/new?legacy=1 still forces the legacy page on this server too', () => {
+    browser.goto(`${baseUrl}/new?legacy=1`)
+    browser.waitForFunction(`document.getElementById('brand') !== null`)
+    expect(browser.evaluate(`document.getElementById('root') === null`)).toBe(true)
   })
 })

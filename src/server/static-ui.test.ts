@@ -48,10 +48,10 @@ describe('resolveGetRequest', () => {
     { name: '/settings/skills → the shell', path: '/settings/skills', target: 'dist' },
     // react-router owns the 404 — it is the only side that knows the route map.
     { name: '/nope → the shell, which renders the 404 route', path: '/nope', target: 'dist' },
-    // /new is pinned to the legacy page until R4 lands the React composer:
-    // the bookmarklet contract (?skill=&ref=&auto=1&key=) needs auto-start,
-    // which only the legacy UI has today. A build being present changes nothing.
-    { name: '/new with the build → still the legacy page (composer lands in R4)', path: '/new', target: 'legacy' },
+    // /new lost its R1-era legacy pin in R4 Step 1.3: the React composer now carries the
+    // bookmarklet auto-start contract (?skill=&ref=&auto=1&key=), so a full load of /new
+    // is the shell like any other route.
+    { name: '/new with the build → the shell (React composer owns the bookmarklet contract)', path: '/new', target: 'dist' },
     { name: '/new without the build → the legacy page', path: '/new', distExists: false, target: 'legacy' },
     { name: '/new?legacy=1 → the legacy page (saved bookmarklets keep an escape hatch)', path: '/new', legacyRequested: true, target: 'legacy' },
 
@@ -94,8 +94,8 @@ describe('resolveGetRequest', () => {
     // An /api or asset caller is not a person who could run `npm run build:web`.
     expect(resolveGetRequest({ path: '/api/runs', ...opts }).hint).toBe(false);
     expect(resolveGetRequest({ path: '/assets/index-abc123.js', ...opts }).hint).toBe(false);
-    // /new serves legacy on purpose (until R4) — never a misconfiguration.
-    expect(resolveGetRequest({ path: '/new', ...opts }).hint).toBe(false);
+    // /new behaves like every other shell route now: no build → legacy + the hint.
+    expect(resolveGetRequest({ path: '/new', ...opts }).hint).toBe(true);
   });
 });
 

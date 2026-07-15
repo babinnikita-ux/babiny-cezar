@@ -182,6 +182,12 @@ export interface HealthResponse {
   defaultRunner: Runner
 }
 
+/** `GET /api/launch-key` — the bookmarklet auto-start secret (spec 011). Fetched only to
+ *  COMPARE against the `?key=` query param; the value must never reach the DOM. */
+export interface LaunchKeyResponse {
+  key: string
+}
+
 // ---- repo view (src/server/git.ts) ---------------------------------------------------------
 
 export interface StatusEntry {

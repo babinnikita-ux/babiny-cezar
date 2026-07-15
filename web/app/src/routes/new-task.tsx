@@ -5,10 +5,10 @@ import {
   SparklesIcon,
   WorkflowIcon,
 } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 
-import { createRun, postPlan, putConfig, putUiState } from '@/api/client'
+import { createRun, getLaunchKey, postPlan, putConfig, putUiState } from '@/api/client'
 import { queryKeys, useHealth, useRepo, useSkills, useUiState, useWorkflows } from '@/api/queries'
 import type { ImageInput, RepoResponse, Runner, Skill, WorkflowDef } from '@/api/types'
 import { TwinkleBackdrop } from '@/components/centered-state'
@@ -34,6 +34,12 @@ import { isProjectSkill, orderSkills } from '@/lib/skills'
 import { submitShortcutHint } from '@/lib/use-submit-shortcut'
 import { cn } from '@/lib/utils'
 
+import {
+  bookmarkletRunBody,
+  deepLinkToast,
+  unknownSkillPrefillText,
+  type DeepLinkNotice,
+} from './new-task-autostart'
 import { clearDraftText, readDraft, writeDraft, type NewTaskDraft } from './new-task-draft'
 import {
   availableRunners,
@@ -57,14 +63,20 @@ import { PlanReview } from './plan-review'
  * In plan-first mode (#383, the `Start | Plan first` segment) submit runs `POST /api/plan`
  * and opens the review overlay (plan-review.tsx) instead of starting a run.
  *
- * Still to come here: `auto=1` bookmarklet auto-start (Step 1.3 — the param is parsed and
- * deliberately ignored; full document loads of /new stay pinned to the legacy page until that
- * step proves parity).
+ * This route also owns the saved-bookmarklet contract (spec 011, BACKWARD_COMPATIBILITY.md):
+ * a full document load of `/new?skill=&ref=&auto=1&key=` auto-starts a run unattended when the
+ * key matches `GET /api/launch-key`, and only prefills otherwise — `handleDeepLink()` in
+ * web/app.js, verbatim (see new-task-autostart.ts for the verified semantics).
  */
 export function NewTaskRoute() {
   const [search] = useSearchParams()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+
+  // The deep-link params, captured ONCE: the mount effect below strips them from the URL
+  // (legacy's `history.replaceState` — the launch key must not survive in history or survive
+  // a reload to re-trigger), so live search params would vanish under us.
+  const [deepLink] = useState(() => parseNewTaskParams(search))
 
   const health = useHealth()
   const workflows = useWorkflows()
@@ -75,12 +87,13 @@ export function NewTaskRoute() {
   // The draft survives navigation (module store); explicit deep-link params beat it — a
   // pasted `/new?skill=&ref=` link states intent, a leftover draft only remembers it.
   const [draft, setDraft] = useState<NewTaskDraft>(() => {
-    const params = parseNewTaskParams(search)
     const stored = readDraft()
     return {
       ...stored,
-      ...(params.ref !== '' ? { text: params.ref } : {}),
-      ...(params.skill !== '' ? { source: { source: 'skill', ref: params.skill } as TaskSource } : {}),
+      ...(deepLink.ref !== '' ? { text: deepLink.ref } : {}),
+      ...(deepLink.skill !== ''
+        ? { source: { source: 'skill', ref: deepLink.skill } as TaskSource }
+        : {}),
     }
   })
   useEffect(() => {
@@ -109,6 +122,79 @@ export function NewTaskRoute() {
   const [plan, setPlan] = useState<PendingPlan | null>(null)
   const [planning, setPlanning] = useState(false)
   const [starting, setStarting] = useState(false)
+
+  // ---- bookmarklet deep-link (spec 011 — legacy handleDeepLink, verbatim) -------------------
+  // `auto=1` with a ref arms the unattended start; the composer stays hidden behind a
+  // "Starting…" surface until the key check + POST settle (or fail into the prefill path).
+  const [autoStarting, setAutoStarting] = useState(() => deepLink.auto && deepLink.ref !== '')
+  const [notice, setNotice] = useState<DeepLinkNotice | null>(() =>
+    !deepLink.auto && deepLink.ref !== '' ? { kind: 'prefill' } : null,
+  )
+  const deepLinkHandled = useRef(false)
+  useEffect(() => {
+    if (deepLinkHandled.current) return
+    deepLinkHandled.current = true
+    // Legacy cleans the URL FIRST (`history.replaceState({}, '', '/')` — before anything
+    // async): the launch key never lingers in the address bar or history, and a reload can
+    // never re-trigger the start. Same move here, staying on this route. (The router's own
+    // search, not window.location — MemoryRouter under test never touches the window.)
+    if (search.toString() !== '') void navigate('/new', { replace: true })
+    if (!deepLink.auto || deepLink.ref === '') return
+    void (async () => {
+      let launchKey = ''
+      try {
+        launchKey = (await getLaunchKey()).key
+      } catch {
+        // key endpoint unreachable → the blocked path, exactly like legacy
+      }
+      if (launchKey !== '' && deepLink.key === launchKey) {
+        try {
+          const created = await createRun(bookmarkletRunBody(deepLink))
+          clearDraftText()
+          void queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
+          void navigate(startedRunPath(created))
+          return
+        } catch (error) {
+          setNotice({
+            kind: 'failed',
+            message: error instanceof Error ? error.message : String(error),
+          })
+        }
+      } else {
+        // Wrong or missing key: a drive-by page guessing the URL gets a form, never a run.
+        setNotice({ kind: 'blocked' })
+      }
+      setAutoStarting(false)
+    })()
+    // mount-only by design: deepLink is captured state and this must run exactly once
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // The prefill toast waits for the pickers' data: whether the skill exists decides the
+  // wording, and the unknown-skill case rewrites the draft the way legacy did (intent into
+  // the text, quick-task as the source — its planner resolves skills from prose).
+  useEffect(() => {
+    if (notice === null || !sourcesReady) return
+    setNotice(null)
+    const unknownSkill =
+      deepLink.skill !== '' && !skillList.some((s) => s.name === deepLink.skill)
+        ? deepLink.skill
+        : ''
+    if (unknownSkill !== '') {
+      update({
+        text: unknownSkillPrefillText(deepLink.skill, deepLink.ref),
+        ...(workflowList.some((w) => w.name === 'quick-task')
+          ? { source: { source: 'workflow', ref: 'quick-task' } as TaskSource }
+          : {}),
+      })
+    }
+    const { message, tone } = deepLinkToast(notice, unknownSkill)
+    toast(message, { tone })
+    // Legacy focused the Run button so a bare Enter submits the reviewed form.
+    document
+      .querySelector<HTMLButtonElement>(
+        '[data-slot="composer"] button[aria-label="Start task"], [data-slot="composer"] button[aria-label="Plan task"]',
+      )
+      ?.focus()
+  }, [notice, sourcesReady]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async (text: string, images: ImageInput[]) => {
     if (!sourcesReady) {
@@ -175,6 +261,26 @@ export function NewTaskRoute() {
     } finally {
       setStarting(false)
     }
+  }
+
+  // The unattended bookmarklet start in flight: no composer, no params echoed anywhere —
+  // just an honest "working on it" until the POST answers (success navigates to the thread;
+  // failure drops back to the prefilled composer with a toast).
+  if (autoStarting) {
+    return (
+      <div
+        data-route="new"
+        className="relative isolate flex min-h-full flex-col items-center justify-center overflow-x-clip px-6"
+      >
+        <TwinkleBackdrop />
+        <div data-slot="auto-starting" role="status" className="text-center">
+          <h1 className="animate-pulse text-lg font-semibold tracking-tight">Starting task…</h1>
+          <p className="mt-1.5 text-[13.5px] text-muted-foreground">
+            Launched from a bookmarklet — taking you to the run.
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (

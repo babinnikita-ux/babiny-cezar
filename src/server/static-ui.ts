@@ -67,18 +67,10 @@ export function resolveGetRequest(opts: {
   if (path === '/api' || path.startsWith('/api/') || isStaticAsset(path)) {
     return { target: 'passthrough', hint: false };
   }
-  // TEMPORARY until phase R4 lands the React composer: a full page load of
-  // /new serves the LEGACY page even when the build exists. The bookmarklet
-  // contract (`/new?skill=&ref=&auto=1&key=`, BACKWARD_COMPATIBILITY.md) needs
-  // a composer that auto-starts, and only the legacy UI has one today — the
-  // React route is a placeholder that would dead-end saved bookmarklets. The
-  // React /new route and its param parsing stay in place for R4, but deliberate
-  // New task affordances use document navigation so they land here meanwhile.
-  // `?legacy=1` semantics are unchanged (legacy is already the answer here).
-  // No build hint: legacy is deliberate.
-  if (path === '/new') {
-    return { target: 'legacy', hint: false };
-  }
+  // /new is no longer special (R4 Step 1.3): the React composer carries the full
+  // bookmarklet auto-start contract (`/new?skill=&ref=&auto=1&key=`,
+  // BACKWARD_COMPATIBILITY.md), so saved bookmarklets land on the shell like any
+  // other route. `?legacy=1` still forces the legacy page, everywhere.
   return resolveIndexHtml({ distExists, legacyRequested });
 }
 

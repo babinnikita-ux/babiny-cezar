@@ -452,12 +452,23 @@ describe('legacy cockpit', () => {
     browser.screenshot(`${artifactsDir}/legacy-shell.png`)
   })
 
-  it('serves the legacy page for a full load of /new until the R4 composer lands', () => {
-    // The bookmarklet contract (/new?skill=&ref=&auto=1&key=) needs a composer
-    // that auto-starts; only the legacy UI has one today, so the server pins
-    // full loads of /new to legacy even with the build present. Deliberate New
-    // task affordances use full document navigation until R4 replaces this path.
-    browser.goto(baseUrl + '/new?skill=om-code-review&auto=1')
+  it('serves the React shell for a full load of /new — the R1 legacy pin is gone (R4 1.3)', () => {
+    // The React composer now carries the bookmarklet contract (/new?skill=&ref=&auto=1&key=),
+    // so a full document load of /new gets the shell like every other route. Without a valid
+    // key nothing starts — this link only prefills (the full auto-start matrix runs against
+    // the dry-run server in new-task.e2e.ts).
+    browser.goto(baseUrl + '/new?skill=om-code-review&ref=hello&auto=1')
+
+    expect(browser.evaluate('document.getElementById("root") !== null')).toBe(true)
+    expect(browser.evaluate('document.getElementById("brand") === null')).toBe(true)
+    browser.waitForFunction(`document.querySelector('[data-route="new"]') !== null`)
+    // The sensitive params are stripped from the address bar (legacy replaceState parity).
+    browser.waitForFunction(`location.search === ''`)
+    expect(browser.url()).toBe(baseUrl + '/new')
+  })
+
+  it('/new?legacy=1 still forces the legacy page (the R7 escape hatch)', () => {
+    browser.goto(baseUrl + '/new?legacy=1')
 
     expect(browser.isVisible('#brand')).toBe(true)
     expect(browser.evaluate('document.getElementById("root") === null')).toBe(true)

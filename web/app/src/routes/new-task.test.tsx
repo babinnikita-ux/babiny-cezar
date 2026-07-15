@@ -120,6 +120,10 @@ function serve(overrides: {
   repo?: RepoResponse
   uiState?: Record<string, unknown>
   createRun?: unknown
+  /** Non-2xx `POST /api/runs` answers (the auto-start failure path). */
+  createRunStatus?: number
+  /** What `GET /api/launch-key` answers — the bookmarklet auto-start secret. */
+  launchKey?: string
   /** `POST /api/plan` — a payload, or a handler for delayed/failing answers. */
   plan?: unknown | (() => Promise<Response>)
   /** `POST /api/workflows` — answers in call order (409-then-201 for the overwrite flow). */
@@ -132,6 +136,8 @@ function serve(overrides: {
     repo: REPO,
     uiState: {},
     createRun: { id: 'r1' },
+    createRunStatus: 201,
+    launchKey: 'k-real',
     plan: PLAN,
     saveWorkflow: [{ status: 201, body: { path: '.ai/cezar/workflows/my-chain.yaml', name: 'my chain' } }],
     ...overrides,
@@ -159,9 +165,10 @@ function serve(overrides: {
         return typeof data.plan === 'function' ? (data.plan as () => Promise<Response>)() : json(data.plan)
       }
       if (url === '/api/repo') return json(data.repo)
+      if (url === '/api/launch-key') return json({ key: data.launchKey })
       if (url === '/api/ui-state' && method === 'GET') return json(data.uiState)
       if (url === '/api/ui-state' && method === 'PUT') return json(body ?? {})
-      if (url === '/api/runs' && method === 'POST') return json(data.createRun, 201)
+      if (url === '/api/runs' && method === 'POST') return json(data.createRun, data.createRunStatus)
       if (url === '/api/config' && method === 'PUT')
         return json({ baseBranch: (body as { baseBranch: string | null }).baseBranch, defaultRunner: 'claude' })
       return json({ error: `unmocked ${method} ${url}` }, 404)
@@ -433,9 +440,9 @@ describe('drafts and prefill', () => {
     first.unmount()
 
     renderNewTask('/new?skill=deploy&ref=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fissues%2F5&auto=1&key=whatever')
+    // auto=1 with the WRONG key resolves to the blocked/prefill path — never a run.
     await pillReady('deploy')
     expect(textarea().value).toBe('https://github.com/o/r/issues/5')
-    // auto=1 is parsed but INERT this step (Step 1.3 proves auto-start parity first).
     expect(requests.some((r) => r.method === 'POST' && r.url === '/api/runs')).toBe(false)
   })
 
@@ -449,6 +456,132 @@ describe('drafts and prefill', () => {
 
     renderNewTask()
     expect(textarea().value).toBe('')
+  })
+})
+
+// ---- bookmarklet auto-start (spec 011, Step 1.3 — legacy handleDeepLink parity) -----------------
+
+describe('bookmarklet auto-start', () => {
+  const runsPosted = () => requests.filter((r) => r.method === 'POST' && r.url === '/api/runs')
+  const keyFetched = () => requests.some((r) => r.method === 'GET' && r.url === '/api/launch-key')
+
+  it('valid key + auto=1 + skill/ref → starts unattended with the exact legacy body, then the thread', async () => {
+    serve()
+    renderNewTask('/new?skill=deploy&ref=hello&auto=1&key=k-real')
+    await waitFor(() => expect(screen.queryByTestId('elsewhere')).not.toBeNull())
+
+    expect(keyFetched()).toBe(true)
+    // The body pin: Step 1.1's skill-source shape, nothing else on the wire — no model, no
+    // runner, no variants (legacy's bookmarklet start never sent them either).
+    expect(runsPosted().map((r) => r.body)).toEqual([
+      { task: 'hello', steps: [{ id: 'task', name: 'deploy', skill: 'deploy', prompt: '{{task}}' }] },
+    ])
+    expect(location()).toBe('/tasks/r1')
+    // Unattended starts do not rewrite the sticky lastTask (legacy parity).
+    expect(requests.some((r) => r.method === 'PUT' && r.url === '/api/ui-state')).toBe(false)
+  })
+
+  it('ref only (no skill) + valid key → quick-task, exactly like legacy', async () => {
+    serve()
+    renderNewTask('/new?ref=hello&auto=1&key=k-real')
+    await waitFor(() => expect(screen.queryByTestId('elsewhere')).not.toBeNull())
+    expect(runsPosted().map((r) => r.body)).toEqual([{ task: 'hello', workflow: 'quick-task' }])
+  })
+
+  it('the legacy `task` alias for ref still auto-starts', async () => {
+    serve()
+    renderNewTask('/new?task=hello&auto=1&key=k-real')
+    await waitFor(() => expect(screen.queryByTestId('elsewhere')).not.toBeNull())
+    expect(runsPosted().map((r) => r.body)).toEqual([{ task: 'hello', workflow: 'quick-task' }])
+  })
+
+  it('an unknown skill with a valid key STILL starts (legacy never validated it client-side)', async () => {
+    // The server notes `skill "…" not found — running with the plain prompt` and runs anyway
+    // (src/workflows/run.ts); blocking here would break saved bookmarklets legacy honored.
+    serve()
+    renderNewTask('/new?skill=ghost&ref=hello&auto=1&key=k-real')
+    await waitFor(() => expect(screen.queryByTestId('elsewhere')).not.toBeNull())
+    expect(runsPosted().map((r) => r.body)).toEqual([
+      { task: 'hello', steps: [{ id: 'task', name: 'ghost', skill: 'ghost', prompt: '{{task}}' }] },
+    ])
+  })
+
+  it('wrong key + auto=1 → blocked: prefill, a toast, focus on Start, no run, key never rendered', async () => {
+    serve()
+    renderNewTask('/new?skill=deploy&ref=hello&auto=1&key=wrong')
+    await pillReady('deploy')
+    await screen.findByText('Auto-start blocked (bad key) — review and press Start')
+
+    expect(keyFetched()).toBe(true)
+    expect(runsPosted()).toHaveLength(0)
+    expect(textarea().value).toBe('hello')
+    expect(document.body.textContent).not.toContain('k-real')
+    // Legacy focused the Run button so a bare Enter submits the reviewed form.
+    await waitFor(() =>
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Start task' })),
+    )
+  })
+
+  it('missing key + auto=1 → the same blocked path', async () => {
+    serve()
+    renderNewTask('/new?skill=deploy&ref=hello&auto=1')
+    await pillReady('deploy')
+    await screen.findByText('Auto-start blocked (bad key) — review and press Start')
+    expect(runsPosted()).toHaveLength(0)
+    expect(textarea().value).toBe('hello')
+  })
+
+  it('valid key WITHOUT auto=1 → prefill + toast, the key is not even fetched', async () => {
+    serve()
+    renderNewTask('/new?skill=deploy&ref=hello&key=k-real')
+    await pillReady('deploy')
+    await screen.findByText('Prefilled from link — review and press Start')
+    expect(keyFetched()).toBe(false)
+    expect(runsPosted()).toHaveLength(0)
+    expect(textarea().value).toBe('hello')
+    expect(document.body.textContent).not.toContain('k-real')
+  })
+
+  it('the generic launcher link (auto=0&key=&ref=, no skill) prefills — never starts', async () => {
+    // Exactly what legacy `bookmarkletUrl('', false, key)` emits: auto=0 still carries the key.
+    serve()
+    renderNewTask('/new?auto=0&key=k-real&ref=hello')
+    await pillReady()
+    await screen.findByText('Prefilled from link — review and press Start')
+    expect(textarea().value).toBe('hello')
+    expect(runsPosted()).toHaveLength(0)
+    expect(keyFetched()).toBe(false)
+  })
+
+  it('an unknown skill on the prefill path → honest toast + the legacy quick-task embedding', async () => {
+    serve()
+    renderNewTask('/new?skill=ghost&ref=hello')
+    await screen.findByText('Unknown skill "ghost" — prefilled for quick-task; review and press Start')
+    // Legacy initFromQuery verbatim: the intent goes into the text, quick-task resolves it.
+    expect(textarea().value).toBe('Use the "ghost" skill on: hello')
+    await pillReady('quick-task')
+    expect(runsPosted()).toHaveLength(0)
+  })
+
+  it('a failed unattended POST falls back to the prefilled composer with the reason', async () => {
+    serve({ createRun: { error: 'boom' }, createRunStatus: 500 })
+    renderNewTask('/new?skill=deploy&ref=hello&auto=1&key=k-real')
+    await screen.findByText('Auto-start failed: boom — review and press Start')
+    expect(runsPosted()).toHaveLength(1)
+    expect(textarea().value).toBe('hello')
+    expect(location()).toBe('/new')
+  })
+
+  it('cleans the sensitive params from the URL immediately (legacy history.replaceState)', async () => {
+    serve()
+    renderNewTask('/new?skill=deploy&ref=hello&auto=1&key=wrong')
+    await waitFor(() => expect(location()).toBe('/new'))
+  })
+
+  it('cleans the URL on plain prefill links too', async () => {
+    serve()
+    renderNewTask('/new?ref=hello')
+    await waitFor(() => expect(location()).toBe('/new'))
   })
 })
 

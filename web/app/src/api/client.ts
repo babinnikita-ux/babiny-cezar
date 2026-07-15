@@ -11,6 +11,7 @@ import type {
   GithubData,
   GroupResponse,
   HealthResponse,
+  LaunchKeyResponse,
   MessageInput,
   MessageResponse,
   OpenInCliResponse,
@@ -160,6 +161,12 @@ const runPath = (id: string, suffix = ''): string => `/api/runs/${encodeURICompo
 /** Version, update check, repo/branch, and the tool probes behind the Tools menu. */
 export function getHealth(opts?: ReadOptions): Promise<HealthResponse> {
   return get<HealthResponse>('/api/health', opts)
+}
+
+/** The bookmarklet auto-start secret (spec 011). Fetched to compare against `/new?key=` —
+ *  never rendered, never logged, never put back into a URL. */
+export function getLaunchKey(opts?: ReadOptions): Promise<LaunchKeyResponse> {
+  return get<LaunchKeyResponse>('/api/launch-key', opts)
 }
 
 /** The authoritative run list — sorted newest-first by the server. */

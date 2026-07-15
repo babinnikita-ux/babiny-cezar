@@ -13,7 +13,7 @@
 |-------|------|-------|--------|--------|
 | 1 | 1.1 | Full-screen /new: hero composer, pickers (workflow/skill, runner, model, variants, base), drafts | done | pending |
 | 1 | 1.2 | Plan-mode toggle + plan review overlay (drag-reorder, save-as-chain, start) | done | pending |
-| 1 | 1.3 | Bookmarklet auto-start parity + re-point /new to the React shell | todo | — |
+| 1 | 1.3 | Bookmarklet auto-start parity + re-point /new to the React shell | done | pending |
 | 1 | 1.4 | List/table polish: header meta finishing touches + ⌘N routing + R4 loose ends | todo | — |
 
 ## Goal
