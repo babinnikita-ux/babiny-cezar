@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { type AgentSession } from '../core/claude-cli-runner.js';
-import { registerRunProcess, unregisterRunProcess } from '../core/process-usage.js';
+import { onUsage, registerRunProcess, unregisterRunProcess, type ProcessUsage } from '../core/process-usage.js';
 import { createRunner } from '../core/runner-factory.js';
 import type { RunnerId } from '../core/agent-runner.js';
 import {
@@ -158,11 +158,54 @@ export class RunManager {
   /** `.ai/cezar` — where the per-task handoff files and todos.json live. */
   private readonly dataDir: string;
 
+  /** Runs currently being paused by the memory guard — dedupes the ~2 s samples so one breach
+   *  triggers one pause, not a burst. Cleared in dropActive when the run leaves the registry. */
+  private readonly memoryPausing = new Set<string>();
+
   constructor(
     private readonly store: RunStore,
     private readonly repoRoot: string,
   ) {
     this.dataDir = join(repoRoot, '.ai/cezar');
+    // Memory guard (#memory-guard): the shared process-tree sampler already ticks ~every 2 s for
+    // the runs table; piggyback on it to enforce the per-task memory ceiling.
+    onUsage((snapshot) => void this.enforceMemoryLimit(snapshot));
+  }
+
+  /**
+   * Pause any active run whose whole process tree exceeds `config.memoryLimitMb`, freeing its
+   * slot so the queue advances (#memory-guard). "Pause" closes the session — freeing the tree's
+   * memory — and leaves the run resumable via Continue; a loud warning explains why. No-op when
+   * no limit is set or the sampler has no data (e.g. `ps`/PowerShell unavailable).
+   */
+  private async enforceMemoryLimit(snapshot: Record<string, ProcessUsage>): Promise<void> {
+    const runIds = Object.keys(snapshot);
+    if (runIds.length === 0) return;
+    const limitMb = (await loadConfig(this.repoRoot)).memoryLimitMb;
+    if (!limitMb || limitMb <= 0) return;
+    const limitBytes = limitMb * 1024 * 1024;
+    for (const runId of runIds) {
+      const usage = snapshot[runId];
+      if (!usage || usage.rssBytes <= limitBytes) continue;
+      if (this.memoryPausing.has(runId)) continue;
+      const state = this.active.get(runId);
+      if (!state?.session?.open || state.cancelled) continue;
+      this.memoryPausing.add(runId);
+      const usedMb = Math.round(usage.rssBytes / (1024 * 1024));
+      this.store.appendEvent(runId, {
+        type: 'note',
+        message: `⚠ memory limit exceeded — this task's process tree is using ${usedMb} MiB (limit ${limitMb} MiB). Pausing it and letting the next queued task run; resume it with Continue.`,
+      });
+      this.store.appendEvent(runId, {
+        type: 'lifecycle',
+        message: `paused — memory limit exceeded (${usedMb} MiB > ${limitMb} MiB)`,
+      });
+      // Closing the session frees the tree and lets the normal exit path settle the run and
+      // pump the queue. Suppress autonomous auto-continue so the pause actually holds.
+      state.autonomous = false;
+      this.clearIdleTimer(state);
+      state.session.end();
+    }
   }
 
   /** Env the spawned claude gets so the agent can find its handoff file and
@@ -355,6 +398,7 @@ export class RunManager {
   private dropActive(runId: string): void {
     this.waiting.delete(runId);
     this.active.delete(runId);
+    this.memoryPausing.delete(runId);
   }
 
   cancel(runId: string): boolean {
