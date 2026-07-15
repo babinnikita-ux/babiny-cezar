@@ -12,7 +12,7 @@ import { toast } from '@/components/ui/toaster'
 import { gitActionPolicy, type GitActionId } from '@/lib/git-actions'
 import { useIsDesktop } from '@/lib/use-desktop'
 
-import { lastSessionId } from '../task-thread/run-actions'
+import { isRunActive, lastSessionId } from '../task-thread/run-actions'
 import { RunHeader } from '../task-thread/run-header'
 import { ChangesTree } from './changes-tree'
 import { CommitDialog } from './commit-dialog'
@@ -41,7 +41,8 @@ export function TaskChangesRoute() {
 
 function ChangesView({ run }: { run: ApiRun }) {
   const health = useHealth()
-  const changes = useRunChanges(run.id)
+  // Poll while the run is active so writes appear as the agent makes them.
+  const changes = useRunChanges(run.id, isRunActive(run.status))
   const desktop = useIsDesktop()
 
   const [mode, setMode] = useState<DiffMode>('unified')

@@ -111,12 +111,15 @@ export function useRunDiff(id: string | undefined) {
 /** The structured worktree diff behind the Changes tab (R5). A 409 ("no worktree — …") is a
  *  real answer here, not a network hiccup — retrying cannot change it, so retries are off and
  *  the view renders the server's own reason. */
-export function useRunChanges(id: string | undefined) {
+export function useRunChanges(id: string | undefined, live = false) {
   return useQuery({
     queryKey: queryKeys.runs.changes(id ?? ''),
     queryFn: ({ signal }) => getRunChanges(id as string, { signal }),
     enabled: Boolean(id),
     retry: false,
+    // While the run is active the agent is still writing — poll so the Changes tab keeps up
+    // instead of showing a stale empty snapshot from before the first write (#changes-live).
+    refetchInterval: live ? 4000 : false,
   })
 }
 
