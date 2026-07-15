@@ -149,13 +149,17 @@ export function GithubRoute({ view }: { view: GithubView }) {
   const listPath = view === 'issues' ? '/github' : '/github/prs'
 
   return (
-    <div data-route="github" className="flex min-h-full items-stretch">
+    // Bounded to the viewport (`h-full min-h-0`) so the PAGE never scrolls — each pane owns its
+    // own scroll (`overflow-y-auto`), so scrolling starts inside the issues/PR list (and the
+    // detail), and the list header stays pinned. `overscroll-contain` keeps a pane's scroll from
+    // chaining out to the shell.
+    <div data-route="github" className="flex h-full min-h-0 items-stretch">
       {/* List pane. Below md it IS the page when no item is in the URL, and yields entirely
           to the detail when one is — the same two-surfaces-one-URL rule the git tabs use. */}
       <section
         data-slot="gh-list"
         className={cn(
-          'w-full flex-col border-border md:sticky md:top-0 md:flex md:max-h-dvh md:w-[360px] md:shrink-0 md:overflow-y-auto md:border-r',
+          'w-full min-h-0 flex-col overflow-y-auto overscroll-contain border-border md:flex md:w-[360px] md:shrink-0 md:border-r',
           n === undefined ? 'flex' : 'hidden',
         )}
       >
@@ -240,7 +244,10 @@ export function GithubRoute({ view }: { view: GithubView }) {
       {/* Detail pane. Hidden below md until an item is in the URL. */}
       <section
         data-slot="gh-detail"
-        className={cn('min-w-0 flex-1 flex-col', n === undefined ? 'hidden md:flex' : 'flex')}
+        className={cn(
+          'min-w-0 min-h-0 flex-1 flex-col overflow-y-auto overscroll-contain',
+          n === undefined ? 'hidden md:flex' : 'flex',
+        )}
       >
         {selected ? (
           <GithubDetail item={selected} listPath={listPath} colors={labelColors}>
