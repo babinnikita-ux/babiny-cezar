@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import type { DiffStat } from '@/api/types'
 import { DiffStatLabel } from '@/components/diff-stat'
-import { canonicalLang, highlight, highlightSync, type SynToken } from '@/lib/highlighter'
+import { highlight, highlightSync, langForPath, type SynToken } from '@/lib/highlighter'
 import { cn } from '@/lib/utils'
 
 import {
@@ -244,16 +244,6 @@ function useFileTokens(path: string, lineList: HunkLine[]): SynToken[][] | null 
   if (text === null || lang === null) return null
   if (loaded?.text === text) return loaded.tokens
   return highlightSync(text, lang)?.tokens ?? null
-}
-
-/** Extension → the highlighter's fence language, or null for "don't highlight". */
-export function langForPath(path: string): string | null {
-  const name = path.slice(path.lastIndexOf('/') + 1)
-  const dot = name.lastIndexOf('.')
-  if (dot <= 0) return null
-  const ext = name.slice(dot + 1).toLowerCase()
-  const extra: Record<string, string> = { mts: 'typescript', cts: 'typescript', htm: 'html' }
-  return canonicalLang(extra[ext] ?? ext)
 }
 
 function Note({ children }: { children: React.ReactNode }) {

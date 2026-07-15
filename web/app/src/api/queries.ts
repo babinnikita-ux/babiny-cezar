@@ -8,6 +8,7 @@ import {
   getRun,
   getRunChanges,
   getRunDiff,
+  getRunFile,
   getRunHandoff,
   getRuns,
   getSkills,
@@ -36,6 +37,7 @@ export const queryKeys = {
     detail: (id: string) => ['runs', 'detail', id] as const,
     diff: (id: string) => ['runs', 'diff', id] as const,
     changes: (id: string) => ['runs', 'changes', id] as const,
+    file: (id: string, path: string) => ['runs', 'files', id, path] as const,
     handoff: (id: string) => ['runs', 'handoff', id] as const,
   },
   groups: {
@@ -91,6 +93,19 @@ export function useRunChanges(id: string | undefined) {
     queryKey: queryKeys.runs.changes(id ?? ''),
     queryFn: ({ signal }) => getRunChanges(id as string, { signal }),
     enabled: Boolean(id),
+    retry: false,
+  })
+}
+
+/** One worktree path for the Files tab (R5): the root/dir listings the tree lazy-loads and
+ *  the file entries the preview renders. `path` is '' for the worktree root and `undefined`
+ *  while nothing is selected. Like /changes, a 409 ("no worktree — …") is an answer retries
+ *  cannot change, so retries are off. Cached per (run, path) — re-expanding a folder is free. */
+export function useRunFile(id: string | undefined, path: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.runs.file(id ?? '', path ?? ''),
+    queryFn: ({ signal }) => getRunFile(id as string, path as string, { signal }),
+    enabled: Boolean(id) && path !== undefined,
     retry: false,
   })
 }

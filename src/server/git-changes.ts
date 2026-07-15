@@ -234,6 +234,34 @@ export type FilesResult =
   | { kind: 'invalid'; error: string }
   | { kind: 'missing'; error: string };
 
+/**
+ * Extensions the Files tab renders inline as `<img>` — the only kinds the
+ * `/files?raw=1` mode will ever serve as bytes (anything else stays JSON, so a
+ * worktree HTML file can never become a same-origin document). SVG is included:
+ * inert inside `<img>`, and the raw response carries a no-script CSP for the
+ * "opened the URL directly" case. Keep in sync with IMAGE_EXTENSIONS in
+ * web/app/src/routes/task-git/file-preview.tsx.
+ */
+const IMAGE_MIME: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+  svg: 'image/svg+xml',
+  bmp: 'image/bmp',
+  ico: 'image/x-icon',
+  avif: 'image/avif',
+};
+
+/** The image MIME type for a path, or null when it is not an image we serve raw. */
+export function imageMimeType(path: string): string | null {
+  const name = path.slice(path.lastIndexOf('/') + 1);
+  const dot = name.lastIndexOf('.');
+  if (dot <= 0) return null;
+  return IMAGE_MIME[name.slice(dot + 1).toLowerCase()] ?? null;
+}
+
 /** True when the first 8 KB contain a NUL byte — good enough for a viewer flag. */
 async function sniffBinary(path: string, size: number): Promise<boolean> {
   const handle = await open(path, 'r');

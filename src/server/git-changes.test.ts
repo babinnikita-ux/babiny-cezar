@@ -7,8 +7,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RunStore, type RunRecord } from '../runs/store.js';
 import type { RunManager } from '../workflows/run.js';
 import {
+  FILE_CONTENT_CAP,
   collectChanges,
   commitAll,
+  imageMimeType,
   pushCurrentBranch,
   readWorktreePath,
   type ChangesPayload,
@@ -165,6 +167,24 @@ describe('readWorktreePath — Files tab browsing', () => {
   });
 });
 
+describe('imageMimeType — the raw-serving allowlist (R5 Step 1.6)', () => {
+  it('maps image extensions case-insensitively', () => {
+    expect(imageMimeType('logo.png')).toBe('image/png');
+    expect(imageMimeType('deep/dir/Photo.JPEG')).toBe('image/jpeg');
+    expect(imageMimeType('pic.jpg')).toBe('image/jpeg');
+    expect(imageMimeType('icon.svg')).toBe('image/svg+xml');
+    expect(imageMimeType('anim.webp')).toBe('image/webp');
+  });
+
+  it('answers null for everything else — non-images never leave as bytes', () => {
+    expect(imageMimeType('index.html')).toBeNull();
+    expect(imageMimeType('script.js')).toBeNull();
+    expect(imageMimeType('README')).toBeNull();
+    expect(imageMimeType('.png')).toBeNull(); // a dotfile named ".png" is not an image
+    expect(imageMimeType('archive.png.zip')).toBeNull();
+  });
+});
+
 describe('session git API routes', () => {
   let repoRoot: string;
   let worktree: string;
@@ -244,6 +264,45 @@ describe('session git API routes', () => {
     const evil = await app.request(`/api/runs/${run.id}/files?path=${encodeURIComponent('../../etc/passwd')}`);
     expect(evil.status).toBe(409);
     expect(((await evil.json()) as { error: string }).error).toContain('escapes the worktree');
+  });
+
+  // 1×1 transparent PNG — real bytes, so the sniffer and the wire agree it is binary.
+  const PNG = Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+    'base64',
+  );
+
+  it('GET /files?raw=1 serves image bytes with the image content-type and a no-script CSP', async () => {
+    writeFileSync(join(worktree, 'logo.png'), PNG);
+    const res = await app.request(`/api/runs/${run.id}/files?path=logo.png&raw=1`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('image/png');
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(res.headers.get('content-security-policy')).toContain('sandbox');
+    expect(Buffer.from(await res.arrayBuffer()).equals(PNG)).toBe(true);
+  });
+
+  it('GET /files?raw=1 refuses non-images — a worktree HTML file can never become a document', async () => {
+    writeFileSync(join(worktree, 'page.html'), '<script>alert(1)</script>\n');
+    const res = await app.request(`/api/runs/${run.id}/files?path=page.html&raw=1`);
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toContain('limited to images');
+  });
+
+  it('GET /files?raw=1 refuses images past the size cap with a reason', async () => {
+    const huge = Buffer.alloc(FILE_CONTENT_CAP + 1);
+    PNG.copy(huge); // PNG magic up front, NULs after — binary, image extension, over cap
+    writeFileSync(join(worktree, 'huge.png'), huge);
+    const res = await app.request(`/api/runs/${run.id}/files?path=huge.png&raw=1`);
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toContain('too large');
+  });
+
+  it('GET /files?raw=1 still rejects traversal with a 409', async () => {
+    const res = await app.request(
+      `/api/runs/${run.id}/files?path=${encodeURIComponent('../../etc/passwd')}&raw=1`,
+    );
+    expect(res.status).toBe(409);
   });
 
   it('POST git/commit commits everything; a clean tree is a 409, a bad body a 400', async () => {

@@ -35,6 +35,7 @@ import {
   collectChanges,
   commitAll,
   createOrSwitchBranch,
+  imageMimeType,
   pushCurrentBranch,
   readWorktreePath,
 } from './git-changes.js';
@@ -741,7 +742,10 @@ export function createApp(deps: ServerDeps): Hono {
 
   // Files tab: directory listing (path omitted or a dir) or file content
   // (size-capped, binary flagged). Traversal-safe — readWorktreePath rejects
-  // anything escaping the worktree.
+  // anything escaping the worktree. `raw=1` (R5 Step 1.6) serves the BYTES of
+  // image files only, for the preview's inline <img> — never HTML/JS/etc., so
+  // no worktree file can become a same-origin document, and never past the
+  // size cap. The no-script CSP neutralizes SVG opened as a top-level URL.
   app.get('/api/runs/:id/files', async (c) => {
     const run = store.getRun(c.req.param('id'));
     if (!run) return c.json({ error: 'not found' }, 404);
@@ -753,6 +757,19 @@ export function createApp(deps: ServerDeps): Hono {
     }
     if (result.kind === 'dir') {
       return c.json({ type: 'dir', path: result.path, entries: result.entries });
+    }
+    if (c.req.query('raw') === '1') {
+      const mime = imageMimeType(result.path);
+      if (!mime) return c.json({ error: `raw serving is limited to images: ${result.path}` }, 409);
+      if (result.tooLarge) {
+        return c.json({ error: `file too large to serve raw (${result.size} bytes): ${result.path}` }, 409);
+      }
+      const bytes = await readFile(join(worktree, result.path));
+      return c.body(new Uint8Array(bytes).buffer as ArrayBuffer, 200, {
+        'content-type': mime,
+        'x-content-type-options': 'nosniff',
+        'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox",
+      });
     }
     return c.json({
       type: 'file',

@@ -16,7 +16,7 @@
 | 1 | 1.3 | Repo API: /api/repo/changes + /api/repo/branch | done | 1289484 |
 | 1 | 1.4 | `<Diff>` facade on @pierre/diffs (fallback impl, same props) + shared Shiki highlighting | done | 8e2c2ab |
 | 1 | 1.5 | Changes tab: tree + viewer + git action policy bar (Commit/Push/branch/Create PR→View PR/editor) | done | 57d9fdc |
-| 1 | 1.6 | Files tab: read-only worktree browser (tree + preview, images inline, size caps) | todo | — |
+| 1 | 1.6 | Files tab: read-only worktree browser (tree + preview, images inline, size caps) | done | pending |
 | 1 | 1.7 | Repo view rebuild on the same components + commits/branches + mobile diff mode | todo | — |
 
 ## Goal

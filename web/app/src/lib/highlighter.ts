@@ -145,6 +145,17 @@ export function supportedLanguages(): string[] {
   return [...Object.keys(LANG_LOADERS), ...Object.keys(ALIASES), ...PLAIN].filter((l) => l !== '')
 }
 
+/** Extension → the highlighter's fence language, or null for "don't highlight". Shared by the
+ *  diff facade's per-file tokens and the Files tab's preview (R5). */
+export function langForPath(path: string): string | null {
+  const name = path.slice(path.lastIndexOf('/') + 1)
+  const dot = name.lastIndexOf('.')
+  if (dot <= 0) return null
+  const ext = name.slice(dot + 1).toLowerCase()
+  const extra: Record<string, string> = { mts: 'typescript', cts: 'typescript', htm: 'html' }
+  return canonicalLang(extra[ext] ?? ext)
+}
+
 // ---- singleton state --------------------------------------------------------------------------
 
 let core: HighlighterCore | null = null

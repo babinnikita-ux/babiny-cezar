@@ -239,6 +239,12 @@ export function getRunFile(id: string, path: string, opts?: ReadOptions): Promis
   return get<WorktreeEntry>(runPath(id, `/files?path=${encodeURIComponent(path)}`), opts)
 }
 
+/** The same-origin URL an `<img>` can load an image file's bytes from (R5 Files tab). The
+ *  server serves raw ONLY for image extensions within the size cap — everything else 409s. */
+export function runFileRawUrl(id: string, path: string): string {
+  return runPath(id, `/files?path=${encodeURIComponent(path)}&raw=1`)
+}
+
 /** The variant-compare data (spec 010): one entry per variant of the group, with the legacy
  *  `git diff --stat` text and the handoff Progress excerpt. 404 for an unknown group. */
 export function getGroup(groupId: string, opts?: ReadOptions): Promise<GroupResponse> {

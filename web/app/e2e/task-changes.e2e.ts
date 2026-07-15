@@ -222,9 +222,9 @@ describe('the Changes tab against a live dry run', () => {
     browser.waitForFunction(`document.querySelector('[data-slot="tree-file"][data-path="edited-by-e2e.md"]') !== null`)
   })
 
-  it('the Files tab renders the honest 1.6 stub under the same header', () => {
+  it('the Files tab opens the worktree browser under the same header (deep coverage: task-files.e2e.ts)', () => {
     browser.click(`[data-slot="run-tabs"] a[href="/tasks/${runId}/files"]`)
-    browser.waitForFunction(`document.querySelector('[data-route="task-files"] [data-slot="centered-state"]') !== null`)
+    browser.waitForFunction(`document.querySelector('[data-route="task-files"] [data-slot="files-tree"]') !== null`)
     expect(browser.url()).toBe(`${baseUrl}/tasks/${runId}/files`)
     expect(
       browser.evaluate(
