@@ -9,7 +9,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core'
-import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
+import type { DragEndEvent, DragOverEvent, DragStartEvent } from '@dnd-kit/core'
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -130,6 +130,9 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
   const [confirmOverwrite, setConfirmOverwrite] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [dragging, setDragging] = useState<DragItem | null>(null)
+  // The step id (or CANVAS_ID) the pointer is over mid-drag — drives the "drop to insert"
+  // indicator between cards, the affordance the legacy `.wb-gap` slots gave (#wb-drop-line).
+  const [overId, setOverId] = useState<string | null>(null)
   const nameInput = useRef<HTMLInputElement>(null)
 
   const workflows = workflowsQuery.data?.workflows ?? []
@@ -235,8 +238,13 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
     setDragging(data ?? null)
   }
 
+  const handleDragOver = (event: DragOverEvent) => {
+    setOverId(event.over ? String(event.over.id) : null)
+  }
+
   const handleDragEnd = (event: DragEndEvent) => {
     setDragging(null)
+    setOverId(null)
     const { active, over } = event
     if (over === null) return
     const data = active.data.current as DragItem | undefined
@@ -296,8 +304,12 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
-        onDragCancel={() => setDragging(null)}
+        onDragCancel={() => {
+          setDragging(null)
+          setOverId(null)
+        }}
       >
         <div className="flex flex-1 flex-col gap-6 p-3 pb-[calc(90px+env(safe-area-inset-bottom))] md:flex-row md:p-5 md:pb-5">
           {/* ---- canvas ---------------------------------------------------------------- */}
@@ -450,7 +462,14 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
               </div>
             ) : null}
 
-            <Canvas steps={steps} skills={skills} onRemove={(index) => setSteps(removeStep(steps, index))} />
+            <Canvas
+              steps={steps}
+              skills={skills}
+              dragging={dragging !== null}
+              overId={overId}
+              activeStepId={dragging?.type === 'step' ? dragging.step.id : null}
+              onRemove={(index) => setSteps(removeStep(steps, index))}
+            />
           </section>
 
           {/* ---- palette + YAML preview ------------------------------------------------- */}
@@ -554,34 +573,70 @@ function WorkflowsBuilder({ routeName }: { routeName: string | undefined }) {
 function Canvas({
   steps,
   skills,
+  dragging,
+  overId,
+  activeStepId,
   onRemove,
 }: {
   steps: WorkflowStepDef[]
   skills: readonly Skill[]
+  /** A drag (palette or step) is in flight — reveals the between-card insert affordances. */
+  dragging: boolean
+  /** The step id (or CANVAS_ID) under the pointer, for the insert line. */
+  overId: string | null
+  /** The id of the step BEING dragged — never draw an insert line against itself. */
+  activeStepId: string | null
   onRemove: (index: number) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: CANVAS_ID })
+  // Append target: the pointer is over the canvas padding (below the last card), not a card.
+  const appendActive = dragging && overId === CANVAS_ID
   return (
     <div
       ref={setNodeRef}
       data-slot="wb-steps"
+      data-dragging={dragging || undefined}
       className={cn(
         'mt-4 rounded-lg border border-dashed p-2 transition-colors',
         isOver ? 'border-primary/60 bg-primary/5' : 'border-muted-foreground/25',
       )}
     >
       {steps.length === 0 ? (
-        <p className="px-3 py-10 text-center text-[13px] text-soft-foreground">
+        <p
+          className={cn(
+            'rounded-md px-3 py-10 text-center text-[13px] transition-colors',
+            isOver ? 'text-primary' : 'text-muted-foreground',
+          )}
+        >
           Drop a skill here — or Import a workflow.yaml
         </p>
       ) : (
         <SortableContext items={steps.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-          <ol className="flex flex-col gap-1.5">
+          <ol className="flex flex-col gap-2.5">
             {steps.map((step, index) => (
-              <StepCard key={step.id} step={step} index={index} skills={skills} onRemove={() => onRemove(index)} />
+              <StepCard
+                key={step.id}
+                step={step}
+                index={index}
+                skills={skills}
+                connector={index > 0}
+                dragging={dragging}
+                // The insert line rides above the hovered card — unless that card is the one
+                // being dragged (dropping onto itself is a no-op, so no line).
+                insertBefore={dragging && overId === step.id && activeStepId !== step.id}
+                onRemove={() => onRemove(index)}
+              />
             ))}
           </ol>
-          <div className="flex items-center justify-center gap-1.5 pt-2 pb-1 text-[11px] text-muted-foreground">
+          {/* Appending below the last card: the same accent slot, at the tail. */}
+          <div
+            aria-hidden="true"
+            className={cn(
+              'mx-1 mt-2.5 h-[3px] rounded-full transition-colors',
+              appendActive ? 'bg-primary' : 'bg-transparent',
+            )}
+          />
+          <div className="flex items-center justify-center gap-1.5 pt-1.5 pb-1 text-[11px] text-muted-foreground">
             <ArrowDownIcon aria-hidden="true" className="size-3" />
             runs top to bottom
           </div>
@@ -595,11 +650,21 @@ function StepCard({
   step,
   index,
   skills,
+  connector,
+  dragging,
+  insertBefore,
   onRemove,
 }: {
   step: WorkflowStepDef
   index: number
   skills: readonly Skill[]
+  /** Draw the rest-state vertical hairline linking this card to the one above (every card but
+   *  the first) — the legacy `.wb-gap` connector. */
+  connector: boolean
+  /** A drag is in flight — hide the rest connector so it doesn't compete with the insert line. */
+  dragging: boolean
+  /** The drop indicator sits in the gap above this card. */
+  insertBefore: boolean
   onRemove: () => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -610,8 +675,23 @@ function StepCard({
     <li
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={cn(isDragging && 'opacity-40')}
+      className={cn('relative', isDragging && 'opacity-40')}
     >
+      {/* Rest connector: a hairline down the middle of the gap, linking consecutive skills. */}
+      {connector && !dragging ? (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -top-[11px] left-1/2 h-[9px] w-px -translate-x-1/2 bg-muted-foreground/30"
+        />
+      ) : null}
+      {/* Drop-to-insert line: an accent bar in the gap above, where the card will land. */}
+      {insertBefore ? (
+        <span
+          aria-hidden="true"
+          data-slot="wb-drop-line"
+          className="pointer-events-none absolute -top-[7px] right-0 left-0 h-[3px] rounded-full bg-primary"
+        />
+      ) : null}
       <StepCardBody
         step={step}
         index={index}
