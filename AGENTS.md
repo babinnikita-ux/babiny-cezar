@@ -22,12 +22,14 @@ cezar is a **parallel coding-agents orchestrator**: a local cockpit (CLI + brows
 Before any commit or PR, run in order:
 
 ```bash
-npm run typecheck   # tsc --noEmit (server)
+npm run typecheck   # tsc --noEmit (server + web)
 npm test            # vitest — server + cockpit unit suites
-npm run build       # tsc → dist/, vite → web/dist/
+npm run test:unit   # node:test — fast core-module coverage (test/unit/)
+npm run build       # tsc → dist/, vite → web/dist/, then the check:pack tarball gate
+npm run test:package # pack/install the release tarball and exercise the built CLI (test/e2e/)
 ```
 
-`npm test` is the fast unit gate: no server, no browser. It must stay that way.
+`npm test` and `npm run test:unit` are the fast unit gate: no server, no browser. They must stay that way. `npm run test:package` needs a completed `npm run build` (it packs the tarball).
 
 The UI smoke suite is a **separate** command — it boots the real app and drives it in a real
 Chrome through the `agent-browser` provider (`.ai/browsers/agent-browser.md`):

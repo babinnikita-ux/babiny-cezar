@@ -349,6 +349,10 @@ npm install
 npm run dev          # tsx src/index.ts — the server, live-reloaded
 npm run build        # tsc → dist/, vite build → web/dist/, then the pack gate
 npm run typecheck    # server + web (tsc --noEmit)
+npm test             # vitest — server + cockpit unit suites
+npm run test:unit    # node:test — fast core-module tests
+npm run test:package # pack/install and exercise the built CLI
+npm run test:e2e     # real-browser cockpit suite (agent-browser)
 ```
 
 The stack is deliberately small: **TypeScript** (strict, ESM), **Hono** + SSE for
