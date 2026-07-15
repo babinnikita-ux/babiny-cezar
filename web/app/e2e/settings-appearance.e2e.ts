@@ -59,9 +59,11 @@ describe('settings → appearance against the live dry-run server', () => {
     browser.waitForFunction(`document.querySelector('[data-route="settings-appearance"]') !== null`)
 
     const nav = '[data-slot="settings-nav"]'
-    expect(browser.count(`${nav} [data-section]`)).toBe(4)
+    expect(browser.count(`${nav} [data-section]`)).toBe(6)
     expect(browser.count(`${nav} [data-section="skills"]`)).toBe(1)
+    expect(browser.count(`${nav} [data-section="bookmarklets"]`)).toBe(1)
     expect(browser.count(`${nav} [data-section="agents"]`)).toBe(1)
+    expect(browser.count(`${nav} [data-section="resources"]`)).toBe(1)
     expect(browser.count(`${nav} [data-section="notifications"]`)).toBe(1)
     // Hidden registry entries: no nav, and the URL is an honest 404 (asserted in unit tests).
     expect(browser.count(`${nav} [data-section="mcp"]`)).toBe(0)

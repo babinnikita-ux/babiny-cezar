@@ -205,9 +205,33 @@ describe('refresh (#384: selection and scroll survive)', () => {
 })
 
 describe('the bookmarklet panel (spec 011)', () => {
-  it('generates the protected /new links from the launch key; auto arms per-skill links only', async () => {
+  it('says it is loading rather than claiming there are no skills while the catalog is in flight', async () => {
+    // The panel's empty state reads "(no skills yet …)". Rendering it against an unresolved
+    // catalog would state that as fact on every cold load of the subpage — so the section
+    // must gate on the pending query the way its sibling sections do.
+    const json = (payload: unknown) =>
+      new Response(JSON.stringify(payload), { status: 200, headers: { 'content-type': 'application/json' } })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url === '/api/launch-key') return json({ key: 'sekret' })
+        if (url === '/api/ui-state') return json({})
+        return new Promise<never>(() => {}) // /api/skills never settles
+      }),
+    )
+    renderAt('/settings/bookmarklets')
+
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="bookmarklets-loading"]')).not.toBeNull(),
+    )
+    expect(document.querySelector('[data-slot="bookmarklet-panel"]')).toBeNull()
+    expect(document.body.textContent).not.toContain('no skills yet')
+  })
+
+  it('is a first-class Settings page that generates protected links and auto-arms per-skill links only', async () => {
     serve()
-    renderAt('/settings/skills?skill=__bm')
+    renderAt('/settings/bookmarklets')
 
     await waitFor(() => expect(document.querySelector('[data-slot="bookmarklet-panel"]')).not.toBeNull())
     // The key landed in the links (the panel is its one legitimate DOM use).

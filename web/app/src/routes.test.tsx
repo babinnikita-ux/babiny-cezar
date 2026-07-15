@@ -81,6 +81,7 @@ describe('route map', () => {
     ['/workflows/ship-it', 'workflows', 'Loading workflows…'],
     ['/settings', 'settings', 'Settings'],
     ['/settings/skills', 'settings-skills', 'Skills'],
+    ['/settings/bookmarklets', 'settings-bookmarklets', 'Bookmarklets'],
     ['/settings/appearance', 'settings-appearance', 'Appearance'],
     ['/settings/agents', 'settings-agents', 'Agents'],
     ['/settings/notifications', 'settings-notifications', 'Notifications'],
