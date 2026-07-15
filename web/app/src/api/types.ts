@@ -456,6 +456,12 @@ export interface GithubData {
  *  untouched — future prefs need no server change, which is why this stays open. */
 export interface UiState {
   lastTask?: { source: 'workflow' | 'skill'; ref: string }
+  /** Most-recently-run sources, newest first (deduped, capped). Feeds the composer picker's
+   *  recency sort so the skills you actually use float to the top of their locality group. */
+  recentSources?: { source: 'workflow' | 'skill'; ref: string }[]
+  /** The last worktree choice for a single-skill run — remembered so the checkbox re-opens where
+   *  you left it. Absent → the default (isolated worktree). */
+  lastWorktree?: boolean
   runsView?: 'list' | 'table'
   /** Settings → Appearance (redesign R6): accent + density. Theme itself stays in
    *  localStorage (`cez-theme`) — it must pre-paint, and it is per-browser by design. */

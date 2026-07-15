@@ -20,6 +20,23 @@ import type {
  *  `ui-state.json` stores as `lastTask`, so persistence needs no mapping. */
 export type TaskSource = NonNullable<UiState['lastTask']>
 
+/** Prepend `source` to the recency list (newest first), dropping any earlier occurrence of the
+ *  same source+ref, and cap the length. Pure so the picker's recency sort is table-testable. */
+export function pushRecentSource(
+  recent: readonly TaskSource[] | undefined,
+  source: TaskSource,
+  cap = 24,
+): TaskSource[] {
+  const rest = (recent ?? []).filter((s) => !(s.source === source.source && s.ref === source.ref))
+  return [source, ...rest].slice(0, cap)
+}
+
+/** The recent SKILL names, newest first — the recency key the composer's skill picker sorts by
+ *  (workflow entries are ignored; only skills share a namespace with `Skill.name`). */
+export function recentSkillNames(recent: readonly TaskSource[] | undefined): string[] {
+  return (recent ?? []).filter((s) => s.source === 'skill').map((s) => s.ref)
+}
+
 export interface RunnerOption {
   id: Runner
   label: string

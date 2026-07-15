@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest'
 
 import type { Skill, WorkflowDef } from '@/api/types'
 
-import { filterSkills, fuzzyMatch, isProjectSkill, orderSkills, skillUsedBy } from './skills'
+import {
+  filterSkills,
+  fuzzyMatch,
+  isProjectSkill,
+  orderSkills,
+  orderSkillsByRecency,
+  skillUsedBy,
+} from './skills'
 
 const skill = (over: Partial<Skill> & Pick<Skill, 'name' | 'source'>): Skill => ({
   body: '',
@@ -27,6 +34,30 @@ describe('isProjectSkill / orderSkills (#377)', () => {
       skill({ name: 'p2', source: 'ai' }),
     ])
     expect(ordered.map((s) => s.name)).toEqual(['p1', 'p2', 'g1', 'g2'])
+  })
+})
+
+describe('orderSkillsByRecency', () => {
+  const skills = [
+    skill({ name: 'g1', source: 'global' }),
+    skill({ name: 'p1', source: 'agents' }),
+    skill({ name: 'g2', source: 'global' }),
+    skill({ name: 'p2', source: 'ai' }),
+  ]
+
+  it('keeps locality first, then sorts most-recent within each half', () => {
+    // Recent = [g2, p2] newest first → g2 leads globals, p2 leads projects.
+    const ordered = orderSkillsByRecency(skills, ['g2', 'p2'])
+    expect(ordered.map((s) => s.name)).toEqual(['p2', 'p1', 'g2', 'g1'])
+  })
+
+  it('never-run skills keep server order after the recent ones', () => {
+    const ordered = orderSkillsByRecency(skills, ['g2'])
+    expect(ordered.map((s) => s.name)).toEqual(['p1', 'p2', 'g2', 'g1'])
+  })
+
+  it('falls back to plain locality order with no recency', () => {
+    expect(orderSkillsByRecency(skills, []).map((s) => s.name)).toEqual(['p1', 'p2', 'g1', 'g2'])
   })
 })
 

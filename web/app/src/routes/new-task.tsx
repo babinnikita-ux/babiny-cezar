@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { toast } from '@/components/ui/toaster'
-import { isProjectSkill, orderSkills } from '@/lib/skills'
+import { isProjectSkill, orderSkillsByRecency } from '@/lib/skills'
 import { submitShortcutHint } from '@/lib/use-submit-shortcut'
 import { cn } from '@/lib/utils'
 
@@ -47,6 +47,8 @@ import {
   availableRunners,
   buildCreateRunBody,
   modelsForRunner,
+  pushRecentSource,
+  recentSkillNames,
   resolveModel,
   resolveRunner,
   resolveSource,
@@ -107,7 +109,8 @@ export function NewTaskRoute() {
     setDraft((current) => ({ ...current, ...patch }))
 
   // ---- effective picker values (rules in new-task-form.ts, mirrored from legacy) -----------
-  const skillList = orderSkills(skills.data ?? [])
+  const recentSources = uiState.data?.recentSources
+  const skillList = orderSkillsByRecency(skills.data ?? [], recentSkillNames(recentSources))
   const workflowList = workflows.data?.workflows ?? []
   const sourcesReady =
     skills.data !== undefined && workflows.data !== undefined && !uiState.isPending
@@ -230,8 +233,9 @@ export function NewTaskRoute() {
       }),
     )
     // Remember what was actually run so the next visit preselects it (legacy
-    // `saveLastTaskSource`) — fire-and-forget: a failed write only costs the convenience.
-    void putUiState({ lastTask: source })
+    // `saveLastTaskSource`) and float it to the top of the picker next time
+    // (recency sort) — fire-and-forget: a failed write only costs the convenience.
+    void putUiState({ lastTask: source, recentSources: pushRecentSource(recentSources, source) })
       .then(() => queryClient.invalidateQueries({ queryKey: queryKeys.uiState }))
       .catch(() => {})
     clearDraftText()

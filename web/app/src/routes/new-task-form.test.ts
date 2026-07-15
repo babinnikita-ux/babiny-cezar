@@ -7,11 +7,14 @@ import {
   buildCreateRunBody,
   MODELS_BY_RUNNER,
   modelsForRunner,
+  pushRecentSource,
+  recentSkillNames,
   resolveModel,
   resolveRunner,
   resolveSource,
   sourceExists,
   startedRunPath,
+  type TaskSource,
 } from './new-task-form'
 
 const check = (name: BackendCheck['name'], available: boolean): BackendCheck => ({ name, available })
@@ -193,5 +196,36 @@ describe('startedRunPath (legacy handleStarted: select the first run)', () => {
 
   it('×2/×3: the FIRST variant’s thread', () => {
     expect(startedRunPath({ runs: [{ id: 'v-a' }, { id: 'v-b' }] as never })).toBe('/tasks/v-a')
+  })
+})
+
+describe('pushRecentSource / recentSkillNames (recency, #picker)', () => {
+  const s = (ref: string, source: TaskSource['source'] = 'skill'): TaskSource => ({ source, ref })
+
+  it('prepends newest and dedups the same source+ref', () => {
+    const after = pushRecentSource([s('a'), s('b')], s('b'))
+    expect(after).toEqual([s('b'), s('a')])
+  })
+
+  it('treats skill and workflow with the same ref as distinct', () => {
+    const after = pushRecentSource([s('x', 'skill')], s('x', 'workflow'))
+    expect(after).toEqual([s('x', 'workflow'), s('x', 'skill')])
+  })
+
+  it('caps the list length', () => {
+    const seed = Array.from({ length: 24 }, (_, i) => s(`k${i}`))
+    const after = pushRecentSource(seed, s('new'), 24)
+    expect(after).toHaveLength(24)
+    expect(after[0]).toEqual(s('new'))
+    expect(after.at(-1)).toEqual(s('k22')) // k23 fell off the end
+  })
+
+  it('handles an undefined starting list', () => {
+    expect(pushRecentSource(undefined, s('a'))).toEqual([s('a')])
+  })
+
+  it('recentSkillNames keeps only skill refs, in order', () => {
+    expect(recentSkillNames([s('a'), s('w', 'workflow'), s('b')])).toEqual(['a', 'b'])
+    expect(recentSkillNames(undefined)).toEqual([])
   })
 })

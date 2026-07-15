@@ -165,6 +165,13 @@ const uiStateSchema = z
     lastTask: z
       .object({ source: z.enum(['workflow', 'skill']), ref: z.string().min(1).max(200) })
       .optional(),
+    // Composer picker recency (newest first, capped) + the remembered worktree
+    // choice for single-skill runs. Additive prefs, like the rest of ui-state.
+    recentSources: z
+      .array(z.object({ source: z.enum(['workflow', 'skill']), ref: z.string().min(1).max(200) }))
+      .max(50)
+      .optional(),
+    lastWorktree: z.boolean().optional(),
     // Runs area presentation (#348): the sidebar-list + detail pane, or the
     // full-width table ("task manager") view.
     runsView: z.enum(['list', 'table']).optional(),

@@ -23,6 +23,21 @@ export function orderSkills(skills: readonly Skill[]): Skill[] {
   return [...skills].sort((a, b) => Number(!isProjectSkill(a)) - Number(!isProjectSkill(b)))
 }
 
+/** Locality first (project before global, the #377 rule), then recency WITHIN each locality:
+ *  a skill you ran more recently sorts above one you ran longer ago, and both sort above skills
+ *  you have never run. `recentNames` is newest-first (the ui-state `recentSources` refs). The
+ *  sort is stable, so never-run skills keep the server's directory order. */
+export function orderSkillsByRecency(skills: readonly Skill[], recentNames: readonly string[]): Skill[] {
+  const rank = new Map<string, number>()
+  recentNames.forEach((name, index) => {
+    if (!rank.has(name)) rank.set(name, index)
+  })
+  const recency = (skill: Skill) => rank.get(skill.name) ?? Number.MAX_SAFE_INTEGER
+  return [...skills].sort(
+    (a, b) => Number(!isProjectSkill(a)) - Number(!isProjectSkill(b)) || recency(a) - recency(b),
+  )
+}
+
 /**
  * Does `query` fuzzy-match `candidate`? Case-insensitive subsequence — `omfx` finds
  * `om-fix-issue` — the same permissiveness cmdk gives the palette, minus its score-reordering:
