@@ -176,6 +176,26 @@ describe('buildCreateRunBody — the exact POST /api/runs payloads legacy sends'
     expect(single.runner).toBeUndefined()
   })
 
+  it('worktree=false is sent only for a single run; on/variants keep it implicit', () => {
+    const off = buildCreateRunBody({
+      task: 't', source: { source: 'skill', ref: 'om-review' }, model: '',
+      runner: 'claude', runnerCount: 1, variants: 1, images: [], worktree: false,
+    })
+    expect(off.worktree).toBe(false)
+    // Default (on) never sends the flag.
+    const on = buildCreateRunBody({
+      task: 't', source: { source: 'skill', ref: 'om-review' }, model: '',
+      runner: 'claude', runnerCount: 1, variants: 1, images: [], worktree: true,
+    })
+    expect(on.worktree).toBeUndefined()
+    // Variants always isolate — worktree=false is ignored.
+    const variant = buildCreateRunBody({
+      task: 't', source: { source: 'skill', ref: 'om-review' }, model: '',
+      runner: 'claude', runnerCount: 1, variants: 2, images: [], worktree: false,
+    })
+    expect(variant.worktree).toBeUndefined()
+  })
+
   it('variants > 1 and images ride along; ×1 and no images are omitted', () => {
     const body = buildCreateRunBody({
       task: 't', source: { source: 'workflow', ref: 'quick-task' }, model: '',

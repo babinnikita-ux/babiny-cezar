@@ -491,6 +491,9 @@ export interface CreateRunInput {
   /** 1–3. Above 1 the response is `{ runs }` rather than a single record. */
   variants?: number
   images?: ImageInput[]
+  /** false → run in the repo working tree instead of an isolated worktree (read-only skills).
+   *  Omit for the default. Ignored server-side when variants > 1. */
+  worktree?: boolean
 }
 
 export interface MessageInput {

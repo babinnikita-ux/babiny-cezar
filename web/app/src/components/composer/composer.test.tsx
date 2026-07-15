@@ -159,6 +159,26 @@ describe('images — attach, paste, thumbnails, caps (legacy parity)', () => {
     await waitFor(() => expect(screen.queryByLabelText('Remove shot.png')).toBeNull())
   })
 
+  it('a single paste adds exactly ONE thumbnail under StrictMode (#double-paste regression)', async () => {
+    // StrictMode double-invokes state updaters in dev; the earlier addFiles ran its async encode
+    // inside the setImages updater, so one paste appended the image twice. Render under
+    // StrictMode to lock the fix in.
+    const onSubmit = vi.fn(() => Promise.resolve({}))
+    stubSkillsFetch()
+    render(
+      <React.StrictMode>
+        <QueryClientProvider client={createQueryClient()}>
+          <Composer onSubmit={onSubmit} />
+          <Toaster />
+        </QueryClientProvider>
+      </React.StrictMode>,
+    )
+    const textarea = screen.getByLabelText('Reply to the agent') as HTMLTextAreaElement
+    paste(textarea, [pngFile('once.png')])
+    await screen.findByLabelText('Remove once.png')
+    expect(screen.getAllByLabelText(/^Remove /)).toHaveLength(1)
+  })
+
   it('an image alone (no text) is sendable — the server accepts either', async () => {
     const { onSubmit, textarea } = renderComposer()
     paste(textarea, [pngFile()])

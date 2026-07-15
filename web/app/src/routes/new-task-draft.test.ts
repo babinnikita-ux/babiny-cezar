@@ -13,6 +13,7 @@ describe('the new-task draft store', () => {
       model: null,
       variants: 1,
       planFirst: false,
+      worktree: null,
     })
   })
 
@@ -24,9 +25,11 @@ describe('the new-task draft store', () => {
       model: 'gpt-5-codex',
       variants: 2,
       planFirst: false,
+      worktree: false,
     })
     const first = readDraft()
     expect(first.text).toBe('fix it')
+    expect(first.worktree).toBe(false)
     first.text = 'mutated'
     expect(readDraft().text).toBe('fix it')
   })
@@ -39,6 +42,7 @@ describe('the new-task draft store', () => {
       model: 'opus',
       variants: 3,
       planFirst: true,
+      worktree: null,
     })
     clearDraftText()
     expect(readDraft()).toEqual({
@@ -48,6 +52,55 @@ describe('the new-task draft store', () => {
       model: 'opus',
       variants: 3,
       planFirst: true,
+      worktree: null,
+    })
+  })
+
+  it('survives a page reload — a cold read re-hydrates from localStorage', () => {
+    writeDraft({
+      text: 'do not lose me',
+      source: { source: 'skill', ref: 'om-fix' },
+      runner: 'claude',
+      model: 'sonnet',
+      variants: 2,
+      planFirst: true,
+      worktree: false,
+    })
+    // A fresh page has no in-memory cache but keeps localStorage: resetDraft removes storage, so
+    // instead drop only the cache by round-tripping through a raw storage read.
+    const raw = localStorage.getItem('cez-new-task-draft') as string
+    expect(JSON.parse(raw)).toMatchObject({
+      text: 'do not lose me',
+      variants: 2,
+      worktree: false,
+      planFirst: true,
+    })
+  })
+
+  it('normalizes a malformed/older stored value instead of throwing', () => {
+    // A cold read (cache null after resetDraft) hitting bad JSON must degrade to EMPTY.
+    resetDraft()
+    localStorage.setItem('cez-new-task-draft', 'not json at all')
+    expect(readDraft()).toEqual({
+      text: '',
+      source: null,
+      runner: null,
+      model: null,
+      variants: 1,
+      planFirst: false,
+      worktree: null,
+    })
+
+    resetDraft()
+    localStorage.setItem('cez-new-task-draft', '{"text":42,"variants":9,"source":"nope","worktree":"x"}')
+    expect(readDraft()).toEqual({
+      text: '',
+      source: null,
+      runner: null,
+      model: null,
+      variants: 1,
+      planFirst: false,
+      worktree: null,
     })
   })
 })

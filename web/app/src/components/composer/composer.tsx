@@ -117,6 +117,10 @@ export function Composer({
     onValueChangeRef.current?.(resolved)
   }, [])
   const [images, setImages] = useState<PendingImage[]>([])
+  // Mirrors `images` for reads inside event handlers that must not run through a setState updater
+  // (StrictMode double-invokes those in dev — see addFiles / #double-paste).
+  const imagesRef = useRef(images)
+  imagesRef.current = images
   const [busy, setBusy] = useState(false)
   const [trigger, setTrigger] = useState<TriggerState | null>(null)
   const [menuValue, setMenuValue] = useState('')
@@ -218,17 +222,17 @@ export function Composer({
   const addFiles = useCallback(
     (files: readonly File[]) => {
       if (disabled) return
-      setImages((current) => {
-        const intake = screenFiles(files, current.length)
-        for (const reason of intake.rejected) toast(reason, { tone: 'danger' })
-        // Encoding is async; append as each finishes, re-checking the cap (two drops racing).
-        for (const file of intake.accepted) {
-          void fileToPendingImage(file).then((image) =>
-            setImages((prev) => (prev.length >= MAX_IMAGES ? prev : [...prev, image])),
-          )
-        }
-        return current
-      })
+      // Side effects (screening toasts + async encode) run OUTSIDE any setState updater: React
+      // StrictMode double-invokes updater functions in dev, so screening here would encode and
+      // append each pasted image twice (#double-paste). `imagesRef` gives the current count
+      // without reading through state; each async append re-checks the cap functionally.
+      const intake = screenFiles(files, imagesRef.current.length)
+      for (const reason of intake.rejected) toast(reason, { tone: 'danger' })
+      for (const file of intake.accepted) {
+        void fileToPendingImage(file).then((image) =>
+          setImages((prev) => (prev.length >= MAX_IMAGES ? prev : [...prev, image])),
+        )
+      }
     },
     [disabled],
   )

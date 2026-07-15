@@ -4,6 +4,7 @@ import {
   ChevronDownIcon,
   EyeIcon,
   SparklesIcon,
+  SquareIcon,
   WorkflowIcon,
 } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
@@ -125,6 +126,12 @@ export function NewTaskRoute() {
   const hasGit = health.data === undefined || health.data.repo !== null
   const variants = hasGit ? draft.variants : 1
 
+  // Worktree opt-out (#worktree-toggle): only offered for a single skill run in a git repo —
+  // workflows and variants always isolate, and a non-git repo already runs in place. The choice
+  // is remembered (draft → last-used → default on).
+  const worktreeToggleShown = hasGit && source.source === 'skill' && variants <= 1
+  const worktreeOn = worktreeToggleShown ? (draft.worktree ?? uiState.data?.lastWorktree ?? true) : true
+
   // ---- plan mode (#383 + spec 008) ----------------------------------------------------------
   const [plan, setPlan] = useState<PendingPlan | null>(null)
   const [planning, setPlanning] = useState(false)
@@ -230,12 +237,17 @@ export function NewTaskRoute() {
         runnerCount: runners.length,
         variants,
         images,
+        worktree: worktreeOn,
       }),
     )
     // Remember what was actually run so the next visit preselects it (legacy
     // `saveLastTaskSource`) and float it to the top of the picker next time
     // (recency sort) — fire-and-forget: a failed write only costs the convenience.
-    void putUiState({ lastTask: source, recentSources: pushRecentSource(recentSources, source) })
+    void putUiState({
+      lastTask: source,
+      recentSources: pushRecentSource(recentSources, source),
+      ...(worktreeToggleShown ? { lastWorktree: worktreeOn } : {}),
+    })
       .then(() => queryClient.invalidateQueries({ queryKey: queryKeys.uiState }))
       .catch(() => {})
     clearDraftText()
@@ -351,6 +363,9 @@ export function NewTaskRoute() {
                   { value: '3', label: '×3 variants', desc: 'Three competing runs — pick the diff you keep' },
                 ]}
               />
+              {worktreeToggleShown ? (
+                <WorktreeToggle on={worktreeOn} onChange={(on) => update({ worktree: on })} />
+              ) : null}
               {repo.data ? <BaseBranchPill repo={repo.data} /> : null}
             </>
           }
@@ -384,6 +399,33 @@ export function NewTaskRoute() {
         />
       ) : null}
     </div>
+  )
+}
+
+/** Worktree opt-out toggle (#worktree-toggle): a checkbox-style chip for single skill runs.
+ *  Checked = isolated worktree (the default); unchecked = run in the repo working tree. */
+function WorktreeToggle({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={on}
+      data-slot="worktree-toggle"
+      onClick={() => onChange(!on)}
+      title={
+        on
+          ? 'Runs in an isolated worktree — uncheck to run in the repo working tree'
+          : 'Runs in the repo working tree — check to isolate in a worktree'
+      }
+      className={cn(chipClass, on && 'border-primary/60 text-foreground')}
+    >
+      {on ? (
+        <CheckIcon aria-hidden="true" className="size-3 shrink-0 text-primary" />
+      ) : (
+        <SquareIcon aria-hidden="true" className="size-3 shrink-0 text-soft-foreground" />
+      )}
+      Worktree
+    </button>
   )
 }
 

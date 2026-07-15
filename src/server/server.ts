@@ -103,6 +103,9 @@ const startRunSchema = z
     // Parallel variants (spec 010): ×2/×3 runs the task as 2–3 competing
     // agents in separate worktrees; the user compares diffs and picks one.
     variants: z.number().int().min(1).max(3).optional(),
+    // Composer worktree opt-out (#worktree-toggle): false runs in the repo
+    // working tree (read-only skills). Ignored when variants > 1.
+    worktree: z.boolean().optional(),
     // Per-run system-prompt override (R2 2.3) — programmatic callers only
     // (bookmarklets, scripts); deliberately NOT a composer-UI control. Wins
     // over the config.json default; whitespace-only degrades to absent.
@@ -499,6 +502,7 @@ export function createApp(deps: ServerDeps): Hono {
       runner: parsed.data.runner,
       images,
       systemPrompt: parsed.data.systemPrompt,
+      worktree: parsed.data.worktree,
     };
     const variants = parsed.data.variants ?? 1;
     if (variants > 1) {

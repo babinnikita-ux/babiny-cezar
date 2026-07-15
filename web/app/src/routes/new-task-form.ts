@@ -172,8 +172,11 @@ export function buildCreateRunBody(opts: {
   runnerCount: number
   variants: number
   images: readonly ImageInput[]
+  /** false → run in the repo working tree, no worktree (single runs only). Sent only when
+   *  explicitly off; the default (isolated worktree) stays implicit. */
+  worktree?: boolean
 }): CreateRunInput {
-  const { task, source, model, runner, runnerCount, variants, images } = opts
+  const { task, source, model, runner, runnerCount, variants, images, worktree } = opts
   return {
     task,
     ...(source.source === 'skill'
@@ -183,6 +186,8 @@ export function buildCreateRunBody(opts: {
     runner: runnerCount > 1 ? runner : undefined,
     variants: variants > 1 ? variants : undefined,
     images: images.length > 0 ? [...images] : undefined,
+    // Off only matters for a single run — variants always isolate.
+    worktree: worktree === false && variants <= 1 ? false : undefined,
   }
 }
 

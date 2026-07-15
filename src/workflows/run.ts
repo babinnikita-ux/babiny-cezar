@@ -71,6 +71,11 @@ export interface StartRunInput {
    *  Replaces the `config.json` default for this run — see
    *  `resolveExtraSystemPrompt` for the precedence contract. */
   systemPrompt?: string;
+  /** Composer opt-out (#worktree-toggle): `false` runs the task in the repo
+   *  working tree instead of an isolated worktree — for read-only skills that
+   *  don't need a branch. Undefined/`true` keeps the default per-task worktree.
+   *  Ignored for variants (they always isolate). */
+  worktree?: boolean;
 }
 
 /**
@@ -626,7 +631,11 @@ export class RunManager {
     // `.ai/cezar/worktrees/<id>`, never in the user's working tree. Not a git
     // repo, or worktree creation failed → degrade to running in place.
     const repo = await getRepoInfo(this.repoRoot);
-    if (repo) {
+    if (repo && input.worktree === false) {
+      // Composer opt-out: run in the repo working tree, no branch/worktree
+      // (read-only skills — review, summarize — that never need isolation).
+      emit({ type: 'note', message: 'worktree off — running in the repo working tree' });
+    } else if (repo) {
       // Fork from the configured base branch (config.json `baseBranch`, e.g.
       // `develop`) — also the target of the eventual draft PR. Unresolvable
       // (typo, not fetched) → note + the currently checked-out branch.

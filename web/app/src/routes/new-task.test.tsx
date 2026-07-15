@@ -367,8 +367,10 @@ describe('submit', () => {
     await waitFor(() =>
       expect(requests.find((r) => r.method === 'PUT' && r.url === '/api/ui-state')?.body).toEqual({
         lastTask: { source: 'skill', ref: 'om-fix' },
-        // The run also lands at the head of the recency list (picker sort).
+        // The run also lands at the head of the recency list (picker sort)...
         recentSources: [{ source: 'skill', ref: 'om-fix' }],
+        // ...and a single skill run remembers its worktree choice (default on).
+        lastWorktree: true,
       }),
     )
   })

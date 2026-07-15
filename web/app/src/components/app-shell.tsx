@@ -10,6 +10,9 @@ import { Button } from '@/components/ui/button'
 import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { activeNavItem, activeNavPath, visibleNavItems, type NavItem } from '@/components/nav-items'
 import { cn } from '@/lib/utils'
+// The Open Mercato brand mark (web/open-mercato.svg), bundled by Vite so it resolves in both
+// the dev server and the built cockpit. Its own gradient + rounded corners ARE the tile.
+import brandLogoUrl from '../../../open-mercato.svg'
 
 /** Tailwind's `md`. The drawer is the `<md` affordance, so this must stay in step with the
  *  `md:hidden` / `md:flex` classes below — they are the same breakpoint expressed twice, once
@@ -366,17 +369,17 @@ function VersionChip({ version, latestVersion }: { version: string; latestVersio
   )
 }
 
-/** The gradient brand mark. Dark glyph on the lime→yellow→violet gradient in both themes —
- *  `--primary-foreground` is the near-black the gradient is designed to carry. */
+/** The Open Mercato brand mark. The SVG carries its own gradient and rounded corners, so it is
+ *  the tile — no wrapper background. */
 function BrandTile() {
   return (
-    <span
-      data-slot="brand-tile"
+    <img
+      src={brandLogoUrl}
+      alt=""
       aria-hidden="true"
-      className="inline-flex size-[26px] shrink-0 items-center justify-center rounded-sm bg-[image:var(--grad)] text-[15px] font-bold text-primary-foreground"
-    >
-      ⚡
-    </span>
+      data-slot="brand-tile"
+      className="size-[26px] shrink-0 rounded-sm"
+    />
   )
 }
 
