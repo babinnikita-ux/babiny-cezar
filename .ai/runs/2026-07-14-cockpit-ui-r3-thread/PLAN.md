@@ -15,10 +15,10 @@
 | 1 | 1.2 | Tool cards + context groups + reasoning + live output streaming | done | e1ea47b |
 | 1 | 1.3 | Plan dock + step rail + check-step cards | done | d7d1d5a |
 | 1 | 1.4 | Run header: meta, status, tabs, action bar (Finish/Continue/Terminal/Notes/Archive/Cancel/Delete) | done | 1b7a72e |
-| 2 | 2.1 | Shared composer: reply, attachments, / skills autocomplete, @ files, dictation, quick replies | done | pending |
-| 2 | 2.2 | Review gate on the new surface (diff panel, send back, Draft PR) | done | pending |
-| 2 | 2.3 | Variants compare view | done | pending |
-| 2 | 2.4 | Thread virtualization + scroll caches + iOS pass + v1 fallback for old runs | done | pending |
+| 2 | 2.1 | Shared composer: reply, attachments, / skills autocomplete, @ files, dictation, quick replies | done | b5cb131 |
+| 2 | 2.2 | Review gate on the new surface (diff panel, send back, Draft PR) | done | a6e255e |
+| 2 | 2.3 | Variants compare view | done | 0ba7cc3 |
+| 2 | 2.4 | Thread virtualization + scroll caches + iOS pass + v1 fallback for old runs | done | b0bcde1 |
 
 ## Goal
 The chat view at `/tasks/:id` (Session tab) rendered from protocol v2 with v1 fallback: turns, tool cards with live output, context groups, reasoning, the plan dock (#382), tool results Codex-style (#381), the composer with skills autocomplete (#380) and Dictation, review gate, variants compare — matching the thread.html mockup, mobile-first.
