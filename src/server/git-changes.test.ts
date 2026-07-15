@@ -1,0 +1,321 @@
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { Hono } from 'hono';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { RunStore, type RunRecord } from '../runs/store.js';
+import type { RunManager } from '../workflows/run.js';
+import {
+  collectChanges,
+  commitAll,
+  pushCurrentBranch,
+  readWorktreePath,
+  type ChangesPayload,
+} from './git-changes.js';
+import { createApp } from './server.js';
+
+/**
+ * Session git API (redesign R5 Step 1.2 — spec §"Git/session API additions"):
+ * structured /changes, /files browsing, git/commit and git/push — against
+ * real fixture git repos in tmp dirs. Every predictable git failure must be
+ * a 409 with a human reason (never HTML, never a 500); 404 only for unknown
+ * run ids. The text-blob /diff endpoint is a protected surface and untested
+ * here on purpose — nothing in this step touches it.
+ */
+
+function g(dir: string, ...args: string[]): string {
+  return execFileSync('git', args, { cwd: dir, encoding: 'utf8' });
+}
+
+/** Fresh repo with identity configured and one initial commit on `main`. */
+function initRepo(dir: string): void {
+  g(dir, 'init', '-b', 'main');
+  g(dir, 'config', 'user.email', 'test@cezar.local');
+  g(dir, 'config', 'user.name', 'cezar-test');
+  g(dir, 'config', 'commit.gpgsign', 'false');
+}
+
+describe('collectChanges — structured diff vs base', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'cez-changes-'));
+    initRepo(dir);
+  });
+
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('reports modified, added, deleted, renamed and binary files with counts and patches', async () => {
+    writeFileSync(join(dir, 'mod.txt'), 'line one\nline two\n');
+    writeFileSync(join(dir, 'del.txt'), 'goes away\n');
+    writeFileSync(join(dir, 'ren.txt'), 'stable content that stays identical across the rename\n');
+    writeFileSync(join(dir, 'bin.dat'), Buffer.from([0, 1, 2, 3, 0, 255]));
+    g(dir, 'add', '-A');
+    g(dir, 'commit', '-m', 'base');
+    g(dir, 'checkout', '-b', 'task');
+
+    // Committed rename + binary change…
+    g(dir, 'mv', 'ren.txt', 'renamed.txt');
+    writeFileSync(join(dir, 'bin.dat'), Buffer.from([0, 9, 9, 9, 0, 1]));
+    g(dir, 'add', '-A');
+    g(dir, 'commit', '-m', 'rename + binary');
+    // …plus uncommitted edits and an untracked file — all must show up.
+    writeFileSync(join(dir, 'mod.txt'), 'line one\nline two changed\nline three\n');
+    rmSync(join(dir, 'del.txt'));
+    writeFileSync(join(dir, 'new.txt'), 'brand new\n');
+
+    const result = await collectChanges(dir, 'main');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const byPath = new Map(result.changes.files.map((f) => [f.path, f]));
+
+    expect(byPath.get('new.txt')).toMatchObject({ status: 'added', adds: 1, dels: 0, binary: false });
+    expect(byPath.get('new.txt')?.patch).toContain('+brand new');
+    expect(byPath.get('mod.txt')).toMatchObject({ status: 'modified', adds: 2, dels: 1 });
+    expect(byPath.get('mod.txt')?.patch).toContain('-line two');
+    expect(byPath.get('del.txt')).toMatchObject({ status: 'deleted', adds: 0, dels: 1 });
+    expect(byPath.get('renamed.txt')).toMatchObject({ status: 'renamed', oldPath: 'ren.txt' });
+    expect(byPath.get('bin.dat')).toMatchObject({ status: 'modified', binary: true, adds: 0, dels: 0 });
+
+    expect(result.changes.stat.files).toBe(5);
+    expect(result.changes.stat.adds).toBe(result.changes.files.reduce((s, f) => s + f.adds, 0));
+    expect(result.changes.stat.dels).toBe(result.changes.files.reduce((s, f) => s + f.dels, 0));
+  });
+
+  it('an empty diff is a valid all-zero payload, not an error', async () => {
+    writeFileSync(join(dir, 'a.txt'), 'hello\n');
+    g(dir, 'add', '-A');
+    g(dir, 'commit', '-m', 'base');
+
+    const result = await collectChanges(dir, 'main');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.changes.files).toEqual([]);
+    expect(result.changes.stat).toEqual({ adds: 0, dels: 0, files: 0 });
+  });
+
+  it('caps oversized per-file patches with a truncation note', async () => {
+    writeFileSync(join(dir, 'a.txt'), 'hello\n');
+    g(dir, 'add', '-A');
+    g(dir, 'commit', '-m', 'base');
+    writeFileSync(join(dir, 'a.txt'), `${'x'.repeat(500)}\n`.repeat(20));
+
+    const result = await collectChanges(dir, 'main', 200);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.changes.files[0]?.patch.length).toBeLessThan(300);
+    expect(result.changes.files[0]?.patch).toContain('… (patch truncated)');
+  });
+});
+
+describe('readWorktreePath — Files tab browsing', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'cez-files-'));
+    mkdirSync(join(dir, '.git')); // stand-in for repo internals
+    mkdirSync(join(dir, 'sub'));
+    writeFileSync(join(dir, 'a.txt'), 'alpha\n');
+    writeFileSync(join(dir, 'sub', 'b.txt'), 'beta\n');
+    writeFileSync(join(dir, 'bin.dat'), Buffer.from([0, 1, 2, 0]));
+  });
+
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('lists the root (dirs first, .git hidden) when path is omitted', async () => {
+    const res = await readWorktreePath(dir, '');
+    expect(res.kind).toBe('dir');
+    if (res.kind !== 'dir') return;
+    expect(res.entries.map((e) => e.name)).toEqual(['sub', 'a.txt', 'bin.dat']);
+    expect(res.entries.find((e) => e.name === 'a.txt')?.size).toBe(6);
+  });
+
+  it('lists a subdirectory and reads a file with content', async () => {
+    const listing = await readWorktreePath(dir, 'sub');
+    expect(listing.kind).toBe('dir');
+    if (listing.kind === 'dir') expect(listing.entries).toEqual([{ name: 'b.txt', type: 'file', size: 5 }]);
+
+    const file = await readWorktreePath(dir, 'sub/b.txt');
+    expect(file).toMatchObject({ kind: 'file', path: 'sub/b.txt', binary: false, tooLarge: false, content: 'beta\n' });
+  });
+
+  it('flags binary files and withholds their content', async () => {
+    const res = await readWorktreePath(dir, 'bin.dat');
+    expect(res).toMatchObject({ kind: 'file', binary: true });
+    if (res.kind === 'file') expect(res.content).toBeUndefined();
+  });
+
+  it('withholds content past the size cap with an honest tooLarge flag', async () => {
+    const res = await readWorktreePath(dir, 'a.txt', 3);
+    expect(res).toMatchObject({ kind: 'file', tooLarge: true, size: 6 });
+    if (res.kind === 'file') expect(res.content).toBeUndefined();
+  });
+
+  it('rejects traversal, absolute paths, .git and symlinks', async () => {
+    expect((await readWorktreePath(dir, '../outside.txt')).kind).toBe('invalid');
+    expect((await readWorktreePath(dir, 'sub/../../outside.txt')).kind).toBe('invalid');
+    expect((await readWorktreePath(dir, '/etc/passwd')).kind).toBe('invalid');
+    expect((await readWorktreePath(dir, '.git')).kind).toBe('invalid');
+    expect((await readWorktreePath(dir, '.git/config')).kind).toBe('invalid');
+    expect((await readWorktreePath(dir, 'a\0.txt')).kind).toBe('invalid');
+    symlinkSync('/etc', join(dir, 'link'));
+    expect((await readWorktreePath(dir, 'link')).kind).toBe('invalid');
+    expect((await readWorktreePath(dir, 'nope.txt')).kind).toBe('missing');
+  });
+});
+
+describe('session git API routes', () => {
+  let repoRoot: string;
+  let worktree: string;
+  let store: RunStore;
+  let app: Hono;
+  let run: RunRecord;
+
+  beforeEach(() => {
+    repoRoot = mkdtempSync(join(tmpdir(), 'cez-gitapi-'));
+    store = RunStore.open(join(repoRoot, '.ai/cezar'));
+    app = createApp({
+      repoRoot,
+      store,
+      manager: {} as unknown as RunManager, // these routes never touch it
+      version: '0.0.0-test',
+    });
+    // The "worktree" fixture is a plain repo — the routes only need a git
+    // dir the record points at, not a literal `git worktree add` product.
+    worktree = join(repoRoot, 'wt');
+    mkdirSync(worktree);
+    initRepo(worktree);
+    writeFileSync(join(worktree, 'base.txt'), 'base\n');
+    g(worktree, 'add', '-A');
+    g(worktree, 'commit', '-m', 'base');
+    g(worktree, 'checkout', '-b', 'task');
+    run = store.createRun({ title: 't', workflow: 'quick-task', task: 't', steps: [] });
+    store.updateRun(run.id, { worktreePath: worktree, baseBranch: 'main', branch: 'task' });
+  });
+
+  afterEach(() => {
+    store.flush();
+    rmSync(repoRoot, { recursive: true, force: true });
+  });
+
+  const commit = (id: string, body: unknown) =>
+    app.request(`/api/runs/${id}/git/commit`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  it('GET /changes answers the structured shape; 404 for unknown ids', async () => {
+    writeFileSync(join(worktree, 'new.txt'), 'hi\n');
+    const res = await app.request(`/api/runs/${run.id}/changes`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as ChangesPayload;
+    expect(body.files).toHaveLength(1);
+    expect(body.files[0]).toMatchObject({ path: 'new.txt', status: 'added', adds: 1, dels: 0 });
+    expect(body.stat).toEqual({ adds: 1, dels: 0, files: 1 });
+
+    expect((await app.request('/api/runs/nope/changes')).status).toBe(404);
+  });
+
+  it('runs without a worktree get 409 + reason (JSON, never HTML) on every session-git route', async () => {
+    const bare = store.createRun({ title: 'b', workflow: 'quick-task', task: 'b', steps: [] });
+    for (const req of [
+      app.request(`/api/runs/${bare.id}/changes`),
+      app.request(`/api/runs/${bare.id}/files`),
+      commit(bare.id, { message: 'x' }),
+      app.request(`/api/runs/${bare.id}/git/push`, { method: 'POST' }),
+    ]) {
+      const res = await req;
+      expect(res.status).toBe(409);
+      expect(((await res.json()) as { error: string }).error).toContain('no worktree');
+    }
+  });
+
+  it('GET /files lists and reads inside the worktree, 409s traversal', async () => {
+    const listing = await app.request(`/api/runs/${run.id}/files`);
+    expect(listing.status).toBe(200);
+    expect((await listing.json()) as object).toMatchObject({ type: 'dir', path: '' });
+
+    const file = await app.request(`/api/runs/${run.id}/files?path=base.txt`);
+    expect(file.status).toBe(200);
+    expect((await file.json()) as object).toMatchObject({ type: 'file', content: 'base\n' });
+
+    const evil = await app.request(`/api/runs/${run.id}/files?path=${encodeURIComponent('../../etc/passwd')}`);
+    expect(evil.status).toBe(409);
+    expect(((await evil.json()) as { error: string }).error).toContain('escapes the worktree');
+  });
+
+  it('POST git/commit commits everything; a clean tree is a 409, a bad body a 400', async () => {
+    writeFileSync(join(worktree, 'feat.txt'), 'feature\n');
+    const res = await commit(run.id, { message: 'feat: add feature' });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { committed: boolean; sha: string };
+    expect(body.committed).toBe(true);
+    expect(body.sha).toMatch(/^[0-9a-f]{40}$/);
+    expect(g(worktree, 'log', '-1', '--pretty=%s')).toContain('feat: add feature');
+    expect(g(worktree, 'status', '--porcelain').trim()).toBe('');
+
+    // Nothing left to commit — predictable git failure, 409 with a reason.
+    const clean = await commit(run.id, { message: 'again' });
+    expect(clean.status).toBe(409);
+    expect(((await clean.json()) as { error: string }).error).toContain('nothing to commit');
+
+    expect((await commit(run.id, { message: '   ' })).status).toBe(400);
+    expect((await commit(run.id, {})).status).toBe(400);
+  });
+
+  it('POST git/push with no remote is a 409 with a human reason', async () => {
+    const res = await app.request(`/api/runs/${run.id}/git/push`, { method: 'POST' });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toContain('no remote configured');
+  });
+
+  it('POST git/push sets upstream on first push to a real remote', async () => {
+    const remote = mkdtempSync(join(tmpdir(), 'cez-remote-'));
+    try {
+      execFileSync('git', ['init', '--bare', remote], { encoding: 'utf8' });
+      g(worktree, 'remote', 'add', 'origin', remote);
+
+      const first = await app.request(`/api/runs/${run.id}/git/push`, { method: 'POST' });
+      expect(first.status).toBe(200);
+      expect((await first.json()) as object).toMatchObject({ pushed: true, branch: 'task', remote: 'origin', upstreamSet: true });
+
+      // Second push goes through the existing upstream.
+      const second = await app.request(`/api/runs/${run.id}/git/push`, { method: 'POST' });
+      expect(second.status).toBe(200);
+      expect((await second.json()) as object).toMatchObject({ pushed: true, upstreamSet: false });
+    } finally {
+      rmSync(remote, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('commitAll / pushCurrentBranch — direct degradation paths', () => {
+  it('commitAll on a non-repo dir fails with a reason, never throws', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cez-norepo-'));
+    try {
+      const res = await commitAll(dir, 'msg');
+      expect(res.ok).toBe(false);
+      if (!res.ok) expect(res.error.toLowerCase()).toContain('not a git repository');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('pushCurrentBranch reports detached HEAD as a reason', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cez-detached-'));
+    try {
+      initRepo(dir);
+      writeFileSync(join(dir, 'a.txt'), 'a\n');
+      g(dir, 'add', '-A');
+      g(dir, 'commit', '-m', 'base');
+      g(dir, 'checkout', '--detach');
+      const res = await pushCurrentBranch(dir);
+      expect(res.ok).toBe(false);
+      if (!res.ok) expect(res.error).toContain('detached HEAD');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

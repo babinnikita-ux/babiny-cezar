@@ -31,6 +31,7 @@ import { isV2WireEventType } from '../runs/ui-event-sink.js';
 import type { RunManager } from '../workflows/run.js';
 import { removeWorktree, worktreeDiff, worktreeDiffStat } from '../git-worktree.js';
 import { getBranches, getCommit, getDiff, getLog, getRepoInfo, getStatus } from './git.js';
+import { collectChanges, commitAll, pushCurrentBranch, readWorktreePath } from './git-changes.js';
 import { loadConfig } from '../config.js';
 import { resolveCapabilities } from './capabilities.js';
 import { resolveForge } from './forge/index.js';
@@ -165,6 +166,11 @@ const uiStateSchema = z
 // Editable titles (#389). `title` is the only editable field for now.
 const patchRunSchema = z.object({
   title: z.string().trim().min(1).max(300).optional(),
+});
+
+// Session commit (redesign R5 — §"Git/session API additions").
+const gitCommitSchema = z.object({
+  message: z.string().trim().min(1, 'commit message must not be empty').max(5_000),
 });
 
 const messageSchema = z
@@ -707,6 +713,73 @@ export function createApp(deps: ServerDeps): Hono {
       return c.text('(no worktree — this task ran directly in the repo working tree)');
     }
     return c.text(await worktreeDiff(run.worktreePath, run.baseBranch ?? 'HEAD'));
+  });
+
+  // ---- session git view (redesign R5 Step 1.2 — §"Git/session API additions").
+  // Structured sibling of the text-blob /diff above (which stays untouched —
+  // protected surface). Same worktree/base resolution; every predictable git
+  // failure degrades to 409 + human-readable reason, 404 only for unknown ids.
+  const worktreeOf = (run: RunRecord): string | null =>
+    run.worktreePath && existsSync(run.worktreePath) ? run.worktreePath : null;
+  const NO_WORKTREE = 'no worktree — this task ran directly in the repo working tree';
+
+  app.get('/api/runs/:id/changes', async (c) => {
+    const run = store.getRun(c.req.param('id'));
+    if (!run) return c.json({ error: 'not found' }, 404);
+    const worktree = worktreeOf(run);
+    if (!worktree) return c.json({ error: NO_WORKTREE }, 409);
+    const result = await collectChanges(worktree, run.baseBranch ?? 'HEAD');
+    if (!result.ok) return c.json({ error: result.error }, 409);
+    return c.json(result.changes);
+  });
+
+  // Files tab: directory listing (path omitted or a dir) or file content
+  // (size-capped, binary flagged). Traversal-safe — readWorktreePath rejects
+  // anything escaping the worktree.
+  app.get('/api/runs/:id/files', async (c) => {
+    const run = store.getRun(c.req.param('id'));
+    if (!run) return c.json({ error: 'not found' }, 404);
+    const worktree = worktreeOf(run);
+    if (!worktree) return c.json({ error: NO_WORKTREE }, 409);
+    const result = await readWorktreePath(worktree, c.req.query('path') ?? '');
+    if (result.kind === 'invalid' || result.kind === 'missing') {
+      return c.json({ error: result.error }, 409);
+    }
+    if (result.kind === 'dir') {
+      return c.json({ type: 'dir', path: result.path, entries: result.entries });
+    }
+    return c.json({
+      type: 'file',
+      path: result.path,
+      size: result.size,
+      binary: result.binary,
+      tooLarge: result.tooLarge,
+      ...(result.content !== undefined ? { content: result.content } : {}),
+    });
+  });
+
+  app.post('/api/runs/:id/git/commit', async (c) => {
+    const run = store.getRun(c.req.param('id'));
+    if (!run) return c.json({ error: 'not found' }, 404);
+    const worktree = worktreeOf(run);
+    if (!worktree) return c.json({ error: NO_WORKTREE }, 409);
+    const parsed = gitCommitSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.issues.map((i) => i.message).join('; ') }, 400);
+    }
+    const result = await commitAll(worktree, parsed.data.message);
+    if (!result.ok) return c.json({ error: result.error }, 409);
+    return c.json({ committed: true, sha: result.sha });
+  });
+
+  app.post('/api/runs/:id/git/push', async (c) => {
+    const run = store.getRun(c.req.param('id'));
+    if (!run) return c.json({ error: 'not found' }, 404);
+    const worktree = worktreeOf(run);
+    if (!worktree) return c.json({ error: NO_WORKTREE }, 409);
+    const result = await pushCurrentBranch(worktree);
+    if (!result.ok) return c.json({ error: result.error }, 409);
+    return c.json({ pushed: true, branch: result.branch, remote: result.remote, upstreamSet: result.upstreamSet });
   });
 
   // Draft PR from the review gate (spec 009): final autosave → push →

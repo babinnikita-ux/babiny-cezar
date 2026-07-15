@@ -1,0 +1,358 @@
+import { execFile } from 'node:child_process';
+import { lstat, open, readFile, readdir, stat } from 'node:fs/promises';
+import { join, resolve, sep } from 'node:path';
+
+/**
+ * Session git plumbing for the cockpit's Changes & Files tabs (redesign spec
+ * `.ai/specs/2026-07-14-cockpit-ui-redesign.md` §"Git/session API additions").
+ *
+ * Structured diff (`collectChanges`), worktree browsing (`readWorktreePath`),
+ * commit-all and push — all against an arbitrary directory so the same
+ * helpers serve a task worktree today and the main working tree (Step 1.3).
+ *
+ * Policy mirrors `src/git-worktree.ts`: helpers never throw; every git
+ * failure comes back as `{ ok:false, error }` with git's own words, and the
+ * route layer turns that into a 409 + human-readable reason (never HTML,
+ * never a 500 for a predictable git failure).
+ */
+
+interface GitResult {
+  ok: boolean;
+  stdout: string;
+  stderr: string;
+}
+
+/** Run git, never throw — degradation is the caller's policy. */
+function git(cwd: string, args: string[]): Promise<GitResult> {
+  return new Promise((resolvePromise) => {
+    execFile(
+      'git',
+      args,
+      { cwd, maxBuffer: 32 * 1024 * 1024, encoding: 'utf8' },
+      (err, stdout, stderr) => resolvePromise({ ok: !err, stdout: stdout ?? '', stderr: stderr ?? '' }),
+    );
+  });
+}
+
+/** First line of git's stderr (or stdout) as a one-line human reason. */
+function gitReason(res: GitResult, fallback: string): string {
+  const text = (res.stderr.trim() || res.stdout.trim()).split('\n')[0]?.trim();
+  return text || fallback;
+}
+
+// ---- structured changes -----------------------------------------------------
+
+/** Per-file patch cap — the GUI shows a "truncated" note past this. */
+const PATCH_CAP = 200_000;
+
+export interface ChangedFile {
+  path: string;
+  /** Rename/copy source — present only when `status` is renamed/copied. */
+  oldPath?: string;
+  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied';
+  adds: number;
+  dels: number;
+  binary: boolean;
+  patch: string;
+}
+
+export interface ChangesPayload {
+  files: ChangedFile[];
+  stat: { adds: number; dels: number; files: number };
+}
+
+export type ChangesResult = { ok: true; changes: ChangesPayload } | { ok: false; error: string };
+
+interface NumstatEntry {
+  adds: number;
+  dels: number;
+  binary: boolean;
+  path: string;
+  oldPath?: string;
+}
+
+/** Parse `git diff --numstat -z -M`: `adds TAB dels TAB path NUL`, or for a
+ *  rename/copy `adds TAB dels TAB NUL old NUL new NUL`. Binary files report
+ *  `-` for both counters. Exported for tests. */
+export function parseNumstatZ(out: string): NumstatEntry[] {
+  const tokens = out.split('\0');
+  const entries: NumstatEntry[] = [];
+  let i = 0;
+  while (i < tokens.length) {
+    const head = tokens[i] ?? '';
+    if (!head) {
+      i += 1;
+      continue;
+    }
+    const m = /^(\d+|-)\t(\d+|-)\t([\s\S]*)$/.exec(head);
+    if (!m) {
+      i += 1;
+      continue;
+    }
+    const binary = m[1] === '-';
+    const adds = binary ? 0 : Number(m[1]);
+    const dels = m[2] === '-' ? 0 : Number(m[2]);
+    if (m[3]) {
+      entries.push({ adds, dels, binary, path: m[3] });
+      i += 1;
+    } else {
+      entries.push({ adds, dels, binary, oldPath: tokens[i + 1] ?? '', path: tokens[i + 2] ?? '' });
+      i += 3;
+    }
+  }
+  return entries;
+}
+
+interface NameStatusEntry {
+  status: string;
+  path: string;
+  oldPath?: string;
+}
+
+/** Parse `git diff --name-status -z -M`: `X NUL path NUL`, renames/copies
+ *  `Rnnn NUL old NUL new NUL`. Exported for tests. */
+export function parseNameStatusZ(out: string): NameStatusEntry[] {
+  const tokens = out.split('\0');
+  const entries: NameStatusEntry[] = [];
+  let i = 0;
+  while (i < tokens.length) {
+    const status = tokens[i] ?? '';
+    if (!status) {
+      i += 1;
+      continue;
+    }
+    if (/^[RC]/.test(status)) {
+      entries.push({ status, oldPath: tokens[i + 1] ?? '', path: tokens[i + 2] ?? '' });
+      i += 3;
+    } else {
+      entries.push({ status, path: tokens[i + 1] ?? '' });
+      i += 2;
+    }
+  }
+  return entries;
+}
+
+/** Split one `git diff --patch` blob into per-file sections, in git's file
+ *  order (the same order `--numstat`/`--name-status` use). Exported for tests. */
+export function splitPatch(patch: string): string[] {
+  if (!patch.trim()) return [];
+  const starts: number[] = [];
+  const re = /^diff --git /gm;
+  for (let m = re.exec(patch); m; m = re.exec(patch)) starts.push(m.index);
+  return starts.map((start, idx) => patch.slice(start, starts[idx + 1] ?? patch.length));
+}
+
+function statusWord(letter: string): ChangedFile['status'] {
+  switch (letter[0]) {
+    case 'A':
+      return 'added';
+    case 'D':
+      return 'deleted';
+    case 'R':
+      return 'renamed';
+    case 'C':
+      return 'copied';
+    default:
+      // M, T (typechange), U — the GUI treats them all as "modified".
+      return 'modified';
+  }
+}
+
+/**
+ * Structured "what changed here" for a directory vs its base branch:
+ * committed + uncommitted + untracked (via `add -N`), anchored at the
+ * merge-base so the diff stays *this task's* changes even after the base
+ * moves on — the exact resolution `worktreeDiff` (src/git-worktree.ts) uses
+ * for the text-blob `/diff` endpoint, which stays untouched.
+ */
+export async function collectChanges(
+  dir: string,
+  baseBranch: string,
+  patchCap = PATCH_CAP,
+): Promise<ChangesResult> {
+  await git(dir, ['add', '-N', '.']); // intent-to-add: untracked files show up
+  const mergeBase = await git(dir, ['merge-base', baseBranch, 'HEAD']);
+  const base = mergeBase.ok && mergeBase.stdout.trim() ? mergeBase.stdout.trim() : baseBranch;
+
+  const nameStatus = await git(dir, ['diff', '--name-status', '-z', '-M', base]);
+  if (!nameStatus.ok) return { ok: false, error: gitReason(nameStatus, 'git diff failed') };
+  const numstat = await git(dir, ['diff', '--numstat', '-z', '-M', base]);
+  if (!numstat.ok) return { ok: false, error: gitReason(numstat, 'git diff failed') };
+  const patchOut = await git(dir, ['diff', '--patch', '-M', '--no-color', base]);
+  if (!patchOut.ok) return { ok: false, error: gitReason(patchOut, 'git diff failed') };
+
+  const statuses = parseNameStatusZ(nameStatus.stdout);
+  const counts = parseNumstatZ(numstat.stdout);
+  const patches = splitPatch(patchOut.stdout);
+  const countByPath = new Map(counts.map((entry) => [entry.path, entry]));
+
+  const files: ChangedFile[] = statuses.map((entry, idx) => {
+    const count = countByPath.get(entry.path);
+    // All three listings come out in git's path order, so index-matching the
+    // patch sections is safe; a length mismatch degrades to "no patch".
+    let patch = patches.length === statuses.length ? (patches[idx] ?? '') : '';
+    if (patch.length > patchCap) patch = `${patch.slice(0, patchCap)}\n… (patch truncated)`;
+    return {
+      path: entry.path,
+      ...(entry.oldPath ? { oldPath: entry.oldPath } : {}),
+      status: statusWord(entry.status),
+      adds: count?.adds ?? 0,
+      dels: count?.dels ?? 0,
+      binary: count?.binary ?? false,
+      patch,
+    };
+  });
+
+  return {
+    ok: true,
+    changes: {
+      files,
+      stat: {
+        adds: files.reduce((sum, f) => sum + f.adds, 0),
+        dels: files.reduce((sum, f) => sum + f.dels, 0),
+        files: files.length,
+      },
+    },
+  };
+}
+
+// ---- worktree file browsing ---------------------------------------------------
+
+/** Max file content served to the Files tab — past this the GUI shows an
+ *  honest "too large" state instead of the bytes. */
+export const FILE_CONTENT_CAP = 512_000;
+
+export interface DirEntry {
+  name: string;
+  type: 'dir' | 'file';
+  size?: number;
+}
+
+export type FilesResult =
+  | { kind: 'dir'; path: string; entries: DirEntry[] }
+  | { kind: 'file'; path: string; size: number; binary: boolean; tooLarge: boolean; content?: string }
+  | { kind: 'invalid'; error: string }
+  | { kind: 'missing'; error: string };
+
+/** True when the first 8 KB contain a NUL byte — good enough for a viewer flag. */
+async function sniffBinary(path: string, size: number): Promise<boolean> {
+  const handle = await open(path, 'r');
+  try {
+    const len = Math.min(size, 8192);
+    if (len === 0) return false;
+    const buf = Buffer.alloc(len);
+    await handle.read(buf, 0, len, 0);
+    return buf.includes(0);
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
+ * Directory listing or file content from inside `root`, traversal-safe:
+ * anything resolving outside the root (dot-segments, absolute paths, NUL) is
+ * rejected — same "not a file we serve" stance as `isSafeAssetFilename` in
+ * src/server/static-ui.ts. `.git` and symlinks are off-limits too.
+ */
+export async function readWorktreePath(
+  root: string,
+  relPath: string,
+  contentCap = FILE_CONTENT_CAP,
+): Promise<FilesResult> {
+  if (relPath.includes('\0')) return { kind: 'invalid', error: 'invalid path' };
+  const rootAbs = resolve(root);
+  const target = resolve(rootAbs, relPath);
+  if (target !== rootAbs && !target.startsWith(rootAbs + sep)) {
+    return { kind: 'invalid', error: `path escapes the worktree: ${relPath}` };
+  }
+  const gitDir = join(rootAbs, '.git');
+  if (target === gitDir || target.startsWith(gitDir + sep)) {
+    return { kind: 'invalid', error: '.git internals are not browsable' };
+  }
+  const display = target === rootAbs ? '' : target.slice(rootAbs.length + 1).split(sep).join('/');
+
+  let info;
+  try {
+    info = await lstat(target);
+  } catch {
+    return { kind: 'missing', error: `no such file or directory in the worktree: ${relPath || '/'}` };
+  }
+  if (info.isSymbolicLink()) {
+    return { kind: 'invalid', error: `symlinks are not served: ${display}` };
+  }
+
+  if (info.isDirectory()) {
+    const dirents = await readdir(target, { withFileTypes: true });
+    const entries: DirEntry[] = [];
+    for (const d of dirents) {
+      if (d.name === '.git') continue;
+      if (d.isDirectory()) {
+        entries.push({ name: d.name, type: 'dir' });
+      } else if (d.isFile()) {
+        const size = await stat(join(target, d.name))
+          .then((s) => s.size)
+          .catch(() => undefined);
+        entries.push({ name: d.name, type: 'file', ...(size !== undefined ? { size } : {}) });
+      }
+      // Symlinks, sockets, … deliberately omitted from the listing.
+    }
+    entries.sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'dir' ? -1 : 1));
+    return { kind: 'dir', path: display, entries };
+  }
+
+  if (!info.isFile()) return { kind: 'invalid', error: `not a regular file: ${display}` };
+
+  const binary = await sniffBinary(target, info.size).catch(() => true);
+  const tooLarge = info.size > contentCap;
+  if (binary || tooLarge) {
+    return { kind: 'file', path: display, size: info.size, binary, tooLarge };
+  }
+  const content = await readFile(target, 'utf8');
+  return { kind: 'file', path: display, size: info.size, binary: false, tooLarge: false, content };
+}
+
+// ---- commit & push ------------------------------------------------------------
+
+export type CommitResult = { ok: true; sha: string } | { ok: false; error: string };
+
+/** `git add -A && git commit -m <message>` in `dir`. A clean tree, a failing
+ *  hook or missing identity all come back as `{ ok:false, error }`. */
+export async function commitAll(dir: string, message: string): Promise<CommitResult> {
+  const status = await git(dir, ['status', '--porcelain']);
+  if (!status.ok) return { ok: false, error: gitReason(status, 'git status failed') };
+  if (!status.stdout.trim()) {
+    return { ok: false, error: 'nothing to commit — the working tree is clean' };
+  }
+  const add = await git(dir, ['add', '-A']);
+  if (!add.ok) return { ok: false, error: gitReason(add, 'git add failed') };
+  const commit = await git(dir, ['commit', '-m', message]);
+  if (!commit.ok) return { ok: false, error: gitReason(commit, 'git commit failed') };
+  const head = await git(dir, ['rev-parse', 'HEAD']);
+  return { ok: true, sha: head.ok ? head.stdout.trim() : '' };
+}
+
+export type PushResult =
+  | { ok: true; branch: string; remote: string; upstreamSet: boolean }
+  | { ok: false; error: string };
+
+/** Push the current branch, setting upstream when it has none. No remote,
+ *  detached HEAD and rejected pushes all degrade to `{ ok:false, error }`. */
+export async function pushCurrentBranch(dir: string): Promise<PushResult> {
+  const branchRes = await git(dir, ['rev-parse', '--abbrev-ref', 'HEAD']);
+  if (!branchRes.ok) return { ok: false, error: gitReason(branchRes, 'not a git repository') };
+  const branch = branchRes.stdout.trim();
+  if (!branch || branch === 'HEAD') {
+    return { ok: false, error: 'detached HEAD — check out a branch before pushing' };
+  }
+  const remotesRes = await git(dir, ['remote']);
+  const remotes = remotesRes.stdout.split('\n').map((r) => r.trim()).filter(Boolean);
+  if (remotes.length === 0) {
+    return { ok: false, error: 'no remote configured — add one with `git remote add origin <url>`' };
+  }
+  const remote = remotes.includes('origin') ? 'origin' : (remotes[0] as string);
+  const upstream = await git(dir, ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']);
+  const args = upstream.ok ? ['push'] : ['push', '-u', remote, branch];
+  const push = await git(dir, args);
+  if (!push.ok) return { ok: false, error: gitReason(push, 'git push failed') };
+  return { ok: true, branch, remote, upstreamSet: !upstream.ok };
+}
