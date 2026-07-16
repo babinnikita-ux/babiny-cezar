@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
+import { collectSecretValues, redactDeep } from '../core/secret-redaction.js';
 
 export type RunStatus = 'queued' | 'running' | 'waiting' | 'review' | 'done' | 'failed' | 'cancelled';
 export type StepStatus =
@@ -335,7 +336,10 @@ export class RunStore extends EventEmitter {
     const run = this.runs.get(runId);
     if (!run) throw new Error(`unknown run: ${runId}`);
     const seq = this.nextSeq(runId);
-    const full: RunEvent = { ...event, seq, ts: new Date().toISOString() };
+    // Scrub credentials before the event touches disk or the live wire (#427):
+    // tool-result output is persisted verbatim and served back over the API, so
+    // a secret in an agent's command output would otherwise land in `.ai/cezar/`.
+    const full: RunEvent = this.redact({ ...event, seq, ts: new Date().toISOString() });
     // Sync append keeps event order without a write queue; local NDJSON
     // appends at agent-event rates are effectively free.
     appendFileSync(this.eventsPath(runId), `${JSON.stringify(full)}\n`, 'utf8');
@@ -387,9 +391,22 @@ export class RunStore extends EventEmitter {
    * (gaps are fine — dedup compares with `>`).
    */
   emitEphemeral(runId: string, event: { type: string; stepId?: string; [key: string]: unknown }): RunEvent {
-    const full: RunEvent = { ...event, seq: this.nextSeq(runId), ts: new Date().toISOString() };
+    const full: RunEvent = this.redact({ ...event, seq: this.nextSeq(runId), ts: new Date().toISOString() });
     this.emit('event', { runId, event: full });
     return full;
+  }
+
+  /** Lazily-collected concrete secret values from the host env (#427). */
+  private secretValues: readonly string[] | null = null;
+
+  /**
+   * Scrub known credential values / token shapes from an event before it is
+   * persisted or fanned out. On by default; `CEZ_REDACT_SECRETS=0` opts out.
+   */
+  private redact(event: RunEvent): RunEvent {
+    if (process.env.CEZ_REDACT_SECRETS === '0') return event;
+    if (this.secretValues === null) this.secretValues = collectSecretValues();
+    return redactDeep(event, this.secretValues);
   }
 
   readEvents(runId: string): RunEvent[] {

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -127,6 +127,72 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
       },
     });
     expect(store.getRun(run.id)?.pullRequestUrl).toBe('https://github.com/open-mercato/cezar/pull/9');
+  });
+});
+
+describe('RunStore — secret redaction before persistence (#427)', () => {
+  let dataDir: string;
+  const saved = { GITHUB_TOKEN: process.env.GITHUB_TOKEN, CEZ_REDACT_SECRETS: process.env.CEZ_REDACT_SECRETS };
+  beforeEach(() => {
+    dataDir = mkdtempSync(join(tmpdir(), 'cez-store-'));
+  });
+  afterEach(() => {
+    rmSync(dataDir, { recursive: true, force: true });
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  });
+
+  const eventsFile = (dir: string, id: string) => readFileSync(join(dir, 'runs', `${id}.ndjson`), 'utf8');
+
+  it('scrubs a host secret value from the NDJSON transcript', () => {
+    process.env.GITHUB_TOKEN = 'gho_thisisarealsecrettoken123456';
+    delete process.env.CEZ_REDACT_SECRETS;
+    const store = RunStore.open(dataDir);
+    const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
+    store.appendEvent(run.id, {
+      type: 'tool-result',
+      result: 'printenv output: GITHUB_TOKEN=gho_thisisarealsecrettoken123456',
+    } as never);
+    const raw = eventsFile(dataDir, run.id);
+    expect(raw).not.toContain('gho_thisisarealsecrettoken123456');
+    expect(raw).toContain('[REDACTED]');
+  });
+
+  it('scrubs a token shape even when it never lived in cezar’s env', () => {
+    delete process.env.CEZ_REDACT_SECRETS;
+    const store = RunStore.open(dataDir);
+    const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
+    store.appendEvent(run.id, {
+      type: 'tool-result',
+      result: 'cat ~/.aws: AKIAIOSFODNN7EXAMPLE and sk-ant-api03-abcdefghijklmnopqrst',
+    } as never);
+    const raw = eventsFile(dataDir, run.id);
+    expect(raw).not.toMatch(/AKIA|sk-ant/);
+  });
+
+  it('CEZ_REDACT_SECRETS=0 opts out (escape hatch)', () => {
+    process.env.GITHUB_TOKEN = 'gho_thisisarealsecrettoken123456';
+    process.env.CEZ_REDACT_SECRETS = '0';
+    const store = RunStore.open(dataDir);
+    const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
+    store.appendEvent(run.id, {
+      type: 'tool-result',
+      result: 'GITHUB_TOKEN=gho_thisisarealsecrettoken123456',
+    } as never);
+    expect(eventsFile(dataDir, run.id)).toContain('gho_thisisarealsecrettoken123456');
+  });
+
+  it('does not disturb a PR URL (redaction leaves non-secrets intact)', () => {
+    delete process.env.CEZ_REDACT_SECRETS;
+    const store = RunStore.open(dataDir);
+    const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
+    store.appendEvent(run.id, {
+      type: 'result',
+      result: 'Opened a draft pull request: https://github.com/open-mercato/cezar/pull/42',
+    } as never);
+    expect(store.getRun(run.id)?.pullRequestUrl).toBe('https://github.com/open-mercato/cezar/pull/42');
   });
 });
 
