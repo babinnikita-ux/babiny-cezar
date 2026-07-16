@@ -28,4 +28,4 @@ implementation — the spec's own Implementation Plan is the future work.
 
 ### Phase 1: Ship the spec
 
-- [ ] 1.1 Add the reviewed spec file under `.ai/specs/`
+- [x] 1.1 Add the reviewed spec file under `.ai/specs/` — a973980
