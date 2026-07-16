@@ -43,6 +43,25 @@ export function resumeHint(run: RunRecord): string | undefined {
   return run.worktreePath ? `cd ${run.worktreePath} && ${command}` : command
 }
 
+/** The runner a `cli:<runner>` Open-in target hands off to, or undefined for every other
+ *  target (editors, Finder, terminal) — mirrors the server's `agentCliRunner` (open-in-app.ts)
+ *  without importing server code into the bundle. */
+function cliTargetRunner(targetId: string): Runner | undefined {
+  const match = /^cli:(claude|codex|opencode)$/.exec(targetId)
+  return match ? (match[1] as Runner) : undefined
+}
+
+/** Does picking this "Open in…" CLI target resume THIS run's own session, or start a fresh
+ *  one (#402)? Only the backend that produced the session can resume it — a foreign CLI's
+ *  session id means nothing to a different agent, so cross-runner picks always launch clean.
+ *  Legacy runs with no `runner` recorded predate the runner choice and default to Claude, same
+ *  as `resumeCommand`. */
+export function cliTargetResumes(run: RunRecord, targetId: string): boolean {
+  const runner = cliTargetRunner(targetId)
+  if (!runner) return false
+  return runner === (run.runner ?? 'claude') && lastSessionId(run) !== undefined
+}
+
 export interface RunActionFlags {
   /** waiting → close the session; review → accept the changes without a PR. Both POST /finish. */
   finish: boolean
