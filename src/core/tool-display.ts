@@ -11,7 +11,8 @@
  * Known names covered (matched case-insensitively so claude's `Bash` and
  * opencode's `bash` share one row):
  *  - claude:   Bash, Edit, Write, NotebookEdit, Read, Glob, Grep, WebFetch,
- *              WebSearch, Task, TodoWrite, mcp__server__tool
+ *              WebSearch, Task, TodoWrite, TaskCreate/TaskUpdate/TaskList
+ *              (Agent SDK todo tools), mcp__server__tool
  *  - codex:    commandExecution, fileChange, mcpToolCall, webSearch,
  *              todoList, plan
  *  - opencode: bash, edit, write, read, grep, glob, webfetch, task, todowrite
@@ -143,6 +144,12 @@ export function toolDisplay(name: string, input?: unknown): ToolDisplay {
     case 'todowrite':
     case 'todolist':
     case 'plan':
+    // claude Agent SDK todo tools — the plan is built incrementally through
+    // TaskCreate/TaskUpdate (accumulated in the mapper) instead of TodoWrite's
+    // one-shot list; TaskList just reads it. All are the plan dock's surface.
+    case 'taskcreate':
+    case 'taskupdate':
+    case 'tasklist':
       return { toolKind: 'plan', title: 'Update plan' };
 
     case 'mcptoolcall': {

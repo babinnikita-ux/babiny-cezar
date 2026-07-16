@@ -32,7 +32,6 @@ import {
   finishedRunCount,
   formatCost,
   prNumber,
-  taskPrUrl,
   usageCells,
   workflowLabel,
   type UsageCell,
@@ -334,7 +333,6 @@ function TableRow({
   const attention = deriveAttention(run)
   const to = `/tasks/${run.id}`
   const cost = formatCost(run.costUsd)
-  const prUrl = taskPrUrl(run)
 
   return (
     <tr
@@ -359,7 +357,7 @@ function TableRow({
       {/* ± — refreshed on every turn-end (#389); still an honest dash on records that predate it. */}
       <td className={TD_BASE}>{run.diffStat ? <DiffStatLabel stat={run.diffStat} /> : <Dash />}</td>
       <td className={TD_BASE}>
-        {prUrl ? <PrChip url={prUrl} taskTitle={runTitle(run)} /> : <Dash />}
+        {run.pullRequestUrl ? <PrChip url={run.pullRequestUrl} taskTitle={runTitle(run)} /> : <Dash />}
       </td>
       <td className={cn(TD_BASE, 'text-right font-mono text-xs text-muted-foreground tabular-nums')}>
         {compactTokens(run.tokensUsed)}
@@ -473,7 +471,6 @@ function TaskCard({
   const navigate = useNavigate()
   const attention = deriveAttention(run)
   const to = `/tasks/${run.id}`
-  const prUrl = taskPrUrl(run)
 
   return (
     <div
@@ -526,8 +523,8 @@ function TaskCard({
             ) : null}
           </>
         )}
-        {prUrl ? (
-          <PrChip url={prUrl} taskTitle={runTitle(run)} className="h-5" />
+        {run.pullRequestUrl ? (
+          <PrChip url={run.pullRequestUrl} taskTitle={runTitle(run)} className="h-5" />
         ) : null}
       </div>
     </div>

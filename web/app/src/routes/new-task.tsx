@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { toast } from '@/components/ui/toaster'
-import { isProjectSkill, multiWordFilter, orderSkillsByRecency, skillKeywords } from '@/lib/skills'
+import { isProjectSkill, orderSkillsByRecency } from '@/lib/skills'
 import { submitShortcutHint } from '@/lib/use-submit-shortcut'
 import { cn } from '@/lib/utils'
 
@@ -510,7 +510,6 @@ function SourcePill({
 }) {
   const [open, setOpen] = useState(false)
   const [preview, setPreview] = useState<Skill | null>(null)
-  const listRef = useRef<HTMLDivElement>(null)
   const project = skills.filter(isProjectSkill)
   const global = skills.filter((skill) => !isProjectSkill(skill))
   const pick = (next: TaskSource) => {
@@ -525,7 +524,7 @@ function SourcePill({
         key={skill.path}
         // The path suffix keeps values unique when a project skill shadows a global one.
         value={`skill ${skill.name} ${skill.path}`}
-        keywords={skillKeywords(skill.name, skill.description)}
+        keywords={skill.description ? [skill.description] : undefined}
         data-slot="source-option"
         data-source-kind="skill"
         data-source-ref={skill.name}
@@ -586,9 +585,9 @@ function SourcePill({
           sideOffset={8}
           className="w-[336px] max-w-[calc(100vw-2rem)] p-0"
         >
-          <Command filter={multiWordFilter}>
-            <CommandInput placeholder="search skills & workflows…" onInput={() => listRef.current?.scrollTo(0, 0)} />
-            <CommandList ref={listRef} data-slot="source-menu" className="max-h-72">
+          <Command>
+            <CommandInput placeholder="search skills & workflows…" />
+            <CommandList data-slot="source-menu" className="max-h-72">
               <CommandEmpty>Nothing matches.</CommandEmpty>
               {/* Project skills lead, Global trails everything — the closer a skill lives
                   to the repo, the more likely it's the one being picked. */}
@@ -605,7 +604,7 @@ function SourcePill({
                       <CommandItem
                         key={workflow.name}
                         value={`workflow ${workflow.name}`}
-                        keywords={skillKeywords(workflow.name, workflow.description)}
+                        keywords={workflow.description ? [workflow.description] : undefined}
                         data-slot="source-option"
                         data-source-kind="workflow"
                         data-source-ref={workflow.name}
