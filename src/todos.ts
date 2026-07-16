@@ -32,13 +32,6 @@ const todoSchema = z.object({
 
 export type TodoItem = z.infer<typeof todoSchema> & { id: string };
 
-/** Notes are acknowledged; only executable follow-ups should spawn a run. */
-export function isTodoRunnable(
-  todo: Pick<TodoItem, 'runnable' | 'suggestedSkill' | 'suggestedPrompt'>,
-): boolean {
-  return todo.runnable ?? Boolean(todo.suggestedSkill || todo.suggestedPrompt);
-}
-
 export function todosPath(dataDir: string): string {
   return join(dataDir, 'todos.json');
 }
