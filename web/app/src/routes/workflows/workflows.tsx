@@ -34,6 +34,7 @@ import { ApiError, createWorkflow, deleteWorkflow, parseWorkflow } from '@/api/c
 import { queryKeys, useSkills, useWorkflows } from '@/api/queries'
 import type { Skill, WorkflowDef, WorkflowStepDef } from '@/api/types'
 import { CenteredState } from '@/components/centered-state'
+import { SkillEmptyHintCompact } from '@/components/skill-empty-hint'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -834,14 +835,7 @@ function Palette({
         ))
       ) : (
         <p className="py-1 text-xs leading-relaxed text-soft-foreground">
-          {skills.length > 0 ? (
-            'No skills match.'
-          ) : (
-            <>
-              No skills yet — drop Markdown files into <span className="font-mono">.ai/skills/</span> or{' '}
-              <span className="font-mono">.ai/cezar/skills/</span>.
-            </>
-          )}
+          {skills.length > 0 ? 'No skills match.' : <SkillEmptyHintCompact />}
         </p>
       )}
     </div>
