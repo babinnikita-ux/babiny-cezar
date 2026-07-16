@@ -2,6 +2,7 @@ import type { AgentBackend, AgentRunner, RunnerId } from './agent-runner.js';
 import { ClaudeCliRunner } from './claude-cli-runner.js';
 import { CodexAppServerRunner } from './codex-app-server-runner.js';
 import { OpencodeServerRunner } from './opencode-server-runner.js';
+import { PiRunner } from './pi-runner.js';
 
 /**
  * The single place that maps a backend id onto a concrete runner. Everything
@@ -15,6 +16,8 @@ export function createRunner(backend: AgentBackend | RunnerId | undefined): Agen
       return new CodexAppServerRunner();
     case 'opencode':
       return new OpencodeServerRunner();
+    case 'pi':
+      return new PiRunner();
     case 'claude':
     case 'claude-cli':
     default:

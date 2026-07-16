@@ -49,6 +49,7 @@ export const RUNNERS: readonly RunnerOption[] = [
   { id: 'claude', label: 'claude', desc: 'Claude Code CLI' },
   { id: 'codex', label: 'codex', desc: 'OpenAI Codex (app-server)' },
   { id: 'opencode', label: 'opencode', desc: 'OpenCode (serve)' },
+  { id: 'pi', label: 'pi', desc: 'pi CLI (provider/model)' },
 ]
 
 export interface ModelPreset {
@@ -83,6 +84,13 @@ export const MODELS_BY_RUNNER: Record<Runner, readonly ModelPreset[]> = {
     { id: 'anthropic/claude-sonnet-5', label: 'claude-sonnet-5', desc: 'via Anthropic' },
     { id: 'openai/gpt-5.1', label: 'gpt-5.1', desc: 'via OpenAI' },
     { id: 'openai/gpt-5.1-codex', label: 'gpt-5.1-codex', desc: 'via OpenAI' },
+  ],
+  // pi selects a model with the same `provider/model` convention as opencode.
+  pi: [
+    { id: '', label: 'auto', desc: 'Use your pi default model' },
+    { id: 'anthropic/claude-opus-4-8', label: 'claude-opus-4.8', desc: 'via Anthropic' },
+    { id: 'anthropic/claude-sonnet-5', label: 'claude-sonnet-5', desc: 'via Anthropic' },
+    { id: 'openai/gpt-5.1', label: 'gpt-5.1', desc: 'via OpenAI' },
   ],
 }
 

@@ -288,7 +288,7 @@ steps:
     prompt: "{{task}}"
     skill: project-conventions   # optional — from .ai/skills or .ai/cezar/skills
     # model: opus                # optional per-step model override
-    # runner: codex              # optional per-step backend: claude · codex · opencode
+    # runner: codex              # optional per-step backend: claude · codex · opencode · pi
     # allowedTools: [Read, Edit, Write, Grep, Glob, Bash]
   - id: verify
     name: Verify
@@ -330,6 +330,7 @@ Useful environment variables:
 | `CEZ_CLAUDE_BIN=/path/to/claude` | Override which `claude` binary is used. |
 | `CEZ_CODEX_BIN=/path/to/codex` | Override which `codex` binary is used. |
 | `CEZ_OPENCODE_BIN=/path/to/opencode` | Override which `opencode` binary is used. |
+| `CEZ_PI_BIN=/path/to/pi` | Override which `pi` binary is used. |
 | `GITHUB_TOKEN` | Fallback for GitHub reads/PRs when `gh` isn't authenticated. |
 
 ---
@@ -337,16 +338,17 @@ Useful environment variables:
 ## Coding agent backends
 
 cezar is not married to one vendor. Every agent step runs through a single
-`AgentRunner` seam with three built-in backends:
+`AgentRunner` seam with four built-in backends:
 
 | Backend | CLI | How cezar drives it |
 |---|---|---|
 | **Claude Code** (default) | [`claude`](https://github.com/anthropics/claude-code) | Headless `stream-json` mode. |
 | **Codex** | [`codex`](https://github.com/openai/codex) | `codex app-server` — JSON-RPC over stdio, the same transport the Codex IDE extensions use. |
 | **OpenCode** | [`opencode`](https://opencode.ai) | `opencode serve` — a local HTTP server with an SSE event stream. |
+| **pi** | `pi` | Headless Claude-compatible `stream-json`; models are picked with the `provider/model` convention. |
 
 On startup cezar probes which CLIs are installed and the cockpit only offers
-the backends it found — install any one of the three and you're operational.
+the backends it found — install any one of the four and you're operational.
 
 **Pick a backend at three levels** (most specific wins):
 
@@ -418,7 +420,7 @@ never blocks startup):
 {
   "skillsRepos": [{ "repo": "open-mercato/skills", "ref": "main" }], // team skills; [] disables
   "maxParallel": 2,          // how many tasks may run at once (non-git dirs always run 1)
-  "defaultRunner": "claude", // agent backend: "claude" (default) · "codex" · "opencode"
+  "defaultRunner": "claude", // agent backend: "claude" (default) · "codex" · "opencode" · "pi"
   "plannerModel": "sonnet",  // model the "Plan first" button uses to draft chains
   "baseBranch": "develop"    // branch worktrees fork from + PRs target (also settable in the Git tab)
 }

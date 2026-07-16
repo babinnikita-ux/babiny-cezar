@@ -4,6 +4,8 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync
 import { join } from 'node:path';
 import { z } from 'zod';
 
+import type { RunnerId } from '../core/agent-runner.js';
+
 export type RunStatus = 'queued' | 'running' | 'waiting' | 'review' | 'done' | 'failed' | 'cancelled';
 export type StepStatus =
   | 'pending'
@@ -56,7 +58,7 @@ const runRecordSchema = z.object({
    *  is the parseable identity cost attribution and reproducible replay key off. */
   modelIdentity: z.string().optional(),
   /** Agent backend this run used — drives "open in CLI" resume command. */
-  runner: z.enum(['claude', 'codex', 'opencode']).optional(),
+  runner: z.enum(['claude', 'codex', 'opencode', 'pi']).optional(),
   /** Echo of the extra system prompt this run actually used (R2): the
    *  `POST /api/runs` override, or the `config.json` default it fell back to.
    *  Deliberately NOT the full composed prompt — skill bodies and the handoff
@@ -253,7 +255,7 @@ export class RunStore extends EventEmitter {
     workflow: string;
     task: string;
     model?: string;
-    runner?: 'claude' | 'codex' | 'opencode';
+    runner?: RunnerId;
     groupId?: string;
     variant?: string;
     steps: Array<Pick<StepState, 'id' | 'name' | 'kind'>>;

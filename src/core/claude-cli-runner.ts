@@ -360,8 +360,10 @@ function truncate(s: string, max = 200): string {
   return s.length > max ? `${s.slice(0, max)}…` : s;
 }
 
-/** Path to the bundled mock (`scripts/mock-claude.mjs`), for CEZ_DRY_RUN=1. */
-function mockClaudePath(): string {
+/** Path to the bundled mock (`scripts/mock-claude.mjs`), for CEZ_DRY_RUN=1.
+ *  Exported so sibling stream-json runners (the `pi` runner, #387) reuse the
+ *  one mock instead of shipping a second copy. */
+export function mockClaudePath(): string {
   const here = dirname(fileURLToPath(import.meta.url));
   // here = <pkg>/dist/core (built) or <pkg>/src/core (tsx dev).
   return resolvePath(here, '..', '..', 'scripts', 'mock-claude.mjs');

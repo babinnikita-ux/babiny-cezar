@@ -18,7 +18,7 @@ export const workflowStepSchema = z
     skill: z.string().optional(),
     model: z.string().optional(),
     /** Per-step agent backend override (falls back to the task / config default). */
-    runner: z.enum(['claude', 'codex', 'opencode']).optional(),
+    runner: z.enum(['claude', 'codex', 'opencode', 'pi']).optional(),
     allowedTools: z.array(z.string()).optional(),
     bashAllowlist: z.array(z.string()).optional(),
     // check step

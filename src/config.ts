@@ -36,7 +36,7 @@ const configSchema = z.object({
    * step (workflow). The GUI only offers runners actually installed; this is
    * the preselected default. Also the runner the chain planner uses.
    */
-  defaultRunner: z.enum(['claude', 'codex', 'opencode']).default('claude'),
+  defaultRunner: z.enum(['claude', 'codex', 'opencode', 'pi']).default('claude'),
   /** Model for the chain planner (spec 008) — cheap but reliable at JSON. */
   plannerModel: z.string().min(1).default('sonnet'),
   /**
@@ -65,6 +65,7 @@ const configSchema = z.object({
       claude: z.string().trim().min(1).max(200).optional(),
       codex: z.string().trim().min(1).max(200).optional(),
       opencode: z.string().trim().min(1).max(200).optional(),
+      pi: z.string().trim().min(1).max(200).optional(),
     })
     .optional()
     .catch(undefined),

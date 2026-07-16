@@ -32,7 +32,7 @@ export type StepStatus =
 
 /** The agent backends a run can use. `runner` is optional on old records — they predate the
  *  choice and are Claude by definition (see `resumeCommand` in the server). */
-export type Runner = 'claude' | 'codex' | 'opencode'
+export type Runner = 'claude' | 'codex' | 'opencode' | 'pi'
 
 export interface StepState {
   id: string
@@ -166,7 +166,7 @@ export interface PickVariantResponse {
 // ---- health / environment (src/core/backend-detect.ts, src/server/git.ts) -----------------
 
 export interface BackendCheck {
-  name: 'claude' | 'codex' | 'opencode' | 'gh' | 'git'
+  name: 'claude' | 'codex' | 'opencode' | 'pi' | 'gh' | 'git'
   available: boolean
   version?: string
   /** Human setup hint — shown verbatim; the server writes these for people, not for parsing. */

@@ -101,7 +101,7 @@ const startRunSchema = z
     task: z.string().min(1),
     model: z.string().optional(),
     // Agent backend for this task (falls back to config `defaultRunner`).
-    runner: z.enum(['claude', 'codex', 'opencode']).optional(),
+    runner: z.enum(['claude', 'codex', 'opencode', 'pi']).optional(),
     // Parallel variants (spec 010): ×2/×3 runs the task as 2–3 competing
     // agents in separate worktrees; the user compares diffs and picks one.
     variants: z.number().int().min(1).max(3).optional(),
@@ -1123,7 +1123,7 @@ export function createApp(deps: ServerDeps): Hono {
   const modelPresetSchema = z.string().trim().max(200).nullable().optional();
   const setConfigSchema = z.object({
     baseBranch: z.string().trim().min(1).max(200).nullable().optional(),
-    defaultRunner: z.enum(['claude', 'codex', 'opencode']).optional(),
+    defaultRunner: z.enum(['claude', 'codex', 'opencode', 'pi']).optional(),
     systemPrompt: z
       .string()
       .trim()
@@ -1131,7 +1131,12 @@ export function createApp(deps: ServerDeps): Hono {
       .nullable()
       .optional(),
     defaultModels: z
-      .object({ claude: modelPresetSchema, codex: modelPresetSchema, opencode: modelPresetSchema })
+      .object({
+        claude: modelPresetSchema,
+        codex: modelPresetSchema,
+        opencode: modelPresetSchema,
+        pi: modelPresetSchema,
+      })
       .optional(),
     // Concurrency + memory guard (Settings → Resources). maxParallel clamps to
     // the schema's 1–16; memoryLimitMb null/0 clears the ceiling.
@@ -1293,6 +1298,8 @@ function resumeCommand(runner: string | undefined, sessionId: string): string {
       return `codex resume ${sessionId}`;
     case 'opencode':
       return `opencode --session ${sessionId}`;
+    case 'pi':
+      return `pi --resume ${sessionId}`;
     default:
       return `claude --resume ${sessionId}`;
   }

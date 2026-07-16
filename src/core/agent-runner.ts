@@ -8,17 +8,19 @@
  * process so multi-turn follow-ups, `waiting`, interrupt and resume all work:
  *  - `claude`   — Claude Code CLI, stream-json over stdin/stdout;
  *  - `codex`    — `codex app-server`, JSON-RPC 2.0 (JSONL) over stdin/stdout;
- *  - `opencode` — `opencode serve`, HTTP + SSE.
+ *  - `opencode` — `opencode serve`, HTTP + SSE;
+ *  - `pi`       — pi coding CLI, Claude-compatible stream-json over
+ *                 stdin/stdout, selecting its model with `provider/model`.
  */
 
 import type { UiEvent } from './ui-events.js';
 
 /** `claude-cli` is the legacy id kept so old run records still parse. */
-export type AgentBackend = 'claude' | 'codex' | 'opencode' | 'claude-cli';
+export type AgentBackend = 'claude' | 'codex' | 'opencode' | 'pi' | 'claude-cli';
 
 /** The user-selectable runners (what config/GUI expose). */
-export type RunnerId = 'claude' | 'codex' | 'opencode';
-export const RUNNER_IDS: readonly RunnerId[] = ['claude', 'codex', 'opencode'];
+export type RunnerId = 'claude' | 'codex' | 'opencode' | 'pi';
+export const RUNNER_IDS: readonly RunnerId[] = ['claude', 'codex', 'opencode', 'pi'];
 
 export interface AgentRunSpec {
   /** Appended to the CLI's default system prompt (`--append-system-prompt`). */
