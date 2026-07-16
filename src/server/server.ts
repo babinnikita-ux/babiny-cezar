@@ -193,6 +193,9 @@ const uiStateSchema = z
         density: z.enum(['comfortable', 'compact', 'ultra']).optional(),
       })
       .optional(),
+    // Skills promo banner (#391): set once the cockpit banner is dismissed, never unset.
+    // Server-persisted (not a cookie) so the "shown once" promise holds across browsers.
+    dismissedSkillsBanner: z.boolean().optional(),
   })
   .passthrough();
 

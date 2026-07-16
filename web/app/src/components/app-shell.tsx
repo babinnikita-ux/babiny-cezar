@@ -45,6 +45,9 @@ export type AppShellProps = {
    *  Defaults to shown so the presentational shell stays renderable alone; the container
    *  passes the health payload's truth. */
   forgeAvailable?: boolean
+  /** Global chrome banner (#391's `SkillsBanner`), rendered above the routed view inside the
+   *  one scrolling region. Absent renders nothing — the slot is generic, not skills-specific. */
+  banner?: ReactNode
 }
 
 /**
@@ -72,6 +75,7 @@ export function AppShell({
   taskQuickList,
   toolsMenu,
   forgeAvailable = true,
+  banner,
 }: AppShellProps) {
   const { pathname } = useLocation()
   const activeTo = activeNavPath(pathname)
@@ -124,6 +128,11 @@ export function AppShell({
           <MobileTopBar title={current?.label ?? 'cezar'} />
 
           <main data-slot="main" className="row-start-2 min-h-0 overflow-y-auto overscroll-contain">
+            {banner ? (
+              <div data-slot="banner-slot" className="sticky top-0 z-10">
+                {banner}
+              </div>
+            ) : null}
             {children}
           </main>
 
