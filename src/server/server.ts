@@ -4,6 +4,7 @@ import { basename, dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Hono, type Context } from 'hono';
 import { serve, type ServerType } from '@hono/node-server';
+import { bodyLimit } from 'hono/body-limit';
 import { streamSSE } from 'hono/streaming';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { z } from 'zod';
@@ -98,7 +99,11 @@ const startRunSchema = z
   .object({
     workflow: z.string().min(1).optional(),
     steps: z.array(workflowStepSchema).min(1).max(8).optional(),
-    task: z.string().min(1),
+    // The primary agent prompt handed to the spawned runner. Bounded like the
+    // other prompt fields (`systemPrompt` 20k, message `text` 100k) so an
+    // unbounded body can't be piped into a spawned process (#429). 100k chars
+    // (~25k tokens) is well past any hand-written task.
+    task: z.string().min(1).max(100_000, 'task must be at most 100000 characters'),
     model: z.string().optional(),
     // Agent backend for this task (falls back to config `defaultRunner`).
     runner: z.enum(['claude', 'codex', 'opencode']).optional(),
@@ -142,7 +147,8 @@ const pickSchema = z.object({
 });
 
 const planSchema = z.object({
-  task: z.string().trim().min(1),
+  // Same bound as `startRunSchema.task` — this flows into `planChain` (#429).
+  task: z.string().trim().min(1).max(100_000, 'task must be at most 100000 characters'),
 });
 
 // A saved workflow carries full `steps` OR the builder's `skills` stack
@@ -151,7 +157,9 @@ const planSchema = z.object({
 const saveWorkflowSchema = z
   .object({
     name: z.string().trim().min(1).max(80),
-    description: z.string().optional(),
+    // Written into a YAML file on disk (#429) — a workflow description is a
+    // short blurb, so a 2k cap is generous without allowing a file-bloat write.
+    description: z.string().max(2_000, 'description must be at most 2000 characters').optional(),
     steps: z.array(workflowStepSchema).min(1).max(8).optional(),
     skills: z.array(z.string().trim().min(1)).min(1).max(8).optional(),
     overwrite: z.boolean().optional(),
@@ -224,6 +232,35 @@ const messageSchema = z
     message: 'message needs text or at least one image',
   });
 
+// Resume-turn text for `POST /api/runs/:id/continue` (#429). Bounded like the
+// live-session message `text`; optional — an empty body re-runs the last turn.
+const continueSchema = z.object({
+  text: z.string().max(100_000, 'text must be at most 100000 characters').optional(),
+});
+
+// `POST /api/runs/:id/archive` (#429) — no body archives; `{archived:false}`
+// un-archives. A tiny schema so the route follows the safeParse convention.
+const archiveSchema = z.object({
+  archived: z.boolean().optional(),
+});
+
+// `POST /api/runs/:id/open-in` (#429) — the chosen local app/target id. Matched
+// against a downstream allowlist; a short bound is plenty for an editor id.
+const openInSchema = z.object({
+  target: z.string().min(1).max(200),
+});
+
+// Request-body size guards (#429). A generous global cap keeps a single
+// localhost request from being unbounded (the largest legit body is 4 pasted
+// images at ~7 MB base64 each); the ui-state PUT gets a much tighter cap since
+// it only ever carries small GUI prefs.
+const GLOBAL_BODY_LIMIT = 32 * 1024 * 1024; // 32 MiB
+const UI_STATE_BODY_LIMIT = 128 * 1024; // 128 KiB
+// Belt-and-braces cap on the number of top-level ui-state keys so the
+// `.passthrough()` schema can't accumulate an unbounded key set (#429). Very
+// generous for GUI prefs; over-limit is a 400, never a silent strip.
+const UI_STATE_MAX_KEYS = 200;
+
 export function createApp(deps: ServerDeps): Hono {
   const { repoRoot, store, manager, version, update, bindHost } = deps;
   const dataDir = join(repoRoot, '.ai/cezar');
@@ -233,6 +270,10 @@ export function createApp(deps: ServerDeps): Hono {
   startTodosWatch(dataDir); // inbox live updates (spec 007)
   const launchKey = ensureLaunchKey(dataDir); // bookmarklet auto-start secret (spec 011)
   const app = new Hono();
+
+  // Reject oversized request bodies before they reach any handler (#429). GETs
+  // and SSE carry no body, so this only ever gates the mutating routes.
+  app.use('*', bodyLimit({ maxSize: GLOBAL_BODY_LIMIT }));
 
   // ---- static GUI ----------------------------------------------------------
   const webDir = resolveWebDir();
@@ -336,10 +377,15 @@ export function createApp(deps: ServerDeps): Hono {
     }
   };
   app.get('/api/ui-state', async (c) => c.json(await readUiState()));
-  app.put('/api/ui-state', async (c) => {
+  app.put('/api/ui-state', bodyLimit({ maxSize: UI_STATE_BODY_LIMIT }), async (c) => {
     const parsed = uiStateSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) {
       return c.json({ error: parsed.error.issues.map((i) => i.message).join('; ') }, 400);
+    }
+    // `.passthrough()` keeps unknown prefs (BACKWARD_COMPATIBILITY §3), but a
+    // single request may not stuff an unbounded key set (#429).
+    if (Object.keys(parsed.data).length > UI_STATE_MAX_KEYS) {
+      return c.json({ error: `ui-state has too many keys (max ${UI_STATE_MAX_KEYS})` }, 400);
     }
     const merged = { ...(await readUiState()), ...parsed.data };
     try {
@@ -477,8 +523,13 @@ export function createApp(deps: ServerDeps): Hono {
 
   app.post('/api/runs/:id/archive', async (c) => {
     const id = c.req.param('id');
-    const body = (await c.req.json().catch(() => ({}))) as { archived?: unknown };
-    const run = store.setArchived(id, body.archived !== false);
+    // An empty/absent body archives (the common case); a malformed body degrades
+    // to `{}` just as before, but a wrong-typed `archived` is now a 400 (#429).
+    const parsed = archiveSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.issues.map((i) => i.message).join('; ') }, 400);
+    }
+    const run = store.setArchived(id, parsed.data.archived !== false);
     return run ? c.json(run) : c.json({ error: 'not found' }, 404);
   });
 
@@ -679,8 +730,12 @@ export function createApp(deps: ServerDeps): Hono {
   app.post('/api/runs/:id/continue', async (c) => {
     const id = c.req.param('id');
     if (!store.getRun(id)) return c.json({ error: 'not found' }, 404);
-    const body = (await c.req.json().catch(() => ({}))) as { text?: unknown };
-    const result = manager.continueRun(id, typeof body.text === 'string' ? body.text : undefined);
+    // Bounded resume text (#429); an empty/absent body still just re-runs.
+    const parsed = continueSchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) {
+      return c.json({ error: parsed.error.issues.map((i) => i.message).join('; ') }, 400);
+    }
+    const result = manager.continueRun(id, parsed.data.text);
     if (!result.ok) return c.json({ error: result.error }, 409);
     return c.json({ continued: true });
   });
@@ -727,9 +782,11 @@ export function createApp(deps: ServerDeps): Hono {
         409,
       );
     }
-    const body = (await c.req.json().catch(() => ({}))) as { target?: unknown };
-    const target = typeof body.target === 'string' ? body.target : '';
-    if (!target) return c.json({ error: 'target required' }, 400);
+    // Follows the safeParse convention (#429); the downstream allowlist match
+    // is the real injection guard, this just validates the shape.
+    const parsed = openInSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: 'target required' }, 400);
+    const target = parsed.data.target;
     const dir = run.worktreePath && existsSync(run.worktreePath) ? run.worktreePath : repoRoot;
 
     // Coding-agent CLI handoff (#cli-handoff): open a terminal in the worktree that resumes THIS
