@@ -24,11 +24,20 @@ const todoSchema = z.object({
   suggestedSkill: z.string().optional(),
   suggestedArgs: z.string().optional(),
   suggestedPrompt: z.string().optional(),
+  /** Explicit intent; legacy entries infer it from an executable suggestion. */
+  runnable: z.boolean().optional(),
   /** Set by the server when "▶ Run" turned this entry into a task. */
   startedTaskId: z.string().optional(),
 });
 
 export type TodoItem = z.infer<typeof todoSchema> & { id: string };
+
+/** Notes are acknowledged; only executable follow-ups should spawn a run. */
+export function isTodoRunnable(
+  todo: Pick<TodoItem, 'runnable' | 'suggestedSkill' | 'suggestedPrompt'>,
+): boolean {
+  return todo.runnable ?? Boolean(todo.suggestedSkill || todo.suggestedPrompt);
+}
 
 export function todosPath(dataDir: string): string {
   return join(dataDir, 'todos.json');

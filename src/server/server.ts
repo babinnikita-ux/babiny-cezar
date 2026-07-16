@@ -25,7 +25,15 @@ import { planChain, slugify } from '../planner.js';
 import { discoverSkills } from '../skills.js';
 import { refreshTeamSkills } from '../skills-remote.js';
 import { appendHandoffHeartbeat, handoffProgressExcerpt, readHandoff } from '../handoff.js';
-import { markStarted, onTodosChanged, readTodos, removeTodo, startTodosWatch, type TodoItem } from '../todos.js';
+import {
+  isTodoRunnable,
+  markStarted,
+  onTodosChanged,
+  readTodos,
+  removeTodo,
+  startTodosWatch,
+  type TodoItem,
+} from '../todos.js';
 import type { RunEvent, RunRecord, RunStatus, RunStore } from '../runs/store.js';
 import { isV2WireEventType } from '../runs/ui-event-sink.js';
 import type { RunManager } from '../workflows/run.js';
@@ -963,6 +971,7 @@ export function createApp(deps: ServerDeps): Hono {
     const todo = (await readTodos(dataDir)).find((t) => t.id === id);
     if (!todo) return c.json({ error: 'not found' }, 404);
     if (todo.startedTaskId) return c.json({ error: 'already started' }, 409);
+    if (!isTodoRunnable(todo)) return c.json({ error: 'follow-up is not runnable' }, 409);
 
     let task = (todo.suggestedPrompt ?? todo.summary).trim() || todo.summary;
     if (todo.suggestedArgs) task += `\n\nArguments: ${todo.suggestedArgs}`;
