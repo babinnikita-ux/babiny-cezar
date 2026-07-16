@@ -22,6 +22,8 @@ implementation — the spec's own Implementation Plan is the future work.
 - None to runtime: docs-only, adds a new file under `.ai/specs/`. The validation gate is
   a diff re-read; the repo has no markdown linter wired into `validation.commands`.
 
+PR: #406
+
 ## Progress
 
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
