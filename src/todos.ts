@@ -14,7 +14,7 @@ import { z } from 'zod';
  * (tmp + rename, the runs.json pattern).
  */
 
-const todoSchema = z.object({
+export const todoSchema = z.object({
   id: z.string().min(1).optional(),
   ts: z.string().optional(),
   taskId: z.string().optional(),

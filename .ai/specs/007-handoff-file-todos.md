@@ -37,7 +37,11 @@ jednego inboxa, z którego kolejny task odpala się jednym klikiem.
      `runnable` jawnie zapisuje intencję, a stary wpis bez tego pola jest
      wykonywalny tylko wtedy, gdy ma `suggestedSkill` lub `suggestedPrompt`,
    - agent dostaje env `CEZ_TODOS_FILE` + instrukcję: „po skończeniu dopisz
-     wpis JSON do tablicy; nigdy nie modyfikuj istniejących",
+     wpis JSON do tablicy; nigdy nie modyfikuj istniejących"; ta instrukcja
+     (`HANDOFF_INSTRUCTIONS`) jest jedynym producentem wpisów, więc opisuje
+     też `runnable`: notatka do przeczytania albo robota dla człowieka
+     (manual QA, „pamiętaj, żeby…") dostaje `runnable: false` i żadnego
+     `suggestedSkill`/`suggestedPrompt`,
    - zapis serwerowy pod lockiem (nasz store ma już atomic write; dodajemy
      `withLock` — 15-liniowy port z janitorowego `storage.ts`),
    - watch pliku (fs.watch + debounce) → SSE → licznik na zakładce,
