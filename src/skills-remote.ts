@@ -26,20 +26,106 @@ interface GitResult {
   stderr: string;
 }
 
+/**
+ * Hardening applied to *every* git invocation here (#428). The `repo`/`ref`
+ * strings ultimately come from a file — `.ai/cezar/config.json` — that an
+ * attacker might influence (a prompt-injected Write-only agent, a synced
+ * config), so git must never be able to pick a remote-helper transport:
+ *  - `protocol.ext.allow=never` / `fd.allow=never` kill the `ext::`/`fd::`
+ *    helpers — the arbitrary-command-execution vector (`ext::sh -c …`).
+ *  - `GIT_ALLOW_PROTOCOL` allowlists only real transports; anything else
+ *    (including `ext`) is refused even if a value slips past validation.
+ *  - `protocol.file.allow=user` keeps direct local-path clones (a documented
+ *    source shape) working while blocking submodule/recursive file abuse.
+ *  - `GIT_TERMINAL_PROMPT=0` stops git blocking on a credential prompt — this
+ *    runs on cockpit open and must never hang the boot.
+ */
+const GIT_HARDENING_ARGS = [
+  '-c',
+  'protocol.ext.allow=never',
+  '-c',
+  'protocol.fd.allow=never',
+  '-c',
+  'protocol.file.allow=user',
+];
+const GIT_HARDENING_ENV = {
+  GIT_ALLOW_PROTOCOL: 'https:http:ssh:git:file',
+  GIT_TERMINAL_PROMPT: '0',
+};
+
 function git(args: string[], timeoutMs: number, cwd?: string): Promise<GitResult> {
   return new Promise((resolve) => {
     execFile(
       'git',
-      args,
-      { cwd, timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: 16 * 1024 * 1024, encoding: 'utf8' },
+      [...GIT_HARDENING_ARGS, ...args],
+      {
+        cwd,
+        timeout: timeoutMs,
+        killSignal: 'SIGKILL',
+        maxBuffer: 16 * 1024 * 1024,
+        encoding: 'utf8',
+        env: { ...process.env, ...GIT_HARDENING_ENV },
+      },
       (err, stdout, stderr) => resolve({ ok: !err, stdout: stdout ?? '', stderr: stderr ?? '' }),
     );
   });
 }
 
-/** `owner/name` shorthand → GitHub HTTPS; anything else (URL, file://, local path) as-is. */
-function remoteFor(repo: string): string {
-  return /^[\w.-]+\/[\w.-]+$/.test(repo) ? `https://github.com/${repo}.git` : repo;
+const ALLOWED_URL_SCHEMES = new Set(['https', 'http', 'ssh', 'git', 'file']);
+
+/**
+ * The git remote for a configured source, or null when the value is unsafe to
+ * hand to `git` (#428). Team-skill repos are code-trusted — their skill bodies
+ * become agent system prompts — but the *string* is attacker-influenceable, so
+ * it must never be able to select a transport helper or pose as a git option.
+ * We accept exactly:
+ *  - `owner/name`         GitHub shorthand → canonical https
+ *  - `https://` `http://` web URLs
+ *  - `ssh://…` or scp-like `git@host:path`
+ *  - a local path (`/abs`, `./`, `../`, `~/…`) or `file://…`
+ * and reject the RCE/argument-injection surface: a leading `-`, the `::`
+ * remote-helper syntax (`ext::sh -c …`, `fd::…`), and any other URL scheme.
+ */
+export function safeRemoteFor(repo: string): string | null {
+  const value = repo.trim();
+  if (!value) return null;
+  // git would read a leading `-` as an option, not a repo — argument injection.
+  if (value.startsWith('-')) return null;
+  // `ext::`, `fd::`, and friends: remote-helper transports = command execution.
+  if (value.includes('::')) return null;
+  // GitHub shorthand → the canonical https remote.
+  if (/^[\w.-]+\/[\w.-]+$/.test(value)) return `https://github.com/${value}.git`;
+  // Explicit URL scheme: allowlist safe transports only (blocks `ext:` etc.).
+  const scheme = /^([a-z][a-z0-9+.-]*):\/\//i.exec(value);
+  if (scheme) {
+    return ALLOWED_URL_SCHEMES.has(scheme[1]!.toLowerCase()) ? value : null;
+  }
+  // scp-like `user@host:path` (no scheme, host before the first colon).
+  if (/^[\w.-]+@[\w.-]+:/.test(value)) return value;
+  // Otherwise only a bare local filesystem path is allowed.
+  if (/^(\/|\.\/|\.\.\/|~\/)/.test(value)) return value;
+  return null;
+}
+
+/**
+ * A ref safe to pass to `git` as a positional revision (#428): a branch, tag,
+ * or commit SHA. Rejects a leading `-` (argument injection against git's option
+ * surface), range/pathspec metacharacters, and anything outside the git
+ * ref-name charset — so `${ref}:${path}` in `git show` can never be a `-`-flag.
+ */
+export function isSafeRef(ref: string): boolean {
+  return (
+    ref.length > 0 &&
+    ref.length <= 256 &&
+    !ref.startsWith('-') &&
+    !ref.includes('..') &&
+    /^[A-Za-z0-9._/-]+$/.test(ref)
+  );
+}
+
+/** A full commit SHA (sha-1 or sha-256) — a pinned, immutable ref (#428). */
+export function isPinnedSha(ref: string): boolean {
+  return /^[0-9a-f]{40}$/i.test(ref) || /^[0-9a-f]{64}$/i.test(ref);
 }
 
 /** Stable cache directory name: the last two path segments, `owner__name`. */
@@ -62,9 +148,12 @@ function sanitizeSegment(s: string): string {
 export async function ensureBareClone(repo: string): Promise<{ bareDir: string; created: boolean }> {
   const bareDir = bareDirFor(repo);
   if (existsSync(join(bareDir, 'HEAD'))) return { bareDir, created: false };
+  const remote = safeRemoteFor(repo);
+  if (!remote) throw new Error(`refusing unsafe skills repo remote: ${repo}`);
   await mkdir(dirname(bareDir), { recursive: true });
-  const remote = remoteFor(repo);
-  const res = await git(['clone', '--bare', remote, bareDir], CLONE_TIMEOUT_MS);
+  // `--` separates options from the remote/dir operands: even a value that
+  // slipped past validation can't pose as a git option.
+  const res = await git(['clone', '--bare', '--', remote, bareDir], CLONE_TIMEOUT_MS);
   if (!res.ok) throw new Error(`git clone --bare ${remote} failed: ${res.stderr.trim()}`);
   return { bareDir, created: true };
 }
@@ -79,12 +168,31 @@ export async function fetchAll(bareDir: string): Promise<void> {
   if (!res.ok) throw new Error(`git fetch failed: ${res.stderr.trim() || res.stdout.trim()}`);
 }
 
-async function resolveRef(bareDir: string, ref: string): Promise<string> {
+/**
+ * Resolve a source ref to something safe to use as a positional revision, or
+ * null (#428). An unsafe ref is refused outright. A ref pinned to a full commit
+ * SHA is verified to name exactly that commit and is *never* replaced by a
+ * moving `HEAD` fallback — that is the whole point of pinning against a
+ * force-push / supply-chain swap. A branch/tag falls back through the usual
+ * candidates.
+ */
+async function resolveRef(bareDir: string, ref: string): Promise<string | null> {
+  if (!isSafeRef(ref)) return null;
+  if (isPinnedSha(ref)) {
+    const sha = ref.toLowerCase();
+    const probe = await git(
+      ['rev-parse', '--verify', '--quiet', `${sha}^{commit}`],
+      LIST_TIMEOUT_MS,
+      bareDir,
+    );
+    // Pinned means pinned: only accept when rev-parse names exactly this commit.
+    return probe.ok && probe.stdout.trim() === sha ? sha : null;
+  }
   for (const candidate of [ref, `refs/heads/${ref}`, 'HEAD']) {
     const probe = await git(['rev-parse', '--verify', '--quiet', candidate], LIST_TIMEOUT_MS, bareDir);
     if (probe.ok) return candidate;
   }
-  return ref;
+  return null;
 }
 
 // ---- skill discovery (three conventions) --------------------------------------
@@ -119,6 +227,7 @@ export async function readRemoteSkill(src: SkillsRepoSource, path: string): Prom
   const bareDir = bareDirFor(src.repo);
   if (!existsSync(join(bareDir, 'HEAD'))) return null;
   const ref = await resolveRef(bareDir, src.ref);
+  if (ref === null) return null;
   const res = await git(['show', `${ref}:${path}`], LIST_TIMEOUT_MS, bareDir);
   return res.ok ? res.stdout : null;
 }
@@ -132,8 +241,14 @@ export async function listRemoteSkills(src: SkillsRepoSource): Promise<Skill[]> 
   const bareDir = bareDirFor(src.repo);
   if (!existsSync(join(bareDir, 'HEAD'))) return [];
   const ref = await resolveRef(bareDir, src.ref);
-  const ls = await git(['ls-tree', '-r', '--name-only', ref], LIST_TIMEOUT_MS, bareDir);
+  if (ref === null) return [];
+  // `--` after the ref keeps a `-`-leading value out of git's option surface.
+  const ls = await git(['ls-tree', '-r', '--name-only', ref, '--'], LIST_TIMEOUT_MS, bareDir);
   if (!ls.ok) return [];
+  // Record the exact commit the list was read at, so a moving branch head is
+  // traceable to an immutable SHA (#428, supply-chain transparency).
+  const shaProbe = await git(['rev-parse', '--verify', '--quiet', ref], LIST_TIMEOUT_MS, bareDir);
+  const commit = shaProbe.ok && shaProbe.stdout.trim() ? shaProbe.stdout.trim() : undefined;
 
   const skills: Skill[] = [];
   const seen = new Set<string>();
@@ -161,7 +276,7 @@ export async function listRemoteSkills(src: SkillsRepoSource): Promise<Skill[]> 
       body,
       path: `${src.repo}@${src.ref}:${line}`,
       source: 'team',
-      team: { repo: src.repo, ref: src.ref, path: line, dir: hit.kind === 'skill' },
+      team: { repo: src.repo, ref: src.ref, path: line, dir: hit.kind === 'skill', commit },
     });
   }
   return skills;
@@ -180,6 +295,7 @@ export async function materializeSkillDir(repoRoot: string, skill: Skill): Promi
   const bareDir = bareDirFor(skill.team.repo);
   if (!existsSync(join(bareDir, 'HEAD'))) return false;
   const ref = await resolveRef(bareDir, skill.team.ref);
+  if (ref === null) return false;
   const srcDir = skill.team.path.slice(0, -'/SKILL.md'.length);
   const ls = await git(['ls-tree', '-r', '--name-only', ref, '--', srcDir], LIST_TIMEOUT_MS, bareDir);
   if (!ls.ok) return false;
