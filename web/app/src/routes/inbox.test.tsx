@@ -1,13 +1,13 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router'
+import { MemoryRouter, Route, Routes, useSearchParams } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
 import type { RunRecord, TodoItem } from '@/api/types'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 
-import { InboxRoute, isTodoRunnable, visibleTodos } from './inbox'
+import { InboxRoute, isTodoRunnable, todoRunHref, todoTaskText, visibleTodos } from './inbox'
 
 afterEach(() => {
   act(() => resetToasts())
@@ -56,13 +56,6 @@ const RUN_1: RunRecord = {
   steps: [],
 }
 
-const STARTED_RUN: RunRecord = {
-  ...RUN_1,
-  id: 'run-9',
-  title: 'Follow-up from the inbox',
-  status: 'queued',
-}
-
 interface SentRequest {
   path: string
   method: string
@@ -98,16 +91,17 @@ function stubFetch(
         inbox = inbox.filter((item) => item.id !== 't2')
         return jsonResponse({ removed: true })
       }
-      if (method === 'POST' && path === '/api/todos/t1/start') {
-        inbox = inbox.map((item) =>
-          item.id === 't1' ? { ...item, startedTaskId: STARTED_RUN.id } : item,
-        )
-        return jsonResponse({ run: STARTED_RUN }, 201)
-      }
       return jsonResponse({ error: 'not found' }, 404)
     }),
   )
   return sent
+}
+
+/** Stands in for the real `/new` route: renders the query string Run navigated with, so tests
+ *  can assert on the prefill contract without pulling in the whole composer. */
+function NewTaskProbe() {
+  const [params] = useSearchParams()
+  return <div data-slot="new-task-probe">{params.toString()}</div>
 }
 
 function renderInbox() {
@@ -118,6 +112,8 @@ function renderInbox() {
           <Route path="/inbox" element={<InboxRoute />} />
           {/* Navigation probe: where Run's success is supposed to land (legacy selectRun hop). */}
           <Route path="/tasks/:id" element={<div data-slot="thread-probe" />} />
+          {/* #374: Run navigates here now, prefilled — not straight to a started run. */}
+          <Route path="/new" element={<NewTaskProbe />} />
         </Routes>
         <Toaster />
       </MemoryRouter>
@@ -203,33 +199,73 @@ describe('the inbox card list', () => {
 
 // ---- Run --------------------------------------------------------------------------------------
 
-describe('Run', () => {
-  it('POSTs the legacy start endpoint and navigates to the new task', async () => {
+describe('Run (#374: prefill, never blind-launch)', () => {
+  function probeParams(): URLSearchParams {
+    const text = document.querySelector('[data-slot="new-task-probe"]')?.textContent ?? ''
+    return new URLSearchParams(text)
+  }
+
+  it('navigates to a prefilled /new — the suggested skill + summary — instead of starting a run', async () => {
     const sent = stubFetch()
     renderInbox()
 
     await waitFor(() => expect(cards()).toHaveLength(2))
     fireEvent.click(cards()[0]!.querySelector('[data-action="todo-run"]')!)
 
-    await waitFor(() =>
-      expect(document.querySelector('[data-slot="thread-probe"]')).not.toBeNull(),
-    )
-    expect(sent).toContainEqual({ path: '/api/todos/t1/start', method: 'POST' })
+    await waitFor(() => expect(document.querySelector('[data-slot="new-task-probe"]')).not.toBeNull())
+    expect(probeParams().get('skill')).toBe('om-fix')
+    expect(probeParams().get('ref')).toBe(TODO_FULL.summary)
+    // The whole point: clicking Run must not itself fire a task (#355's "blindly firing").
+    expect(sent.some((r) => r.method === 'POST')).toBe(false)
   })
 
-  it('surfaces a start failure as a toast and stays on the inbox', async () => {
-    stubFetch({
-      'POST /api/todos/t1/start': () => jsonResponse({ error: 'already started' }, 409),
-    })
+  it('omits the skill param when the entry has no suggested skill', async () => {
+    // #440 infers a summary-only entry to be a note (Acknowledge, no Run), so the
+    // skill-less *Run* path needs an entry that is explicitly runnable — `isTodoRunnable`
+    // lets that intent win. `ref` then falls back to the summary (`todoTaskText`).
+    const runnableWithoutSkill: TodoItem = { ...TODO_ORPHAN, runnable: true }
+    stubFetch({}, [runnableWithoutSkill])
     renderInbox()
 
-    await waitFor(() => expect(cards()).toHaveLength(2))
+    await waitFor(() => expect(cards()).toHaveLength(1))
     fireEvent.click(cards()[0]!.querySelector('[data-action="todo-run"]')!)
 
-    // The server's own words, verbatim (ApiError rule).
-    expect(await screen.findByText('already started')).not.toBeNull()
-    expect(document.querySelector('[data-slot="thread-probe"]')).toBeNull()
-    expect(cards()).toHaveLength(2)
+    await waitFor(() => expect(document.querySelector('[data-slot="new-task-probe"]')).not.toBeNull())
+    expect(probeParams().has('skill')).toBe(false)
+    expect(probeParams().get('ref')).toBe(TODO_ORPHAN.summary)
+  })
+})
+
+describe('todoTaskText / todoRunHref (the prefill contract, #374)', () => {
+  it('falls back to the summary when there is no suggested prompt', () => {
+    expect(todoTaskText({ summary: 'Ship it' })).toBe('Ship it')
+  })
+
+  it('prefers the suggested prompt over the summary', () => {
+    expect(todoTaskText({ summary: 'Ship it', suggestedPrompt: 'Cut the release notes' })).toBe(
+      'Cut the release notes',
+    )
+  })
+
+  it('appends suggested args as a trailing "Arguments:" line — matches the legacy /start route', () => {
+    expect(
+      todoTaskText({ summary: 'Ship it', suggestedPrompt: 'Cut the release notes', suggestedArgs: '--dry-run' }),
+    ).toBe('Cut the release notes\n\nArguments: --dry-run')
+  })
+
+  it('builds the /new href with both skill and ref, URL-encoded', () => {
+    const href = todoRunHref({
+      id: 't9',
+      summary: 'Ship it',
+      suggestedSkill: 'om-release',
+      suggestedArgs: '--dry-run',
+    })
+    expect(href).toBe('/new?skill=om-release&ref=Ship+it%0A%0AArguments%3A+--dry-run')
+  })
+
+  it('omits both params when the entry carries neither (still a valid href)', () => {
+    const todo: TodoItem = { id: 't9', summary: '' }
+    expect(todoRunHref(todo)).toBe('/new')
   })
 })
 

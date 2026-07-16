@@ -347,9 +347,11 @@ export function removeTodo(id: string): Promise<RemoveTodoResponse> {
   return mutate<RemoveTodoResponse>('DELETE', `/api/todos/${encodeURIComponent(id)}`)
 }
 
-/** Inbox "Run" (spec 007): the server turns the entry into a task — a one-off single-step
- *  workflow around the suggested skill when it exists, plain quick-task otherwise — and
- *  answers 201 with the new run. 409 when the entry was already started. */
+/** `POST /api/todos/:id/start` (spec 007): the server turns the entry into a task — a one-off
+ *  single-step workflow around the suggested skill when it exists, plain quick-task otherwise —
+ *  and answers 201 with the new run. 409 when the entry was already started. Kept for the
+ *  documented public API contract (BACKWARD_COMPATIBILITY.md); the Inbox's own "▶ Run" (#374)
+ *  no longer calls this itself — see routes/inbox.tsx's `todoRunHref`. */
 export function startTodo(id: string): Promise<StartTodoResponse> {
   return mutate<StartTodoResponse>('POST', `/api/todos/${encodeURIComponent(id)}/start`)
 }

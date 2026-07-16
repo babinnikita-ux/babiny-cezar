@@ -96,3 +96,21 @@ jednego inboxa, z którego kolejny task odpala się jednym klikiem.
   inboxa — także wtedy, gdy proces cezara sam ma ustawione `CEZ_TODOS_FILE` —
   a mimo to prowadzi `handoff.md` i kończy markerem `CEZ:DONE`. Task bez tego
   pola (stary run, stary klient) zachowuje się jak dotychczas.
+
+## Aktualizacja 2026-07-17 (#374, follow-up do #355)
+
+„▶ Odpal" **nie odpala już bezpośrednio** (`POST /api/runs`/`/api/todos/:id/start`
+z automatu) — zamiast tego nawiguje do `/new` z prefillem (`skill`/`ref` z
+sugestii, ten sam kontrakt co bookmarklety, spec 011), tak żeby użytkownik mógł
+poprawić prompt przed startem zamiast dostawać „ślepo odpaloną" sugestię
+(zgłoszenie z #355). `POST /api/todos/:id/start` zostaje jako publiczny,
+udokumentowany endpoint (BACKWARD_COMPATIBILITY.md) dla każdego, kto skryptuje
+cockpit bezpośrednio — po prostu własny Inbox GUI go już nie wywołuje. Wpis
+inboxa NIE znika automatycznie po kliknięciu „▶ Odpal" (nawigacja nie tworzy
+taska, więc nie ma czego oznaczyć jako `startedTaskId`) — użytkownik odhacza go
+ręcznie, tak jak każdy inny wpis.
+
+Przy okazji: `HANDOFF_INSTRUCTIONS` (`src/handoff.ts`) dostał ostrzejszy
+kontrakt — agent dopisuje wpis do `todos.json` tylko gdy zostaje faktycznie
+actionable follow-up, nie przy każdym zakończonym tasku (zbyt „gadatliwe"
+sugestie z #355).

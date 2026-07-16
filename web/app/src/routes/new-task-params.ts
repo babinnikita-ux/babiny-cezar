@@ -22,3 +22,17 @@ export function parseNewTaskParams(search: string | URLSearchParams): NewTaskPar
     key: params.get('key') ?? '',
   }
 }
+
+/**
+ * Build a same-origin `/new` href from this contract — the counterpart to `parseNewTaskParams`
+ * for in-app callers (e.g. the Inbox's "Run", #374). Deliberately never sets `auto`/`key`:
+ * those arm the bookmarklet's unattended start, but an in-app link always lands on the
+ * editable composer so the user can review before launching.
+ */
+export function newTaskPrefillHref(params: { skill?: string; ref?: string }): string {
+  const search = new URLSearchParams()
+  if (params.skill) search.set('skill', params.skill)
+  if (params.ref) search.set('ref', params.ref)
+  const qs = search.toString()
+  return qs ? `/new?${qs}` : '/new'
+}

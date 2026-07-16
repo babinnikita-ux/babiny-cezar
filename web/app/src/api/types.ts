@@ -430,7 +430,10 @@ export interface TodoItem {
   suggestedPrompt?: string
   /** Explicit intent; missing infers from suggestedSkill/suggestedPrompt for old files. */
   runnable?: boolean
-  /** Set by the server when "▶ Run" turned this entry into a task. */
+  /** Set by the server when `startTodo` below started a task from this entry. Since #374 the
+   *  cockpit's "▶ Run" prefills the composer instead of calling that route, so a task launched
+   *  that way does not carry the todo id back and leaves this unset. */
+
   startedTaskId?: string
 }
 
@@ -439,7 +442,10 @@ export interface RemoveTodoResponse {
   removed: boolean
 }
 
-/** `POST /api/todos/:id/start` — Run turns the entry into a task (201 with the new run). */
+/** `POST /api/todos/:id/start` — turns the entry into a task in one step (201 with the new
+ *  run). Still a documented public route (BACKWARD_COMPATIBILITY.md) for anyone scripting the
+ *  cockpit directly, but (#374) the Inbox's own "▶ Run" no longer calls it — it navigates to
+ *  a prefilled `/new` instead so the user can review the suggestion before starting it. */
 export interface StartTodoResponse {
   run: RunRecord
 }

@@ -1,8 +1,8 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { CheckIcon, InboxIcon, PlayIcon, TriangleAlertIcon } from 'lucide-react'
-import { Link, useNavigate } from 'react-router'
+import { Link } from 'react-router'
 
-import { removeTodo, startTodo } from '@/api/client'
+import { removeTodo } from '@/api/client'
 import { queryKeys, useRuns, useTodos } from '@/api/queries'
 import type { TodoItem } from '@/api/types'
 import { CenteredState } from '@/components/centered-state'
@@ -11,16 +11,23 @@ import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
 import { deriveAttention } from '@/lib/attention'
 import { shortAge } from '@/lib/format'
+import { newTaskPrefillHref } from './new-task-params'
 
 /**
  * `/inbox` — the follow-up inbox rebuilt in React (R6 Step 1.2, spec §"Skills, Workflows,
  * Inbox"): the card list the legacy `renderInbox()` drew, restyled to the design system.
  *
- * Functional parity with the legacy view (web/app.js, spec 007):
- *  - entries already turned into a task (`startedTaskId`) are hidden — they stay in
- *    `todos.json` as an audit trail (the legacy `visibleTodos()` rule);
- *  - Run → `POST /api/todos/:id/start`, then straight to the new task's thread (the legacy
- *    `showRunsView()` + `selectRun()` hop, expressed as navigation);
+ * Functional parity with the legacy view (web/app.js, spec 007), with one deliberate
+ * behavior change (#374, follow-up to #355): the legacy `Run` button POSTed straight to
+ * `POST /api/todos/:id/start`, launching the suggested skill/prompt unattended — reviewers
+ * called that "blindly firing the suggestion." Run now navigates to the `/new` composer
+ * prefilled with the suggested skill and prompt (`todoRunHref` below, reusing the bookmarklet
+ * deep-link contract — spec 011 / new-task-params.ts) so the user can edit before starting.
+ * `POST /api/todos/:id/start` still exists and still works exactly as before — it is a
+ * documented public route (BACKWARD_COMPATIBILITY.md) for anyone scripting the cockpit
+ * directly — this route just no longer calls it itself.
+ *  - entries already turned into a task (`startedTaskId`, e.g. via that public route) are
+ *    hidden — they stay in `todos.json` as an audit trail (the legacy `visibleTodos()` rule);
  *  - Dismiss → `DELETE /api/todos/:id` — check off, gone;
  *  - the meta row keeps age / action / source-task link (or the honest "source task
  *    deleted") / PR link / suggested skill.
@@ -33,6 +40,21 @@ import { shortAge } from '@/lib/format'
  * an inbox entry is by definition an agent waiting on a human decision, so the dot is the
  * same amber pulse a waiting run shows — one grammar, not a second dialect.
  */
+
+/** Same text the legacy `POST /api/todos/:id/start` route builds server-side
+ *  (src/server/server.ts) — kept in sync so the prefilled composer reads exactly like the
+ *  task that route would have started. */
+export function todoTaskText(todo: Pick<TodoItem, 'summary' | 'suggestedPrompt' | 'suggestedArgs'>): string {
+  let task = (todo.suggestedPrompt ?? todo.summary).trim() || todo.summary
+  if (todo.suggestedArgs) task += `\n\nArguments: ${todo.suggestedArgs}`
+  return task
+}
+
+/** The Inbox `Run` button's target — the prefilled `/new`, never auto-starting (see doc
+ *  block above). */
+export function todoRunHref(todo: TodoItem): string {
+  return newTaskPrefillHref({ skill: todo.suggestedSkill, ref: todoTaskText(todo) })
+}
 
 /** The one attention rung an inbox entry can be on — see the doc block above. */
 const CARD_ATTENTION = deriveAttention({ status: 'waiting' })
@@ -112,20 +134,7 @@ function TodoCard({
   todo: TodoItem
   sourceTaskExists: boolean | null
 }) {
-  const navigate = useNavigate()
   const queryClient = useQueryClient()
-
-  const start = useMutation({
-    mutationFn: () => startTodo(todo.id),
-    onSuccess: ({ run }) => {
-      // The server rewrote todos.json (SSE will confirm); the invalidations just refuse to
-      // wait for the file watcher's debounce.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.todos })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
-      void navigate(`/tasks/${run.id}`)
-    },
-    onError: (error) => toast(error.message, { tone: 'danger' }),
-  })
 
   const dismiss = useMutation({
     mutationFn: () => removeTodo(todo.id),
@@ -140,7 +149,7 @@ function TodoCard({
     onError: (error) => toast(error.message, { tone: 'danger' }),
   })
 
-  const busy = start.isPending || dismiss.isPending
+  const busy = dismiss.isPending
   const runnable = isTodoRunnable(todo)
 
   return (
@@ -200,16 +209,18 @@ function TodoCard({
         {runnable ? (
           <>
             <Button
-              type="button"
+              asChild
               variant="contrast"
               size="sm"
               data-action="todo-run"
-              title="Start a task from this follow-up"
-              disabled={busy}
-              onClick={() => start.mutate()}
+              title="Open a prefilled task from this follow-up — review before starting"
+              aria-disabled={busy || undefined}
+              className={busy ? 'pointer-events-none opacity-55' : undefined}
             >
-              <PlayIcon aria-hidden="true" className="size-3" />
-              Run
+              <Link to={todoRunHref(todo)}>
+                <PlayIcon aria-hidden="true" className="size-3" />
+                Run
+              </Link>
             </Button>
             <Button
               type="button"
