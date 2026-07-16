@@ -39,6 +39,35 @@ export function orderSkillsByRecency(skills: readonly Skill[], recentNames: read
 }
 
 /**
+ * The composer picker's frequency sort (#408): locality first (project before global, the #377
+ * rule), then MOST-SELECTED first within each half. `usage` is the ui-state `skillUsage` map
+ * (name → times chosen, counted across BOTH composers — `/new`'s SourcePill and the GitHub tab's
+ * follow-up `SkillsPicker`). The sort is stable, so ties — including "never selected", the
+ * common case before any stats exist — keep the server's own directory order: the project-first
+ * fallback (#2) falls out of stability for free, no separate branch needed. Shared by both
+ * pickers so they can never drift into two different orders.
+ */
+export function orderSkillsByUsage(
+  skills: readonly Skill[],
+  usage: Readonly<Record<string, number>> | undefined,
+): Skill[] {
+  const countOf = (skill: Skill) => usage?.[skill.name] ?? 0
+  return [...skills].sort(
+    (a, b) => Number(!isProjectSkill(a)) - Number(!isProjectSkill(b)) || countOf(b) - countOf(a),
+  )
+}
+
+/** A pure reducer over the ui-state `skillUsage` map (#408): bump one skill's count by one. The
+ *  server's `PUT /api/ui-state` merge is shallow (`uiStateSchema` passthrough), so a successful
+ *  run start always sends the WHOLE updated map back, never just the one changed entry. */
+export function bumpSkillUsage(
+  usage: Readonly<Record<string, number>> | undefined,
+  name: string,
+): Record<string, number> {
+  return { ...usage, [name]: (usage?.[name] ?? 0) + 1 }
+}
+
+/**
  * Does `query` fuzzy-match `candidate`? Case-insensitive subsequence — `omfx` finds
  * `om-fix-issue` — the same permissiveness cmdk gives the palette, minus its score-reordering:
  * the composer autocomplete filters WITHOUT re-sorting, so the project-first order above

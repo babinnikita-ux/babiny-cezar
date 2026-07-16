@@ -7,7 +7,7 @@ import {
   SquareIcon,
   WorkflowIcon,
 } from 'lucide-react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
 
 import { createRun, getLaunchKey, postPlan, putConfig, putUiState } from '@/api/client'
@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { toast } from '@/components/ui/toaster'
-import { isProjectSkill, multiWordFilter, orderSkillsByRecency, skillKeywords } from '@/lib/skills'
+import { bumpSkillUsage, isProjectSkill, multiWordFilter, orderSkillsByUsage, skillKeywords } from '@/lib/skills'
 import { submitShortcutHint } from '@/lib/use-submit-shortcut'
 import { cn } from '@/lib/utils'
 
@@ -49,7 +49,6 @@ import {
   buildCreateRunBody,
   modelsForRunner,
   pushRecentSource,
-  recentSkillNames,
   resolveModel,
   resolveRunner,
   resolveSource,
@@ -111,7 +110,15 @@ export function NewTaskRoute() {
 
   // ---- effective picker values (rules in new-task-form.ts, mirrored from legacy) -----------
   const recentSources = uiState.data?.recentSources
-  const skillList = orderSkillsByRecency(skills.data ?? [], recentSkillNames(recentSources))
+  // Memoized so the picker gets a STABLE array identity across renders that don't actually
+  // change the catalog or the usage stats (#408 — a raw `orderSkillsByUsage(...)` call here
+  // would create a new array on EVERY render, including ones unrelated to skills/usage).
+  const skillsData = skills.data
+  const skillUsage = uiState.data?.skillUsage
+  const skillList = useMemo(
+    () => orderSkillsByUsage(skillsData ?? [], skillUsage),
+    [skillsData, skillUsage],
+  )
   const workflowList = workflows.data?.workflows ?? []
   const sourcesReady =
     skills.data !== undefined && workflows.data !== undefined && !uiState.isPending
@@ -265,6 +272,11 @@ export function NewTaskRoute() {
       ...(worktreeToggleShown ? { lastWorktree: worktreeOn } : {}),
       lastAutonomous: autonomousOn,
       lastGenerateFollowups: generateFollowupsOn,
+      // Frequency sort (#408): only a SKILL pick counts — the map is keyed by skill name, and a
+      // workflow choice here doesn't select one directly.
+      ...(source.source === 'skill'
+        ? { skillUsage: bumpSkillUsage(uiState.data?.skillUsage, source.ref) }
+        : {}),
     })
       .then(() => queryClient.invalidateQueries({ queryKey: queryKeys.uiState }))
       .catch(() => {})

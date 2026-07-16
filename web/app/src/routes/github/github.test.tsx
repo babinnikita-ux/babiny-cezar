@@ -24,6 +24,9 @@ beforeEach(() => {
       disconnect() {}
     },
   )
+  // The #408 follow-up persistence (remembered selection + per-item draft) is localStorage-
+  // backed and jsdom's localStorage survives across tests in this file — start every test clean.
+  localStorage.clear()
 })
 
 afterEach(() => {
@@ -159,6 +162,9 @@ function renderAt(entry: string) {
 
 const rows = () => [...document.querySelectorAll<HTMLElement>('[data-slot="gh-row"]')]
 const detail = () => document.querySelector('[data-slot="gh-detail-inner"]')
+const promptField = () =>
+  document.querySelector<HTMLTextAreaElement>('[data-slot="gh-custom-prompt"]')!
+const promptValue = () => promptField().value
 
 // ---- lists + detail ---------------------------------------------------------------------------
 
@@ -517,5 +523,224 @@ describe('the hand-to-agent run (legacy three-way body)', () => {
 
     await waitFor(() => expect(screen.getByText('a task is already running')).toBeTruthy())
     expect(document.querySelector('[data-slot="gh-queued"]')).toBeNull()
+  })
+})
+
+// ---- #408: frequency sort ----------------------------------------------------------------------
+
+describe('the skills dropdown frequency sort (#408 item 1, shared with project-first #2)', () => {
+  it('orders skills by usage count within each locality group', async () => {
+    stubFetch({
+      'GET /api/ui-state': () => jsonResponse({ skillUsage: { 'team-x': 9, 'g-review': 1 } }),
+    })
+    await openDetail()
+
+    fireEvent.click(document.querySelector('[data-slot="gh-skills-trigger"]')!)
+    await waitFor(() =>
+      expect(document.querySelectorAll('[data-slot="gh-skill-option"]')).toHaveLength(3),
+    )
+    const options = [...document.querySelectorAll<HTMLElement>('[data-slot="gh-skill-option"]')]
+    // Project skill still leads (locality wins, #2) — frequency only reorders WITHIN "Global":
+    // team-x (9 picks) now leads g-review (1 pick), reversing the fixture's server order.
+    expect(options.map((option) => option.dataset.skill)).toEqual(['om-fix', 'team-x', 'g-review'])
+  })
+
+  it('no usage stats at all falls back to the plain project-first order (#2)', async () => {
+    stubFetch() // the default GET /api/ui-state answers {}
+    await openDetail()
+
+    fireEvent.click(document.querySelector('[data-slot="gh-skills-trigger"]')!)
+    await waitFor(() =>
+      expect(document.querySelectorAll('[data-slot="gh-skill-option"]')).toHaveLength(3),
+    )
+    const options = [...document.querySelectorAll<HTMLElement>('[data-slot="gh-skill-option"]')]
+    expect(options.map((option) => option.dataset.skill)).toEqual(['om-fix', 'g-review', 'team-x'])
+  })
+
+  it('a successful hand-off run bumps skillUsage for every selected skill', async () => {
+    const sent = stubFetch({
+      'GET /api/ui-state': () => jsonResponse({ skillUsage: { 'om-fix': 2 } }),
+    })
+    await openDetail()
+
+    fireEvent.click(document.querySelector('[data-slot="gh-skills-trigger"]')!)
+    await waitFor(() => expect(document.querySelector('[data-skill="om-fix"]')).not.toBeNull())
+    fireEvent.click(document.querySelector('[data-slot="gh-skill-option"][data-skill="om-fix"]')!)
+    fireEvent.click(document.querySelector('[data-slot="gh-skill-option"][data-skill="g-review"]')!)
+
+    fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
+
+    await waitFor(() =>
+      expect(sent.some((request) => request.method === 'PUT' && request.path === '/api/ui-state')).toBe(
+        true,
+      ),
+    )
+    const put = sent.find((request) => request.method === 'PUT' && request.path === '/api/ui-state')
+    expect(put?.body).toMatchObject({ skillUsage: { 'om-fix': 3, 'g-review': 1 } })
+  })
+
+  it('picking a workflow only (no skills) never touches skillUsage', async () => {
+    const sent = stubFetch()
+    await openDetail()
+
+    fireEvent.click(document.querySelector('[data-slot="gh-workflow-trigger"]')!)
+    await waitFor(() => expect(document.querySelector('[data-workflow="ship-it"]')).not.toBeNull())
+    fireEvent.click(document.querySelector('[data-workflow="ship-it"]')!)
+
+    fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
+    await waitFor(() => expect(document.querySelector('[data-slot="gh-queued"]')).not.toBeNull())
+
+    expect(sent.some((request) => request.method === 'PUT' && request.path === '/api/ui-state')).toBe(
+      false,
+    )
+  })
+})
+
+// ---- #408: remembered last selection -----------------------------------------------------------
+
+describe('the remembered last selection (#408 item 3)', () => {
+  it('a repeat hand-off pre-selects the previous workflow + skills on a fresh mount', async () => {
+    stubFetch()
+    await openDetail()
+
+    fireEvent.click(document.querySelector('[data-slot="gh-workflow-trigger"]')!)
+    await waitFor(() => expect(document.querySelector('[data-workflow="ship-it"]')).not.toBeNull())
+    fireEvent.click(document.querySelector('[data-workflow="ship-it"]')!)
+
+    fireEvent.click(document.querySelector('[data-slot="gh-skills-trigger"]')!)
+    await waitFor(() => expect(document.querySelector('[data-skill="om-fix"]')).not.toBeNull())
+    fireEvent.click(document.querySelector('[data-slot="gh-skill-option"][data-skill="om-fix"]')!)
+    await waitFor(() =>
+      expect(document.querySelectorAll('[data-slot="gh-skill-chip"]')).toHaveLength(1),
+    )
+
+    // Simulate a full page reload: unmount everything and mount fresh — only localStorage (not
+    // React state) can carry the pick across this boundary.
+    cleanup()
+    stubFetch()
+    await openDetail()
+
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="gh-workflow-trigger"]')?.textContent).toContain(
+        'ship-it',
+      ),
+    )
+    expect(
+      [...document.querySelectorAll<HTMLElement>('[data-slot="gh-skill-chip"]')].map(
+        (chip) => chip.dataset.skill,
+      ),
+    ).toEqual(['om-fix'])
+  })
+})
+
+// ---- #408: draft persistence -------------------------------------------------------------------
+
+describe('the follow-up prompt draft (#408 item 4)', () => {
+  it('typed instructions persist when navigating away and back to the same item', async () => {
+    stubFetch()
+    await openDetail()
+
+    fireEvent.change(promptField(), { target: { value: 'Also add a test.' } })
+    await waitFor(() => expect(promptValue()).toBe('Also add a test.'))
+
+    // Switch to a different item — HandToAgent remounts (key={item.url}); its OWN draft is empty.
+    fireEvent.click(document.querySelector('[data-slot="gh-row"][data-number="139"]')!)
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="gh-detail-inner"]')?.textContent).toContain(
+        'Add --json flag',
+      ),
+    )
+    expect(promptValue()).toBe('')
+
+    // Switch back — the first item's draft is restored.
+    fireEvent.click(document.querySelector('[data-slot="gh-row"][data-number="142"]')!)
+    await waitFor(() => expect(promptValue()).toBe('Also add a test.'))
+  })
+
+  it('a page reload restores the draft too (localStorage, not just component state)', async () => {
+    stubFetch()
+    await openDetail()
+    fireEvent.change(promptField(), { target: { value: 'do not lose me' } })
+    await waitFor(() => expect(promptValue()).toBe('do not lose me'))
+
+    cleanup()
+    stubFetch()
+    await openDetail()
+    await waitFor(() => expect(promptValue()).toBe('do not lose me'))
+  })
+
+  it('a successful run spends that item’s draft', async () => {
+    stubFetch()
+    await openDetail()
+    fireEvent.change(promptField(), { target: { value: 'spend me' } })
+    await waitFor(() => expect(promptValue()).toBe('spend me'))
+
+    fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
+    await waitFor(() => expect(document.querySelector('[data-slot="gh-queued"]')).not.toBeNull())
+
+    cleanup()
+    stubFetch()
+    await openDetail()
+    expect(promptValue()).toBe('')
+  })
+})
+
+// ---- #408: ⌘/Ctrl+Enter submit ------------------------------------------------------------------
+
+describe('⌘/Ctrl+Enter submits the follow-up composer (#408 item 5)', () => {
+  it('Ctrl+Enter runs the agent', async () => {
+    const sent = stubFetch()
+    await openDetail()
+
+    const textarea = screen.getByLabelText('Custom prompt')
+    fireEvent.change(textarea, { target: { value: 'go' } })
+    fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true })
+
+    await waitFor(() =>
+      expect(sent.some((request) => request.method === 'POST' && request.path === '/api/runs')).toBe(
+        true,
+      ),
+    )
+  })
+
+  it('⌘+Enter (metaKey) also runs the agent', async () => {
+    const sent = stubFetch()
+    await openDetail()
+
+    const textarea = screen.getByLabelText('Custom prompt')
+    fireEvent.keyDown(textarea, { key: 'Enter', metaKey: true })
+
+    await waitFor(() =>
+      expect(sent.some((request) => request.method === 'POST' && request.path === '/api/runs')).toBe(
+        true,
+      ),
+    )
+  })
+
+  it('a bare Enter does NOT submit — it is a multi-line instructions box', async () => {
+    const sent = stubFetch()
+    await openDetail()
+
+    const textarea = screen.getByLabelText('Custom prompt')
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+
+    // Give any (wrongly) scheduled submit a tick to happen before asserting its absence.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
+    expect(sent.some((request) => request.method === 'POST' && request.path === '/api/runs')).toBe(
+      false,
+    )
+  })
+
+  it('Shift+Ctrl+Enter does not submit — Shift wins, same rule as the thread composer', async () => {
+    const sent = stubFetch()
+    await openDetail()
+
+    const textarea = screen.getByLabelText('Custom prompt')
+    fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true, shiftKey: true })
+
+    await act(() => new Promise((resolve) => setTimeout(resolve, 0)))
+    expect(sent.some((request) => request.method === 'POST' && request.path === '/api/runs')).toBe(
+      false,
+    )
   })
 })

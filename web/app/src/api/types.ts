@@ -492,6 +492,10 @@ export interface UiState {
   lastAutonomous?: boolean
   /** Whether new runs should ask agents to append follow-up work. Absent → on. */
   lastGenerateFollowups?: boolean
+  /** Skill selection frequency (#408): name → times chosen, across BOTH composers (`/new` and
+   *  the GitHub tab's follow-up picker). Feeds `orderSkillsByUsage` (lib/skills.ts) — the
+   *  most-selected skills float to the top of their project/global locality group. */
+  skillUsage?: Record<string, number>
   runsView?: 'list' | 'table'
   /** Settings → Appearance (redesign R6): accent + density. Theme itself stays in
    *  localStorage (`cez-theme`) — it must pre-paint, and it is per-browser by design. */

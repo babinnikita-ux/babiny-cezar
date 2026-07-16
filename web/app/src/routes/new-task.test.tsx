@@ -407,6 +407,9 @@ describe('submit', () => {
         lastWorktree: true,
         lastAutonomous: true,
         lastGenerateFollowups: true,
+        // ...and bumps its usage count for the #408 frequency sort (a workflow source would
+        // NOT carry a skillUsage key at all — see the WORKFLOW test below).
+        skillUsage: { 'om-fix': 1 },
       }),
     )
   })

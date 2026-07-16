@@ -185,6 +185,13 @@ const uiStateSchema = z
     lastWorktree: z.boolean().optional(),
     lastAutonomous: z.boolean().optional(),
     lastGenerateFollowups: z.boolean().optional(),
+    // Skill selection frequency (#408): name → times chosen, incremented on a successful run
+    // start from EITHER composer (`/new`'s SourcePill and the follow-up `SkillsPicker`). Drives
+    // the shared `orderSkillsByUsage` sort (web/app/src/lib/skills.ts) so both pickers float the
+    // skills a user actually reaches for above the rest, within the existing project-first
+    // grouping. ADDITIVE, like the rest of ui-state — the client always PUTs the whole map
+    // because the top-level merge below is shallow.
+    skillUsage: z.record(z.string().min(1), z.number().int().min(0)).optional(),
     // Runs area presentation (#348): the sidebar-list + detail pane, or the
     // full-width table ("task manager") view.
     runsView: z.enum(['list', 'table']).optional(),

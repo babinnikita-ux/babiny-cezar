@@ -3,12 +3,14 @@ import { describe, expect, it } from 'vitest'
 import type { Skill, WorkflowDef } from '@/api/types'
 
 import {
+  bumpSkillUsage,
   filterSkills,
   fuzzyMatch,
   isProjectSkill,
   multiWordFilter,
   orderSkills,
   orderSkillsByRecency,
+  orderSkillsByUsage,
   skillKeywords,
   skillUsedBy,
 } from './skills'
@@ -60,6 +62,53 @@ describe('orderSkillsByRecency', () => {
 
   it('falls back to plain locality order with no recency', () => {
     expect(orderSkillsByRecency(skills, []).map((s) => s.name)).toEqual(['p1', 'p2', 'g1', 'g2'])
+  })
+})
+
+describe('orderSkillsByUsage (#408: frequency sort, shared by both composers)', () => {
+  const skills = [
+    skill({ name: 'g1', source: 'global' }),
+    skill({ name: 'p1', source: 'agents' }),
+    skill({ name: 'g2', source: 'global' }),
+    skill({ name: 'p2', source: 'ai' }),
+  ]
+
+  it('#1: sorts most-selected first within each locality half', () => {
+    const ordered = orderSkillsByUsage(skills, { g2: 5, p2: 9, p1: 1 })
+    // Locality first (project before global), frequency descending within each half.
+    expect(ordered.map((s) => s.name)).toEqual(['p2', 'p1', 'g2', 'g1'])
+  })
+
+  it('#2: with no usage data, keeps the plain project-first fallback (stable ties)', () => {
+    expect(orderSkillsByUsage(skills, undefined).map((s) => s.name)).toEqual(['p1', 'p2', 'g1', 'g2'])
+    expect(orderSkillsByUsage(skills, {}).map((s) => s.name)).toEqual(['p1', 'p2', 'g1', 'g2'])
+  })
+
+  it('#2: ties (equal counts) also keep locality-then-server order, never flattened', () => {
+    const ordered = orderSkillsByUsage(skills, { g1: 3, p1: 3, g2: 3, p2: 3 })
+    expect(ordered.map((s) => s.name)).toEqual(['p1', 'p2', 'g1', 'g2'])
+  })
+
+  it('an unselected skill sorts below any selected one in its half', () => {
+    const ordered = orderSkillsByUsage(skills, { g1: 2 })
+    expect(ordered.map((s) => s.name)).toEqual(['p1', 'p2', 'g1', 'g2'])
+  })
+})
+
+describe('bumpSkillUsage (#408: the ui-state skillUsage reducer)', () => {
+  it('starts a fresh count at 1 from an undefined map', () => {
+    expect(bumpSkillUsage(undefined, 'om-fix')).toEqual({ 'om-fix': 1 })
+  })
+
+  it('increments an existing count without touching other entries', () => {
+    expect(bumpSkillUsage({ 'om-fix': 2, 'om-review': 7 }, 'om-fix')).toEqual({
+      'om-fix': 3,
+      'om-review': 7,
+    })
+  })
+
+  it('adds a new entry alongside existing ones', () => {
+    expect(bumpSkillUsage({ 'om-fix': 1 }, 'om-review')).toEqual({ 'om-fix': 1, 'om-review': 1 })
   })
 })
 
