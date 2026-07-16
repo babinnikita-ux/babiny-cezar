@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import type { Dirent } from 'node:fs';
 import { readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { isSafeGitRef } from './git-refs.js';
 
 /**
  * Git worktree per task (spec 006). Each run gets its own branch
@@ -82,6 +83,9 @@ export async function createWorktree(
     if (!head.ok) throw new Error(`git rev-parse HEAD failed: ${head.stderr.trim()}`);
     base = head.stdout.trim();
   }
+  // Dash-guard (#431): `base` is spliced in as a positional git operand; an
+  // option-like value would be argument injection.
+  if (!isSafeGitRef(base)) throw new Error(`refusing option-like base ref: ${base}`);
   const branch = branchFor(runId);
   const path = worktreePathFor(repoRoot, runId);
   const res = await git(repoRoot, ['worktree', 'add', '-b', branch, path, base]);
@@ -148,6 +152,7 @@ export async function worktreeDiff(
   baseBranch: string,
   cap = DIFF_CAP,
 ): Promise<string> {
+  if (!isSafeGitRef(baseBranch)) return '(diff failed: refusing option-like base ref)';
   await git(worktreePath, ['add', '-N', '.']); // intent-to-add: untracked files show up
   const mergeBase = await git(worktreePath, ['merge-base', baseBranch, 'HEAD']);
   const base = mergeBase.ok && mergeBase.stdout.trim() ? mergeBase.stdout.trim() : baseBranch;
@@ -165,6 +170,7 @@ export async function worktreeDiffStat(
   worktreePath: string,
   baseBranch: string,
 ): Promise<string> {
+  if (!isSafeGitRef(baseBranch)) return '';
   await git(worktreePath, ['add', '-N', '.']); // intent-to-add: untracked files show up
   const mergeBase = await git(worktreePath, ['merge-base', baseBranch, 'HEAD']);
   const base = mergeBase.ok && mergeBase.stdout.trim() ? mergeBase.stdout.trim() : baseBranch;
@@ -207,6 +213,7 @@ export async function worktreeShortstat(
   worktreePath: string,
   baseBranch: string,
 ): Promise<DiffStat | null> {
+  if (!isSafeGitRef(baseBranch)) return null;
   await git(worktreePath, ['add', '-N', '.']); // intent-to-add: untracked files show up
   const mergeBase = await git(worktreePath, ['merge-base', baseBranch, 'HEAD']);
   const base = mergeBase.ok && mergeBase.stdout.trim() ? mergeBase.stdout.trim() : baseBranch;

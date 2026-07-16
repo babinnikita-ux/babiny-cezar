@@ -3,6 +3,7 @@ import { rmSync } from 'node:fs';
 import { lstat, open, readFile, readdir, realpath, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
+import { isSafeGitRef } from '../git-refs.js';
 
 /**
  * Session git plumbing for the cockpit's Changes & Files tabs (redesign spec
@@ -178,6 +179,7 @@ export async function collectChanges(
   baseBranch: string,
   opts: { patchCap?: number; intentToAdd?: boolean } = {},
 ): Promise<ChangesResult> {
+  if (!isSafeGitRef(baseBranch)) return { ok: false, error: 'refusing option-like base ref' };
   const patchCap = opts.patchCap ?? PATCH_CAP;
   // `git add -N .` (intent-to-add) makes untracked files appear in the diff, but it MUTATES the
   // index — fine in a task worktree cezar owns, but forbidden on the user's real main tree (a
@@ -273,6 +275,7 @@ export type RunCommitsResult = { ok: true; commits: RunCommit[] } | { ok: false;
  * what "this task's work" means. Empty (not an error) when the branch has no commits past base.
  */
 export async function collectRunCommits(dir: string, baseBranch: string): Promise<RunCommitsResult> {
+  if (!isSafeGitRef(baseBranch)) return { ok: false, error: 'refusing option-like base ref' };
   const mergeBase = await git(dir, ['merge-base', baseBranch, 'HEAD']);
   const base = mergeBase.ok && mergeBase.stdout.trim() ? mergeBase.stdout.trim() : baseBranch;
   const log = await git(dir, ['log', '--pretty=format:%H%x1f%s%x1f%an%x1f%cr', `${base}..HEAD`]);
@@ -500,6 +503,8 @@ export async function createOrSwitchBranch(
   }
 
   if (from) {
+    // Dash-guard (#431): `from` becomes a positional operand of `checkout -b`.
+    if (!isSafeGitRef(from)) return { ok: false, error: `invalid start point: ${from}` };
     // `--quiet` keeps git silent on failure, so supply our own reason.
     const start = await git(dir, ['rev-parse', '--verify', '--quiet', `${from}^{commit}`]);
     if (!start.ok) return { ok: false, error: `unknown start point: ${from}` };

@@ -19,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import type { GitAction, GitActionBar, GitActionId } from '@/lib/git-actions'
+import { isHttpUrl } from '@/lib/utils'
 
 import { BranchChip, DiffViewToggles } from './diff-controls'
 
@@ -115,7 +116,8 @@ function ActionButton({
   variant: 'primary' | 'outline'
   onAction: (id: GitActionId) => void
 }) {
-  if (action.id === 'view-pr' && action.href) {
+  // href protocol guard (#431): treat the PR link as a link only for http(s) URLs.
+  if (action.id === 'view-pr' && isHttpUrl(action.href)) {
     return (
       <Button asChild variant={variant} size="sm" data-action={action.id}>
         <a href={action.href} target="_blank" rel="noopener noreferrer">

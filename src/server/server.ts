@@ -305,17 +305,22 @@ export function createApp(deps: ServerDeps): Hono {
     // Additive fields only below — the pre-forge shape is the most
     // externally-depended-on JSON in the app (BACKWARD_COMPATIBILITY.md §2).
     const forge = resolveForge(repo);
+    const caps = capabilities();
     return c.json({
       version,
       latestVersion: update?.latest,
-      repoRoot,
+      // Health is CORS-open and, in hosted mode, reachable off the loopback —
+      // so any site/host that reads it would learn the developer's absolute
+      // checkout path and username (#431). Local mode keeps the full path (the
+      // protected bookmarklet shape); hosted/remote mode trims it to a basename.
+      repoRoot: caps.localHandoff ? repoRoot : basename(repoRoot),
       repo,
       checks,
       defaultRunner: config.defaultRunner,
       // Non-blocking: cached availability or null-until-warm — health must never pay a `gh`
       // shell-out (the bookmarklet aborts its port probe at 800 ms). See detectGithubCached.
       forge: forge ? { kind: forge.kind, ...(forge.detectCached() ?? {}) } : null,
-      capabilities: capabilities(),
+      capabilities: caps,
     });
   });
 
@@ -1286,14 +1291,23 @@ function resolveWebDir(): string {
 }
 
 /** The CLI command that reopens a run's session for interactive take-over,
- *  per backend. Legacy/undefined records default to Claude. */
-function resumeCommand(runner: string | undefined, sessionId: string): string {
+ *  per backend. Legacy/undefined records default to Claude. The session id is
+ *  the only variable spliced into a shell command that openInTerminal then
+ *  hands to bash / AppleScript / `cmd /K`, so it is shell-quoted (#431) — the
+ *  ids are UUID/CLI-minted today, but the quote keeps a future source safe. */
+export function resumeCommand(runner: string | undefined, sessionId: string): string {
+  const id = shellQuoteArg(sessionId);
   switch (runner) {
     case 'codex':
-      return `codex resume ${sessionId}`;
+      return `codex resume ${id}`;
     case 'opencode':
-      return `opencode --session ${sessionId}`;
+      return `opencode --session ${id}`;
     default:
-      return `claude --resume ${sessionId}`;
+      return `claude --resume ${id}`;
   }
+}
+
+/** POSIX single-quote quoting: wrap in '…' and escape embedded quotes. */
+function shellQuoteArg(s: string): string {
+  return `'${s.replaceAll("'", `'\\''`)}'`;
 }
