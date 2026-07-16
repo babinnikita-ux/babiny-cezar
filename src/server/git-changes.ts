@@ -61,6 +61,10 @@ export interface ChangedFile {
   adds: number;
   dels: number;
   binary: boolean;
+  /** True when `path`'s extension is one the raw-bytes route (`/files?raw=1`) will serve as an
+   *  `<img>` (#365) — lets the diff pane preview it inline instead of the "Binary file" note,
+   *  even for extensions (SVG) git itself doesn't flag `binary`. Present only when true. */
+  image?: boolean;
   patch: string;
 }
 
@@ -241,6 +245,7 @@ function assemblePayload(
       adds: count?.adds ?? 0,
       dels: count?.dels ?? 0,
       binary: count?.binary ?? false,
+      ...(imageMimeType(entry.path) ? { image: true } : {}),
       patch,
     };
   });

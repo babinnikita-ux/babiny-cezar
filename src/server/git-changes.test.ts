@@ -86,6 +86,30 @@ describe('collectChanges — structured diff vs base', () => {
     expect(result.changes.stat.dels).toBe(result.changes.files.reduce((s, f) => s + f.dels, 0));
   });
 
+  it('flags image paths with image:true (#365) — even ones git does not mark binary', async () => {
+    writeFileSync(join(dir, 'seed.txt'), 'seed\n');
+    g(dir, 'add', '-A');
+    g(dir, 'commit', '-m', 'base');
+    g(dir, 'checkout', '-b', 'task');
+
+    writeFileSync(join(dir, 'photo.png'), Buffer.from([0, 1, 2, 3, 0, 255]));
+    // SVG is text — git will not flag it binary — but it is still an image by extension.
+    writeFileSync(join(dir, 'icon.svg'), '<svg></svg>\n');
+    writeFileSync(join(dir, 'notes.txt'), 'plain text, not an image\n');
+    g(dir, 'add', '-A');
+
+    const result = await collectChanges(dir, 'main');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const byPath = new Map(result.changes.files.map((f) => [f.path, f]));
+
+    expect(byPath.get('photo.png')).toMatchObject({ binary: true, image: true });
+    expect(byPath.get('icon.svg')).toMatchObject({ binary: false, image: true });
+    // Non-images never carry the field at all (optional, absent-by-default).
+    expect(byPath.get('notes.txt')?.image).toBeUndefined();
+    expect('image' in (byPath.get('notes.txt') ?? {})).toBe(false);
+  });
+
   it('an empty diff is a valid all-zero payload, not an error', async () => {
     writeFileSync(join(dir, 'a.txt'), 'hello\n');
     g(dir, 'add', '-A');

@@ -36,9 +36,9 @@ const ADDED: DiffFileChange = {
 }
 
 /** The engine chunk loads lazily — settle on a rendered file header before asserting. */
-async function renderDiff(ui: React.ReactElement) {
+async function renderDiff(ui: React.ReactElement, settleText = 'src/a.ts') {
   const view = render(ui)
-  await screen.findByText('src/a.ts')
+  await screen.findByText(settleText)
   return view
 }
 
@@ -143,5 +143,60 @@ describe('Diff facade', () => {
 
     expect(screen.getByText('Binary file — no text diff.')).not.toBeNull()
     expect(screen.getByText('No content changes (metadata only).')).not.toBeNull()
+  })
+})
+
+describe('Diff facade — image previews (#365)', () => {
+  const IMAGE: DiffFileChange = {
+    path: 'assets/logo.png',
+    status: 'modified',
+    adds: 0,
+    dels: 0,
+    binary: true,
+    image: true,
+    patch: '',
+  }
+  const DELETED_IMAGE: DiffFileChange = { ...IMAGE, path: 'assets/gone.png', status: 'deleted' }
+
+  it('renders an inline <img> from imageSrc instead of the binary note, tagged "image" not "binary"', async () => {
+    const imageSrc = vi.fn((path: string) => `/api/runs/r1/files?path=${path}&raw=1`)
+    await renderDiff(<Diff files={[IMAGE]} imageSrc={imageSrc} />, 'assets/logo.png')
+
+    const img = document.querySelector('[data-slot="diff-image-preview"] img')
+    expect(img).not.toBeNull()
+    expect(img?.getAttribute('src')).toBe('/api/runs/r1/files?path=assets/logo.png&raw=1')
+    expect(imageSrc).toHaveBeenCalledWith('assets/logo.png')
+    expect(screen.queryByText('Binary file — no text diff.')).toBeNull()
+    // Status badge reads "image", not "binary".
+    expect(screen.getByText('image')).not.toBeNull()
+    expect(screen.queryByText('binary')).toBeNull()
+  })
+
+  it('falls back to the plain binary note when no imageSrc resolver is wired', async () => {
+    await renderDiff(<Diff files={[IMAGE]} />, 'assets/logo.png')
+
+    expect(screen.getByText('Binary file — no text diff.')).not.toBeNull()
+    expect(document.querySelector('[data-slot="diff-image-preview"]')).toBeNull()
+  })
+
+  it('shows "Open in default app" only when onOpenInApp is provided, and calls it with the path', async () => {
+    const imageSrc = (path: string) => `/raw/${path}`
+    const onOpenInApp = vi.fn()
+    const { rerender } = await renderDiff(<Diff files={[IMAGE]} imageSrc={imageSrc} />, 'assets/logo.png')
+    expect(screen.queryByText('Open in default app')).toBeNull()
+
+    rerender(<Diff files={[IMAGE]} imageSrc={imageSrc} onOpenInApp={onOpenInApp} />)
+    const button = screen.getByText('Open in default app')
+    fireEvent.click(button)
+    expect(onOpenInApp).toHaveBeenCalledWith('assets/logo.png')
+  })
+
+  it('never renders a preview for a deleted image — only the new side is ever servable', async () => {
+    const imageSrc = vi.fn((path: string) => `/raw/${path}`)
+    await renderDiff(<Diff files={[DELETED_IMAGE]} imageSrc={imageSrc} />, 'assets/gone.png')
+
+    expect(document.querySelector('[data-slot="diff-image-preview"]')).toBeNull()
+    expect(imageSrc).not.toHaveBeenCalled()
+    expect(screen.getByText(/only the new side can be previewed/)).not.toBeNull()
   })
 })

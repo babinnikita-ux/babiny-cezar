@@ -2,6 +2,7 @@ import { useEffect, useState, type ComponentType } from 'react'
 
 import type { DiffStat } from '@/api/types'
 import { DiffStatLabel } from '@/components/diff-stat'
+import { ZoomableImage } from '@/components/zoomable-image'
 import { cn } from '@/lib/utils'
 
 import type { DiffFileChange, DiffProps } from './types'
@@ -67,7 +68,7 @@ export function Diff(props: DiffProps) {
  * the engine chunk can. Split mode degrades to unified; that is documented degradation, not
  * a bug.
  */
-export function DiffFallback({ files, wrap = false, className }: DiffProps) {
+export function DiffFallback({ files, wrap = false, imageSrc, onOpenInApp, className }: DiffProps) {
   const stat: DiffStat = {
     adds: files.reduce((sum, file) => sum + file.adds, 0),
     dels: files.reduce((sum, file) => sum + file.dels, 0),
@@ -82,13 +83,29 @@ export function DiffFallback({ files, wrap = false, className }: DiffProps) {
         <DiffStatLabel stat={stat} />
       </p>
       {files.map((file) => (
-        <FallbackFile key={`${file.oldPath ?? ''}→${file.path}`} file={file} wrap={wrap} />
+        <FallbackFile
+          key={`${file.oldPath ?? ''}→${file.path}`}
+          file={file}
+          wrap={wrap}
+          imageSrc={imageSrc}
+          onOpenInApp={onOpenInApp}
+        />
       ))}
     </div>
   )
 }
 
-function FallbackFile({ file, wrap }: { file: DiffFileChange; wrap: boolean }) {
+function FallbackFile({
+  file,
+  wrap,
+  imageSrc,
+  onOpenInApp,
+}: {
+  file: DiffFileChange
+  wrap: boolean
+  imageSrc?: (path: string) => string
+  onOpenInApp?: (path: string) => void
+}) {
   return (
     <section data-slot="diff-file" data-path={file.path} className="min-w-0 overflow-clip rounded-md border border-border bg-card">
       <header className="flex items-center gap-2 border-b border-border/50 px-3 py-2">
@@ -99,7 +116,23 @@ function FallbackFile({ file, wrap }: { file: DiffFileChange; wrap: boolean }) {
           <DiffStatLabel stat={{ adds: file.adds, dels: file.dels, files: 1 }} className="text-[11px]" />
         </span>
       </header>
-      {file.binary ? (
+      {file.image && file.status !== 'deleted' && imageSrc ? (
+        <div data-slot="diff-image-preview" className="flex flex-col items-center gap-2 p-4">
+          <ZoomableImage src={imageSrc(file.path)} alt={file.path} className="max-h-[60vh] max-w-full rounded-sm" />
+          {onOpenInApp ? (
+            <button
+              type="button"
+              data-slot="diff-image-open"
+              onClick={() => onOpenInApp(file.path)}
+              className="text-[11px] font-medium text-soft-foreground hover:text-foreground hover:underline"
+            >
+              Open in default app
+            </button>
+          ) : null}
+        </div>
+      ) : file.image && file.status === 'deleted' ? (
+        <p className="px-4 py-2.5 text-xs text-soft-foreground">Image deleted — only the new side can be previewed.</p>
+      ) : file.binary ? (
         <p className="px-4 py-2.5 text-xs text-soft-foreground">Binary file — no text diff.</p>
       ) : file.patch === '' ? (
         <p className="px-4 py-2.5 text-xs text-soft-foreground">No content changes (metadata only).</p>

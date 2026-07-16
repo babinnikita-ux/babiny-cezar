@@ -117,6 +117,17 @@ async function openFileManager(dir: string): Promise<boolean> {
   return runDetached('xdg-open', [dir]);
 }
 
+/** Open a single worktree FILE with whatever application the OS has registered as its
+ *  default handler — the diff pane's "open in default app" action for images (#365). Distinct
+ *  from `openFileManager` above: that opens a *directory* in the file manager; this launches
+ *  the file itself (e.g. the OS's default image viewer), never a directory listing. Local-only
+ *  by construction — the caller gates this behind `localHandoff`. */
+export async function openFileInDefaultApp(path: string): Promise<boolean> {
+  if (process.platform === 'darwin') return runDetached('open', [path]);
+  if (process.platform === 'win32') return runDetached('cmd', ['/c', 'start', '', path]);
+  return runDetached('xdg-open', [path]);
+}
+
 /** Open `dir` in the given target. Unknown/unavailable target → false (the caller 409s). */
 export async function openInApp(targetId: string, dir: string): Promise<boolean> {
   if (targetId === 'finder') return openFileManager(dir);
