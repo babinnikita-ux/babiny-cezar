@@ -20,8 +20,9 @@ export interface DiffFileChange {
   /** Binary per numstat — there is no text patch to render. */
   binary?: boolean
   /** True when the server's raw-bytes route (`/files?raw=1`) will serve this path as an image
-   *  (#365) — lets the renderer preview it inline instead of the "Binary file" note. Present
-   *  only when true. */
+   *  (#365) — set from the path's EXTENSION, so it is true for SVGs too. It means "previewable",
+   *  NOT "has no text diff": whether the renderer actually swaps the rows for a picture is
+   *  `shouldPreviewImage` in `./image-preview`. Present only when true. */
   image?: boolean
   /** This file's unified-diff section (`diff --git …` headers + `@@` hunks), possibly
    *  ending in the server's `… (patch truncated)` marker, possibly empty (metadata-only). */

@@ -212,7 +212,7 @@ const gitCommitSchema = z.object({
 // `readWorktreePath`; this schema only shapes the request.
 const openInSchema = z.object({
   target: z.string().trim().min(1, 'target required'),
-  path: z.string().optional(),
+  path: z.string().max(1_000).optional(),
 });
 
 const messageSchema = z
@@ -759,6 +759,14 @@ export function createApp(deps: ServerDeps): Hono {
           { error: result.kind === 'dir' ? `not a file: ${relPath}` : result.error },
           409,
         );
+      }
+      // Same allowlist the raw-bytes route enforces (`/files?raw=1` below): this route's whole
+      // contract is "preview an image in its default app", and containment alone does not
+      // enforce it. Without this gate any regular file in the worktree — a `.command`/`.desktop`
+      // an agent just wrote, an `.exe` — would be handed to the OS launcher, which EXECUTES it.
+      // Not remotely reachable (random run ids, same-origin, local mode), so: defense in depth.
+      if (!imageMimeType(result.path)) {
+        return c.json({ error: `opening in the default app is limited to images: ${result.path}` }, 409);
       }
       const filePath = join(run.worktreePath, result.path);
       const opened = await openFileInDefaultApp(filePath);

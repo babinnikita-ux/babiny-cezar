@@ -2,9 +2,9 @@ import { useEffect, useState, type ComponentType } from 'react'
 
 import type { DiffStat } from '@/api/types'
 import { DiffStatLabel } from '@/components/diff-stat'
-import { ZoomableImage } from '@/components/zoomable-image'
 import { cn } from '@/lib/utils'
 
+import { ImagePreview, shouldPreviewImage } from './image-preview'
 import type { DiffFileChange, DiffProps } from './types'
 
 /**
@@ -116,22 +116,8 @@ function FallbackFile({
           <DiffStatLabel stat={{ adds: file.adds, dels: file.dels, files: 1 }} className="text-[11px]" />
         </span>
       </header>
-      {file.image && file.status !== 'deleted' && imageSrc ? (
-        <div data-slot="diff-image-preview" className="flex flex-col items-center gap-2 p-4">
-          <ZoomableImage src={imageSrc(file.path)} alt={file.path} className="max-h-[60vh] max-w-full rounded-sm" />
-          {onOpenInApp ? (
-            <button
-              type="button"
-              data-slot="diff-image-open"
-              onClick={() => onOpenInApp(file.path)}
-              className="text-[11px] font-medium text-soft-foreground hover:text-foreground hover:underline"
-            >
-              Open in default app
-            </button>
-          ) : null}
-        </div>
-      ) : file.image && file.status === 'deleted' ? (
-        <p className="px-4 py-2.5 text-xs text-soft-foreground">Image deleted — only the new side can be previewed.</p>
+      {shouldPreviewImage(file) ? (
+        <ImagePreview file={file} imageSrc={imageSrc} onOpenInApp={onOpenInApp} />
       ) : file.binary ? (
         <p className="px-4 py-2.5 text-xs text-soft-foreground">Binary file — no text diff.</p>
       ) : file.patch === '' ? (

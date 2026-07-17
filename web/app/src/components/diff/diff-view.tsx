@@ -3,9 +3,10 @@ import { useEffect, useMemo, useState } from 'react'
 
 import type { DiffStat } from '@/api/types'
 import { DiffStatLabel } from '@/components/diff-stat'
-import { ZoomableImage } from '@/components/zoomable-image'
 import { highlight, highlightSync, langForPath, type SynToken } from '@/lib/highlighter'
 import { cn } from '@/lib/utils'
+
+import { ImagePreview, shouldPreviewImage } from './image-preview'
 
 import {
   buildSplitRows,
@@ -223,7 +224,9 @@ function DiffFileBody({
     [mode, parsed.hunks, gaps, expanded],
   )
 
-  if (file.image) {
+  // Only images with no text diff to lose take the preview branch — see `shouldPreviewImage`.
+  // An SVG git reports as text keeps its rows below, exactly as `DiffFallback` renders it.
+  if (shouldPreviewImage(file)) {
     return <ImagePreview file={file} imageSrc={imageSrc} onOpenInApp={onOpenInApp} />
   }
   if (file.binary) {
@@ -286,44 +289,6 @@ function useFileTokens(path: string, lineList: HunkLine[]): SynToken[][] | null 
 
 function Note({ children }: { children: React.ReactNode }) {
   return <p className="px-4 py-2.5 text-xs text-soft-foreground">{children}</p>
-}
-
-/**
- * Inline preview for an image diff (#365) — replaces the flat "Binary file" note. `raw=1`
- * only ever serves the file's CURRENT (new-side) bytes, so a deleted image has nothing to
- * fetch; `imageSrc` absent (a consumer that never wired byte access, e.g. repo/commit diffs)
- * degrades to the same honest note every other binary gets.
- */
-function ImagePreview({
-  file,
-  imageSrc,
-  onOpenInApp,
-}: {
-  file: DiffFileChange
-  imageSrc?: (path: string) => string
-  onOpenInApp?: (path: string) => void
-}) {
-  if (file.status === 'deleted') {
-    return <Note>Image deleted — only the new side can be previewed.</Note>
-  }
-  if (!imageSrc) {
-    return <Note>Binary file — no text diff.</Note>
-  }
-  return (
-    <div data-slot="diff-image-preview" className="flex flex-col items-center gap-2 p-4">
-      <ZoomableImage src={imageSrc(file.path)} alt={file.path} className="max-h-[60vh] max-w-full rounded-sm" />
-      {onOpenInApp ? (
-        <button
-          type="button"
-          data-slot="diff-image-open"
-          onClick={() => onOpenInApp(file.path)}
-          className="text-[11px] font-medium text-soft-foreground hover:text-foreground hover:underline"
-        >
-          Open in default app
-        </button>
-      ) : null}
-    </div>
-  )
 }
 
 // ---- rows ---------------------------------------------------------------------------------

@@ -116,6 +116,27 @@ describe("POST /api/runs/:id/open-in — target 'default' (local-mode file open,
     expect(openFileInDefaultApp).not.toHaveBeenCalled();
   });
 
+  it('refuses a non-image file — the OS launcher would EXECUTE a .command/.desktop/.exe', async () => {
+    writeFileSync(join(worktree, 'build.command'), '#!/bin/sh\necho pwned\n', { mode: 0o755 });
+    const res = await post({ target: 'default', path: 'build.command' });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toContain('limited to images');
+    expect(openFileInDefaultApp).not.toHaveBeenCalled();
+  });
+
+  it('refuses an ordinary text file in the worktree just the same', async () => {
+    writeFileSync(join(worktree, 'notes.txt'), 'hello');
+    const res = await post({ target: 'default', path: 'notes.txt' });
+    expect(res.status).toBe(409);
+    expect(openFileInDefaultApp).not.toHaveBeenCalled();
+  });
+
+  it('rejects an over-long path at the schema boundary', async () => {
+    const res = await post({ target: 'default', path: `${'a/'.repeat(600)}logo.png` });
+    expect(res.status).toBe(400);
+    expect(openFileInDefaultApp).not.toHaveBeenCalled();
+  });
+
   it('requires a path for the default target', async () => {
     const res = await post({ target: 'default' });
     expect(res.status).toBe(400);

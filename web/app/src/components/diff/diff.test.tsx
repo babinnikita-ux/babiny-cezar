@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { Diff } from './diff'
+import { Diff, DiffFallback } from './diff'
 import type { DiffFileChange } from './types'
 
 // Explicit rather than relying on RTL's auto-cleanup, which only runs when vitest `globals` is on.
@@ -198,5 +198,72 @@ describe('Diff facade — image previews (#365)', () => {
     expect(document.querySelector('[data-slot="diff-image-preview"]')).toBeNull()
     expect(imageSrc).not.toHaveBeenCalled()
     expect(screen.getByText(/only the new side can be previewed/)).not.toBeNull()
+  })
+})
+
+/**
+ * The regression this file's PNG-only fixtures let through: `image` is set from the path's
+ * EXTENSION, so an SVG git diffs as TEXT (`binary: false`, real +N/−M) arrives flagged
+ * `image: true`. Swapping its rows for a picture — or worse, for the "Binary file" note when
+ * no `imageSrc` is wired (Repo → Changes, repo commits, task commits) — destroys the diff.
+ */
+describe('Diff facade — an SVG is text, not a picture (#365 regression)', () => {
+  const SVG: DiffFileChange = {
+    path: 'assets/icon.svg',
+    status: 'modified',
+    adds: 1,
+    dels: 1,
+    binary: false,
+    image: true,
+    patch: [
+      'diff --git a/assets/icon.svg b/assets/icon.svg',
+      'index 1111111..2222222 100644',
+      '--- a/assets/icon.svg',
+      '+++ b/assets/icon.svg',
+      '@@ -1,3 +1,3 @@',
+      ' <svg viewBox="0 0 16 16">',
+      '-  <path d="M1 1h14v14H1z" />',
+      '+  <path d="M2 2h12v12H2z" />',
+      ' </svg>',
+      '',
+    ].join('\n'),
+  }
+
+  it('renders the text diff for a modified SVG when no imageSrc is wired (repo/commit views)', async () => {
+    await renderDiff(<Diff files={[SVG]} />, 'assets/icon.svg')
+
+    expect(screen.queryByText('Binary file — no text diff.')).toBeNull()
+    expect(document.querySelector('[data-slot="diff-image-preview"]')).toBeNull()
+    const rows = Array.from(document.querySelectorAll('[data-slot="diff-line"]'))
+    expect(rows.some((row) => row.textContent?.includes('M1 1h14v14H1z'))).toBe(true)
+    expect(rows.some((row) => row.textContent?.includes('M2 2h12v12H2z'))).toBe(true)
+  })
+
+  it('still renders the text diff for a modified SVG when imageSrc IS wired (Changes tab)', async () => {
+    const imageSrc = vi.fn((path: string) => `/raw/${path}`)
+    await renderDiff(<Diff files={[SVG]} imageSrc={imageSrc} onOpenInApp={vi.fn()} />, 'assets/icon.svg')
+
+    // The text diff is the review surface — a lone new-side picture would lose the change.
+    expect(document.querySelector('[data-slot="diff-image-preview"]')).toBeNull()
+    expect(imageSrc).not.toHaveBeenCalled()
+    expect(document.querySelectorAll('[data-slot="diff-line"]').length).toBeGreaterThan(0)
+  })
+
+  it('previews an SVG that carries no text patch at all (nothing to lose)', async () => {
+    const noPatch: DiffFileChange = { ...SVG, adds: 0, dels: 0, patch: '' }
+    const imageSrc = vi.fn((path: string) => `/raw/${path}`)
+    await renderDiff(<Diff files={[noPatch]} imageSrc={imageSrc} />, 'assets/icon.svg')
+
+    expect(document.querySelector('[data-slot="diff-image-preview"] img')?.getAttribute('src')).toBe(
+      '/raw/assets/icon.svg',
+    )
+  })
+
+  it('agrees with the zero-dependency fallback renderer on the same SVG', () => {
+    render(<DiffFallback files={[SVG]} imageSrc={(path) => `/raw/${path}`} />)
+
+    expect(document.querySelector('[data-slot="diff-image-preview"]')).toBeNull()
+    expect(screen.queryByText('Binary file — no text diff.')).toBeNull()
+    expect(document.querySelector('pre')?.textContent).toContain('M2 2h12v12H2z')
   })
 })
