@@ -385,7 +385,7 @@ describe('meta line, tabs, pill and resume hint', () => {
     expect(badge.getAttribute('data-slot')).toBe('agent-badge')
   })
 
-  it('the agent badge reveals runner and model on click — works for all three runners, and "auto" when unset', async () => {
+  it('the agent badge reveals runner and model on click, reading "auto" when the model is unset', async () => {
     stubFetch()
     renderHeader(run('done', { runner: 'opencode' }))
     const meta = document.querySelector('[data-slot="run-meta"]') as HTMLElement
@@ -393,6 +393,19 @@ describe('meta line, tabs, pill and resume hint', () => {
     const menu = await screen.findByRole('menu')
     expect(within(menu).getByText('runner: opencode')).not.toBeNull()
     expect(within(menu).getByText('model: auto')).not.toBeNull()
+  })
+
+  // #416: the record persists only the runner the caller ASKED for (`src/runs/store.ts`), while
+  // the run executes as `input.runner ?? config.defaultRunner` (`src/workflows/run.ts`). So a
+  // record without a runner must name the repo's DEFAULT agent — hardcoding 'claude' here would
+  // confidently name the wrong agent on a codex/opencode repo, which is the exact question the
+  // badge exists to answer.
+  it('a run with no explicit runner names the repo default from health, not a hardcoded claude', async () => {
+    stubFetch({ '/api/health': () => jsonResponse({ defaultRunner: 'codex' }) })
+    renderHeader(run('done', { runner: undefined }))
+    const meta = document.querySelector('[data-slot="run-meta"]') as HTMLElement
+    const badge = await within(meta).findByRole('button', { name: /Agent: codex, model auto/ })
+    expect(badge.getAttribute('data-slot')).toBe('agent-badge')
   })
 
   it('a claude run still gets an agent badge — Claude is the default, not a hidden runner', () => {
