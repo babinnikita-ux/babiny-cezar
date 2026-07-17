@@ -247,6 +247,39 @@ describe('AppShell', () => {
     })
   })
 
+  describe('banner slot', () => {
+    const bannerSlot = () => document.querySelector('[data-slot="banner-slot"]')
+
+    it('renders nothing when no banner is passed', () => {
+      renderShell()
+      expect(bannerSlot()).toBeNull()
+    })
+
+    it('renders the banner above the routed view', () => {
+      renderShell('/', { banner: <p>promo</p> })
+      expect(screen.getByText('promo')).not.toBeNull()
+    })
+
+    // The regression guard for the #391 QA defect: the banner first shipped as `sticky top-0
+    // z-10` *inside* `main`, where routed views' own `sticky top-0` headers (z-10 and z-20) sit
+    // later in the DOM and painted over it — the banner vanished on scroll and its dismiss
+    // button stopped being clickable on every route. Keeping the slot a sibling of the scroller
+    // is what makes that unrepresentable; nesting it back inside `main` fails here.
+    it('is a peer of the scroller, not a child of it, so route headers cannot paint over it', () => {
+      renderShell('/', { banner: <p>promo</p> })
+      const slot = bannerSlot() as HTMLElement
+      const main = screen.getByRole('main')
+
+      expect(main.contains(slot)).toBe(false)
+      expect(slot.parentElement).toBe(main.parentElement)
+
+      // Its own grid row, so it holds its space instead of sticking to the scroller's edge.
+      expect(slot.className).toContain('row-start-2')
+      expect(main.className).toContain('row-start-3')
+      expect(slot.className).not.toContain('sticky')
+    })
+  })
+
   /** The `<md` drawer (spec: "Sidebar becomes an overlay drawer … backdrop").
    *
    *  jsdom still cannot evaluate `md:`, so the drawer is always openable here — the button that
