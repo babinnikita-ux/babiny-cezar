@@ -26,6 +26,8 @@ approval first).
 
 ## Progress
 
+PR: #477
+
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
 
 ### Phase 1: Author the spec
@@ -37,4 +39,4 @@ approval first).
 ### Phase 2: Review and ship
 
 - [x] 2.1 Fresh-context adversarial spec review; applied 1 Critical (phasing), 1 High (nonexistent claude mode), 2 Medium (resolved-event shape, notice carrier), 2 Low findings
-- [ ] 2.2 Docs-only validation + PR with pipeline labels
+- [x] 2.2 Docs-only validation + PR with pipeline labels — 8420577 (PR #477; om-auto-review-pr verdict APPROVED, submitted as comment review — GitHub blocks self-approval)
