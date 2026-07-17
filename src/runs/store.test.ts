@@ -184,6 +184,64 @@ describe('RunStore — secret redaction before persistence (#427)', () => {
     expect(eventsFile(dataDir, run.id)).toContain('gho_thisisarealsecrettoken123456');
   });
 
+  /**
+   * #427 review: redaction reached the NDJSON but not runs.json. `titleSummary`
+   * is derived from the RAW first agent turn and `error` from raw process
+   * output, so a token the agent echoed was `[REDACTED]` in the transcript and
+   * verbatim in the file the "no secrets in state files" rule names explicitly.
+   */
+  it('scrubs a host secret from titleSummary and error before runs.json is written', () => {
+    process.env.GITHUB_TOKEN = 'gho_thisisarealsecrettoken123456';
+    delete process.env.CEZ_REDACT_SECRETS;
+    const store = RunStore.open(dataDir);
+    const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
+    store.updateRun(run.id, {
+      titleSummary: 'Set GITHUB_TOKEN=gho_thisisarealsecrettoken123456 in CI',
+      error: 'auth failed for gho_thisisarealsecrettoken123456',
+    });
+    store.flush();
+
+    expect(store.getRun(run.id)?.error).toBe('auth failed for [REDACTED]');
+    const raw = readFileSync(join(dataDir, 'runs.json'), 'utf8');
+    expect(raw).not.toContain('gho_thisisarealsecrettoken123456');
+    expect(raw).toContain('[REDACTED]');
+    // …and it survives the round-trip scrubbed (reopening rewrites `error` on
+    // an unfinished run — the raw-file assertion above is what covers it).
+    expect(RunStore.open(dataDir).getRun(run.id)?.titleSummary).toBe('Set GITHUB_TOKEN=[REDACTED] in CI');
+  });
+
+  it('scrubs a token shape from a user-supplied title too', () => {
+    delete process.env.CEZ_REDACT_SECRETS;
+    const store = RunStore.open(dataDir);
+    const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
+    store.updateRun(run.id, { title: 'rotate ghp_0123456789abcdefghijABCDEFGHIJ0123' });
+    expect(store.getRun(run.id)?.title).toBe('rotate [REDACTED]');
+  });
+
+  it('leaves ordinary record fields alone', () => {
+    delete process.env.CEZ_REDACT_SECRETS;
+    const store = RunStore.open(dataDir);
+    const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
+    store.updateRun(run.id, {
+      titleSummary: 'Catch AuthError in the login handler',
+      status: 'done',
+      diffStat: { adds: 1, dels: 2, files: 3 },
+    });
+    const loaded = store.getRun(run.id);
+    expect(loaded?.titleSummary).toBe('Catch AuthError in the login handler');
+    expect(loaded?.status).toBe('done');
+    expect(loaded?.diffStat).toEqual({ adds: 1, dels: 2, files: 3 });
+  });
+
+  it('CEZ_REDACT_SECRETS=0 opts runs.json out as well', () => {
+    process.env.GITHUB_TOKEN = 'gho_thisisarealsecrettoken123456';
+    process.env.CEZ_REDACT_SECRETS = '0';
+    const store = RunStore.open(dataDir);
+    const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
+    store.updateRun(run.id, { titleSummary: 'gho_thisisarealsecrettoken123456' });
+    expect(store.getRun(run.id)?.titleSummary).toBe('gho_thisisarealsecrettoken123456');
+  });
+
   it('does not disturb a PR URL (redaction leaves non-secrets intact)', () => {
     delete process.env.CEZ_REDACT_SECRETS;
     const store = RunStore.open(dataDir);

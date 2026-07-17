@@ -17,9 +17,22 @@
  */
 
 import type { AgentBackend } from './agent-runner.js';
+import { SECRET_NAME_RE } from './secret-redaction.js';
+
+/**
+ * Env var names are matched case-INSENSITIVELY (#427 review). Windows spells
+ * the essentials `Path`, `SystemRoot`, `ComSpec`, `windir` — an exact-case
+ * `Set.has('PATH')` matched none of them, so every child env on win32 came out
+ * with no PATH and the backend binary could not even be resolved. The child env
+ * still carries each var under the parent's ORIGINAL spelling: Windows tooling
+ * expects `Path`, and normalizing the key would break it just as badly.
+ */
+function upperSet(names: readonly string[]): ReadonlySet<string> {
+  return new Set(names.map((n) => n.toUpperCase()));
+}
 
 /** Exact var names always forwarded — non-secret, needed by shells/tools. */
-const BASE_ALLOW_NAMES: ReadonlySet<string> = new Set([
+const BASE_ALLOW_NAMES: ReadonlySet<string> = upperSet([
   // Core shell / process identity
   'PATH',
   'HOME',
@@ -71,17 +84,48 @@ const BASE_ALLOW_NAMES: ReadonlySet<string> = new Set([
   'GIT_SSH',
   'GIT_SSH_COMMAND',
   'GIT_EXEC_PATH',
-  // Proxies (both cases)
+  // Proxies (matching is case-insensitive, so `http_proxy` is covered too)
   'HTTP_PROXY',
   'HTTPS_PROXY',
   'FTP_PROXY',
   'ALL_PROXY',
   'NO_PROXY',
-  'http_proxy',
-  'https_proxy',
-  'ftp_proxy',
-  'all_proxy',
-  'no_proxy',
+  // Windows equivalents of the above. Without these `nodeSpawn('claude', …)`
+  // cannot resolve or launch the binary at all on win32 — the platform is
+  // supported (open-in-terminal.ts, open-in-app.ts, process-usage.ts) and
+  // package.json carries no `os` restriction. `HOME` is normally unset there;
+  // `USERPROFILE` is its counterpart.
+  'SYSTEMROOT',
+  'SYSTEMDRIVE',
+  'WINDIR',
+  'COMSPEC',
+  'PATHEXT',
+  'USERPROFILE',
+  'HOMEDRIVE',
+  'HOMEPATH',
+  'APPDATA',
+  'LOCALAPPDATA',
+  'PROGRAMDATA',
+  'ALLUSERSPROFILE',
+  'PUBLIC',
+  'PROGRAMFILES',
+  'PROGRAMFILES(X86)',
+  'PROGRAMW6432',
+  'COMMONPROGRAMFILES',
+  'COMMONPROGRAMFILES(X86)',
+  'COMMONPROGRAMW6432',
+  'PSMODULEPATH',
+  'USERNAME',
+  'USERDOMAIN',
+  'COMPUTERNAME',
+  'LOGONSERVER',
+  'SESSIONNAME',
+  'OS',
+  'NUMBER_OF_PROCESSORS',
+  'PROCESSOR_ARCHITECTURE',
+  'PROCESSOR_IDENTIFIER',
+  'PROCESSOR_LEVEL',
+  'PROCESSOR_REVISION',
 ]);
 
 /** Safe prefix families — dev toolchains that agents drive (node, python,
@@ -179,7 +223,7 @@ const BACKEND_ALLOW_PREFIXES: Record<AgentBackend, readonly string[]> = {
 /** `gh` handoff (draft PRs) works in every backend — the one credential the
  *  project deliberately keeps in the environment (AGENTS.md "No secrets in
  *  state files": GITHUB_TOKEN stays in env, never on disk). */
-const GH_ALLOW_NAMES: ReadonlySet<string> = new Set([
+const GH_ALLOW_NAMES: ReadonlySet<string> = upperSet([
   'GITHUB_TOKEN',
   'GH_TOKEN',
   'GH_HOST',
@@ -188,20 +232,53 @@ const GH_ALLOW_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Names that look like a credential. A prefix-family match is dropped when it
- * also matches this (so `NODE_AUTH_TOKEN` never rides in on `NODE_`), while
- * explicit backend/gh allow entries are forwarded regardless — that is where
- * the auth a backend needs deliberately lives.
+ * Claude Code can be pointed at Bedrock or Vertex instead of the Anthropic API
+ * by `CLAUDE_CODE_USE_BEDROCK=1` / `CLAUDE_CODE_USE_VERTEX=1`. Those toggles
+ * ride in on the `CLAUDE_` prefix — but the cloud credentials they switch the
+ * SDK over to did not, so hardening the env forwarded the *instruction* to use
+ * Bedrock while dropping the *means*, turning a working setup into a hard auth
+ * failure with no hint (#427 review). Each toggle therefore unlocks exactly the
+ * credentials its own path needs, and only while it is on: with no toggle set
+ * (the default, direct-API posture) `AWS_*` / `GOOGLE_*` stay dropped, which is
+ * the least-privilege behavior #427 asked for in the first place.
  */
-const SECRET_NAME_RE =
-  /(TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|_KEY$|_KEY_|APIKEY|API_KEY|PRIVATE_KEY|ACCESS_KEY|_AUTH$|_AUTH_|SESSION|COOKIE|PASSPHRASE)/i;
+const BEDROCK_TOGGLE = 'CLAUDE_CODE_USE_BEDROCK';
+const VERTEX_TOGGLE = 'CLAUDE_CODE_USE_VERTEX';
+/** The whole `AWS_` family: the SDK's credential chain reads far more than the
+ *  static keys (SSO/profile/container/web-identity all have their own vars). */
+const BEDROCK_ALLOW_PREFIXES: readonly string[] = ['AWS_'];
+const VERTEX_ALLOW_NAMES: ReadonlySet<string> = upperSet([
+  'GOOGLE_APPLICATION_CREDENTIALS',
+  'CLOUD_ML_REGION',
+  // ANTHROPIC_VERTEX_PROJECT_ID already rides in on the `ANTHROPIC_` prefix.
+]);
+const VERTEX_ALLOW_PREFIXES: readonly string[] = ['GOOGLE_CLOUD_'];
 
 export function looksSecret(name: string): boolean {
   return SECRET_NAME_RE.test(name);
 }
 
+/** Prefixes are authored uppercase; `name` must already be normalized. */
 function matchesPrefix(name: string, prefixes: readonly string[]): boolean {
   return prefixes.some((p) => name.startsWith(p));
+}
+
+/** Case-insensitive read of `source` — a win32 fixture may spell it `Path`. */
+function readVar(source: NodeJS.ProcessEnv, name: string): string | undefined {
+  const direct = source[name];
+  if (direct !== undefined) return direct;
+  const upper = name.toUpperCase();
+  for (const [k, v] of Object.entries(source)) {
+    if (k.toUpperCase() === upper) return v;
+  }
+  return undefined;
+}
+
+/** An opt-in toggle is on unless it is absent/empty/`0`/`false`. */
+function isTruthy(value: string | undefined): boolean {
+  if (value === undefined) return false;
+  const v = value.trim().toLowerCase();
+  return v !== '' && v !== '0' && v !== 'false';
 }
 
 export interface BuildChildEnvOptions {
@@ -221,17 +298,30 @@ export function buildChildEnv(opts: BuildChildEnvOptions): NodeJS.ProcessEnv {
   const extra = opts.extraEnv ?? {};
 
   // Escape hatch: restore legacy full-inheritance (opt-in, off by default).
-  if (source.CEZ_AGENT_ENV_FULL === '1') {
+  if (readVar(source, 'CEZ_AGENT_ENV_FULL') === '1') {
     return { ...source, ...extra };
   }
 
   const backendPrefixes = BACKEND_ALLOW_PREFIXES[opts.backend] ?? BACKEND_ALLOW_PREFIXES.claude;
-  const passthrough = new Set(
-    (source.CEZ_ENV_PASSTHROUGH ?? '')
+  const passthrough = upperSet(
+    (readVar(source, 'CEZ_ENV_PASSTHROUGH') ?? '')
       .split(',')
       .map((s) => s.trim())
       .filter(Boolean),
   );
+
+  // Cloud auth is unlocked only by the toggle that needs it, and only for a
+  // backend that is actually given the toggle (`CLAUDE_` prefix) to read.
+  const claudeCloud = backendPrefixes.includes('CLAUDE_');
+  const cloudPrefixes: string[] = [];
+  const cloudNames = new Set<string>();
+  if (claudeCloud && isTruthy(readVar(source, BEDROCK_TOGGLE))) {
+    cloudPrefixes.push(...BEDROCK_ALLOW_PREFIXES);
+  }
+  if (claudeCloud && isTruthy(readVar(source, VERTEX_TOGGLE))) {
+    cloudPrefixes.push(...VERTEX_ALLOW_PREFIXES);
+    for (const n of VERTEX_ALLOW_NAMES) cloudNames.add(n);
+  }
 
   const out: NodeJS.ProcessEnv = {};
   for (const [name, value] of Object.entries(source)) {
@@ -242,20 +332,25 @@ export function buildChildEnv(opts: BuildChildEnvOptions): NodeJS.ProcessEnv {
   for (const [name, value] of Object.entries(extra)) out[name] = value;
   return out;
 
+  /** `name` is matched normalized; the caller keeps the original spelling. */
   function allow(name: string): boolean {
+    const key = name.toUpperCase();
     // cezar's own namespace (CEZ_DRY_RUN plumbing, mock hooks, run wiring).
-    if (name.startsWith('CEZ_')) return true;
-    // Backend auth + gh handoff: forwarded even though they are secrets — the
-    // backend cannot authenticate without them. They are still redacted before
-    // anything reaches the on-disk NDJSON (see secret-redaction.ts).
-    if (GH_ALLOW_NAMES.has(name)) return true;
-    if (matchesPrefix(name, backendPrefixes)) return true;
+    if (key.startsWith('CEZ_')) return true;
+    // Backend auth + gh handoff + the cloud creds an active Bedrock/Vertex
+    // toggle needs: forwarded even though they are secrets — the backend cannot
+    // authenticate without them. They are still redacted before anything
+    // reaches the on-disk NDJSON (see secret-redaction.ts).
+    if (GH_ALLOW_NAMES.has(key)) return true;
+    if (matchesPrefix(key, backendPrefixes)) return true;
+    if (cloudNames.has(key) || matchesPrefix(key, cloudPrefixes)) return true;
     // Explicit opt-in passthrough.
-    if (passthrough.has(name)) return true;
+    if (passthrough.has(key)) return true;
     // Base allowlist — exact names always, prefix families only when the name
-    // is not itself credential-shaped.
-    if (BASE_ALLOW_NAMES.has(name)) return true;
-    if (matchesPrefix(name, BASE_ALLOW_PREFIXES) && !looksSecret(name)) return true;
+    // is not itself credential-shaped (`NODE_AUTH_TOKEN` never rides in on
+    // `NODE_`, in either spelling — looksSecret sees the normalized name).
+    if (BASE_ALLOW_NAMES.has(key)) return true;
+    if (matchesPrefix(key, BASE_ALLOW_PREFIXES) && !looksSecret(key)) return true;
     return false;
   }
 }

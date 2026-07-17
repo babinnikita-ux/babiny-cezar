@@ -36,6 +36,8 @@ describe('buildChildEnv — least-privilege child env (#427)', () => {
 
   it('drops arbitrary host secrets (AWS creds, stripe key, npm token, passwords)', () => {
     const env = buildChildEnv({ backend: 'claude', source: HOST });
+    // No Bedrock/Vertex toggle here, so the AWS creds are not auth the backend
+    // needs — the default direct-API posture drops them (see the toggle tests).
     expect(env.AWS_ACCESS_KEY_ID).toBeUndefined();
     expect(env.AWS_SECRET_ACCESS_KEY).toBeUndefined();
     expect(env.STRIPE_SECRET_KEY).toBeUndefined();
@@ -87,6 +89,135 @@ describe('buildChildEnv — least-privilege child env (#427)', () => {
     const src = { ...HOST, CEZ_AGENT_ENV_FULL: '1' };
     const env = buildChildEnv({ backend: 'claude', source: src });
     expect(env.AWS_SECRET_ACCESS_KEY).toBe(HOST.AWS_SECRET_ACCESS_KEY);
+  });
+});
+
+/**
+ * #427 review (BLOCKER): Windows spells its essentials `Path`, `SystemRoot`,
+ * `ComSpec`, `windir` and has no `HOME`. Exact-case matching dropped every one
+ * of them, so the child env had no PATH and the backend binary could not be
+ * resolved — every run on win32 broke. Matching is case-insensitive; the
+ * original spelling must survive, because Windows tooling reads `Path`.
+ */
+describe('buildChildEnv — Windows-shaped env (#427 review)', () => {
+  const WIN: NodeJS.ProcessEnv = {
+    Path: 'C:\\Windows\\system32;C:\\Program Files\\nodejs',
+    PATHEXT: '.COM;.EXE;.BAT;.CMD',
+    SystemRoot: 'C:\\Windows',
+    SystemDrive: 'C:',
+    ComSpec: 'C:\\Windows\\system32\\cmd.exe',
+    windir: 'C:\\Windows',
+    USERPROFILE: 'C:\\Users\\dev',
+    APPDATA: 'C:\\Users\\dev\\AppData\\Roaming',
+    LOCALAPPDATA: 'C:\\Users\\dev\\AppData\\Local',
+    TEMP: 'C:\\Users\\dev\\AppData\\Local\\Temp',
+    TMP: 'C:\\Users\\dev\\AppData\\Local\\Temp',
+    ProgramFiles: 'C:\\Program Files',
+    // No HOME on Windows.
+  };
+
+  it('keeps the vars a spawned binary needs, under their original casing', () => {
+    const env = buildChildEnv({ backend: 'claude', source: WIN });
+    expect(env.Path).toBe('C:\\Windows\\system32;C:\\Program Files\\nodejs');
+    expect(env.SystemRoot).toBe('C:\\Windows');
+    expect(env.ComSpec).toBe('C:\\Windows\\system32\\cmd.exe');
+    expect(env.windir).toBe('C:\\Windows');
+    expect(env.USERPROFILE).toBe('C:\\Users\\dev');
+    expect(env.APPDATA).toBe('C:\\Users\\dev\\AppData\\Roaming');
+    expect(env.LOCALAPPDATA).toBe('C:\\Users\\dev\\AppData\\Local');
+    expect(env.PATHEXT).toBe('.COM;.EXE;.BAT;.CMD');
+    expect(env.SystemDrive).toBe('C:');
+    expect(env.ProgramFiles).toBe('C:\\Program Files');
+    expect(env.TEMP).toBe('C:\\Users\\dev\\AppData\\Local\\Temp');
+    // The key is NOT normalized: an upper-cased `PATH` would be a second,
+    // unrelated var to Windows tooling that reads `Path`.
+    expect(Object.keys(env)).toContain('Path');
+    expect(Object.keys(env)).not.toContain('PATH');
+  });
+
+  it('still drops secrets whatever their casing', () => {
+    const env = buildChildEnv({
+      backend: 'claude',
+      source: { ...WIN, Node_Auth_Token: 'npm_shouldnotleak', Stripe_Secret_Key: 'sk_live_x' },
+    });
+    expect(env.Node_Auth_Token).toBeUndefined(); // secret name beats the NODE_ prefix
+    expect(env.Stripe_Secret_Key).toBeUndefined();
+  });
+
+  it('honors lower-cased proxy vars and CEZ_* / passthrough case-insensitively', () => {
+    const env = buildChildEnv({
+      backend: 'claude',
+      source: { ...WIN, http_proxy: 'http://p:3128', CEZ_ENV_PASSTHROUGH: 'my_tool_dir', my_tool_dir: 'C:\\tc' },
+    });
+    expect(env.http_proxy).toBe('http://p:3128');
+    expect(env.my_tool_dir).toBe('C:\\tc');
+  });
+});
+
+/**
+ * #427 review (MAJOR): `CLAUDE_CODE_USE_BEDROCK` / `_USE_VERTEX` ride in on the
+ * `CLAUDE_` prefix. Forwarding the toggle while dropping the credentials it
+ * switches the SDK over to is a hard auth failure, so each toggle unlocks its
+ * own creds — and only while it is on.
+ */
+describe('buildChildEnv — Bedrock/Vertex toggles (#427 review)', () => {
+  const AWS = {
+    AWS_ACCESS_KEY_ID: 'AKIAIOSFODNN7EXAMPLE',
+    AWS_SECRET_ACCESS_KEY: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+    AWS_SESSION_TOKEN: 'FwoGZXIvYXdzEExample',
+    AWS_REGION: 'us-east-1',
+    AWS_DEFAULT_REGION: 'us-east-1',
+    AWS_PROFILE: 'dev',
+    AWS_BEARER_TOKEN_BEDROCK: 'bedrock-bearer-xyz',
+  };
+  const GCP = {
+    GOOGLE_APPLICATION_CREDENTIALS: '/home/dev/gcp.json',
+    CLOUD_ML_REGION: 'us-east5',
+    ANTHROPIC_VERTEX_PROJECT_ID: 'my-project',
+    GOOGLE_CLOUD_PROJECT: 'my-project',
+  };
+
+  it('CLAUDE_CODE_USE_BEDROCK=1 forwards the toggle AND the AWS creds it needs', () => {
+    const env = buildChildEnv({
+      backend: 'claude',
+      source: { PATH: '/usr/bin', CLAUDE_CODE_USE_BEDROCK: '1', ...AWS },
+    });
+    expect(env.CLAUDE_CODE_USE_BEDROCK).toBe('1');
+    for (const [k, v] of Object.entries(AWS)) expect(env[k]).toBe(v);
+  });
+
+  it('without the toggle the same AWS creds are dropped (least-privilege default)', () => {
+    const env = buildChildEnv({ backend: 'claude', source: { PATH: '/usr/bin', ...AWS } });
+    for (const k of Object.keys(AWS)) expect(env[k]).toBeUndefined();
+  });
+
+  it('CLAUDE_CODE_USE_BEDROCK=0 is not a toggle — creds stay dropped', () => {
+    const env = buildChildEnv({
+      backend: 'claude',
+      source: { PATH: '/usr/bin', CLAUDE_CODE_USE_BEDROCK: '0', ...AWS },
+    });
+    expect(env.AWS_SECRET_ACCESS_KEY).toBeUndefined();
+  });
+
+  it('CLAUDE_CODE_USE_VERTEX=1 forwards the GCP config it needs, but not AWS', () => {
+    const env = buildChildEnv({
+      backend: 'claude',
+      source: { PATH: '/usr/bin', CLAUDE_CODE_USE_VERTEX: 'true', ...GCP, ...AWS },
+    });
+    expect(env.GOOGLE_APPLICATION_CREDENTIALS).toBe('/home/dev/gcp.json');
+    expect(env.CLOUD_ML_REGION).toBe('us-east5');
+    expect(env.ANTHROPIC_VERTEX_PROJECT_ID).toBe('my-project');
+    expect(env.GOOGLE_CLOUD_PROJECT).toBe('my-project');
+    expect(env.AWS_SECRET_ACCESS_KEY).toBeUndefined(); // vertex ≠ bedrock
+  });
+
+  it('a backend that never sees the toggle never gets the creds either', () => {
+    const env = buildChildEnv({
+      backend: 'codex',
+      source: { PATH: '/usr/bin', CLAUDE_CODE_USE_BEDROCK: '1', ...AWS },
+    });
+    expect(env.CLAUDE_CODE_USE_BEDROCK).toBeUndefined();
+    expect(env.AWS_SECRET_ACCESS_KEY).toBeUndefined();
   });
 });
 

@@ -18,15 +18,41 @@
 
 export const REDACTED = '[REDACTED]';
 
-/** Names whose value is a credential worth scrubbing from the transcript. */
-const SECRET_VALUE_NAME_RE =
-  /(TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|APIKEY|API_KEY|PRIVATE_KEY|ACCESS_KEY|PASSPHRASE|_AUTH$|_AUTH_)/i;
+/**
+ * Names that look like a credential — the single source of truth for "is this
+ * var a secret?", shared with `agent-env.ts` (#427 review). The two used to
+ * carry near-identical but subtly different lists, so a var could be stripped
+ * from the child env yet never collected for redaction (or vice versa). One
+ * constant, one answer: what we refuse to forward is exactly what we scrub.
+ */
+export const SECRET_NAME_RE =
+  /(TOKEN|SECRET|PASSWORD|PASSWD|CREDENTIAL|_KEY$|_KEY_|APIKEY|API_KEY|PRIVATE_KEY|ACCESS_KEY|_AUTH$|_AUTH_|SESSION|COOKIE|PASSPHRASE)/i;
 
-/** Names matched above but whose value is NOT a secret (a socket path, a pid). */
-const SECRET_VALUE_NAME_ALLOW: ReadonlySet<string> = new Set(['SSH_AUTH_SOCK', 'SSH_AGENT_PID']);
+/** Names matched above whose value is NOT a secret (a socket path, a pid, a
+ *  desktop-session id) — collecting them would scrub ordinary paths from the
+ *  transcript for no benefit. */
+const SECRET_VALUE_NAME_ALLOW: ReadonlySet<string> = new Set([
+  'SSH_AUTH_SOCK',
+  'SSH_AGENT_PID',
+  'SESSION_MANAGER',
+  'SESSIONNAME',
+  'XDG_SESSION_ID',
+  'XDG_SESSION_TYPE',
+  'XDG_SESSION_CLASS',
+  'XDG_SESSION_DESKTOP',
+]);
 
-/** Below this length a "secret" value is too common to redact safely. */
-const MIN_SECRET_LEN = 8;
+/**
+ * Below this length a "secret" value is too common a word to redact safely.
+ * Verified over-redaction at the old floor of 8 (#427 review): a dev box with
+ * `POSTGRES_PASSWORD=postgres` turned `apt install postgresql-16` into
+ * `apt install [REDACTED]ql-16` in the transcript. Real credentials (API keys,
+ * PATs, AWS secrets) are 20+ chars, so 12 keeps the catch rate while putting
+ * short dictionary words — the whole source of false positives — out of reach.
+ * Pattern-based redaction below is unaffected: it matches token *shapes*, not
+ * env values, and still catches short-but-real tokens.
+ */
+const MIN_SECRET_LEN = 12;
 
 /** Well-known credential shapes, independent of the host env. */
 const TOKEN_PATTERNS: readonly RegExp[] = [
@@ -52,8 +78,8 @@ export function collectSecretValues(env: NodeJS.ProcessEnv = process.env): strin
   const values = new Set<string>();
   for (const [name, value] of Object.entries(env)) {
     if (!value || value.length < MIN_SECRET_LEN) continue;
-    if (SECRET_VALUE_NAME_ALLOW.has(name)) continue;
-    if (SECRET_VALUE_NAME_RE.test(name)) values.add(value);
+    if (SECRET_VALUE_NAME_ALLOW.has(name.toUpperCase())) continue;
+    if (SECRET_NAME_RE.test(name)) values.add(value);
   }
   return [...values].sort((a, b) => b.length - a.length);
 }

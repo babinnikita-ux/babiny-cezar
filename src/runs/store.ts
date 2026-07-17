@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { collectSecretValues, redactDeep } from '../core/secret-redaction.js';
+import { collectSecretValues, redactDeep, redactSecrets } from '../core/secret-redaction.js';
 
 export type RunStatus = 'queued' | 'running' | 'waiting' | 'review' | 'done' | 'failed' | 'cancelled';
 export type StepStatus =
@@ -285,9 +285,30 @@ export class RunStore extends EventEmitter {
   updateRun(id: string, patch: Partial<Omit<RunRecord, 'id' | 'steps'>>): RunRecord | undefined {
     const run = this.runs.get(id);
     if (!run) return undefined;
-    Object.assign(run, patch);
+    Object.assign(run, this.redactPatch(patch));
     this.touch(run);
     return run;
+  }
+
+  /**
+   * Scrub the free-text fields of a record patch (#427 review). Redacting only
+   * events left a hole: `titleSummary` is derived from the RAW first agent turn
+   * and `error` from raw process output, so a token the agent echoed was
+   * `[REDACTED]` in the NDJSON yet verbatim in `runs.json` — the file the "no
+   * secrets in state files" rule names explicitly. These three are the only
+   * patch fields carrying agent/process text; the rest are ids, enums, counters
+   * and URLs, and running the scrubber over them would only risk mangling them.
+   */
+  private redactPatch(
+    patch: Partial<Omit<RunRecord, 'id' | 'steps'>>,
+  ): Partial<Omit<RunRecord, 'id' | 'steps'>> {
+    if (process.env.CEZ_REDACT_SECRETS === '0') return patch;
+    const out = { ...patch };
+    for (const field of ['title', 'titleSummary', 'error'] as const) {
+      const value = out[field];
+      if (typeof value === 'string') out[field] = this.redactText(value);
+    }
+    return out;
   }
 
   /** Append a step to an existing run (used by "Continue" — spec 003). */
@@ -405,8 +426,17 @@ export class RunStore extends EventEmitter {
    */
   private redact(event: RunEvent): RunEvent {
     if (process.env.CEZ_REDACT_SECRETS === '0') return event;
+    return redactDeep(event, this.hostSecrets());
+  }
+
+  /** Best-effort scrub of one free-text string bound for `runs.json`. */
+  private redactText(text: string): string {
+    return redactSecrets(text, this.hostSecrets());
+  }
+
+  private hostSecrets(): readonly string[] {
     if (this.secretValues === null) this.secretValues = collectSecretValues();
-    return redactDeep(event, this.secretValues);
+    return this.secretValues;
   }
 
   readEvents(runId: string): RunEvent[] {

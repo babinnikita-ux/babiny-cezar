@@ -21,6 +21,33 @@ describe('collectSecretValues', () => {
     expect(values).not.toContain('/tmp/ssh-abc/agent.1');
     expect(values).not.toContain('abc');
   });
+
+  /** #427 review: the shared SECRET_NAME_RE means a var stripped from the
+   *  child env is also collected for redaction — the two used to diverge. */
+  it('collects the name shapes agent-env strips, so the lists cannot drift', () => {
+    const values = collectSecretValues({
+      SIGNING_KEY: 'signingkeyvalue123',
+      MY_KEY_MATERIAL: 'keymaterialvalue123',
+      SESSION_SECRET: 'sessionsecretvalue123',
+      COOKIE_SIGNING: 'cookiesigningvalue123',
+    });
+    expect(values).toEqual(
+      expect.arrayContaining([
+        'signingkeyvalue123',
+        'keymaterialvalue123',
+        'sessionsecretvalue123',
+        'cookiesigningvalue123',
+      ]),
+    );
+  });
+
+  it('skips session/desktop bookkeeping whose value is a path, not a credential', () => {
+    const values = collectSecretValues({
+      SESSION_MANAGER: 'local/host:@/tmp/.ICE-unix/1234',
+      XDG_SESSION_TYPE: 'wayland-session-type',
+    });
+    expect(values).toEqual([]);
+  });
 });
 
 describe('redactSecrets', () => {
@@ -45,6 +72,25 @@ describe('redactSecrets', () => {
 
   it('leaves non-secret text untouched', () => {
     expect(redactSecrets('the quick brown fox', [])).toBe('the quick brown fox');
+  });
+
+  /**
+   * #427 review: the old 8-char floor mangled ordinary output — a dev box with
+   * `POSTGRES_PASSWORD=postgres` turned `apt install postgresql-16` into
+   * `apt install [REDACTED]ql-16`. Short dictionary words are not redactable.
+   */
+  it('does not redact short dictionary-word "secrets" out of ordinary output', () => {
+    const secrets = collectSecretValues({ POSTGRES_PASSWORD: 'postgres', DB_PASSWORD: 'root' });
+    expect(secrets).toEqual([]);
+    const line = 'apt install postgresql-16 && psql -U postgres -c "select 1"';
+    expect(redactSecrets(line, secrets)).toBe(line);
+  });
+
+  it('still redacts a real credential value at the raised floor', () => {
+    const secrets = collectSecretValues({ POSTGRES_PASSWORD: 'S3cr3t-Pr0d-Passw0rd' });
+    const out = redactSecrets('psql://app:S3cr3t-Pr0d-Passw0rd@db/prod', secrets);
+    expect(out).not.toContain('S3cr3t-Pr0d-Passw0rd');
+    expect(out).toContain(REDACTED);
   });
 });
 
