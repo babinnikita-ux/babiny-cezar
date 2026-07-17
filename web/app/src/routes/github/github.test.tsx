@@ -580,6 +580,30 @@ describe('the skills dropdown frequency sort (#408 item 1, shared with project-f
     expect(put?.body).toMatchObject({ skillUsage: { 'om-fix': 3, 'g-review': 1 } })
   })
 
+  it('a run started while ui-state is unavailable skips the bump rather than wiping the map', async () => {
+    // The PUT merge is shallow, so a bump computed off an unresolved/errored ui-state query
+    // would send a ONE-ENTRY map and replace every count the user has accumulated. The bump is
+    // a convenience; the stored history is not — so the bump is what gives way.
+    const sent = stubFetch({
+      // 404, not a 5xx: the query client never retries a 4xx (query-client.ts), so the query
+      // lands in its errored state immediately and the test stays deterministic.
+      'GET /api/ui-state': () => jsonResponse({ error: 'nope' }, 404),
+    })
+    await openDetail()
+
+    fireEvent.click(document.querySelector('[data-slot="gh-skills-trigger"]')!)
+    await waitFor(() => expect(document.querySelector('[data-skill="om-fix"]')).not.toBeNull())
+    fireEvent.click(document.querySelector('[data-slot="gh-skill-option"][data-skill="om-fix"]')!)
+
+    fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
+    // The run itself still goes through — persistence is fire-and-forget.
+    await waitFor(() => expect(document.querySelector('[data-slot="gh-queued"]')).not.toBeNull())
+
+    expect(sent.some((request) => request.method === 'PUT' && request.path === '/api/ui-state')).toBe(
+      false,
+    )
+  })
+
   it('picking a workflow only (no skills) never touches skillUsage', async () => {
     const sent = stubFetch()
     await openDetail()

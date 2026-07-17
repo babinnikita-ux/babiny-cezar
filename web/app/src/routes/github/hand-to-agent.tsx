@@ -99,10 +99,15 @@ export function HandToAgent({
       const run = 'runs' in created ? created.runs[0] : created
       if (run) onQueued(item.url, run.id)
       // Frequency sort (#408): every hand-off skill counts, mirroring the /new composer.
-      if (validSkills.length > 0) {
+      // Only bump once the CURRENT map is actually known (`uiState.data` present). The PUT
+      // merge is shallow (`uiStateSchema` passthrough, src/server/server.ts), so the client
+      // must send the WHOLE map — bumping off an unresolved or errored query would send a
+      // one-entry map and REPLACE every count the user has accumulated. Skipping the bump
+      // costs one count; sending it would cost the whole history. Fire-and-forget either way.
+      if (validSkills.length > 0 && uiState.data !== undefined) {
         const nextUsage = validSkills.reduce(
           (usage, name) => bumpSkillUsage(usage, name),
-          uiState.data?.skillUsage,
+          uiState.data.skillUsage,
         )
         void putUiState({ skillUsage: nextUsage })
           .then(() => queryClient.invalidateQueries({ queryKey: queryKeys.uiState }))
