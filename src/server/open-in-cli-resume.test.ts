@@ -43,6 +43,8 @@ describe('POST /api/runs/:id/open-in — agent CLI resume vs fresh launch', () =
 
   const app = () => createApp({ repoRoot, store, manager: {} as RunManager, version: '0.0.0-test' });
 
+  /** A FINISHED run by default — `createRun` parks new records at `queued`, which the engine still
+   *  owns, and only a run the engine has let go of resumes at all (see the status cases below). */
   const makeRun = (runner: 'claude' | 'codex' | 'opencode' | undefined, sessionId?: string) => {
     const run = store.createRun({
       title: 't',
@@ -51,6 +53,7 @@ describe('POST /api/runs/:id/open-in — agent CLI resume vs fresh launch', () =
       runner,
       steps: [{ id: 'work', name: 'Work', kind: 'agent' }],
     });
+    store.updateRun(run.id, { status: 'done' });
     if (sessionId) store.updateStep(run.id, 'work', { sessionId });
     return run;
   };
@@ -94,6 +97,32 @@ describe('POST /api/runs/:id/open-in — agent CLI resume vs fresh launch', () =
     expect(res.status).toBe(200);
     expect(((await res.json()) as { command: string }).command).toBe('opencode');
   });
+
+  // The run manager seeds `sessionId` when an agent step STARTS, so a live run already carries
+  // one. Resuming it here would attach a SECOND CLI process to the transcript the engine is
+  // writing — two writers on one session. Active runs degrade to a fresh launch, exactly like a
+  // cross-runner pick, which is also what the client's `cliTargetResumes` labels.
+  it.each(['running', 'queued', 'waiting'] as const)(
+    'a %s run launches fresh — never a second CLI on the session the engine is driving',
+    async (status) => {
+      const run = makeRun('claude', 'sess-1');
+      store.updateRun(run.id, { status });
+      const res = await openIn(run.id, 'cli:claude');
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as { command: string }).command).toBe('claude');
+      expect(mockOpenInTerminal).toHaveBeenCalledWith(expect.any(String), 'claude');
+    },
+  );
+
+  it.each(['done', 'failed', 'cancelled', 'review'] as const)(
+    'a %s run still resumes — the engine has let go of the session',
+    async (status) => {
+      const run = makeRun('claude', 'sess-1');
+      store.updateRun(run.id, { status });
+      const res = await openIn(run.id, 'cli:claude');
+      expect(((await res.json()) as { command: string }).command).toBe('claude --resume sess-1');
+    },
+  );
 
   it('hosted mode (CEZ_REMOTE=1) 409s before any session lookup, CLI or not', async () => {
     process.env.CEZ_REMOTE = '1';

@@ -158,6 +158,23 @@ describe('cliTargetResumes — Open in… menu labeling (#402)', () => {
     expect(cliTargetResumes(run('done', { runner: 'claude' }), 'finder')).toBe(false)
     expect(cliTargetResumes(run('done', { runner: 'claude' }), 'terminal')).toBe(false)
   })
+
+  // The engine seeds `sessionId` the moment an agent step starts, so an ACTIVE run carries both
+  // a runner and a session — the match check alone would offer to resume the live transcript and
+  // attach a second CLI to it.
+  it.each(['running', 'queued', 'waiting'] as RunStatus[])(
+    'a %s run never resumes — the engine still owns the session',
+    (status) => {
+      expect(cliTargetResumes(run(status, { runner: 'claude' }), 'cli:claude')).toBe(false)
+    },
+  )
+
+  it.each(['done', 'failed', 'cancelled', 'review'] as RunStatus[])(
+    'a %s run resumes again once the engine has let go',
+    (status) => {
+      expect(cliTargetResumes(run(status, { runner: 'claude' }), 'cli:claude')).toBe(true)
+    },
+  )
 })
 
 describe('finishTitle', () => {

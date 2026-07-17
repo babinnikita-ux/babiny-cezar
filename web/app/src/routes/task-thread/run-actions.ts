@@ -55,10 +55,15 @@ function cliTargetRunner(targetId: string): Runner | undefined {
  *  one (#402)? Only the backend that produced the session can resume it — a foreign CLI's
  *  session id means nothing to a different agent, so cross-runner picks always launch clean.
  *  Legacy runs with no `runner` recorded predate the runner choice and default to Claude, same
- *  as `resumeCommand`. */
+ *  as `resumeCommand`.
+ *  Active runs never resume, same gate as `resumeHint`/`runActionFlags.terminal`: the engine
+ *  seeds `sessionId` when the step STARTS (workflows/run.ts), so a running run already has one
+ *  and would otherwise offer to attach a second CLI to the transcript the engine is driving.
+ *  Those picks launch a fresh CLI in the worktree instead — what the server does too. */
 export function cliTargetResumes(run: RunRecord, targetId: string): boolean {
   const runner = cliTargetRunner(targetId)
   if (!runner) return false
+  if (isRunActive(run.status)) return false
   return runner === (run.runner ?? 'claude') && lastSessionId(run) !== undefined
 }
 
