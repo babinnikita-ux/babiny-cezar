@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback } from 'react'
+import { Link } from 'react-router'
 
 import { putUiState } from '@/api/client'
 import { queryKeys, useUiState } from '@/api/queries'
@@ -25,6 +26,10 @@ const INSTALL_COMMAND = "npx skills add open-mercato/skills --skill '*'"
  * banner flash on before the "already dismissed" truth loads — the dismissal itself has no
  * pre-paint requirement (unlike theme/appearance), so there is nothing worth mirroring into
  * localStorage for this one.
+ *
+ * The copy says WHY to install a repo cezar already clones and merges by default
+ * (`DEFAULT_SKILLS_REPOS`): the install is for using the skills OUTSIDE cezar. Inside it, the
+ * answer is Skills → Refresh, which this points at rather than duplicating.
  */
 export function SkillsBanner() {
   const queryClient = useQueryClient()
@@ -50,7 +55,6 @@ export function SkillsBanner() {
   return (
     <Banner onDismiss={dismiss} dismissLabel="Dismiss the open-mercato/skills banner">
       <span className="font-semibold">Make the most of parallel coding with our AI skills.</span>{' '}
-      Install{' '}
       <a
         href={SKILLS_REPO_URL}
         target="_blank"
@@ -60,7 +64,9 @@ export function SkillsBanner() {
         open-mercato/skills
       </a>{' '}
       — reusable, technology-agnostic agent skills for PR creation, code review, CI
-      stabilisation, spec writing and more:{' '}
+      stabilisation, spec writing and more. cezar already loads them for you; refresh them any
+      time from <Link to="/skills" className="underline underline-offset-2 hover:text-muted-foreground">Skills</Link>.
+      To use them outside cezar:{' '}
       <code className="rounded bg-card px-1 py-0.5 font-mono text-[12px]">{INSTALL_COMMAND}</code>
     </Banner>
   )

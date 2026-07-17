@@ -189,6 +189,45 @@ describe('AppShell', () => {
     })
   })
 
+  /** The global banner slot (#391). */
+  describe('banner slot', () => {
+    it('renders the banner when one is passed', () => {
+      renderShell('/', { banner: <p>banner content</p> })
+      const slot = document.querySelector('[data-slot="banner-slot"]') as HTMLElement
+      expect(slot).not.toBeNull()
+      expect(within(slot).getByText('banner content')).toBeTruthy()
+    })
+
+    it('renders nothing when absent — no empty slot to push the scroller down', () => {
+      renderShell()
+      expect(document.querySelector('[data-slot="banner-slot"]')).toBeNull()
+    })
+
+    // The regression the slot was born with: as the first child of <main>, a sticky banner sat in
+    // the same scrollport as every routed view's own `sticky top-0` header, which parked over it
+    // (opaque, later in DOM, equal-or-higher z-index) and swallowed the clicks on its dismiss X.
+    // Its own row instead — so the banner is chrome, above the scroller, not scrolled content.
+    it('sits outside the scrolling main region, not inside it', () => {
+      renderShell('/', { banner: <p>banner content</p> })
+      const slot = document.querySelector('[data-slot="banner-slot"]') as HTMLElement
+      expect(screen.getByRole('main').contains(slot)).toBe(false)
+      expect(slot.className).not.toContain('sticky')
+    })
+
+    it('is its own grid row, above the scroller and below the mobile bar', () => {
+      renderShell('/', { banner: <p>banner content</p> })
+      const slot = document.querySelector('[data-slot="banner-slot"]') as HTMLElement
+      const main = screen.getByRole('main')
+      const column = main.parentElement as HTMLElement
+      expect(column.className).toContain('grid-rows-[auto_auto_1fr_auto]')
+      expect(slot.parentElement).toBe(column)
+      expect(slot.className).toContain('row-start-2')
+      // The scroller keeps the 1fr row, so the banner's height comes out of the shell's own
+      // budget rather than making every `min-h-full` route overflow by exactly the banner.
+      expect(main.className).toContain('row-start-3')
+    })
+  })
+
   /** jsdom cannot evaluate `md:` — so assert the structure and the responsive classes that
    *  encode it, and leave "does it actually reflow at 390px" to the e2e iPhone screenshot. */
   describe('responsive skeleton', () => {

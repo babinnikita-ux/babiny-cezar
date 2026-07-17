@@ -1,5 +1,6 @@
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { createQueryClient } from '@/api/query-client'
@@ -27,7 +28,9 @@ function mount(uiState: UiState | undefined, fetchImpl?: typeof fetch) {
   const client = makeClient(uiState)
   render(
     <QueryClientProvider client={client}>
-      <SkillsBanner />
+      <MemoryRouter>
+        <SkillsBanner />
+      </MemoryRouter>
     </QueryClientProvider>,
   )
   return { client }
@@ -54,6 +57,13 @@ describe('SkillsBanner', () => {
     expect(banner()).not.toBeNull()
     expect(banner()?.textContent).toContain('open-mercato/skills')
     expect(banner()?.textContent).toContain("npx skills add open-mercato/skills --skill '*'")
+  })
+
+  it('says why to install skills cezar already loads, and points at Skills for the in-app refresh', () => {
+    mount({})
+    expect(banner()?.textContent).toContain('cezar already loads them')
+    expect(banner()?.textContent).toContain('outside cezar')
+    expect(screen.getByRole('link', { name: 'Skills' }).getAttribute('href')).toBe('/skills')
   })
 
   it('stays hidden once dismissedSkillsBanner is already true', () => {

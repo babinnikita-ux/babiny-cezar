@@ -13,7 +13,7 @@ import { RunManager } from './workflows/run.js';
 import { loadWorkflows } from './workflows/load.js';
 import { startServer } from './server/server.js';
 import { checkForUpdate } from './update-check.js';
-import { SKILLS_BANNER_LINES } from './skills-banner.js';
+import { printSkillsBanner } from './skills-banner.js';
 
 const HELP = `cezar — local cockpit for AI agent tasks in your repo
 
@@ -150,8 +150,8 @@ async function serveCommand(repoRoot: string, preferredPort: number, openBrowser
   }
   if (port !== preferredPort) console.log(`  (port ${preferredPort} was busy — using ${port})`);
   console.log(`\n  cockpit → ${url}\n`);
-  for (const line of SKILLS_BANNER_LINES) console.log(line);
-  console.log();
+  // Silenced by CEZ_NO_BANNER=1 or by dismissing the cockpit's banner (#391).
+  await printSkillsBanner(repoRoot);
 
   const shutdown = () => {
     store.flush();
