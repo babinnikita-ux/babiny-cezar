@@ -12,6 +12,7 @@ import {
   collectRunCommits,
   commitAll,
   imageMimeType,
+  isOsOpenableImage,
   pushCurrentBranch,
   readWorktreePath,
   type ChangesPayload,
@@ -283,6 +284,33 @@ describe('imageMimeType — the raw-serving allowlist (R5 Step 1.6)', () => {
     expect(imageMimeType('README')).toBeNull();
     expect(imageMimeType('.png')).toBeNull(); // a dotfile named ".png" is not an image
     expect(imageMimeType('archive.png.zip')).toBeNull();
+  });
+});
+
+describe('isOsOpenableImage — the OS-launcher allowlist (#365)', () => {
+  it('allows raster images, matching the raw allowlist case-insensitively', () => {
+    expect(isOsOpenableImage('logo.png')).toBe(true);
+    expect(isOsOpenableImage('deep/dir/Photo.JPEG')).toBe(true);
+    expect(isOsOpenableImage('anim.webp')).toBe(true);
+    expect(isOsOpenableImage('shot.avif')).toBe(true);
+  });
+
+  it('refuses SVG — the raw route\'s CSP does not exist once the OS opens the file', () => {
+    // `imageMimeType` says yes (inert in an <img>, plus a no-script CSP); the OS launcher
+    // applies neither, and the default .svg handler is usually a script-executing browser.
+    expect(imageMimeType('icon.svg')).toBe('image/svg+xml');
+    expect(isOsOpenableImage('icon.svg')).toBe(false);
+    expect(isOsOpenableImage('deep/ICON.SVG')).toBe(false);
+  });
+
+  it('refuses everything the OS would EXECUTE rather than display', () => {
+    expect(isOsOpenableImage('build.command')).toBe(false);
+    expect(isOsOpenableImage('run.desktop')).toBe(false);
+    expect(isOsOpenableImage('setup.exe')).toBe(false);
+    expect(isOsOpenableImage('index.html')).toBe(false);
+    expect(isOsOpenableImage('README')).toBe(false);
+    expect(isOsOpenableImage('.png')).toBe(false); // a dotfile named ".png" is not an image
+    expect(isOsOpenableImage('archive.png.zip')).toBe(false);
   });
 });
 

