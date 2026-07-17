@@ -8,6 +8,7 @@ import type { GithubData, GithubItem, Skill, WorkflowsResponse } from '@/api/typ
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 
 import { GithubRoute } from './github'
+import { readFollowupPrompt, readFollowupSelection, writeFollowupSelection } from './hand-to-agent-draft'
 
 beforeAll(() => {
   // cmdk scrolls the selected item into view; jsdom has no scrollIntoView.
@@ -633,6 +634,78 @@ describe('the remembered last selection (#408 item 3)', () => {
   })
 })
 
+// ---- #408: a remembered pick that no longer exists ----------------------------------------------
+
+/**
+ * Remembering the pick gave it a lifetime beyond the files that justify it. A workflow can be
+ * renamed, a skill deleted — and because every cockpit shares one `localhost:<port>` origin
+ * (`pickPort`, src/index.ts), a name can even arrive from a DIFFERENT repo's cockpit, where it
+ * never existed here. What is restored must be checked against the catalog, or Run POSTs a name
+ * the server 404s on, on every press and every reload.
+ */
+describe('a remembered pick the catalog no longer has (#408)', () => {
+  const WITHOUT_SHIP_IT: WorkflowsResponse = {
+    workflows: [{ name: 'quick-task', description: 'one step', steps: [], source: 'built-in' }],
+    issues: [],
+  }
+
+  it('a workflow deleted since it was remembered is dropped from the trigger, the POST and storage', async () => {
+    writeFollowupSelection({ workflow: 'ship-it', skills: [] })
+    const sent = stubFetch({ 'GET /api/workflows': () => jsonResponse(WITHOUT_SHIP_IT) })
+    await openDetail()
+
+    const trigger = () => document.querySelector('[data-slot="gh-workflow-trigger"]')
+    await waitFor(() => expect(trigger()?.textContent).not.toContain('ship-it'))
+    expect(trigger()?.textContent).toContain('workflow') // back to the unselected placeholder
+
+    fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
+    await waitFor(() => expect(document.querySelector('[data-slot="gh-queued"]')).not.toBeNull())
+    // The run falls back to quick-task instead of 404-ing on a workflow that is gone.
+    expect(sent.find((request) => request.method === 'POST' && request.path === '/api/runs')?.body)
+      .toMatchObject({ workflow: 'quick-task' })
+    // Dropped from storage too — otherwise the next reload restores it right back.
+    expect(readFollowupSelection().workflow).toBeNull()
+  })
+
+  it('a remembered workflow that still exists survives — the guard only drops the unknown', async () => {
+    writeFollowupSelection({ workflow: 'ship-it', skills: [] })
+    const sent = stubFetch()
+    await openDetail()
+
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="gh-workflow-trigger"]')?.textContent).toContain('ship-it'),
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
+    await waitFor(() =>
+      expect(sent.some((request) => request.method === 'POST' && request.path === '/api/runs')).toBe(true),
+    )
+    expect(sent.find((request) => request.method === 'POST' && request.path === '/api/runs')?.body)
+      .toMatchObject({ workflow: 'ship-it' })
+  })
+
+  it('a deleted skill is dropped from the chips, the counter AND the POST — never shown but unsent', async () => {
+    writeFollowupSelection({ workflow: null, skills: ['om-fix', 'deleted-skill'] })
+    const sent = stubFetch()
+    await openDetail()
+
+    await waitFor(() => expect(document.querySelectorAll('[data-slot="gh-skill-chip"]')).toHaveLength(1))
+    expect(
+      [...document.querySelectorAll<HTMLElement>('[data-slot="gh-skill-chip"]')].map((chip) => chip.dataset.skill),
+    ).toEqual(['om-fix'])
+    // The counter must agree with the chips and the POST — not report the phantom.
+    expect(document.querySelector('[data-slot="gh-skills-trigger"]')?.textContent).toContain('· 1')
+
+    fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
+    await waitFor(() =>
+      expect(sent.some((request) => request.method === 'POST' && request.path === '/api/runs')).toBe(true),
+    )
+    const body = sent.find((request) => request.method === 'POST' && request.path === '/api/runs')?.body as {
+      steps?: Array<{ skill: string }>
+    }
+    expect(body.steps?.map((step) => step.skill)).toEqual(['om-fix'])
+  })
+})
+
 // ---- #408: draft persistence -------------------------------------------------------------------
 
 describe('the follow-up prompt draft (#408 item 4)', () => {
@@ -682,6 +755,21 @@ describe('the follow-up prompt draft (#408 item 4)', () => {
     stubFetch()
     await openDetail()
     expect(promptValue()).toBe('')
+  })
+
+  it('spending the draft clears the textarea THERE AND THEN, not only on the next mount', async () => {
+    stubFetch()
+    await openDetail()
+    fireEvent.change(promptField(), { target: { value: 'spend me' } })
+    await waitFor(() => expect(promptValue()).toBe('spend me'))
+
+    fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
+    await waitFor(() => expect(document.querySelector('[data-slot="gh-queued"]')).not.toBeNull())
+
+    // Storage and UI must agree without a remount: leaving the text on screen while the entry is
+    // gone from storage means it silently vanishes the next time you come back.
+    await waitFor(() => expect(promptValue()).toBe(''))
+    expect(readFollowupPrompt(ISSUE_142.url)).toBe('')
   })
 })
 

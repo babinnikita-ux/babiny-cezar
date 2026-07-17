@@ -79,4 +79,42 @@ describe('the ui-state API — skillUsage (#408)', () => {
     expect(res.status).toBe(400);
     expect((await res.json()) as { error: string }).toHaveProperty('error');
   });
+
+  // ---- bounds ------------------------------------------------------------------------------
+  // The body is written straight to ui-state.json, which every cockpit load GETs back and every
+  // later PUT re-reads — so an unbounded map is an unbounded file. Every other field in this
+  // schema carries a limit; skillUsage now does too, on all three axes.
+  describe('skillUsage bounds — unbounded input must never reach the file', () => {
+    const usageOf = (entries: number) =>
+      Object.fromEntries(Array.from({ length: entries }, (_, i) => [`skill-${i}`, 1]));
+
+    it('a 200-char key is accepted; a 201-char key is refused', async () => {
+      expect((await put({ skillUsage: { ['a'.repeat(200)]: 1 } })).status).toBe(200);
+      const over = await put({ skillUsage: { ['a'.repeat(201)]: 1 } });
+      expect(over.status).toBe(400);
+      expect(rawFile().skillUsage).toEqual({ ['a'.repeat(200)]: 1 });
+    });
+
+    it('a huge key cannot balloon the file (the 50 MB PUT)', async () => {
+      const res = await put({ skillUsage: { ['A'.repeat(50 * 1024 * 1024)]: 1 } });
+      expect(res.status).toBe(400);
+      // Refused before any write — the file must not exist at all.
+      expect(() => readFileSync(uiStatePath(), 'utf8')).toThrow();
+    });
+
+    it('a count at the cap is accepted; one over it is refused', async () => {
+      expect((await put({ skillUsage: { 'om-fix': 1_000_000 } })).status).toBe(200);
+      expect((await put({ skillUsage: { 'om-fix': 1_000_001 } })).status).toBe(400);
+      expect(rawFile().skillUsage).toEqual({ 'om-fix': 1_000_000 });
+    });
+
+    it('200 entries are accepted; 201 are refused', async () => {
+      expect((await put({ skillUsage: usageOf(200) })).status).toBe(200);
+      const over = await put({ skillUsage: usageOf(201) });
+      expect(over.status).toBe(400);
+      expect((await over.json()) as { error: string }).toHaveProperty('error');
+      // The at-cap map from the previous PUT still stands — the refusal wrote nothing.
+      expect(Object.keys(rawFile().skillUsage as object)).toHaveLength(200);
+    });
+  });
 });

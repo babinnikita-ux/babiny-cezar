@@ -95,6 +95,18 @@ export function GithubRoute({ view }: { view: GithubView }) {
   useEffect(() => {
     writeFollowupSelection({ workflow, skills: [...selectedSkills] })
   }, [workflow, selectedSkills])
+  // A workflow that no longer exists must not reach the server — the same legacy rule
+  // `validSkills` applies to skills (hand-to-agent.tsx). Remembering the pick (#408) gave this
+  // state a lifetime beyond the `.ai/workflows/` file that justified it: rename the workflow and
+  // every reload restores a name the server 404s on, with no obvious way to clear it. Cockpits
+  // for different repos also share one `localhost:<port>` origin (`pickPort`, src/index.ts) and
+  // therefore this localStorage key, so the name can arrive from a repo where it does exist.
+  // Drop it only once the list has LOADED — an in-flight fetch is not evidence of absence.
+  const workflowDefs = workflows.data?.workflows
+  useEffect(() => {
+    if (!workflowDefs) return
+    if (workflow !== null && !workflowDefs.some((def) => def.name === workflow)) setWorkflow(null)
+  }, [workflowDefs, workflow])
   // Frequency sort (#408, shared with /new's SourcePill): project-first, then most-selected.
   // Memoized so the picker gets a STABLE array identity across renders that don't actually
   // change the catalog or the usage stats (e.g. toggling a skill re-renders this route).

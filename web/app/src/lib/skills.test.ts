@@ -9,7 +9,6 @@ import {
   isProjectSkill,
   multiWordFilter,
   orderSkills,
-  orderSkillsByRecency,
   orderSkillsByUsage,
   skillKeywords,
   skillUsedBy,
@@ -41,30 +40,6 @@ describe('isProjectSkill / orderSkills (#377)', () => {
   })
 })
 
-describe('orderSkillsByRecency', () => {
-  const skills = [
-    skill({ name: 'g1', source: 'global' }),
-    skill({ name: 'p1', source: 'agents' }),
-    skill({ name: 'g2', source: 'global' }),
-    skill({ name: 'p2', source: 'ai' }),
-  ]
-
-  it('keeps locality first, then sorts most-recent within each half', () => {
-    // Recent = [g2, p2] newest first → g2 leads globals, p2 leads projects.
-    const ordered = orderSkillsByRecency(skills, ['g2', 'p2'])
-    expect(ordered.map((s) => s.name)).toEqual(['p2', 'p1', 'g2', 'g1'])
-  })
-
-  it('never-run skills keep server order after the recent ones', () => {
-    const ordered = orderSkillsByRecency(skills, ['g2'])
-    expect(ordered.map((s) => s.name)).toEqual(['p1', 'p2', 'g2', 'g1'])
-  })
-
-  it('falls back to plain locality order with no recency', () => {
-    expect(orderSkillsByRecency(skills, []).map((s) => s.name)).toEqual(['p1', 'p2', 'g1', 'g2'])
-  })
-})
-
 describe('orderSkillsByUsage (#408: frequency sort, shared by both composers)', () => {
   const skills = [
     skill({ name: 'g1', source: 'global' }),
@@ -93,6 +68,22 @@ describe('orderSkillsByUsage (#408: frequency sort, shared by both composers)', 
     const ordered = orderSkillsByUsage(skills, { g1: 2 })
     expect(ordered.map((s) => s.name)).toEqual(['p1', 'p2', 'g1', 'g2'])
   })
+
+  it('a skill named after an Object.prototype member counts 0, not the inherited function', () => {
+    // `usage` comes from JSON.parse (the ui-state GET), so it carries Object.prototype: a plain
+    // `usage[name]` lookup returns the INHERITED function for these names, `??` does not catch a
+    // non-nullish function, and the comparator goes NaN — which silently corrupts the order.
+    const usage = JSON.parse('{"p1": 5}') as Record<string, number>
+    const ordered = orderSkillsByUsage(
+      [
+        skill({ name: 'constructor', source: 'ai' }),
+        skill({ name: 'toString', source: 'ai' }),
+        skill({ name: 'p1', source: 'ai' }),
+      ],
+      usage,
+    )
+    expect(ordered.map((s) => s.name)).toEqual(['p1', 'constructor', 'toString'])
+  })
 })
 
 describe('bumpSkillUsage (#408: the ui-state skillUsage reducer)', () => {
@@ -109,6 +100,13 @@ describe('bumpSkillUsage (#408: the ui-state skillUsage reducer)', () => {
 
   it('adds a new entry alongside existing ones', () => {
     expect(bumpSkillUsage({ 'om-fix': 1 }, 'om-review')).toEqual({ 'om-fix': 1, 'om-review': 1 })
+  })
+
+  it('a skill named after an Object.prototype member starts at 1, not string garbage', () => {
+    // Same inherited-property trap as the sort: `usage['toString'] ?? 0` would yield the
+    // function, and `fn + 1` a string — which the server's bounded schema now rejects with a 400.
+    expect(bumpSkillUsage(JSON.parse('{}') as Record<string, number>, 'toString')).toEqual({ toString: 1 })
+    expect(bumpSkillUsage(undefined, 'constructor')).toEqual({ constructor: 1 })
   })
 })
 

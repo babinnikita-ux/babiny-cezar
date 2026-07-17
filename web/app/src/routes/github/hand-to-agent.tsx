@@ -109,7 +109,11 @@ export function HandToAgent({
           .catch(() => {})
       }
       // The prompt is spent; the picker choices remain (legacy keeps its pills too, #408).
+      // Clear BOTH the store and the state: the persist effect keys on `prompt`, so spending
+      // only the store would leave the textarea showing text that no longer exists anywhere —
+      // text that then vanishes on the next remount.
       writeFollowupPrompt(item.url, '')
+      setPrompt('')
       void queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
     },
     onError: (error) => toast(error.message, { tone: 'danger' }),
@@ -147,12 +151,15 @@ export function HandToAgent({
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <WorkflowPicker workflows={workflows} value={workflow} onChange={onWorkflowChange} />
-        <SkillsPicker skills={skills} selected={selectedSkills} onToggle={toggleSkill} />
+        <SkillsPicker skills={skills} selected={validSkills} onToggle={toggleSkill} />
       </div>
 
-      {selectedSkills.length > 0 ? (
+      {/* Chips and the trigger's count render from `validSkills`, not `selectedSkills`: the run
+          POSTs `validSkills`, so showing a deleted skill here would promise the run a skill it
+          will not use. What the composer shows and what it sends are the same list. */}
+      {validSkills.length > 0 ? (
         <div data-slot="gh-skill-chips" className="mt-2.5 flex flex-wrap gap-1.5">
-          {selectedSkills.map((name) => (
+          {validSkills.map((name) => (
             <button
               key={name}
               type="button"

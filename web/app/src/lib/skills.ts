@@ -23,21 +23,6 @@ export function orderSkills(skills: readonly Skill[]): Skill[] {
   return [...skills].sort((a, b) => Number(!isProjectSkill(a)) - Number(!isProjectSkill(b)))
 }
 
-/** Locality first (project before global, the #377 rule), then recency WITHIN each locality:
- *  a skill you ran more recently sorts above one you ran longer ago, and both sort above skills
- *  you have never run. `recentNames` is newest-first (the ui-state `recentSources` refs). The
- *  sort is stable, so never-run skills keep the server's directory order. */
-export function orderSkillsByRecency(skills: readonly Skill[], recentNames: readonly string[]): Skill[] {
-  const rank = new Map<string, number>()
-  recentNames.forEach((name, index) => {
-    if (!rank.has(name)) rank.set(name, index)
-  })
-  const recency = (skill: Skill) => rank.get(skill.name) ?? Number.MAX_SAFE_INTEGER
-  return [...skills].sort(
-    (a, b) => Number(!isProjectSkill(a)) - Number(!isProjectSkill(b)) || recency(a) - recency(b),
-  )
-}
-
 /**
  * The composer picker's frequency sort (#408): locality first (project before global, the #377
  * rule), then MOST-SELECTED first within each half. `usage` is the ui-state `skillUsage` map
@@ -51,10 +36,21 @@ export function orderSkillsByUsage(
   skills: readonly Skill[],
   usage: Readonly<Record<string, number>> | undefined,
 ): Skill[] {
-  const countOf = (skill: Skill) => usage?.[skill.name] ?? 0
   return [...skills].sort(
-    (a, b) => Number(!isProjectSkill(a)) - Number(!isProjectSkill(b)) || countOf(b) - countOf(a),
+    (a, b) =>
+      Number(!isProjectSkill(a)) - Number(!isProjectSkill(b)) ||
+      usageCount(usage, b.name) - usageCount(usage, a.name),
   )
+}
+
+/** One skill's count out of the `skillUsage` map. `Object.hasOwn`, not a plain lookup: `usage`
+ *  comes from `JSON.parse`, so it carries Object.prototype — a skill named `constructor` or
+ *  `toString` would otherwise resolve to the INHERITED function, which `??` does not catch,
+ *  turning the comparator into NaN and the bump into string garbage. */
+function usageCount(usage: Readonly<Record<string, number>> | undefined, name: string): number {
+  if (!usage || !Object.hasOwn(usage, name)) return 0
+  const count = usage[name]
+  return typeof count === 'number' ? count : 0
 }
 
 /** A pure reducer over the ui-state `skillUsage` map (#408): bump one skill's count by one. The
@@ -64,7 +60,7 @@ export function bumpSkillUsage(
   usage: Readonly<Record<string, number>> | undefined,
   name: string,
 ): Record<string, number> {
-  return { ...usage, [name]: (usage?.[name] ?? 0) + 1 }
+  return { ...usage, [name]: usageCount(usage, name) + 1 }
 }
 
 /**
