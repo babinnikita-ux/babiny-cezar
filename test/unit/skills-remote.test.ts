@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import {
@@ -39,8 +39,27 @@ test('safeRemoteFor accepts the documented safe source shapes', () => {
   // Local paths / file:// stay working (a documented source shape).
   assert.equal(safeRemoteFor('/abs/path/to/repo'), '/abs/path/to/repo');
   assert.equal(safeRemoteFor('./rel/repo'), './rel/repo');
-  assert.equal(safeRemoteFor('~/skills'), '~/skills');
+  assert.equal(safeRemoteFor('../sibling/repo'), '../sibling/repo');
   assert.equal(safeRemoteFor('file:///abs/repo'), 'file:///abs/repo');
+  // `.` and `-` are in the owner/name charset, so a single-segment relative
+  // path must be matched as a path first, not rewritten to a github.com URL.
+  assert.equal(safeRemoteFor('./rel'), './rel');
+  assert.equal(safeRemoteFor('../rel'), '../rel');
+});
+
+test('safeRemoteFor keeps Windows local paths working (BC §5: local path)', () => {
+  // win32 is a supported platform and these worked before the hardening —
+  // narrowing the `skillsRepos` source shape would be a breaking change.
+  assert.equal(safeRemoteFor('C:\\skills'), 'C:\\skills');
+  assert.equal(safeRemoteFor('C:/skills'), 'C:/skills');
+  assert.equal(safeRemoteFor('d:\\team\\skills'), 'd:\\team\\skills');
+  // Still not a licence for a drive-letter-shaped transport helper.
+  assert.equal(safeRemoteFor('C:\\x::y'), null);
+});
+
+test('safeRemoteFor expands ~/ so git (no shell) can actually find it', () => {
+  // execFile gives git no shell, so a literal `~` would be a directory name.
+  assert.equal(safeRemoteFor('~/skills'), join(homedir(), 'skills'));
 });
 
 // ---- isSafeRef / isPinnedSha: ref injection guard (#428) ---------------------
