@@ -484,14 +484,19 @@ export type BranchResult =
  * Repo-view branch action (`POST /api/repo/branch`): switch to `name` when it
  * already exists locally, otherwise create it from `from` (or HEAD) and switch.
  * Name validation is delegated to `git check-ref-format --branch` — git's own
- * rules, not a reimplementation. Predictable failures (invalid name, unknown
- * `from`, dirty-tree checkout conflict) come back as `{ ok:false, error }`.
+ * rules, not a reimplementation — behind an explicit dash-guard (#431).
+ * Predictable failures (invalid name, unknown `from`, dirty-tree checkout
+ * conflict) come back as `{ ok:false, error }`.
  */
 export async function createOrSwitchBranch(
   dir: string,
   name: string,
   from?: string,
 ): Promise<BranchResult> {
+  // Dash-guard (#431): `name` reaches `git checkout <name>` / `git checkout -b <name>` as a
+  // positional operand, so it gets the same explicit guard as `from` below — check-ref-format
+  // already rejects option-like names, and the point is not to rely on that alone.
+  if (!isSafeGitRef(name)) return { ok: false, error: `invalid branch name: ${name}` };
   const check = await git(dir, ['check-ref-format', '--branch', name]);
   if (!check.ok) return { ok: false, error: `invalid branch name: ${name}` };
 
