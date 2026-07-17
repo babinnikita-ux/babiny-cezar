@@ -5,11 +5,19 @@
  * `.ai/skills/`, while discovery also scans `.ai/cezar/skills/`, `.agents/skills/` (+ its
  * per-agent mirrors, e.g. `.claude/skills/`), the global `~/.agents/skills` /
  * `~/.claude/skills`, and the team skills repo (`src/skills.ts`). One shared list, so the two
- * surfaces can never drift apart again.
+ * SURFACES render the same copy.
+ *
+ * That is all this module can guarantee on its own: the list below is a hand-copy of the
+ * server's actual discovery order, which lives in another process (`SKILL_DIRS` in
+ * `src/skills.ts`) and cannot be imported into the bundle. `test/unit/skill-dirs.test.ts` pins
+ * the server's list against the constant below, so adding a discovery dir there fails that
+ * suite and points here instead of leaving this copy quietly wrong.
  */
 
-/** Local project directories, in the server's precedence order (`src/skills.ts`'s SKILL_DIRS,
- *  agent mirrors folded into one mention). */
+/** Local project directories, in the server's precedence order — `src/skills.ts`'s SKILL_DIRS
+ *  minus the per-agent mirrors (`.claude/skills` & co.), which the copy folds into one "agent
+ *  mirrors like …" mention rather than listing five times. Pinned by
+ *  `test/unit/skill-dirs.test.ts`; keep the two in step. */
 const SKILL_PROJECT_DIRS = ['.ai/cezar/skills/', '.ai/skills/', '.agents/skills/'] as const
 
 function Path({ children }: { children: string }) {

@@ -105,10 +105,22 @@ sugestii, ten sam kontrakt co bookmarklety, spec 011), tak żeby użytkownik mó
 poprawić prompt przed startem zamiast dostawać „ślepo odpaloną" sugestię
 (zgłoszenie z #355). `POST /api/todos/:id/start` zostaje jako publiczny,
 udokumentowany endpoint (BACKWARD_COMPATIBILITY.md) dla każdego, kto skryptuje
-cockpit bezpośrednio — po prostu własny Inbox GUI go już nie wywołuje. Wpis
-inboxa NIE znika automatycznie po kliknięciu „▶ Odpal" (nawigacja nie tworzy
-taska, więc nie ma czego oznaczyć jako `startedTaskId`) — użytkownik odhacza go
-ręcznie, tak jak każdy inny wpis.
+cockpit bezpośrednio — po prostu własny Inbox GUI go już nie wywołuje.
+
+Objazd przez kompozer **nie kosztuje audit traila**: link niesie też id wpisu
+(`/new?skill=&ref=&todo=t1`), kompozer oddaje je serwerowi jako `todoId` w body
+`POST /api/runs`, a serwer po starcie runa ustawia `startedTaskId` — dokładnie ta
+sama księgowość, którą robił `/api/todos/:id/start`. Efekt dla użytkownika jest
+jak wcześniej: wpis znika z Inboxa dopiero **gdy task naprawdę wystartował**
+(reguła `visibleTodos()`), a nie na samo kliknięcie „▶ Odpal" — kto klika i wraca
+bez startu, wciąż ma wpis. Powtórny start tego samego wpisu nie nadpisuje
+pierwszego runa (pierwszy start wygrywa) i nie duplikuje taska.
+
+`todoId` jest opcjonalny, zbindowany (zod, `.max(200)`) i **best-effort**: nieznane,
+nieaktualne lub już wystartowane id tylko loguje i pomija — run i tak startuje.
+Księgowość follow-upa nigdy nie może wywalić tasku użytkownika (reguła
+graceful degradation z CODE_REVIEW.md). Sam `todo` nie ma żadnej władzy: nie
+uzbraja `auto`/`key`, więc link z prefillem dalej nie potrafi odpalić nic ślepo.
 
 Przy okazji: `HANDOFF_INSTRUCTIONS` (`src/handoff.ts`) dostał ostrzejszy
 kontrakt — agent dopisuje wpis do `todos.json` tylko gdy zostaje faktycznie

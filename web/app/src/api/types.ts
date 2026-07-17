@@ -430,10 +430,11 @@ export interface TodoItem {
   suggestedPrompt?: string
   /** Explicit intent; missing infers from suggestedSkill/suggestedPrompt for old files. */
   runnable?: boolean
-  /** Set by the server when `startTodo` below started a task from this entry. Since #374 the
-   *  cockpit's "▶ Run" prefills the composer instead of calling that route, so a task launched
-   *  that way does not carry the todo id back and leaves this unset. */
-
+  /** Set by the server when a task was started from this entry — by `startTodo` below, or by
+   *  the cockpit's "▶ Run": since #374 that prefills the composer instead of calling that
+   *  route, and the entry's id travels along (`/new?…&todo=`, then `CreateRunInput.todoId`) so
+   *  the launched run is recorded here all the same. Set → the entry leaves the inbox and stays
+   *  in todos.json as the audit trail; a later launch never overwrites the first. */
   startedTaskId?: string
 }
 
@@ -535,6 +536,13 @@ export interface CreateRunInput {
   /** false → keep the handoff journal but do not expose or request a follow-up todos file.
    *  Omit for the default (enabled). */
   generateFollowups?: boolean
+  /** The inbox entry this task came from (#374), when the composer was prefilled from one
+   *  (`/new?…&todo=`). The server records the new run on that entry's `startedTaskId` so it
+   *  leaves the inbox. Best-effort: an unknown or already-started id never fails the run.
+   *  For ×2/×3 the FIRST variant is recorded — the thread the composer navigates to.
+   *  Orthogonal to `generateFollowups` (#444): that governs whether THIS task may append new
+   *  follow-ups, not whether the entry it was launched from gets marked started. */
+  todoId?: string
 }
 
 export interface MessageInput {

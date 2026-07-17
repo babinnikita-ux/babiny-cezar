@@ -26,8 +26,12 @@ import { newTaskPrefillHref } from './new-task-params'
  * `POST /api/todos/:id/start` still exists and still works exactly as before — it is a
  * documented public route (BACKWARD_COMPATIBILITY.md) for anyone scripting the cockpit
  * directly — this route just no longer calls it itself.
- *  - entries already turned into a task (`startedTaskId`, e.g. via that public route) are
- *    hidden — they stay in `todos.json` as an audit trail (the legacy `visibleTodos()` rule);
+ *  - the detour does not cost the audit trail: `todoRunHref` puts this entry's id in the link
+ *    (`&todo=`), the composer sends it back as `todoId` on POST /api/runs, and the server marks
+ *    the entry started — so pressing Start still records the run, and an entry the user only
+ *    looked at (Run, then Back) is honestly still here;
+ *  - entries already turned into a task (`startedTaskId`, via either route) are hidden — they
+ *    stay in `todos.json` as an audit trail (the legacy `visibleTodos()` rule);
  *  - Dismiss → `DELETE /api/todos/:id` — check off, gone;
  *  - the meta row keeps age / action / source-task link (or the honest "source task
  *    deleted") / PR link / suggested skill.
@@ -41,9 +45,11 @@ import { newTaskPrefillHref } from './new-task-params'
  * same amber pulse a waiting run shows — one grammar, not a second dialect.
  */
 
-/** Same text the legacy `POST /api/todos/:id/start` route builds server-side
- *  (src/server/server.ts) — kept in sync so the prefilled composer reads exactly like the
- *  task that route would have started. */
+/** Same text `POST /api/todos/:id/start` builds server-side (`todoTaskText` in src/todos.ts),
+ *  so the prefilled composer reads exactly like the task that route would have started. The
+ *  server lives in another process and shares no module with the bundle, so the two copies are
+ *  pinned by the shared cases in `test/fixtures/todo-task-text.json` — asserted here and in
+ *  `test/unit/todo-task-text.test.ts`. Change one side and a suite goes red. */
 export function todoTaskText(todo: Pick<TodoItem, 'summary' | 'suggestedPrompt' | 'suggestedArgs'>): string {
   let task = (todo.suggestedPrompt ?? todo.summary).trim() || todo.summary
   if (todo.suggestedArgs) task += `\n\nArguments: ${todo.suggestedArgs}`
@@ -51,9 +57,10 @@ export function todoTaskText(todo: Pick<TodoItem, 'summary' | 'suggestedPrompt' 
 }
 
 /** The Inbox `Run` button's target — the prefilled `/new`, never auto-starting (see doc
- *  block above). */
+ *  block above). `todo` carries this entry's id to the composer, which hands it back on
+ *  `POST /api/runs` so the started run lands on `startedTaskId`. */
 export function todoRunHref(todo: TodoItem): string {
-  return newTaskPrefillHref({ skill: todo.suggestedSkill, ref: todoTaskText(todo) })
+  return newTaskPrefillHref({ skill: todo.suggestedSkill, ref: todoTaskText(todo), todo: todo.id })
 }
 
 /** The one attention rung an inbox entry can be on — see the doc block above. */
@@ -217,7 +224,16 @@ function TodoCard({
               aria-disabled={busy || undefined}
               className={busy ? 'pointer-events-none opacity-55' : undefined}
             >
-              <Link to={todoRunHref(todo)}>
+              {/* `asChild` renders a Link, which the Button's `disabled` (and its
+                  `disabled:pointer-events-none`) cannot reach — an anchor has no disabled
+                  state. While a Dismiss is in flight the pointer block above is only half the
+                  job: without these two the link is still reachable by Tab and fires on Enter.
+                  Take it out of the tab order and swallow the activation. */}
+              <Link
+                to={todoRunHref(todo)}
+                tabIndex={busy ? -1 : undefined}
+                onClick={busy ? (event) => event.preventDefault() : undefined}
+              >
                 <PlayIcon aria-hidden="true" className="size-3" />
                 Run
               </Link>

@@ -1,5 +1,8 @@
 import { QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { MemoryRouter, Route, Routes, useSearchParams } from 'react-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -110,7 +113,9 @@ function renderInbox() {
       <MemoryRouter initialEntries={['/inbox']}>
         <Routes>
           <Route path="/inbox" element={<InboxRoute />} />
-          {/* Navigation probe: where Run's success is supposed to land (legacy selectRun hop). */}
+          {/* Where the "source task" meta link points — and where the legacy Run used to land
+              straight after POSTing /start. Rendered so a stray navigation to a thread is a
+              visible failure rather than a router warning. */}
           <Route path="/tasks/:id" element={<div data-slot="thread-probe" />} />
           {/* #374: Run navigates here now, prefilled — not straight to a started run. */}
           <Route path="/new" element={<NewTaskProbe />} />
@@ -215,8 +220,27 @@ describe('Run (#374: prefill, never blind-launch)', () => {
     await waitFor(() => expect(document.querySelector('[data-slot="new-task-probe"]')).not.toBeNull())
     expect(probeParams().get('skill')).toBe('om-fix')
     expect(probeParams().get('ref')).toBe(TODO_FULL.summary)
+    // The audit trail rides along: the composer hands `todo` back as `todoId` on POST /api/runs
+    // so the entry is marked started and leaves the inbox — the bookkeeping the old
+    // POST /api/todos/:id/start did for us.
+    expect(probeParams().get('todo')).toBe('t1')
     // The whole point: clicking Run must not itself fire a task (#355's "blindly firing").
     expect(sent.some((r) => r.method === 'POST')).toBe(false)
+  })
+
+  it('carries the entry id but never the auto-start arming — a prefill link cannot launch', async () => {
+    stubFetch()
+    renderInbox()
+
+    await waitFor(() => expect(cards()).toHaveLength(2))
+    fireEvent.click(cards()[0]!.querySelector('[data-action="todo-run"]')!)
+
+    await waitFor(() => expect(document.querySelector('[data-slot="new-task-probe"]')).not.toBeNull())
+    expect(probeParams().get('todo')).toBe('t1')
+    // `todo` is bookkeeping, not authority: it must not drag `auto`/`key` along (#374/#355).
+    expect(probeParams().has('auto')).toBe(false)
+    expect(probeParams().has('key')).toBe(false)
+    expect(document.querySelector('[data-slot="thread-probe"]')).toBeNull()
   })
 
   it('omits the skill param when the entry has no suggested skill', async () => {
@@ -233,39 +257,58 @@ describe('Run (#374: prefill, never blind-launch)', () => {
     await waitFor(() => expect(document.querySelector('[data-slot="new-task-probe"]')).not.toBeNull())
     expect(probeParams().has('skill')).toBe(false)
     expect(probeParams().get('ref')).toBe(TODO_ORPHAN.summary)
+    // No skill to suggest is no reason to lose the entry.
+    expect(probeParams().get('todo')).toBe(runnableWithoutSkill.id)
   })
 })
 
-describe('todoTaskText / todoRunHref (the prefill contract, #374)', () => {
-  it('falls back to the summary when there is no suggested prompt', () => {
-    expect(todoTaskText({ summary: 'Ship it' })).toBe('Ship it')
+/**
+ * The cockpit half of the cross-process drift guard (#374). This copy exists because the
+ * prefilled composer must read exactly like the task `POST /api/todos/:id/start` would have
+ * started — but that builder is `todoTaskText` in src/todos.ts, in the server process, and no
+ * import can cross into the bundle. So both sides assert the SAME fixture (its counterpart is
+ * test/unit/todo-task-text.test.ts): whichever builder moves first, a suite goes red.
+ */
+describe('todoTaskText (pinned to the server builder via the shared fixture)', () => {
+  interface Fixture {
+    cases: Array<{
+      name: string
+      todo: Pick<TodoItem, 'summary' | 'suggestedPrompt' | 'suggestedArgs'>
+      expected: string
+    }>
+  }
+  // Resolved from this file, not from cwd (the design-guardian.test.ts pattern) — jsdom's URL
+  // is not Node's, so `fileURLToPath(new URL(…))` would throw here.
+  const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..')
+  const fixture = JSON.parse(
+    readFileSync(path.join(REPO_ROOT, 'test/fixtures/todo-task-text.json'), 'utf8'),
+  ) as Fixture
+
+  it('the fixture is the whole contract, not a token case', () => {
+    expect(fixture.cases.length).toBeGreaterThanOrEqual(5)
   })
 
-  it('prefers the suggested prompt over the summary', () => {
-    expect(todoTaskText({ summary: 'Ship it', suggestedPrompt: 'Cut the release notes' })).toBe(
-      'Cut the release notes',
-    )
-  })
+  for (const { name, todo, expected } of fixture.cases) {
+    it(name, () => {
+      expect(todoTaskText(todo)).toBe(expected)
+    })
+  }
+})
 
-  it('appends suggested args as a trailing "Arguments:" line — matches the legacy /start route', () => {
-    expect(
-      todoTaskText({ summary: 'Ship it', suggestedPrompt: 'Cut the release notes', suggestedArgs: '--dry-run' }),
-    ).toBe('Cut the release notes\n\nArguments: --dry-run')
-  })
-
-  it('builds the /new href with both skill and ref, URL-encoded', () => {
+describe('todoRunHref (the prefill contract, #374)', () => {
+  it('builds the /new href with skill, ref and the entry id, URL-encoded', () => {
     const href = todoRunHref({
       id: 't9',
       summary: 'Ship it',
       suggestedSkill: 'om-release',
       suggestedArgs: '--dry-run',
     })
-    expect(href).toBe('/new?skill=om-release&ref=Ship+it%0A%0AArguments%3A+--dry-run')
+    expect(href).toBe('/new?skill=om-release&ref=Ship+it%0A%0AArguments%3A+--dry-run&todo=t9')
   })
 
-  it('omits both params when the entry carries neither (still a valid href)', () => {
+  it('keeps the entry id even when there is nothing else to prefill', () => {
     const todo: TodoItem = { id: 't9', summary: '' }
-    expect(todoRunHref(todo)).toBe('/new')
+    expect(todoRunHref(todo)).toBe('/new?todo=t9')
   })
 })
 
