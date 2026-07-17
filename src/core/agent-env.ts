@@ -298,7 +298,10 @@ export function buildChildEnv(opts: BuildChildEnvOptions): NodeJS.ProcessEnv {
   const extra = opts.extraEnv ?? {};
 
   // Escape hatch: restore legacy full-inheritance (opt-in, off by default).
-  if (readVar(source, 'CEZ_AGENT_ENV_FULL') === '1') {
+  // Parsed with the same `isTruthy` the Bedrock/Vertex toggles use (#456
+  // review) — an exact `=== '1'` made `CEZ_AGENT_ENV_FULL=true` silently do
+  // nothing, which is a confusing way to fail open-vs-closed.
+  if (isTruthy(readVar(source, 'CEZ_AGENT_ENV_FULL'))) {
     return { ...source, ...extra };
   }
 

@@ -255,7 +255,13 @@ export class RunStore extends EventEmitter {
   }): RunRecord {
     const run: RunRecord = {
       id: randomUUID(),
-      title: input.title,
+      // Scrubbed on the way in, exactly as `updateRun` scrubs it on the way
+      // through (#456 review) — a token pasted into the prompt otherwise sat
+      // verbatim in `runs.json` from creation. `task` is deliberately NOT
+      // scrubbed: it is the user's own prompt and is replayed into `{{task}}`
+      // when a queued run is revived after a restart (#367), so redacting it
+      // would corrupt the revived run.
+      title: this.redactText(input.title),
       workflow: input.workflow,
       task: input.task,
       model: input.model,
@@ -298,6 +304,11 @@ export class RunStore extends EventEmitter {
    * secrets in state files" rule names explicitly. These three are the only
    * patch fields carrying agent/process text; the rest are ids, enums, counters
    * and URLs, and running the scrubber over them would only risk mangling them.
+   *
+   * `StepState.error` is the step-level counterpart and is scrubbed the same
+   * way in `updateStep` — `run.ts` feeds the SAME `err.message` string to both
+   * calls, so redacting only the run-level copy left the token verbatim one
+   * field away (#456 review).
    */
   private redactPatch(
     patch: Partial<Omit<RunRecord, 'id' | 'steps'>>,
@@ -309,6 +320,19 @@ export class RunStore extends EventEmitter {
       if (typeof value === 'string') out[field] = this.redactText(value);
     }
     return out;
+  }
+
+  /**
+   * Step-level counterpart of `redactPatch` (#456 review). `error` is the only
+   * free-text `StepState` field — it is set from raw `err.message` /process
+   * output (`run.ts` `finishStep`), and `touch()` fans the whole record out
+   * over SSE, so an unscrubbed copy leaked to `runs.json` AND to the browser.
+   * The remaining fields are ids, enums, counters and timestamps.
+   */
+  private redactStepPatch(patch: Partial<Omit<StepState, 'id'>>): Partial<Omit<StepState, 'id'>> {
+    if (process.env.CEZ_REDACT_SECRETS === '0') return patch;
+    if (typeof patch.error !== 'string') return patch;
+    return { ...patch, error: this.redactText(patch.error) };
   }
 
   /** Append a step to an existing run (used by "Continue" — spec 003). */
@@ -323,7 +347,7 @@ export class RunStore extends EventEmitter {
     const run = this.runs.get(runId);
     const step = run?.steps.find((s) => s.id === stepId);
     if (!run || !step) return;
-    Object.assign(step, patch);
+    Object.assign(step, this.redactStepPatch(patch));
     run.tokensUsed = run.steps.reduce((sum, s) => sum + s.tokensUsed, 0);
     const cost = run.steps.reduce((sum, s) => sum + (s.costUsd ?? 0), 0);
     run.costUsd = cost > 0 ? cost : undefined;
@@ -429,8 +453,10 @@ export class RunStore extends EventEmitter {
     return redactDeep(event, this.hostSecrets());
   }
 
-  /** Best-effort scrub of one free-text string bound for `runs.json`. */
+  /** Best-effort scrub of one free-text string bound for `runs.json`. Honors
+   *  the `CEZ_REDACT_SECRETS=0` opt-out itself so every caller inherits it. */
   private redactText(text: string): string {
+    if (process.env.CEZ_REDACT_SECRETS === '0') return text;
     return redactSecrets(text, this.hostSecrets());
   }
 

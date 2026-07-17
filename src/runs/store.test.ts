@@ -233,6 +233,98 @@ describe('RunStore — secret redaction before persistence (#427)', () => {
     expect(loaded?.diffStat).toEqual({ adds: 1, dels: 2, files: 3 });
   });
 
+  /**
+   * #456 review: redaction covered the run-level `error` but not the STEP-level
+   * one, and `run.ts` feeds the SAME `err.message` string to both — so a token
+   * was `[REDACTED]` in `runs.json`'s `error` and verbatim in
+   * `steps[].error` one field away. `touch()` fans the record out over SSE too,
+   * so it also reached the browser.
+   */
+  it('scrubs a host secret from steps[].error before runs.json is written', () => {
+    process.env.GITHUB_TOKEN = 'gho_thisisarealsecrettoken123456';
+    delete process.env.CEZ_REDACT_SECRETS;
+    const store = RunStore.open(dataDir);
+    const run = store.createRun({
+      title: 't',
+      workflow: 'quick-task',
+      task: 'task',
+      steps: [{ id: 'task', name: 'Do the task', kind: 'agent' }],
+    });
+    // Exactly what run.ts does on a failed step: raw err.message straight in.
+    store.updateStep(run.id, 'task', {
+      status: 'failed',
+      error: 'auth failed for gho_thisisarealsecrettoken123456',
+    });
+    store.flush();
+
+    expect(store.getRun(run.id)?.steps[0]?.error).toBe('auth failed for [REDACTED]');
+    const raw = readFileSync(join(dataDir, 'runs.json'), 'utf8');
+    expect(raw).not.toContain('gho_thisisarealsecrettoken123456');
+    expect(raw).toContain('[REDACTED]');
+    // Survives a reopen — the scrub happened on the way in, not on read.
+    expect(RunStore.open(dataDir).getRun(run.id)?.steps[0]?.error).toBe('auth failed for [REDACTED]');
+  });
+
+  it('leaves non-error step fields untouched (no over-redaction)', () => {
+    process.env.GITHUB_TOKEN = 'gho_thisisarealsecrettoken123456';
+    delete process.env.CEZ_REDACT_SECRETS;
+    const store = RunStore.open(dataDir);
+    const run = store.createRun({
+      title: 't',
+      workflow: 'quick-task',
+      task: 'task',
+      steps: [{ id: 'task', name: 'Do the task', kind: 'agent' }],
+    });
+    store.updateStep(run.id, 'task', { status: 'done', sessionId: 'sess-123', tokensUsed: 42 });
+    const step = store.getRun(run.id)?.steps[0];
+    expect(step?.status).toBe('done');
+    expect(step?.sessionId).toBe('sess-123');
+    expect(step?.tokensUsed).toBe(42);
+  });
+
+  it('CEZ_REDACT_SECRETS=0 opts steps[].error out too', () => {
+    process.env.GITHUB_TOKEN = 'gho_thisisarealsecrettoken123456';
+    process.env.CEZ_REDACT_SECRETS = '0';
+    const store = RunStore.open(dataDir);
+    const run = store.createRun({
+      title: 't',
+      workflow: 'quick-task',
+      task: 'task',
+      steps: [{ id: 'task', name: 'Do the task', kind: 'agent' }],
+    });
+    store.updateStep(run.id, 'task', { error: 'gho_thisisarealsecrettoken123456' });
+    expect(store.getRun(run.id)?.steps[0]?.error).toBe('gho_thisisarealsecrettoken123456');
+  });
+
+  /** #456 review: `updateRun` scrubbed `title` but `createRun` stored it raw. */
+  it('scrubs a host secret from the title at creation time', () => {
+    process.env.GITHUB_TOKEN = 'gho_thisisarealsecrettoken123456';
+    delete process.env.CEZ_REDACT_SECRETS;
+    const store = RunStore.open(dataDir);
+    const run = store.createRun({
+      title: 'rotate gho_thisisarealsecrettoken123456',
+      workflow: 'w',
+      task: 'task',
+      steps: [],
+    });
+    expect(run.title).toBe('rotate [REDACTED]');
+    store.flush();
+    expect(readFileSync(join(dataDir, 'runs.json'), 'utf8')).not.toContain(
+      'gho_thisisarealsecrettoken123456',
+    );
+  });
+
+  /** `task` is the user's own prompt and is replayed into `{{task}}` when a
+   *  queued run is revived (#367) — scrubbing it would corrupt the revived run,
+   *  so it stays verbatim by design. Pinning that decision. */
+  it('leaves the task prompt unredacted (re-enqueue must replay it verbatim)', () => {
+    process.env.GITHUB_TOKEN = 'gho_thisisarealsecrettoken123456';
+    delete process.env.CEZ_REDACT_SECRETS;
+    const store = RunStore.open(dataDir);
+    const run = store.createRun({ title: 't', workflow: 'w', task: 'deploy the thing', steps: [] });
+    expect(store.getRun(run.id)?.task).toBe('deploy the thing');
+  });
+
   it('CEZ_REDACT_SECRETS=0 opts runs.json out as well', () => {
     process.env.GITHUB_TOKEN = 'gho_thisisarealsecrettoken123456';
     process.env.CEZ_REDACT_SECRETS = '0';

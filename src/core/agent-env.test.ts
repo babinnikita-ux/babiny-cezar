@@ -90,6 +90,22 @@ describe('buildChildEnv — least-privilege child env (#427)', () => {
     const env = buildChildEnv({ backend: 'claude', source: src });
     expect(env.AWS_SECRET_ACCESS_KEY).toBe(HOST.AWS_SECRET_ACCESS_KEY);
   });
+
+  /**
+   * #456 review: the hatch parsed with an exact `=== '1'` while the
+   * Bedrock/Vertex toggles beside it used `isTruthy`, so `=true` silently did
+   * nothing. One parser, one answer — and the off/absent spellings must still
+   * mean "stay hardened", since this hatch fails OPEN.
+   */
+  it.each(['1', 'true', 'yes'])('CEZ_AGENT_ENV_FULL=%s enables the hatch', (value) => {
+    const env = buildChildEnv({ backend: 'claude', source: { ...HOST, CEZ_AGENT_ENV_FULL: value } });
+    expect(env.AWS_SECRET_ACCESS_KEY).toBe(HOST.AWS_SECRET_ACCESS_KEY);
+  });
+
+  it.each(['0', 'false', ''])('CEZ_AGENT_ENV_FULL=%s stays hardened', (value) => {
+    const env = buildChildEnv({ backend: 'claude', source: { ...HOST, CEZ_AGENT_ENV_FULL: value } });
+    expect(env.AWS_SECRET_ACCESS_KEY).toBeUndefined();
+  });
 });
 
 /**
