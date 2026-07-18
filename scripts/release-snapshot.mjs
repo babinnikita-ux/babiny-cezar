@@ -10,6 +10,12 @@
 // explicit --tag so a snapshot can never move `latest`, then emits a one-line
 // JSON result to $GITHUB_OUTPUT for the PR-comment and summary steps.
 //
+// If the run is cancelled between the two publishes (ci.yml's workflow-level
+// concurrency can still cancel a superseded PR run), the damage is benign: the
+// scoped package's pr-tag runs briefly ahead of the alias's, the exact-version
+// comment is never posted, and the next green run re-aligns both tags. Users
+// install through the alias, whose tag only ever moves on a complete publish.
+//
 // Publishes with --ignore-scripts: the tarball-integrity gate (check:pack) has
 // already run as the last leg of the `npm run build` this job just executed,
 // and dist/ must exist for this script to even import. Re-running the build
