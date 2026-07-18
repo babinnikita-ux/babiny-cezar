@@ -63,14 +63,24 @@ export interface ManifestLike {
  *  Mirror of `stampManifests` in `snapshot.ts`, but the alias's dependency on
  *  the scoped package is a **caret** range (`^0.1.6`), not an exact pin — a
  *  stable `cezar-cli` should follow compatible releases of the implementation
- *  package, whereas a snapshot must pin the one exact build it was cut from. */
+ *  package, whereas a snapshot must pin the one exact build it was cut from.
+ *
+ *  Like the snapshot stamper, the alias inherits `repository`/`homepage`/`bugs`
+ *  from the root manifest: `--provenance` publishes are rejected (E422) unless
+ *  the manifest's `repository.url` matches the building repo, and the alias file
+ *  carries none of its own. The git URL already matches and survives any
+ *  npm-name rename. */
 export function stampStableManifests(
   rootPkg: ManifestLike,
   aliasPkg: ManifestLike,
   version: string,
 ): { root: ManifestLike; alias: ManifestLike } {
+  const inherited: Partial<ManifestLike> = {};
+  for (const field of ['repository', 'homepage', 'bugs'] as const) {
+    if (rootPkg[field] !== undefined) inherited[field] = rootPkg[field];
+  }
   return {
     root: { ...rootPkg, version },
-    alias: { ...aliasPkg, version, dependencies: { [rootPkg.name]: `^${version}` } },
+    alias: { ...aliasPkg, ...inherited, version, dependencies: { [rootPkg.name]: `^${version}` } },
   };
 }
