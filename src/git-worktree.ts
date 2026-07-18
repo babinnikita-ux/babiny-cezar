@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { existsSync, realpathSync, type Dirent } from 'node:fs';
 import { readdir, rm } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
+import { isSafeGitRef } from './git-refs.js';
 
 /**
  * Git worktree per task (spec 006). Each run gets its own branch
@@ -124,6 +125,9 @@ export async function createWorktree(
     if (!head.ok) throw new Error(`git rev-parse HEAD failed: ${head.stderr.trim()}`);
     base = head.stdout.trim();
   }
+  // Dash-guard (#431): `base` is spliced in as a positional git operand; an
+  // option-like value would be argument injection.
+  if (!isSafeGitRef(base)) throw new Error(`refusing option-like base ref: ${base}`);
   const branch = branchFor(runId);
   const absolutePath = join(canonicalPath(repoRoot), WORKTREES_DIR, runId);
   const branchRef = `refs/heads/${branch}`;
@@ -190,6 +194,26 @@ export async function createWorktree(
   return worktreeInfo(absolutePath, branch, base);
 }
 
+/**
+ * Best-effort on-disk size of a worktree directory in bytes, via POSIX
+ * `du -sk` (kibibytes → bytes). Returns `null` when `du` is unavailable —
+ * including all of Windows, where `du` is not a command — or on any error.
+ * Never throws and never blocks: worktree retention is count-based, so a null
+ * size only blanks the panel's size column, it does not affect reclamation.
+ */
+export function worktreeSizeBytes(path: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    execFile('du', ['-sk', path], { encoding: 'utf8' }, (err, stdout) => {
+      if (err) {
+        resolve(null);
+        return;
+      }
+      const kib = Number.parseInt(stdout.trim().split(/\s+/)[0] ?? '', 10);
+      resolve(Number.isFinite(kib) ? kib * 1024 : null);
+    });
+  });
+}
+
 /** Remove a task worktree and its branch. Best effort — never throws. */
 export async function removeWorktree(
   repoRoot: string,
@@ -249,6 +273,7 @@ export async function worktreeDiff(
   baseBranch: string,
   cap = DIFF_CAP,
 ): Promise<string> {
+  if (!isSafeGitRef(baseBranch)) return '(diff failed: refusing option-like base ref)';
   await git(worktreePath, ['add', '-N', '.']); // intent-to-add: untracked files show up
   const mergeBase = await git(worktreePath, ['merge-base', baseBranch, 'HEAD']);
   const base = mergeBase.ok && mergeBase.stdout.trim() ? mergeBase.stdout.trim() : baseBranch;
@@ -266,6 +291,7 @@ export async function worktreeDiffStat(
   worktreePath: string,
   baseBranch: string,
 ): Promise<string> {
+  if (!isSafeGitRef(baseBranch)) return '';
   await git(worktreePath, ['add', '-N', '.']); // intent-to-add: untracked files show up
   const mergeBase = await git(worktreePath, ['merge-base', baseBranch, 'HEAD']);
   const base = mergeBase.ok && mergeBase.stdout.trim() ? mergeBase.stdout.trim() : baseBranch;
@@ -308,6 +334,7 @@ export async function worktreeShortstat(
   worktreePath: string,
   baseBranch: string,
 ): Promise<DiffStat | null> {
+  if (!isSafeGitRef(baseBranch)) return null;
   await git(worktreePath, ['add', '-N', '.']); // intent-to-add: untracked files show up
   const mergeBase = await git(worktreePath, ['merge-base', baseBranch, 'HEAD']);
   const base = mergeBase.ok && mergeBase.stdout.trim() ? mergeBase.stdout.trim() : baseBranch;

@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createWorktree } from '../git-worktree.js';
 import { RunStore, type RunRecord } from '../runs/store.js';
 import { RunManager } from './run.js';
@@ -97,6 +97,138 @@ describe('RunManager.recordTurnEnd', () => {
 
   it('is a quiet no-op for an unknown run', async () => {
     await expect(manager.recordTurnEnd('nope', TURN_TEXT)).resolves.toBeUndefined();
+  });
+
+  it('applies in-band CEZ markers from the turn text (spec 2026-07-18-task-ref-markers)', async () => {
+    const record = store.createRun({ title: 't', workflow: 'w', task: 'implement comment threads', steps: [] });
+    await manager.recordTurnEnd(
+      record.id,
+      'Progress so far.\nCEZ:PR=500\nCEZ:ISSUE=433\nCEZ:TITLE=implementing comment threads\nMore to come.',
+    );
+    const after = store.getRun(record.id);
+    expect(after?.prNumber).toBe(500);
+    expect(after?.issueNumber).toBe(433);
+    expect(after?.markerRefs).toEqual({ pr: 500, issue: 433 });
+    // The declared title lands number-prefixed, marker-owned.
+    expect(after?.titleSummary).toBe('500: implementing comment threads');
+    expect(after?.titleOrigin).toBe('marker');
+  });
+
+  it('a marker title never overwrites a user rename — but the numbers still land', async () => {
+    const record = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
+    store.updateRun(record.id, { title: 'My name', titleSummary: 'My name', titleOrigin: 'user' });
+    await manager.recordTurnEnd(record.id, 'CEZ:PR=500\nCEZ:TITLE=implementing comment threads');
+    const after = store.getRun(record.id);
+    expect(after?.titleSummary).toBe('My name');
+    expect(after?.titleOrigin).toBe('user');
+    expect(after?.prNumber).toBe(500);
+  });
+
+  it('a junk CEZ:TITLE never blanks the title', async () => {
+    const record = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
+    await manager.recordTurnEnd(record.id, 'CEZ:PR=500\nCEZ:TITLE=...');
+    const after = store.getRun(record.id);
+    expect(after?.titleSummary).toBeUndefined();
+    expect(after?.titleOrigin).toBeUndefined();
+    expect(after?.prNumber).toBe(500); // the number still lands
+  });
+
+  it('prose that merely mentions a marker changes nothing', async () => {
+    const record = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
+    await manager.recordTurnEnd(record.id, 'I will emit CEZ:PR=442 once the PR exists.');
+    const after = store.getRun(record.id);
+    expect(after?.markerRefs).toBeUndefined();
+    expect(after?.prNumber).toBeUndefined();
+    expect(after?.titleSummary).toBeUndefined();
+  });
+});
+
+/**
+ * Optional review gate (#489, spec 2026-07-18-optional-review-gate): the
+ * terminal `settleSuccess` transition parks a changed run at `review` ONLY when
+ * the gate is enabled (config toggle over `CEZ_REVIEW_GATE`, default off) and the
+ * run is not autonomous. Driven directly through the private `settleSuccess`
+ * (the same method `execute`, `runContinuation`, and `recover`'s waiting-run path
+ * all call) against a real fixture worktree.
+ */
+describe('RunManager.settleSuccess — optional review gate', () => {
+  const savedGate = process.env.CEZ_REVIEW_GATE;
+  const savedAutoname = process.env.CEZ_AUTONAME;
+  let repoRoot: string;
+  let store: RunStore;
+  let manager: RunManager;
+
+  beforeAll(async () => {
+    process.env.CEZ_AUTONAME = '0';
+    repoRoot = mkdtempSync(join(tmpdir(), 'cez-reviewgate-'));
+    await run('git', ['init', '-q', '-b', 'main'], { cwd: repoRoot });
+    writeFileSync(join(repoRoot, 'a.txt'), 'one\ntwo\nthree\n');
+    await run('git', ['add', '-A'], { cwd: repoRoot });
+    await run('git', [...GIT_ID, 'commit', '-q', '-m', 'base'], { cwd: repoRoot });
+    store = RunStore.open(join(repoRoot, '.ai/cezar'));
+    manager = new RunManager(store, repoRoot);
+  });
+
+  afterAll(() => {
+    store.flush();
+    rmSync(repoRoot, { recursive: true, force: true });
+    if (savedGate === undefined) delete process.env.CEZ_REVIEW_GATE;
+    else process.env.CEZ_REVIEW_GATE = savedGate;
+    if (savedAutoname === undefined) delete process.env.CEZ_AUTONAME;
+    else process.env.CEZ_AUTONAME = savedAutoname;
+  });
+
+  afterEach(() => {
+    delete process.env.CEZ_REVIEW_GATE;
+    // Reset the config file each test so config.reviewGate never leaks across cases.
+    rmSync(join(repoRoot, '.ai/cezar', 'config.json'), { force: true });
+  });
+
+  /** A fresh run + worktree holding a real diff (edit + new file) vs main. */
+  async function changedRun(autonomous?: boolean): Promise<RunRecord> {
+    const record = store.createRun({ title: 't', workflow: 'w', task: 'task', autonomous, steps: [] });
+    const wt = await createWorktree(repoRoot, record.id, 'main');
+    store.updateRun(record.id, { worktreePath: wt.path, branch: wt.branch, baseBranch: wt.baseBranch });
+    writeFileSync(join(wt.path, 'a.txt'), 'one\nTWO\nthree\n');
+    writeFileSync(join(wt.path, 'new.txt'), 'x\n');
+    return store.getRun(record.id) as RunRecord;
+  }
+
+  /** A fresh run + worktree with no changes vs main (empty diff). */
+  async function cleanRun(): Promise<RunRecord> {
+    const record = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
+    const wt = await createWorktree(repoRoot, record.id, 'main');
+    store.updateRun(record.id, { worktreePath: wt.path, branch: wt.branch, baseBranch: wt.baseBranch });
+    return store.getRun(record.id) as RunRecord;
+  }
+
+  const settle = (id: string) => (manager as unknown as { settleSuccess(id: string): Promise<void> }).settleSuccess(id);
+
+  it('gate off (default) + changes → done, diff left in the worktree', async () => {
+    const record = await changedRun();
+    await settle(record.id);
+    expect(store.getRun(record.id)?.status).toBe('done');
+  });
+
+  it('gate on (env) + non-autonomous + changes → review', async () => {
+    process.env.CEZ_REVIEW_GATE = '1';
+    const record = await changedRun();
+    await settle(record.id);
+    expect(store.getRun(record.id)?.status).toBe('review');
+  });
+
+  it('gate on + autonomous + changes → done (autonomous wins — the #489 fix)', async () => {
+    process.env.CEZ_REVIEW_GATE = '1';
+    const record = await changedRun(true);
+    await settle(record.id);
+    expect(store.getRun(record.id)?.status).toBe('done');
+  });
+
+  it('gate on + no changes → done (the diff check stays first)', async () => {
+    process.env.CEZ_REVIEW_GATE = '1';
+    const record = await cleanRun();
+    await settle(record.id);
+    expect(store.getRun(record.id)?.status).toBe('done');
   });
 });
 
@@ -265,5 +397,101 @@ describe('a single agent step plus a check step gets NO chain note (#410)', () =
     expect(notes[0]).not.toContain('chain of');
     expect(notes[0]).not.toContain('earlier step');
     expect(notes[0]).not.toContain('project-conventions');
+  }, 30_000);
+});
+
+/**
+ * #490 — the `CEZ:MONITORING` marker parks a still-working turn-end as
+ * `running`/`activity:'monitoring'` (a non-attention state) instead of
+ * `waiting`, while a markerless turn-end still parks as `waiting`. Resuming
+ * clears the activity. Driven dry through the mock (`mock:monitoring`).
+ */
+describe('CEZ:MONITORING parks as running/monitoring, not waiting (#490)', () => {
+  // Fresh repo + manager per test: these runs PARK (they never reach a terminal
+  // status), and a `worktree:false` parked run holds the exclusive repo-root
+  // lock — so a shared manager would starve the next test. Isolation avoids that.
+  let repoRoot: string;
+  let store: RunStore;
+  let manager: RunManager;
+  let currentId: string | undefined;
+  const savedEnv: Record<string, string | undefined> = {};
+  const SINGLE_STEP: WorkflowDef = {
+    name: 'quick-task',
+    source: 'built-in',
+    steps: [{ id: 'task', name: 'Task', prompt: '{{task}}' }],
+  };
+
+  beforeEach(async () => {
+    repoRoot = mkdtempSync(join(tmpdir(), 'cez-490-'));
+    savedEnv.CEZ_DRY_RUN = process.env.CEZ_DRY_RUN;
+    process.env.CEZ_DRY_RUN = '1';
+    await run('git', ['init', '-q', '-b', 'main'], { cwd: repoRoot });
+    writeFileSync(join(repoRoot, 'a.txt'), 'one\n');
+    await run('git', ['add', '-A'], { cwd: repoRoot });
+    await run('git', [...GIT_ID, 'commit', '-q', '-m', 'base'], { cwd: repoRoot });
+    store = RunStore.open(join(repoRoot, '.ai/cezar'));
+    manager = new RunManager(store, repoRoot);
+    currentId = undefined;
+  });
+
+  afterEach(() => {
+    if (currentId) manager.cancel(currentId); // release the session + repo lock
+    for (const [key, value] of Object.entries(savedEnv)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    store.flush();
+    rmSync(repoRoot, { recursive: true, force: true });
+  });
+
+  const waitFor = async (id: string, pred: (r: RunRecord | undefined) => boolean, ms = 15_000) => {
+    const deadline = Date.now() + ms;
+    while (!pred(store.getRun(id))) {
+      if (Date.now() > deadline) throw new Error('condition not met in time');
+      await new Promise((r) => setTimeout(r, 50));
+    }
+  };
+
+  it('a CEZ:MONITORING turn-end parks the run as running/monitoring', async () => {
+    const record = manager.startRun(SINGLE_STEP, { task: 'mock:monitoring keep going', worktree: false });
+    currentId = record.id;
+    await waitFor(record.id, (r) => r?.activity === 'monitoring');
+    const parked = store.getRun(record.id);
+    expect(parked?.status).toBe('running'); // a sub-state of running, NOT waiting
+    expect(parked?.activity).toBe('monitoring');
+  }, 30_000);
+
+  it('a markerless turn-end still parks as waiting with no activity', async () => {
+    const record = manager.startRun(SINGLE_STEP, { task: 'just do the thing', worktree: false });
+    currentId = record.id;
+    await waitFor(record.id, (r) => r?.status === 'waiting');
+    expect(store.getRun(record.id)?.activity).toBeUndefined();
+  }, 30_000);
+
+  it('strips the CEZ:MONITORING marker from server-emitted v1 text events', async () => {
+    const record = manager.startRun(SINGLE_STEP, { task: 'mock:monitoring keep going', worktree: false });
+    currentId = record.id;
+    await waitFor(record.id, (r) => r?.activity === 'monitoring');
+    // v1 `text` events are stripped server-side (like CEZ:DONE); v2 message items carry
+    // the raw text and the thread reducer strips it on display (thread-state.test.ts).
+    const ndjson = readFileSync(join(repoRoot, '.ai/cezar/runs', `${record.id}.ndjson`), 'utf8');
+    const v1Text = ndjson
+      .trim()
+      .split('\n')
+      .map((l) => JSON.parse(l))
+      .filter((e) => e.type === 'text');
+    expect(v1Text.length).toBeGreaterThan(0);
+    expect(v1Text.some((e) => String(e.text).includes('CEZ:MONITORING'))).toBe(false);
+  }, 30_000);
+
+  it('resuming a monitoring run clears the activity', async () => {
+    const record = manager.startRun(SINGLE_STEP, { task: 'mock:monitoring keep going', worktree: false });
+    currentId = record.id;
+    await waitFor(record.id, (r) => r?.activity === 'monitoring');
+    // A user reply (no marker) resumes the run: the follow-up turn re-parks as
+    // plain `waiting`, and the monitoring activity is gone.
+    expect(manager.sendMessage(record.id, [{ type: 'text', text: 'thanks, carry on' }])).toBe(true);
+    await waitFor(record.id, (r) => r?.status === 'waiting');
+    expect(store.getRun(record.id)?.activity).toBeUndefined();
   }, 30_000);
 });

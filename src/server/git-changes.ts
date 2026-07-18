@@ -3,6 +3,7 @@ import { rmSync } from 'node:fs';
 import { lstat, open, readFile, readdir, realpath, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve, sep } from 'node:path';
+import { isSafeGitRef } from '../git-refs.js';
 
 /**
  * Session git plumbing for the cockpit's Changes & Files tabs (redesign spec
@@ -150,6 +151,71 @@ export function splitPatch(patch: string): string[] {
   return starts.map((start, idx) => patch.slice(start, starts[idx + 1] ?? patch.length));
 }
 
+/** Undo git's C-style path quoting (`core.quotePath`): git wraps paths with
+ *  special bytes in double-quotes and escapes `\`, `"`, `\t`, `\n`, `\r`, `\f`
+ *  plus octal `\NNN` byte escapes. Unquoted input (the common ASCII case, and
+ *  anything containing only a space) is returned verbatim. Octal escapes are
+ *  decoded per byte, which is lossy for multibyte UTF-8 names — those rare
+ *  paths simply miss the map and fall back to positional matching below. */
+function unquoteGitPath(raw: string): string {
+  if (!raw.startsWith('"') || !raw.endsWith('"')) return raw;
+  const inner = raw.slice(1, -1);
+  return inner.replace(/\\([\\"tnrf])|\\([0-7]{3})/g, (_m, esc: string | undefined, oct: string | undefined) => {
+    if (oct) return String.fromCharCode(parseInt(oct, 8));
+    switch (esc) {
+      case 't':
+        return '\t';
+      case 'n':
+        return '\n';
+      case 'r':
+        return '\r';
+      case 'f':
+        return '\f';
+      default:
+        return esc ?? '';
+    }
+  });
+}
+
+/** The new-side ("b/") path a single `git diff` section describes, or null when
+ *  it can't be resolved. Renames/copies report their target; a deletion reports
+ *  its removed ("a/") path — the exact path `git diff --name-status` lists for
+ *  the same entry, so the two associate by path. The `---`/`+++` lines carry one
+ *  path each (never ambiguous, even with spaces); only binary/mode-only/submodule
+ *  sections, which lack them, fall back to the `diff --git` header. */
+function sectionPath(section: string): string | null {
+  const renameTo = section.match(/^rename to (.+)$/m) ?? section.match(/^copy to (.+)$/m);
+  if (renameTo) return unquoteGitPath(renameTo[1] ?? '');
+  const plus = section.match(/^\+\+\+ (.+)$/m);
+  if (plus && plus[1] !== '/dev/null') return stripSidePrefix(unquoteGitPath(plus[1] ?? ''));
+  const minus = section.match(/^--- (.+)$/m);
+  if (minus && minus[1] !== '/dev/null') return stripSidePrefix(unquoteGitPath(minus[1] ?? ''));
+  const nl = section.indexOf('\n');
+  const header = nl < 0 ? section : section.slice(0, nl);
+  const quoted = header.match(/^diff --git (?:"a\/.*"|a\/\S+) (?:"b\/(.*)"|b\/(\S+))$/);
+  if (quoted) return unquoteGitPath(quoted[1] != null ? `"${quoted[1]}"` : (quoted[2] ?? ''));
+  return null;
+}
+
+/** Strip the single leading `a/` or `b/` diff prefix (a real path segment named
+ *  `a`/`b` keeps its later segments — only the first prefix is removed). */
+function stripSidePrefix(p: string): string {
+  return p.replace(/^[ab]\//, '');
+}
+
+/** Map each `git diff --patch` section to the file path it describes, so a file's
+ *  patch is looked up by path rather than by position. This is robust to the two
+ *  listings (`--name-status` and `--patch`) disagreeing on file count — the case
+ *  where positional matching used to blank *every* file's patch. Exported for tests. */
+export function patchByPath(sections: string[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const section of sections) {
+    const path = sectionPath(section);
+    if (path != null && !map.has(path)) map.set(path, section);
+  }
+  return map;
+}
+
 function statusWord(letter: string): ChangedFile['status'] {
   switch (letter[0]) {
     case 'A':
@@ -178,6 +244,7 @@ export async function collectChanges(
   baseBranch: string,
   opts: { patchCap?: number; intentToAdd?: boolean } = {},
 ): Promise<ChangesResult> {
+  if (!isSafeGitRef(baseBranch)) return { ok: false, error: 'refusing option-like base ref' };
   const patchCap = opts.patchCap ?? PATCH_CAP;
   // `git add -N .` (intent-to-add) makes untracked files appear in the diff, but it MUTATES the
   // index — fine in a task worktree cezar owns, but forbidden on the user's real main tree (a
@@ -216,10 +283,13 @@ export async function collectChanges(
 let scratchSeq = 0;
 
 /** The three raw `git diff` listings (name-status, numstat, patch) → the `{files, stat}`
- *  payload. Shared by the working-tree diff above and the commit diff below — the listings
- *  come out in git's path order either way, so index-matching the patch sections is safe;
- *  a length mismatch degrades to "no patch". */
-function assemblePayload(
+ *  payload. Shared by the working-tree diff above and the commit diff below. Each file's
+ *  patch is matched by path (`patchByPath`), so a mismatch between the name-status and
+ *  patch file counts — a typechange, submodule, or any entry that emits no `diff --git`
+ *  block — drops at most that one file's patch instead of blanking every file's. Positional
+ *  matching remains the fallback for a section whose path can't be parsed, but only when the
+ *  counts agree (the same condition the old all-or-nothing guard required). Exported for tests. */
+export function assemblePayload(
   nameStatusOut: string,
   numstatOut: string,
   patchOut: string,
@@ -229,10 +299,12 @@ function assemblePayload(
   const counts = parseNumstatZ(numstatOut);
   const patches = splitPatch(patchOut);
   const countByPath = new Map(counts.map((entry) => [entry.path, entry]));
+  const patchesByPath = patchByPath(patches);
+  const alignable = patches.length === statuses.length;
 
   const files: ChangedFile[] = statuses.map((entry, idx) => {
     const count = countByPath.get(entry.path);
-    let patch = patches.length === statuses.length ? (patches[idx] ?? '') : '';
+    let patch = patchesByPath.get(entry.path) ?? (alignable ? (patches[idx] ?? '') : '');
     if (patch.length > patchCap) patch = `${patch.slice(0, patchCap)}\n… (patch truncated)`;
     return {
       path: entry.path,
@@ -273,6 +345,7 @@ export type RunCommitsResult = { ok: true; commits: RunCommit[] } | { ok: false;
  * what "this task's work" means. Empty (not an error) when the branch has no commits past base.
  */
 export async function collectRunCommits(dir: string, baseBranch: string): Promise<RunCommitsResult> {
+  if (!isSafeGitRef(baseBranch)) return { ok: false, error: 'refusing option-like base ref' };
   const mergeBase = await git(dir, ['merge-base', baseBranch, 'HEAD']);
   const base = mergeBase.ok && mergeBase.stdout.trim() ? mergeBase.stdout.trim() : baseBranch;
   const log = await git(dir, ['log', '--pretty=format:%H%x1f%s%x1f%an%x1f%cr', `${base}..HEAD`]);
@@ -481,14 +554,19 @@ export type BranchResult =
  * Repo-view branch action (`POST /api/repo/branch`): switch to `name` when it
  * already exists locally, otherwise create it from `from` (or HEAD) and switch.
  * Name validation is delegated to `git check-ref-format --branch` — git's own
- * rules, not a reimplementation. Predictable failures (invalid name, unknown
- * `from`, dirty-tree checkout conflict) come back as `{ ok:false, error }`.
+ * rules, not a reimplementation — behind an explicit dash-guard (#431).
+ * Predictable failures (invalid name, unknown `from`, dirty-tree checkout
+ * conflict) come back as `{ ok:false, error }`.
  */
 export async function createOrSwitchBranch(
   dir: string,
   name: string,
   from?: string,
 ): Promise<BranchResult> {
+  // Dash-guard (#431): `name` reaches `git checkout <name>` / `git checkout -b <name>` as a
+  // positional operand, so it gets the same explicit guard as `from` below — check-ref-format
+  // already rejects option-like names, and the point is not to rely on that alone.
+  if (!isSafeGitRef(name)) return { ok: false, error: `invalid branch name: ${name}` };
   const check = await git(dir, ['check-ref-format', '--branch', name]);
   if (!check.ok) return { ok: false, error: `invalid branch name: ${name}` };
 
@@ -500,6 +578,8 @@ export async function createOrSwitchBranch(
   }
 
   if (from) {
+    // Dash-guard (#431): `from` becomes a positional operand of `checkout -b`.
+    if (!isSafeGitRef(from)) return { ok: false, error: `invalid start point: ${from}` };
     // `--quiet` keeps git silent on failure, so supply our own reason.
     const start = await git(dir, ['rev-parse', '--verify', '--quiet', `${from}^{commit}`]);
     if (!start.ok) return { ok: false, error: `unknown start point: ${from}` };

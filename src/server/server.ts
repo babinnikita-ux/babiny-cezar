@@ -29,7 +29,8 @@ import { markStarted, onTodosChanged, readTodos, removeTodo, startTodosWatch, ty
 import type { RunEvent, RunRecord, RunStatus, RunStore } from '../runs/store.js';
 import { isV2WireEventType } from '../runs/ui-event-sink.js';
 import type { RunManager } from '../workflows/run.js';
-import { removeWorktree, worktreeDiff, worktreeDiffStat } from '../git-worktree.js';
+import { removeWorktree, worktreeDiff, worktreeDiffStat, worktreeSizeBytes } from '../git-worktree.js';
+import { isReclaimable, reclaimWorktrees } from '../runs/retention.js';
 import { getBranches, getCommit, getDiff, getLog, getRepoInfo, getStatus } from './git.js';
 import {
   collectChanges,
@@ -42,10 +43,11 @@ import {
   readWorktreePath,
 } from './git-changes.js';
 import { loadConfig, type CezConfig } from '../config.js';
+import { reviewGateEnabled } from '../runs/review-gate.js';
 import { readUiState, uiStatePath } from '../ui-state.js';
 import { resolveCapabilities } from './capabilities.js';
 import { resolveForge } from './forge/index.js';
-import { fetchGithub } from './github.js';
+import { fetchGithub, fetchGithubComments } from './github.js';
 import { ensureLaunchKey } from './launch-key.js';
 import { openInTerminal } from './open-in-terminal.js';
 import { agentCliRunner, detectOpenTargets, openInApp } from './open-in-app.js';
@@ -393,17 +395,26 @@ export function createApp(deps: ServerDeps): Hono {
     // Additive fields only below — the pre-forge shape is the most
     // externally-depended-on JSON in the app (BACKWARD_COMPATIBILITY.md §2).
     const forge = resolveForge(repo);
+    const caps = capabilities();
     return c.json({
       version,
       latestVersion: update?.latest,
-      repoRoot,
+      // Health is CORS-open and, in hosted mode, reachable off the loopback —
+      // so any site/host that reads it would learn the developer's absolute
+      // checkout path and username (#431). Local mode keeps the full path (the
+      // protected bookmarklet shape); hosted/remote mode trims it to a basename.
+      // NB this narrows the VALUE of a field named in BACKWARD_COMPATIBILITY.md
+      // §2: the field is always present and a string, but under CEZ_REMOTE it is
+      // no longer an absolute path. Deliberate — a hosted cockpit's paths are on
+      // a machine the reader does not have anyway. See §2's `repoRoot` note.
+      repoRoot: caps.localHandoff ? repoRoot : basename(repoRoot),
       repo,
       checks,
       defaultRunner: config.defaultRunner,
       // Non-blocking: cached availability or null-until-warm — health must never pay a `gh`
       // shell-out (the bookmarklet aborts its port probe at 800 ms). See detectGithubCached.
       forge: forge ? { kind: forge.kind, ...(forge.detectCached() ?? {}) } : null,
-      capabilities: capabilities(),
+      capabilities: caps,
     });
   });
 
@@ -670,8 +681,17 @@ export function createApp(deps: ServerDeps): Hono {
     }
 
     // Winner: a non-review terminal state with a non-empty diff flips to
-    // `review` (the settleSuccess rule); an empty diff (or no worktree) stays.
-    if (winner.status !== 'review' && winner.worktreePath && existsSync(winner.worktreePath)) {
+    // `review` (the settleSuccess rule) — but only when the review gate applies
+    // (#489): it is enabled (`reviewGateEnabled`, default off) AND the winner is
+    // not autonomous. An autonomous / gate-off winner keeps its `done` state with
+    // the diff left in the worktree; an empty diff (or no worktree) stays too.
+    if (
+      winner.status !== 'review' &&
+      winner.worktreePath &&
+      existsSync(winner.worktreePath) &&
+      winner.autonomous !== true &&
+      reviewGateEnabled(await loadConfig(repoRoot))
+    ) {
       const diff = await worktreeDiff(winner.worktreePath, winner.baseBranch ?? 'HEAD');
       if (diff.trim().length > 0 && !diff.startsWith('(diff failed')) {
         store.updateRun(winner.id, { status: 'review' });
@@ -792,6 +812,8 @@ export function createApp(deps: ServerDeps): Hono {
     if (!sessionId) return c.json({ error: 'no agent session to resume' }, 409);
     const cwd = run.worktreePath && existsSync(run.worktreePath) ? run.worktreePath : repoRoot;
     const command = resumeCommand(run.runner, sessionId);
+    // Fails closed on an id we do not recognise — see resumeCommand (#431).
+    if (!command) return c.json({ error: 'the recorded session id has an unexpected shape' }, 409);
     const opened = await openInTerminal(cwd, command);
     if (!opened) {
       return c.json({ error: 'no terminal emulator found', command: `cd '${cwd}' && ${command}` }, 409);
@@ -821,14 +843,30 @@ export function createApp(deps: ServerDeps): Hono {
     if (!target) return c.json({ error: 'target required' }, 400);
     const dir = run.worktreePath && existsSync(run.worktreePath) ? run.worktreePath : repoRoot;
 
-    // Coding-agent CLI handoff (#cli-handoff): open a terminal in the worktree that resumes THIS
-    // run's session when the chosen CLI is the run's own runner (and a session exists), or starts
-    // a fresh CLI there otherwise. Same terminal launcher the Terminal button uses.
+    // Coding-agent CLI handoff (#cli-handoff, #402): open a terminal in the worktree that resumes
+    // THIS run's session when the chosen CLI is the run's own runner (and a session exists), or
+    // starts a fresh CLI there otherwise. Same terminal launcher the Terminal button uses.
+    // Records that predate the runner choice carry no `runner` at all — they default to Claude
+    // everywhere else (resumeCommand, the client's resumeHint/cliTargetResumes), so the match
+    // check defaults the same way here; without it, a legacy run's own Claude CLI would never
+    // resume its own session, only ever launch fresh.
+    // A run the engine still owns never resumes: `sessionId` is seeded when the agent step STARTS
+    // (workflows/run.ts), so a running/queued/waiting run already carries one, and resuming it
+    // would attach a SECOND CLI process to the transcript the engine is actively writing. Those
+    // picks launch the CLI fresh in the worktree — the same degradation as a cross-runner pick,
+    // and what the client's cliTargetResumes now labels. Resume-after-finish is untouched.
     const cliRunner = agentCliRunner(target);
     if (cliRunner) {
-      const sessionId = [...run.steps].reverse().find((s) => s.sessionId)?.sessionId;
-      const command =
-        sessionId && cliRunner === run.runner ? resumeCommand(cliRunner, sessionId) : cliRunner;
+      const engineOwnsSession =
+        run.status === 'running' || run.status === 'queued' || run.status === 'waiting';
+      const sessionId = engineOwnsSession
+        ? undefined
+        : [...run.steps].reverse().find((s) => s.sessionId)?.sessionId;
+      // An id resumeCommand refuses (#431) degrades to a fresh CLI in the worktree,
+      // exactly like a run that never recorded a session.
+      const resume =
+        sessionId && cliRunner === (run.runner ?? 'claude') ? resumeCommand(cliRunner, sessionId) : null;
+      const command = resume ?? cliRunner;
       const opened = await openInTerminal(dir, command);
       if (!opened) {
         return c.json({ error: 'no terminal emulator found', command: `cd '${dir}' && ${command}` }, 409);
@@ -1036,6 +1074,42 @@ export function createApp(deps: ServerDeps): Hono {
     return store.deleteRun(id) ? c.json({ deleted: true }) : c.json({ error: 'not found' }, 404);
   });
 
+  // ---- worktree management panel (#483) --------------------------------------
+  // List materialized task worktrees with disk usage + retention state, and a
+  // "Reclaim now" action. Both additive; the per-row delete reuses the existing
+  // /api/runs/:id/remove-worktree route above.
+  app.get('/api/worktrees', async (c) => {
+    const config = await loadConfig(repoRoot);
+    const runs = store.listRuns().filter((r) => r.worktreePath && existsSync(r.worktreePath));
+    const worktrees = await Promise.all(
+      runs.map(async (r) => ({
+        runId: r.id,
+        title: r.title ?? r.id,
+        status: r.status,
+        branch: r.branch ?? null,
+        // POSIX `du` — degrades to null (Windows / du missing / error); never blocks.
+        sizeBytes: await worktreeSizeBytes(r.worktreePath as string),
+        finishedAt: r.finishedAt ?? null,
+        reclaimable: isReclaimable(r),
+      })),
+    );
+    // Total is null when any size degraded, so the panel never shows a wrong sum.
+    const totalBytes = worktrees.some((w) => w.sizeBytes === null)
+      ? null
+      : worktrees.reduce((sum, w) => sum + (w.sizeBytes ?? 0), 0);
+    return c.json({ worktrees, totalBytes, keep: config.worktreeRetention });
+  });
+
+  const reclaimBodySchema = z.object({}).passthrough();
+  app.post('/api/worktrees/reclaim', async (c) => {
+    // Accept an empty or `{}` body; retention is best-effort, so 200 always.
+    const parsed = reclaimBodySchema.safeParse(await c.req.json().catch(() => ({})));
+    if (!parsed.success) return c.json({ error: 'invalid body' }, 400);
+    const { worktreeRetention } = await loadConfig(repoRoot);
+    const reclaimed = await reclaimWorktrees(repoRoot, store, worktreeRetention);
+    return c.json({ reclaimed });
+  });
+
   // ---- inbox (spec 007) ------------------------------------------------------
   // Opt-in via CEZ_FOLLOWUPS=1 (#471). Off, the reader degrades to an empty
   // inbox (a 404 would make old clients surface an error for a feature that is
@@ -1211,6 +1285,21 @@ export function createApp(deps: ServerDeps): Hono {
     );
   });
 
+  // The full comment thread for one issue/PR (#499). Additive sibling of /api/github — lazy
+  // (fetched only while a detail view is open), zod-validated params, 400 on garbage, and the
+  // same in-payload availability degrade (gh missing / offline / 404 all render as a hint).
+  const commentsParams = z.object({
+    kind: z.enum(['issue', 'pr']),
+    number: z.coerce.number().int().positive(),
+  });
+  app.get('/api/github/comments/:kind/:number', async (c) => {
+    const parsed = commentsParams.safeParse({ kind: c.req.param('kind'), number: c.req.param('number') });
+    if (!parsed.success) return c.json({ error: 'invalid kind or number' }, 400);
+    return c.json(
+      await fetchGithubComments(repoRoot, parsed.data.kind, parsed.data.number, c.req.query('refresh') === '1'),
+    );
+  });
+
   // ---- repo view -----------------------------------------------------------
   app.get('/api/repo', async (c) => {
     const info = await getRepoInfo(repoRoot);
@@ -1233,9 +1322,15 @@ export function createApp(deps: ServerDeps): Hono {
     defaultModels: config.defaultModels ?? {},
     maxParallel: config.maxParallel,
     memoryLimitMb: config.memoryLimitMb ?? null,
+    // Count-based worktree retention (#483): keep the last N finished worktrees
+    // on disk. 0 = unlimited. Always materialized (schema default 10).
+    worktreeRetention: config.worktreeRetention,
     // Live title updates (task auto-naming spec): tri-state — null means "no
     // config key, the CEZ_TITLE_UPDATES env default (ON) decides".
     liveTitleUpdates: config.liveTitleUpdates ?? null,
+    // Optional review gate (#489): tri-state — null means "no config key, the
+    // CEZ_REVIEW_GATE env default (OFF) decides".
+    reviewGate: config.reviewGate ?? null,
   });
   app.get('/api/config', async (c) => c.json(configAnswer(await loadConfig(repoRoot))));
 
@@ -1261,9 +1356,16 @@ export function createApp(deps: ServerDeps): Hono {
     // the schema's 1–16; memoryLimitMb null/0 clears the ceiling.
     maxParallel: z.number().int().min(1).max(16).optional(),
     memoryLimitMb: z.number().int().min(0).max(1_048_576).nullable().optional(),
+    // Worktree retention count (Settings → Resources, #483). 0 = unlimited;
+    // null clears the key back to the schema default (10). Unlike memoryLimitMb,
+    // 0 is a meaningful value (unlimited), so it is stored, not treated as clear.
+    worktreeRetention: z.number().int().min(0).max(1000).nullable().optional(),
     // Live title updates toggle (Settings → Agents): null clears the key back
     // to the env-default behavior.
     liveTitleUpdates: z.boolean().nullable().optional(),
+    // Optional review gate toggle (Settings → Agents, #489): null clears the key
+    // back to the env-default behavior (OFF).
+    reviewGate: z.boolean().nullable().optional(),
   });
   app.put('/api/config', async (c) => {
     const parsed = setConfigSchema.safeParse(await c.req.json().catch(() => null));
@@ -1292,9 +1394,19 @@ export function createApp(deps: ServerDeps): Hono {
       }
     }
     if (parsed.data.maxParallel !== undefined) raw.maxParallel = parsed.data.maxParallel;
+    if (parsed.data.worktreeRetention !== undefined) {
+      // null clears back to the default (10); a number (including 0 = unlimited)
+      // is stored as-is.
+      if (parsed.data.worktreeRetention === null) delete raw.worktreeRetention;
+      else raw.worktreeRetention = parsed.data.worktreeRetention;
+    }
     if (parsed.data.liveTitleUpdates !== undefined) {
       if (parsed.data.liveTitleUpdates === null) delete raw.liveTitleUpdates;
       else raw.liveTitleUpdates = parsed.data.liveTitleUpdates;
+    }
+    if (parsed.data.reviewGate !== undefined) {
+      if (parsed.data.reviewGate === null) delete raw.reviewGate;
+      else raw.reviewGate = parsed.data.reviewGate;
     }
     if (parsed.data.memoryLimitMb !== undefined) {
       // null or 0 both mean "no ceiling" — drop the key back to the default.
@@ -1416,9 +1528,38 @@ function resolveWebDir(): string {
   return join(here, '..', '..', 'web');
 }
 
-/** The CLI command that reopens a run's session for interactive take-over,
- *  per backend. Legacy/undefined records default to Claude. */
-function resumeCommand(runner: string | undefined, sessionId: string): string {
+/**
+ * The session id shape every backend actually mints: UUIDs (claude/codex) and
+ * the CLIs' own slug-ish ids. No character here is special to bash, AppleScript
+ * OR cmd.exe, and a leading `-` is refused so the id can never be read as an
+ * option by the CLI it is passed to (same dash-guard as `isSafeGitRef`, #431).
+ * Bounded, like every other input that reaches a spawned process.
+ */
+const SAFE_SESSION_ID = /^[A-Za-z0-9._][A-Za-z0-9._-]{0,199}$/;
+
+/** True for session ids safe to splice into the take-over command (see above). */
+export function isSafeSessionId(sessionId: string): boolean {
+  return SAFE_SESSION_ID.test(sessionId);
+}
+
+/**
+ * The CLI command that reopens a run's session for interactive take-over, per
+ * backend. Legacy/undefined records default to Claude. Returns null when the id
+ * is not a shape we recognise — callers degrade (no take-over) rather than
+ * splice it into a shell.
+ *
+ * Validate, don't quote (#431): the session id is the only variable spliced
+ * into the command string, and `openInTerminal` runs that string through bash
+ * on darwin/linux but through `cmd /K` on win32. cmd.exe does not treat `'` as
+ * a quote character, so POSIX-quoting the id handed Windows users a literal
+ * `claude --resume '9f8e…'` and Claude answered "no conversation found".
+ * Constraining the charset to one with no metacharacter in ANY of those shells
+ * needs no quoting at all and fails closed on an unexpected id — a stronger
+ * guarantee than escaping, and platform-independent. Ids are UUID/CLI-minted
+ * today; this keeps a future source safe.
+ */
+export function resumeCommand(runner: string | undefined, sessionId: string): string | null {
+  if (!isSafeSessionId(sessionId)) return null;
   switch (runner) {
     case 'codex':
       return `codex resume ${sessionId}`;

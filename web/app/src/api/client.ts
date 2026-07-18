@@ -4,6 +4,9 @@ import type {
   CancelResponse,
   ChangesPayload,
   ConfigResponse,
+  ReclaimWorktreesResponse,
+  RemoveWorktreeResponse,
+  WorktreesResponse,
   ContinueResponse,
   CreatePrResponse,
   CreateRunInput,
@@ -13,6 +16,7 @@ import type {
   FinishResponse,
   GitCommitResponse,
   GitPushResponse,
+  GithubCommentsData,
   GithubData,
   GroupResponse,
   HealthResponse,
@@ -257,6 +261,16 @@ export function getGithub(
   return get<GithubData>(`/api/github${search ? `?${search}` : ''}`, opts)
 }
 
+/** The full comment thread for one issue/PR (#499). Degrades to `{ available: false, reason }`
+ *  server-side — an unreachable thread is a one-line hint in the detail view, not an ApiError. */
+export function getGithubComments(
+  kind: 'issue' | 'pr',
+  number: number,
+  opts?: ReadOptions,
+): Promise<GithubCommentsData> {
+  return get<GithubCommentsData>(`/api/github/comments/${kind}/${number}`, opts)
+}
+
 /** The run's worktree diff against its base, as unified-diff text. Also the plain-text
  *  "(no worktree — …)" sentence for runs that executed in the repo working tree. */
 export function getRunDiff(id: string, opts?: ReadOptions): Promise<string> {
@@ -449,4 +463,22 @@ export function putUiState(patch: UiState): Promise<UiState> {
  *  unrelated user keys survive; `null` clears a knob back to its default. */
 export function putConfig(patch: SetConfigInput): Promise<SetConfigResponse> {
   return mutate<SetConfigResponse>('PUT', '/api/config', patch)
+}
+
+/** The worktree management panel (#483): every materialized task worktree with disk usage,
+ *  retention state, the total, and the current keep-limit. */
+export function getWorktrees(opts?: ReadOptions): Promise<WorktreesResponse> {
+  return get<WorktreesResponse>('/api/worktrees', opts)
+}
+
+/** "Reclaim now": force the retention enforcer to reclaim over-limit finished worktrees
+ *  (directory only — branch kept). Returns the reclaimed run ids. Always 200. */
+export function reclaimWorktrees(): Promise<ReclaimWorktreesResponse> {
+  return mutate<ReclaimWorktreesResponse>('POST', '/api/worktrees/reclaim', {})
+}
+
+/** Per-row "Delete" in the worktrees panel: reclaim one run's worktree AND its branch
+ *  (the existing spec-006 route). 409 while the run is active. */
+export function removeRunWorktree(id: string): Promise<RemoveWorktreeResponse> {
+  return mutate<RemoveWorktreeResponse>('POST', runPath(id, '/remove-worktree'))
 }

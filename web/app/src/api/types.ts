@@ -20,6 +20,10 @@
 
 export type RunStatus = 'queued' | 'running' | 'waiting' | 'review' | 'done' | 'failed' | 'cancelled'
 
+/** Sub-state of `running` (spec 2026-07-18-subagent-monitoring-status, #490): the agent is
+ *  still working on its own downstream work (a sub-agent / a monitored command), not on you. */
+export type RunActivity = 'monitoring'
+
 export type StepStatus =
   | 'pending'
   | 'running'
@@ -75,6 +79,9 @@ export interface RunRecord {
   /** false when the run deliberately disabled follow-up todo generation. Absent means enabled. */
   generateFollowups?: boolean
   status: RunStatus
+  /** `monitoring` while `status === 'running'` and the agent is working on downstream work
+   *  (spec 2026-07-18-subagent-monitoring-status, #490). Absent on old runs; cleared on resume/end. */
+  activity?: RunActivity
   createdAt: string
   startedAt?: string
   finishedAt?: string
@@ -88,8 +95,12 @@ export interface RunRecord {
   /** The PR/issue number this task is ABOUT (task auto-naming spec) — display tier only. */
   prNumber?: number
   issueNumber?: number
-  /** 'user' = renamed via PATCH, never auto-overwritten; 'auto' = namer-owned. */
-  titleOrigin?: 'user' | 'auto'
+  /** 'user' = renamed via PATCH, never auto-overwritten; 'marker' = agent-declared
+   *  via CEZ:TITLE (spec 2026-07-18-task-ref-markers); 'auto' = namer-owned. */
+  titleOrigin?: 'user' | 'auto' | 'marker'
+  /** References the agent declared via CEZ:PR/CEZ:ISSUE markers — authoritative
+   *  over the namer for the matching kind. */
+  markerRefs?: { pr?: number; issue?: number }
   /** The referenced tier's working set (distinct PR URLs spotted, capped server-side). */
   referencedPrCandidates?: string[]
   /** Absent when the run executed in the repo working tree rather than its own worktree. */
@@ -485,6 +496,27 @@ export interface GithubData {
   labelColors?: Record<string, string>
 }
 
+/** One comment or PR review summary in an issue/PR thread (`GET /api/github/comments/…`, #499). */
+export interface GithubComment {
+  id: number
+  author: string
+  avatarUrl?: string
+  createdAt: string
+  body: string
+  kind: 'comment' | 'review'
+  reviewState?: 'approved' | 'changes_requested' | 'commented' | 'dismissed'
+  url: string
+}
+
+/** `GET /api/github/comments/:kind/:number` — degrades to `{ available: false, reason }` like the
+ *  list fetch, never an error. */
+export interface GithubCommentsData {
+  available: boolean
+  reason?: string
+  comments: GithubComment[]
+  truncated?: boolean
+}
+
 // ---- GUI prefs (`PUT /api/ui-state`) -----------------------------------------------------------
 
 /** The keys the server's schema names. It is a passthrough schema, so unknown keys round-trip
@@ -579,9 +611,15 @@ export interface ConfigResponse {
   maxParallel: number
   /** Per-task memory ceiling in MiB (whole process tree); null = no limit. */
   memoryLimitMb: number | null
+  /** Keep the last N finished worktrees on disk (#483); 0 = unlimited. Older
+   *  ones are reclaimed (directory only — branch kept, so work is recoverable). */
+  worktreeRetention: number
   /** Live title updates (task auto-naming): null = no config key, the
    *  CEZ_TITLE_UPDATES env default (ON) decides. */
   liveTitleUpdates: boolean | null
+  /** Optional review gate (#489): null = no config key, the CEZ_REVIEW_GATE env
+   *  default (OFF) decides. */
+  reviewGate: boolean | null
 }
 
 /** `PUT /api/config` (Settings → Agents; the Repo tab's base-branch picker). `baseBranch: null`
@@ -596,12 +634,48 @@ export interface SetConfigInput {
   maxParallel?: number
   /** null or 0 clears the ceiling back to "no limit". */
   memoryLimitMb?: number | null
+  /** Keep last N finished worktrees (#483); 0 = unlimited, null clears back to
+   *  the default (10). */
+  worktreeRetention?: number | null
   /** null clears the key back to the env-default behavior. */
   liveTitleUpdates?: boolean | null
+  /** null clears the key back to the env-default behavior (OFF). */
+  reviewGate?: boolean | null
 }
 
 /** The PUT answer: the same shape GET serves (the pre-R6 fields stayed, the rest is additive). */
 export type SetConfigResponse = ConfigResponse
+
+/** One materialized task worktree in the management panel (#483). `sizeBytes` is
+ *  null when `du` is unavailable (Windows / missing). `reclaimable` = finished,
+ *  has a directory, not yet reclaimed (retention's rule). */
+export interface WorktreeInfo {
+  runId: string
+  title: string
+  status: string
+  branch: string | null
+  sizeBytes: number | null
+  finishedAt: string | null
+  reclaimable: boolean
+}
+
+/** `GET /api/worktrees` (#483): the worktrees on disk, their total size (null when any
+ *  degraded), and the current keep-limit (0 = unlimited). */
+export interface WorktreesResponse {
+  worktrees: WorktreeInfo[]
+  totalBytes: number | null
+  keep: number
+}
+
+/** `POST /api/worktrees/reclaim` (#483): the run ids whose directory was reclaimed. */
+export interface ReclaimWorktreesResponse {
+  reclaimed: string[]
+}
+
+/** `POST /api/runs/:id/remove-worktree`: per-row delete in the worktrees panel. */
+export interface RemoveWorktreeResponse {
+  removed: boolean
+}
 
 /** A local app a worktree can be opened in (#open-in): editor, file manager, or terminal. */
 export interface OpenTarget {
