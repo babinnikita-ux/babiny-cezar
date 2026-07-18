@@ -12,7 +12,7 @@ Your CLI logins, your `gh`, your files. No accounts, no database, no cloud.
 
 🔥 **Fire and forget.** Queue a stack of autonomous coding and maintenance
 tasks and let them run — cezar orchestrates them across isolated worktrees,
-in parallel, and picks up follow-ups on its own. Flip the **Autonomous** flag
+in parallel. Flip the **Autonomous** flag
 and a run never stops to ask; it just finishes. Leave it on a VPS and you get
 a dev team that's *always on* — a mobile-friendly cockpit you can check from
 your phone, working your backlog while you're away.
@@ -90,10 +90,11 @@ and an orchestrator keeps a whole queue of them moving.
   worktree**, so two (or three) agents work in parallel without stepping on
   each other — or on the branch you're editing.
 - 🗂️ **A backlog that needs babysitting.** Queue a stack of tasks and cezar
-  **orchestrates** them: it runs up to your parallel limit, holds the rest in an
-  ordered queue, and turns an agent's leftover follow-ups into the next tasks
-  from the **Inbox** — one click each. Point it at a GitHub issue and it runs
-  straight on that, so working the tracker down stops being a manual chore.
+  **orchestrates** them: it runs up to your parallel limit and holds the rest in
+  an ordered queue. Point it at a GitHub issue and it runs straight on that, so
+  working the tracker down stops being a manual chore. Turn on the opt-in
+  **Inbox** (`CEZ_FOLLOWUPS=1`) and an agent's leftover follow-ups become the
+  next tasks too — one click each.
 - 🤖 **"Autonomous" means you still have to sit there.** Flip the **Autonomous**
   flag and a run never parks to ask — it keeps going until the task is done. Pair
   it with a **skill** (a Markdown playbook) and you've got fire-and-forget
@@ -186,7 +187,7 @@ event live and parks the run at a review gate when there's a diff to inspect.
    ┌──────────────────────────────┐     ┌───────────────────────────────┐
    │  git worktree per task       │     │  agent CLI  (your login)      │
    │  (isolated branch, parallel) │◄───►│  claude · codex · opencode    │
-   └──────────────────────────────┘     │  default-deny · no prompts    │
+   └──────────────────────────────┘     │  Bash open · no prompts       │
         │                                 └───────────────────────────────┘
         │  agent text · tool calls · tool results · tokens · cost
         ▼
@@ -256,12 +257,12 @@ Five moves that make the cockpit worth the browser tab:
 
 ## Cockpit tour
 
-Seven views, one browser window, all live over Server-Sent Events:
+Seven views, one browser window, all live over Server-Sent Events (six until you opt into the Inbox):
 
 | View | What's in it |
 |---|---|
 | **Tasks** | Every task with its status, live event stream (agent text · tool calls · tool results · pasted/generated screenshots), tokens and cost. Continue, cancel, open in terminal (`claude --resume`), review the diff, or push a draft PR. |
-| **Inbox** | Follow-ups an agent left behind (`todos.json`) — one click turns a suggestion into the next task, pre-wired to its suggested skill. |
+| **Inbox** | **Opt-in** (`CEZ_FOLLOWUPS=1`; hidden by default). Follow-ups an agent left behind (`todos.json`) — one click turns a suggestion into the next task, pre-wired to its suggested skill. Off, agents are never asked to leave follow-ups; each task's own **Notes** handoff journal is unaffected. |
 | **Git** | Branch, working-tree status, diff vs HEAD, recent commits (click one for its inline patch + GitHub link), and the configurable base branch that worktrees fork from and PRs target. |
 | **GitHub** | Open issues and PRs of the repo's origin, read through your logged-in `gh`. Hand an issue straight to the agent — pick a workflow and skills, one click runs it. |
 | **Skills** | Local skills plus the team skills repo, with a rendered body + prompt preview. Refresh pulls the latest from the remote. |
@@ -316,13 +317,16 @@ skills: [reproduce, root-cause, implement, self-review]
 
 cezar shells out to your locally installed, logged-in agent CLI —
 **your subscription, no API key**. With the default Claude Code backend that
-means headless `stream-json` mode, tool access default-deny via
-`--allowedTools`, with unapproved tools denied without prompting
-(`--permission-mode dontAsk`) inside the task's worktree. Set
-`CEZ_APPROVAL_GATE=1` to opt into Claude's interactive approval UI. Codex and
-OpenCode are driven through their own native protocols — see
-[Coding agent backends](#coding-agent-backends). Nothing runs on a server you
-don't own.
+means headless `stream-json` mode, tool access via `--allowedTools`, with
+unapproved tools denied without prompting (`--permission-mode dontAsk`) inside
+the task's worktree — but note the zero-config default list (`Read`, `Edit`,
+`Write`, `Grep`, `Glob`, `Bash`) grants unrestricted `Bash` unless a step sets
+`bashAllowlist`, so treat a run as having full shell access in its worktree,
+not a sandboxed allowlist. Set `CEZ_APPROVAL_GATE=1` to opt into Claude's
+interactive approval UI. Codex and OpenCode are driven through their own
+native protocols and don't honor `allowedTools` at all — see
+[Coding agent backends](#coding-agent-backends) for what each one actually
+locks down. Nothing runs on a server you don't own.
 
 Useful environment variables:
 
@@ -330,10 +334,15 @@ Useful environment variables:
 |---|---|
 | `CEZ_DRY_RUN=1` | Use the bundled mock instead of the real `claude` CLI — the entire cockpit works offline, for demos and development. |
 | `CEZ_APPROVAL_GATE=1` | Opt into Claude's interactive approval UI; by default, unapproved tools are denied without interrupting the run. |
+| `CEZ_FOLLOWUPS=1` | Turn on the global follow-up **Inbox**: agents are asked to leave follow-ups in `todos.json` when they finish, and the Inbox view appears. Off by default — each task's own **Notes** handoff journal runs either way. |
+| `CEZ_AUTOSAVE=1` | Re-enable the periodic (90 s) `cezar autosave` commit in task worktrees. Off by default (#471) — turn-end and pre-PR flushes always run, so branches still end complete. |
 | `CEZ_CLAUDE_BIN=/path/to/claude` | Override which `claude` binary is used. |
 | `CEZ_CODEX_BIN=/path/to/codex` | Override which `codex` binary is used. |
 | `CEZ_OPENCODE_BIN=/path/to/opencode` | Override which `opencode` binary is used. |
 | `GITHUB_TOKEN` | Fallback for GitHub reads/PRs when `gh` isn't authenticated. |
+| `CEZ_TITLE_UPDATES=0` | Turn off the live task-title refresh (namer re-runs on each turn end). The Settings → Agents toggle overrides this default. |
+| `CEZ_AUTONAME=0` | Disable ALL LLM task naming (creation + live) — titles stay heuristic (`437: /om-auto-review-pr`). Under `CEZ_DRY_RUN=1` naming is already off unless forced with `CEZ_AUTONAME=1`. |
+| `CEZ_NO_BANNER=1` | Skip the `open-mercato/skills` banner on `cezar serve` startup. Dismissing the same banner in the cockpit silences the terminal one too. |
 
 ---
 
@@ -342,11 +351,11 @@ Useful environment variables:
 cezar is not married to one vendor. Every agent step runs through a single
 `AgentRunner` seam with three built-in backends:
 
-| Backend | CLI | How cezar drives it |
-|---|---|---|
-| **Claude Code** (default) | [`claude`](https://github.com/anthropics/claude-code) | Headless `stream-json` mode. |
-| **Codex** | [`codex`](https://github.com/openai/codex) | `codex app-server` — JSON-RPC over stdio, the same transport the Codex IDE extensions use. |
-| **OpenCode** | [`opencode`](https://opencode.ai) | `opencode serve` — a local HTTP server with an SSE event stream. |
+| Backend | CLI | How cezar drives it | Tool access |
+|---|---|---|---|
+| **Claude Code** (default) | [`claude`](https://github.com/anthropics/claude-code) | Headless `stream-json` mode. | Per-tool `--allowedTools` (`bashAllowlist` scopes `Bash`); `dontAsk` denies unapproved tools without prompting (`CEZ_APPROVAL_GATE=1` → `acceptEdits` + approval UI). |
+| **Codex** | [`codex`](https://github.com/openai/codex) | `codex app-server` — JSON-RPC over stdio, the same transport the Codex IDE extensions use. | Ignores `allowedTools`; runs its own `workspace-write` sandbox with `approvalPolicy: never` and network access on. |
+| **OpenCode** | [`opencode`](https://opencode.ai) | `opencode serve` — a local HTTP server with an SSE event stream. | Ignores `allowedTools` entirely; every permission is auto-approved. |
 
 On startup cezar probes which CLIs are installed and the cockpit only offers
 the backends it found — install any one of the three and you're operational.

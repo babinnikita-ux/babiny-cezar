@@ -1,5 +1,5 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -7,7 +7,7 @@ import { createQueryClient } from '@/api/query-client'
 import type { GithubData, GithubItem, Skill, WorkflowsResponse } from '@/api/types'
 import { Toaster, resetToasts } from '@/components/ui/toaster'
 
-import { GithubRoute } from './github'
+import { GithubIndexRoute, GithubRoute } from './github'
 import { readFollowupPrompt, readFollowupSelection, writeFollowupSelection } from './hand-to-agent-draft'
 
 beforeAll(() => {
@@ -144,13 +144,15 @@ function stubFetch(overrides: Record<string, () => Response> = {}): SentRequest[
   return sent
 }
 
-/** Cold-load the tab at a URL, with the same route map routes.tsx registers. */
+/** Cold-load the tab at a URL, with the same route map routes.tsx registers — `/github` goes
+ *  through `GithubIndexRoute` (#417) exactly like production, so the remembered-tab redirect
+ *  is exercised the same way a real navigation would hit it. */
 function renderAt(entry: string) {
   render(
     <QueryClientProvider client={createQueryClient()}>
       <MemoryRouter initialEntries={[entry]}>
         <Routes>
-          <Route path="/github" element={<GithubRoute view="issues" />} />
+          <Route path="/github" element={<GithubIndexRoute />} />
           <Route path="/github/prs" element={<GithubRoute view="prs" />} />
           <Route path="/github/issues/:n" element={<GithubRoute view="issues" />} />
           <Route path="/github/prs/:n" element={<GithubRoute view="prs" />} />
@@ -206,6 +208,35 @@ describe('the GitHub tab lists', () => {
     expect(rows()[0]?.getAttribute('href')).toBe('/github/prs/137')
   })
 
+  it('a PR row shows a checks glyph tinted by outcome (#400); an issue row shows none', async () => {
+    const passing: GithubItem = { ...PR_137, number: 201, url: 'u201', checks: 'passing' }
+    const pending: GithubItem = { ...PR_137, number: 202, url: 'u202', checks: 'pending' }
+    const none: GithubItem = { ...PR_137, number: 203, url: 'u203', checks: null }
+    stubFetch({
+      'GET /api/github': () => jsonResponse({ ...GITHUB, prs: [PR_137, passing, pending, none] }),
+    })
+    renderAt('/github/prs')
+
+    await waitFor(() => expect(rows()).toHaveLength(4))
+    const glyph = (number: string) =>
+      document.querySelector(`[data-slot="gh-row"][data-number="${number}"] [data-slot="gh-row-checks"]`)
+
+    expect(glyph('137')?.getAttribute('data-checks')).toBe('failing')
+    expect(glyph('137')?.textContent).toBe('✗')
+    expect(glyph('201')?.getAttribute('data-checks')).toBe('passing')
+    expect(glyph('201')?.textContent).toBe('✓')
+    expect(glyph('202')?.getAttribute('data-checks')).toBe('pending')
+    expect(glyph('202')?.textContent).toBe('○')
+    expect(glyph('203')).toBeNull()
+
+    // Issues never carry `checks` — no glyph on their rows either.
+    cleanup()
+    stubFetch()
+    renderAt('/github')
+    await waitFor(() => expect(rows().length).toBeGreaterThan(0))
+    expect(document.querySelector('[data-slot="gh-row-checks"]')).toBeNull()
+  })
+
   it('counts at the fast-batch cap render as 30+ until the full fetch lands', async () => {
     const many: GithubData = {
       ...GITHUB,
@@ -253,6 +284,54 @@ describe('the GitHub tab lists', () => {
       expect.stringContaining('Fix GitHub issue #142: Login form drops session on refresh'),
     )
     expect(setData.mock.calls[0]?.[1]).toContain(ISSUE_142.url)
+  })
+})
+
+describe('remembering the last-selected tab (#417)', () => {
+  it('clicking Pull requests persists the choice via PUT /api/ui-state', async () => {
+    const sent = stubFetch()
+    renderAt('/github')
+    await waitFor(() => expect(rows()).toHaveLength(2))
+
+    fireEvent.click(screen.getByRole('link', { name: /Pull requests/ }))
+
+    await waitFor(() =>
+      expect(sent.some((request) => request.method === 'PUT' && request.path === '/api/ui-state')).toBe(
+        true,
+      ),
+    )
+    const put = sent.find((request) => request.method === 'PUT' && request.path === '/api/ui-state')
+    expect(put?.body).toEqual({ githubView: 'prs' })
+  })
+
+  it('opening /github restores "prs" when that was the last-selected tab', async () => {
+    stubFetch({ 'GET /api/ui-state': () => jsonResponse({ githubView: 'prs' }) })
+    renderAt('/github')
+
+    await waitFor(() => expect(rows()).toHaveLength(1))
+    expect(rows()[0]?.getAttribute('href')).toBe('/github/prs/137')
+  })
+
+  it('opening /github falls back to Issues when nothing was ever remembered', async () => {
+    stubFetch({ 'GET /api/ui-state': () => jsonResponse({}) })
+    renderAt('/github')
+
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    expect(rows()[0]?.getAttribute('href')).toBe('/github/issues/142')
+  })
+
+  it('clicking Issues while "prs" is remembered switches to Issues instead of bouncing back', async () => {
+    // The regression this guards: without eagerly patching the query cache on click, the
+    // index route would still read the stale "prs" remembered choice and redirect the click
+    // straight back to /github/prs, making the Issues tab unclickable.
+    stubFetch({ 'GET /api/ui-state': () => jsonResponse({ githubView: 'prs' }) })
+    renderAt('/github/prs')
+    await waitFor(() => expect(rows()).toHaveLength(1))
+
+    fireEvent.click(screen.getByRole('link', { name: /^Issues/ }))
+
+    await waitFor(() => expect(rows()).toHaveLength(2))
+    expect(rows().map((row) => row.dataset.number)).toEqual(['142', '139'])
   })
 })
 
@@ -854,5 +933,181 @@ describe('⌘/Ctrl+Enter submits the follow-up composer (#408 item 5)', () => {
     expect(sent.some((request) => request.method === 'POST' && request.path === '/api/runs')).toBe(
       false,
     )
+  })
+})
+
+// ---- prompt templates (#413) --------------------------------------------------------------------
+
+describe('the follow-up prompt template menu (#413)', () => {
+  /** The menu is a Popover + cmdk (like the skills picker beside it), so it opens on click. */
+  async function openTemplateMenu(): Promise<void> {
+    fireEvent.click(document.querySelector('[data-slot="prompt-template-trigger"]')!)
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="prompt-template-option"]')).not.toBeNull(),
+    )
+  }
+
+  const option = (id: string) =>
+    document.querySelector<HTMLElement>(`[data-slot="prompt-template-option"][data-template="${id}"]`)
+
+  it('an untouched ui-state shows the built-in templates, and inserting one fills the custom prompt', async () => {
+    stubFetch()
+    await openDetail()
+
+    await openTemplateMenu()
+    expect(document.querySelectorAll('[data-slot="prompt-template-option"]').length).toBeGreaterThan(1)
+    expect(option('add-tests')).not.toBeNull()
+
+    fireEvent.click(option('add-tests')!)
+    await waitFor(() =>
+      expect(screen.getByLabelText('Custom prompt')).toHaveProperty(
+        'value',
+        'Also add or update tests covering this change.',
+      ),
+    )
+  })
+
+  it('a user-edited ui-state templates list replaces the built-ins in the menu', async () => {
+    stubFetch({
+      'GET /api/ui-state': () =>
+        jsonResponse({ promptTemplates: [{ id: 'custom-1', label: 'My snippet', text: 'Custom instructions.' }] }),
+    })
+    await openDetail()
+
+    await openTemplateMenu()
+    expect(document.querySelectorAll('[data-slot="prompt-template-option"]')).toHaveLength(1)
+    expect(option('custom-1')?.textContent).toContain('My snippet')
+
+    fireEvent.click(option('custom-1')!)
+    await waitFor(() =>
+      expect(screen.getByLabelText('Custom prompt')).toHaveProperty('value', 'Custom instructions.'),
+    )
+  })
+
+  it('inserting a second template stacks it below the first, separated by a blank line', async () => {
+    stubFetch()
+    await openDetail()
+
+    await openTemplateMenu()
+    fireEvent.click(option('add-tests')!)
+    await waitFor(() =>
+      expect(screen.getByLabelText('Custom prompt')).toHaveProperty(
+        'value',
+        'Also add or update tests covering this change.',
+      ),
+    )
+
+    await openTemplateMenu()
+    fireEvent.click(option('update-docs')!)
+
+    await waitFor(() =>
+      expect(screen.getByLabelText('Custom prompt')).toHaveProperty(
+        'value',
+        'Also add or update tests covering this change.\n\nAlso update any relevant documentation or comments.',
+      ),
+    )
+  })
+
+  it('the menu is searchable — typing narrows it to the matching template', async () => {
+    stubFetch()
+    await openDetail()
+
+    await openTemplateMenu()
+    const all = document.querySelectorAll('[data-slot="prompt-template-option"]').length
+    expect(all).toBeGreaterThan(1)
+
+    fireEvent.change(screen.getByPlaceholderText('search templates…'), { target: { value: 'docs' } })
+    await waitFor(() =>
+      expect(document.querySelectorAll('[data-slot="prompt-template-option"]')).toHaveLength(1),
+    )
+    expect(option('update-docs')).not.toBeNull()
+  })
+
+  it('search matches a template by its TEXT, not just the label someone gave it', async () => {
+    stubFetch()
+    await openDetail()
+
+    await openTemplateMenu()
+    // "unrelated refactors" appears only in the body of the keep-minimal template.
+    fireEvent.change(screen.getByPlaceholderText('search templates…'), {
+      target: { value: 'unrelated refactors' },
+    })
+    await waitFor(() =>
+      expect(document.querySelectorAll('[data-slot="prompt-template-option"]')).toHaveLength(1),
+    )
+    expect(option('keep-minimal')).not.toBeNull()
+  })
+})
+
+// ---- auto-apply on skill selection (#413 follow-up) ---------------------------------------------
+
+describe('templates assigned to a skill auto-apply when a skill is picked', () => {
+  const ASSIGNED = {
+    'GET /api/ui-state': () =>
+      jsonResponse({
+        promptTemplates: [
+          { id: 'assigned', label: 'Fix rules', text: 'Follow the fix rules.', skills: ['om-fix'] },
+          { id: 'manual', label: 'Manual', text: 'Never auto.' },
+        ],
+      }),
+  }
+
+  /** Toggle a skill. The picker is multi-select and STAYS open after a toggle, so only open it
+   *  when it is not already showing — clicking the trigger again would close it instead. */
+  const pickSkill = async (name: string) => {
+    const selector = `[data-slot="gh-skill-option"][data-skill="${name}"]`
+    if (document.querySelector(selector) === null) {
+      fireEvent.click(document.querySelector('[data-slot="gh-skills-trigger"]')!)
+      await waitFor(() => expect(document.querySelector(selector)).not.toBeNull())
+    }
+    fireEvent.click(document.querySelector(selector)!)
+  }
+
+  it('fills an untouched prompt box with the assigned template, and only that one', async () => {
+    stubFetch(ASSIGNED)
+    await openDetail()
+
+    await pickSkill('om-fix')
+    await waitFor(() =>
+      expect(screen.getByLabelText('Custom prompt')).toHaveProperty('value', 'Follow the fix rules.'),
+    )
+  })
+
+  it('deselecting the skill takes the auto-applied text back out again', async () => {
+    stubFetch(ASSIGNED)
+    await openDetail()
+
+    await pickSkill('om-fix')
+    await waitFor(() =>
+      expect(screen.getByLabelText('Custom prompt')).toHaveProperty('value', 'Follow the fix rules.'),
+    )
+
+    await pickSkill('om-fix')
+    await waitFor(() => expect(screen.getByLabelText('Custom prompt')).toHaveProperty('value', ''))
+  })
+
+  it('NEVER overwrites a prompt the user already typed in', async () => {
+    stubFetch(ASSIGNED)
+    await openDetail()
+
+    fireEvent.change(screen.getByLabelText('Custom prompt'), { target: { value: 'my own words' } })
+    await pickSkill('om-fix')
+
+    // Give the effect every chance to misbehave before asserting it did not.
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="gh-skill-chip"][data-skill="om-fix"]')).not.toBeNull(),
+    )
+    expect(screen.getByLabelText('Custom prompt')).toHaveProperty('value', 'my own words')
+  })
+
+  it('a skill with no template assigned to it leaves the box alone', async () => {
+    stubFetch(ASSIGNED)
+    await openDetail()
+
+    await pickSkill('g-review')
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="gh-skill-chip"][data-skill="g-review"]')).not.toBeNull(),
+    )
+    expect(screen.getByLabelText('Custom prompt')).toHaveProperty('value', '')
   })
 })

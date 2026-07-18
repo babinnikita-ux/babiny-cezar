@@ -42,6 +42,7 @@ import {
   readWorktreePath,
 } from './git-changes.js';
 import { loadConfig, type CezConfig } from '../config.js';
+import { readUiState, uiStatePath } from '../ui-state.js';
 import { resolveCapabilities } from './capabilities.js';
 import { resolveForge } from './forge/index.js';
 import { fetchGithub } from './github.js';
@@ -63,6 +64,10 @@ export interface ServerDeps {
    *  implies hosted mode — `capabilities.localHandoff:false`. */
   bindHost?: string;
 }
+
+/** 409 body for the inbox mutators while the follow-up inbox is off (#471). */
+const FOLLOWUPS_OFF =
+  'the follow-up inbox is disabled — set CEZ_FOLLOWUPS=1 to enable it';
 
 // ---- variant-compare response shapes (spec 010) ----------------------------
 // Named and exported so `api-types.test.ts` can drift-guard the cockpit's
@@ -92,6 +97,19 @@ export interface PickVariantResponse {
   winner?: RunRecord;
 }
 
+/** streamSSE with the anti-buffering contract (#424): hono's own header is a
+ *  bare `no-cache`, which lets an intermediary (reverse proxy, compression
+ *  middleware, corporate MITM) transform-buffer the stream — the client then
+ *  sees a silently frozen transcript while the server keeps writing. Headers
+ *  are set on the returned Response because hono's helper overwrites
+ *  `Cache-Control` set via `c.header()` before it. */
+const streamSSENoBuffer: typeof streamSSE = (c, cb, onError) => {
+  const res = streamSSE(c, cb, onError);
+  res.headers.set('Cache-Control', 'no-cache, no-transform');
+  res.headers.set('X-Accel-Buffering', 'no');
+  return res;
+};
+
 // A run starts from a named workflow OR an inline chain of steps (spec 008 —
 // the approved plan is posted as-is, never written to a file).
 const startRunSchema = z
@@ -111,8 +129,11 @@ const startRunSchema = z
     // Autonomous mode (#autonomous): the run never parks at `waiting` — it
     // auto-continues until the agent signals done. No "needs you" is raised.
     autonomous: z.boolean().optional(),
-    // Generate follow-up inbox entries (spec 007, #444). Omitted means enabled
-    // for old clients — the handoff journal is unaffected either way.
+    // Generate follow-up inbox entries (spec 007, #444). Honoured only while
+    // the `followups` capability is on (#471) — off, the server pins it to
+    // false whatever the client asked for. Omitted still means "enabled" for
+    // old clients, but only within an already-enabled server. The handoff
+    // journal is unaffected either way.
     generateFollowups: z.boolean().optional(),
     // Per-run system-prompt override (R2 2.3) — programmatic callers only
     // (bookmarklets, scripts); deliberately NOT a composer-UI control. Wins
@@ -211,6 +232,9 @@ const uiStateSchema = z
     // Runs area presentation (#348): the sidebar-list + detail pane, or the
     // full-width table ("task manager") view.
     runsView: z.enum(['list', 'table']).optional(),
+    // The GitHub tab's last-selected sub-tab (#417): issues or PRs. ADDITIVE — an old
+    // ui-state.json without the key behaves as the default (issues).
+    githubView: z.enum(['issues', 'prs']).optional(),
     // Settings → Appearance (redesign R6): accent + density. ADDITIVE — the theme itself
     // stays in the browser (`cez-theme` localStorage, pre-paint). The cockpit always PUTs
     // the whole object because the top-level merge below is shallow.
@@ -220,6 +244,26 @@ const uiStateSchema = z
         density: z.enum(['comfortable', 'compact', 'ultra']).optional(),
       })
       .optional(),
+    // Follow-up prompt templates (#413): reusable snippets insertable into the GitHub hand-over
+    // and Inbox follow-up composers. Absent → the client's built-in defaults; present (even `[]`)
+    // is the user's own edited list, from Settings → Prompt templates. Additive, like the rest of
+    // ui-state — the cockpit is the only writer, so validation stays generous but bounded.
+    promptTemplates: z
+      .array(
+        z.object({
+          id: z.string().min(1).max(64),
+          label: z.string().trim().min(1).max(80),
+          text: z.string().trim().min(1).max(2000),
+          // Skill names this template auto-applies for. Optional and additive: templates
+          // written before this key existed keep validating, and stay manual-only.
+          skills: z.array(z.string().trim().min(1).max(200)).max(50).optional(),
+        }),
+      )
+      .max(50)
+      .optional(),
+    // Skills promo banner (#391): set once the cockpit banner is dismissed, never unset.
+    // Server-persisted (not a cookie) so the "shown once" promise holds across browsers.
+    dismissedSkillsBanner: z.boolean().optional(),
   })
   .passthrough();
 
@@ -227,6 +271,21 @@ const uiStateSchema = z
 const patchRunSchema = z.object({
   title: z.string().trim().min(1).max(300).optional(),
 });
+
+// Inbox "▶ Run" body (#413): optional extra instructions — e.g. a prompt template inserted in
+// the Inbox composer — appended to the entry's suggested/summary task text. Old clients that
+// POST with no body at all keep the pre-#413 behavior exactly (see the route: a body-less
+// request parses to `undefined`, and an absent `prompt` never touches `task`).
+const startTodoBodySchema = z
+  .object({
+    prompt: z
+      .string()
+      .trim()
+      .max(20_000, 'prompt must be at most 20000 characters')
+      .optional()
+      .transform((s) => (s ? s : undefined)),
+  })
+  .optional();
 
 // Session commit (redesign R5 — §"Git/session API additions").
 const gitCommitSchema = z.object({
@@ -257,7 +316,9 @@ export function createApp(deps: ServerDeps): Hono {
   // Hosted-mode gate (spec §"Deployment modes") — read per request so
   // CEZ_REMOTE flips take effect live (and tests can toggle it).
   const capabilities = () => resolveCapabilities(process.env, bindHost);
-  startTodosWatch(dataDir); // inbox live updates (spec 007)
+  // Inbox live updates (spec 007). Opt-in (#471): no capability, no watcher —
+  // nothing can write todos.json anyway, so a watch would only burn an fd.
+  if (capabilities().followups) startTodosWatch(dataDir);
   const launchKey = ensureLaunchKey(dataDir); // bookmarklet auto-start secret (spec 011)
   const app = new Hono();
 
@@ -353,25 +414,18 @@ export function createApp(deps: ServerDeps): Hono {
   app.get('/api/skills', async (c) => c.json(await discoverSkills(repoRoot)));
 
   // ---- GUI prefs (ui-state.json) --------------------------------------------
-  const uiStatePath = join(dataDir, 'ui-state.json');
-  const readUiState = async (): Promise<Record<string, unknown>> => {
-    try {
-      const parsed: unknown = JSON.parse(await readFile(uiStatePath, 'utf8'));
-      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
-    } catch {
-      return {};
-    }
-  };
-  app.get('/api/ui-state', async (c) => c.json(await readUiState()));
+  // The read path is shared with the CLI (`src/ui-state.ts`) so `cezar serve` can honour a
+  // preference set here — #391's dismissed skills banner — from one notion of the file.
+  app.get('/api/ui-state', async (c) => c.json(await readUiState(repoRoot)));
   app.put('/api/ui-state', async (c) => {
     const parsed = uiStateSchema.safeParse(await c.req.json().catch(() => null));
     if (!parsed.success) {
       return c.json({ error: parsed.error.issues.map((i) => i.message).join('; ') }, 400);
     }
-    const merged = { ...(await readUiState()), ...parsed.data };
+    const merged = { ...(await readUiState(repoRoot)), ...parsed.data };
     try {
       await mkdir(dataDir, { recursive: true });
-      await writeFile(uiStatePath, `${JSON.stringify(merged, null, 2)}\n`, 'utf8');
+      await writeFile(uiStatePath(repoRoot), `${JSON.stringify(merged, null, 2)}\n`, 'utf8');
     } catch (err) {
       return c.json({ error: err instanceof Error ? err.message : String(err) }, 500);
     }
@@ -539,7 +593,12 @@ export function createApp(deps: ServerDeps): Hono {
       systemPrompt: parsed.data.systemPrompt,
       worktree: parsed.data.worktree,
       autonomous: parsed.data.autonomous,
-      generateFollowups: parsed.data.generateFollowups,
+      // Opt-in inbox (#471): the capability is the ceiling, so a client asking
+      // for follow-ups on a server that has them off gets a plain `false`
+      // rather than an error — the run is still perfectly valid without them.
+      // One decision here feeds the run record, the system prompt and
+      // CEZ_TODOS_FILE alike (RunManager.agentEnv).
+      generateFollowups: capabilities().followups ? parsed.data.generateFollowups : false,
     };
     const variants = parsed.data.variants ?? 1;
     if (variants > 1) {
@@ -657,7 +716,9 @@ export function createApp(deps: ServerDeps): Hono {
       return c.json({ error: parsed.error.issues.map((i) => i.message).join('; ') }, 400);
     }
     if (parsed.data.title !== undefined) {
-      store.updateRun(id, { title: parsed.data.title, titleSummary: parsed.data.title });
+      // titleOrigin 'user' permanently stops the namer's live updates for this run
+      // (spec 2026-07-17-task-auto-naming).
+      store.updateRun(id, { title: parsed.data.title, titleSummary: parsed.data.title, titleOrigin: 'user' });
     }
     return c.json(store.getRun(id));
   });
@@ -976,10 +1037,16 @@ export function createApp(deps: ServerDeps): Hono {
   });
 
   // ---- inbox (spec 007) ------------------------------------------------------
-  app.get('/api/todos', async (c) => c.json(await readTodos(dataDir)));
+  // Opt-in via CEZ_FOLLOWUPS=1 (#471). Off, the reader degrades to an empty
+  // inbox (a 404 would make old clients surface an error for a feature that is
+  // merely switched off) and the mutators 409 as defense in depth — the shape
+  // the hosted-mode open-in-* handlers already use. Existing todos.json entries
+  // are never touched, so flipping the env back on restores them.
+  app.get('/api/todos', async (c) => c.json(capabilities().followups ? await readTodos(dataDir) : []));
 
   // Check off = delete the entry.
   app.delete('/api/todos/:id', async (c) => {
+    if (!capabilities().followups) return c.json({ error: FOLLOWUPS_OFF }, 409);
     const removed = await removeTodo(dataDir, c.req.param('id'));
     return removed ? c.json({ removed: true }) : c.json({ error: 'not found' }, 404);
   });
@@ -987,13 +1054,34 @@ export function createApp(deps: ServerDeps): Hono {
   // "▶ Run": turn an inbox entry into a task — a one-off single-step workflow
   // around the suggested skill when it exists, plain quick-task otherwise.
   app.post('/api/todos/:id/start', async (c) => {
+    if (!capabilities().followups) return c.json({ error: FOLLOWUPS_OFF }, 409);
     const id = c.req.param('id');
     const todo = (await readTodos(dataDir)).find((t) => t.id === id);
     if (!todo) return c.json({ error: 'not found' }, 404);
     if (todo.startedTaskId) return c.json({ error: 'already started' }, 409);
 
+    // Body is optional — a request with none at all (the pre-#413 client) stays `undefined`
+    // here, same as an empty `{}`. A body that IS present but is not valid JSON becomes `null`,
+    // which the schema rejects → 400 (the `.catch(() => null)` pattern every other mutating
+    // route uses); mapping it to `undefined` too would let a broken payload pass as "no body"
+    // and silently 201.
+    const rawBody = await c.req.text().catch(() => '');
+    let body: unknown;
+    if (rawBody.trim().length > 0) {
+      try {
+        body = JSON.parse(rawBody);
+      } catch {
+        body = null;
+      }
+    }
+    const parsedBody = startTodoBodySchema.safeParse(body);
+    if (!parsedBody.success) {
+      return c.json({ error: parsedBody.error.issues.map((i) => i.message).join('; ') }, 400);
+    }
+
     let task = (todo.suggestedPrompt ?? todo.summary).trim() || todo.summary;
     if (todo.suggestedArgs) task += `\n\nArguments: ${todo.suggestedArgs}`;
+    if (parsedBody.data?.prompt) task += `\n\n${parsedBody.data.prompt}`;
 
     let workflow: WorkflowDef | undefined;
     if (todo.suggestedSkill) {
@@ -1023,7 +1111,7 @@ export function createApp(deps: ServerDeps): Hono {
   app.get('/api/runs/:id/events', (c) => {
     const id = c.req.param('id');
     if (!store.getRun(id)) return c.json({ error: 'not found' }, 404);
-    return streamSSE(c, async (stream) => {
+    return streamSSENoBuffer(c, async (stream) => {
       let replaying = true;
       let maxSeq = 0;
       const buffered: RunEvent[] = [];
@@ -1075,7 +1163,7 @@ export function createApp(deps: ServerDeps): Hono {
 
   // Global SSE: run-summary updates for the list view + inbox changes.
   app.get('/api/events', (c) =>
-    streamSSE(c, async (stream) => {
+    streamSSENoBuffer(c, async (stream) => {
       const onRun = (run: RunRecord) =>
         void stream.writeSSE({ event: 'run', data: JSON.stringify(run) });
       const onDeleted = (id: string) =>
@@ -1084,7 +1172,12 @@ export function createApp(deps: ServerDeps): Hono {
         const items: TodoItem[] = await readTodos(dataDir).catch(() => []);
         await stream.writeSSE({ event: 'todos', data: JSON.stringify(items) });
       };
-      const offTodos = onTodosChanged(() => void sendTodos());
+      // Opt-in inbox (#471): with the capability off the watcher never starts,
+      // so this would never fire anyway — but the emitter is module-global, so
+      // subscribe only when the inbox actually exists rather than lean on that.
+      const offTodos = capabilities().followups
+        ? onTodosChanged(() => void sendTodos())
+        : () => undefined;
       // Live resource telemetry (#348): the sampler ticks ~every 2 s only
       // while some run has a registered process; each tick is relayed as one
       // `usage` message (runId → {cpuPct, rssBytes, procCount}). Never
@@ -1140,6 +1233,9 @@ export function createApp(deps: ServerDeps): Hono {
     defaultModels: config.defaultModels ?? {},
     maxParallel: config.maxParallel,
     memoryLimitMb: config.memoryLimitMb ?? null,
+    // Live title updates (task auto-naming spec): tri-state — null means "no
+    // config key, the CEZ_TITLE_UPDATES env default (ON) decides".
+    liveTitleUpdates: config.liveTitleUpdates ?? null,
   });
   app.get('/api/config', async (c) => c.json(configAnswer(await loadConfig(repoRoot))));
 
@@ -1165,6 +1261,9 @@ export function createApp(deps: ServerDeps): Hono {
     // the schema's 1–16; memoryLimitMb null/0 clears the ceiling.
     maxParallel: z.number().int().min(1).max(16).optional(),
     memoryLimitMb: z.number().int().min(0).max(1_048_576).nullable().optional(),
+    // Live title updates toggle (Settings → Agents): null clears the key back
+    // to the env-default behavior.
+    liveTitleUpdates: z.boolean().nullable().optional(),
   });
   app.put('/api/config', async (c) => {
     const parsed = setConfigSchema.safeParse(await c.req.json().catch(() => null));
@@ -1193,6 +1292,10 @@ export function createApp(deps: ServerDeps): Hono {
       }
     }
     if (parsed.data.maxParallel !== undefined) raw.maxParallel = parsed.data.maxParallel;
+    if (parsed.data.liveTitleUpdates !== undefined) {
+      if (parsed.data.liveTitleUpdates === null) delete raw.liveTitleUpdates;
+      else raw.liveTitleUpdates = parsed.data.liveTitleUpdates;
+    }
     if (parsed.data.memoryLimitMb !== undefined) {
       // null or 0 both mean "no ceiling" — drop the key back to the default.
       if (parsed.data.memoryLimitMb === null || parsed.data.memoryLimitMb === 0) {

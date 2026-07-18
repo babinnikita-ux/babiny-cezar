@@ -85,6 +85,11 @@ export interface RunRecord {
    *  Display tier only: `pullRequestUrl` (the PR this task CREATED) wins, and the
    *  Draft-PR / Create-PR action gates ignore it. Read via `taskPrUrl()`. */
   referencedPullRequestUrl?: string
+  /** The PR/issue number this task is ABOUT (task auto-naming spec) — display tier only. */
+  prNumber?: number
+  issueNumber?: number
+  /** 'user' = renamed via PATCH, never auto-overwritten; 'auto' = namer-owned. */
+  titleOrigin?: 'user' | 'auto'
   /** The referenced tier's working set (distinct PR URLs spotted, capped server-side). */
   referencedPrCandidates?: string[]
   /** Absent when the run executed in the repo working tree rather than its own worktree. */
@@ -190,11 +195,15 @@ export interface ForgeInfo {
   reason?: string
 }
 
-/** Deployment-mode capabilities (src/server/capabilities.ts). `localHandoff: false` means
+/** Server capabilities (src/server/capabilities.ts). `localHandoff: false` means
  *  hosted mode (`CEZ_REMOTE` / non-loopback bind) — every open-on-my-machine affordance
- *  (Terminal, editor, `cd …` hints) must disappear, not disable. */
+ *  (Terminal, editor, `cd …` hints) must disappear, not disable.
+ *  `followups: false` (the default — the inbox is opt-in via `CEZ_FOLLOWUPS=1`, #471) means
+ *  this server has no follow-up inbox: the Inbox nav item and the composer's follow-up
+ *  toggle disappear the same way. The per-task handoff journal is unrelated and always on. */
 export interface Capabilities {
   localHandoff: boolean
+  followups: boolean
 }
 
 export interface HealthResponse {
@@ -497,12 +506,22 @@ export interface UiState {
    *  most-selected skills float to the top of their project/global locality group. */
   skillUsage?: Record<string, number>
   runsView?: 'list' | 'table'
+  /** The GitHub tab's last-selected sub-tab (#417) — issues or PRs. Absent → issues. */
+  githubView?: 'issues' | 'prs'
   /** Settings → Appearance (redesign R6): accent + density. Theme itself stays in
    *  localStorage (`cez-theme`) — it must pre-paint, and it is per-browser by design. */
   appearance?: { accent?: 'lime' | 'violet'; density?: 'comfortable' | 'compact' | 'ultra' }
   /** Settings → Notifications (redesign R6 1.7): the browser-notification toggle. Off unless
    *  literally `true`. Permission itself is per-browser and never persisted. */
   notifications?: { enabled?: boolean }
+  /** Follow-up prompt templates (#413): reusable snippets insertable into the GitHub hand-over,
+   *  Inbox, and /new composers. Absent → the built-in defaults (`lib/prompt-templates.ts`);
+   *  present (even `[]`) is the user's own edited list from Settings → Prompt templates.
+   *  `skills` (optional) are the skill names the template auto-applies for. */
+  promptTemplates?: { id: string; label: string; text: string; skills?: string[] }[]
+  /** The open-mercato/skills promo banner (#391), dismissed for good. Set once true, never
+   *  unset — server-persisted rather than a cookie so "shown once" holds across browsers. */
+  dismissedSkillsBanner?: boolean
   [key: string]: unknown
 }
 
@@ -560,6 +579,9 @@ export interface ConfigResponse {
   maxParallel: number
   /** Per-task memory ceiling in MiB (whole process tree); null = no limit. */
   memoryLimitMb: number | null
+  /** Live title updates (task auto-naming): null = no config key, the
+   *  CEZ_TITLE_UPDATES env default (ON) decides. */
+  liveTitleUpdates: boolean | null
 }
 
 /** `PUT /api/config` (Settings → Agents; the Repo tab's base-branch picker). `baseBranch: null`
@@ -574,6 +596,8 @@ export interface SetConfigInput {
   maxParallel?: number
   /** null or 0 clears the ceiling back to "no limit". */
   memoryLimitMb?: number | null
+  /** null clears the key back to the env-default behavior. */
+  liveTitleUpdates?: boolean | null
 }
 
 /** The PUT answer: the same shape GET serves (the pre-R6 fields stayed, the rest is additive). */
@@ -583,6 +607,9 @@ export type SetConfigResponse = ConfigResponse
 export interface OpenTarget {
   id: string
   label: string
+  /** A stable icon key (#361) the UI maps to a concrete icon — `openInIcon` in run-header.tsx.
+   *  Optional: an older server omitting it just renders the generic fallback icon. */
+  icon?: string
 }
 
 /** `GET /api/open-targets` — the detected local apps; empty in hosted mode (CEZ_REMOTE). */
