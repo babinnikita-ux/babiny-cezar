@@ -54,8 +54,8 @@ dry-run fallback that keeps CI green while `NPM_TOKEN` is not yet configured.
 
 ### Phase 3: CI workflows
 
-- [ ] 3.1 Extend `ci.yml`: `develop` triggers + `publish-snapshot` job + step summary
-- [ ] 3.2 Sticky PR comment step + `.github/workflows/npm-preview-cleanup.yml`
+- [x] 3.1 Extend `ci.yml`: `develop` triggers + `publish-snapshot` job + step summary — faa0281
+- [x] 3.2 Sticky PR comment step + `.github/workflows/npm-preview-cleanup.yml` — faa0281
 
 ### Phase 4: Docs
 
