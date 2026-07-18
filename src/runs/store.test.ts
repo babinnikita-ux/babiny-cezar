@@ -57,6 +57,102 @@ describe('RunStore — titleSummary + diffStat (#389)', () => {
     expect(run?.title).toBe('fix the login bug');
     expect(run?.titleSummary).toBeUndefined();
     expect(run?.diffStat).toBeUndefined();
+    expect(run?.generateFollowups).toBeUndefined();
+    // Retention field (#483) is additive: a record without it parses and reads undefined.
+    expect(run?.worktreeReclaimedAt).toBeUndefined();
+  });
+
+  it('round-trips worktreeReclaimedAt and lets updateRun clear it (retention #483)', () => {
+    const store = RunStore.open(dataDir);
+    const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
+    store.updateRun(run.id, { worktreeReclaimedAt: '2026-07-18T00:00:00.000Z' });
+    store.flush();
+
+    const reopened = RunStore.open(dataDir);
+    expect(reopened.getRun(run.id)?.worktreeReclaimedAt).toBe('2026-07-18T00:00:00.000Z');
+    // Re-materialization clears the stamp so retention sees the run again.
+    reopened.updateRun(run.id, { worktreeReclaimedAt: undefined });
+    reopened.flush();
+    expect(RunStore.open(dataDir).getRun(run.id)?.worktreeReclaimedAt).toBeUndefined();
+  });
+
+  it("round-trips activity:'monitoring' and lets updateRun clear it (#490)", () => {
+    const store = RunStore.open(dataDir);
+    const run = store.createRun({ title: 't', workflow: 'w', task: 'task', steps: [] });
+    // A fresh record has no activity (additive/optional).
+    expect(run.activity).toBeUndefined();
+    store.updateRun(run.id, { status: 'running', activity: 'monitoring' });
+    store.flush();
+
+    const reopened = RunStore.open(dataDir);
+    expect(reopened.getRun(run.id)?.activity).toBe('monitoring');
+    // Resume/terminal transitions clear it back to a plain running/other state.
+    reopened.updateRun(run.id, { status: 'running', activity: undefined });
+    reopened.flush();
+    expect(RunStore.open(dataDir).getRun(run.id)?.activity).toBeUndefined();
+  });
+
+  it('still loads an old runs.json that predates activity (#490)', () => {
+    writeFileSync(join(dataDir, 'runs.json'), JSON.stringify([LEGACY_RUN]), 'utf8');
+    const store = RunStore.open(dataDir);
+    expect(store.getRun('legacy-1')?.activity).toBeUndefined();
+  });
+
+  it('rejects an unknown activity value at the schema boundary (#490)', () => {
+    writeFileSync(
+      join(dataDir, 'runs.json'),
+      JSON.stringify([{ ...LEGACY_RUN, id: 'bad-activity', status: 'running', activity: 'bogus' }]),
+      'utf8',
+    );
+    // A corrupt/unknown activity must not smuggle a run in with an invalid value:
+    // the schema drops the bad record (degrade-to-fresh), so it does not load.
+    const store = RunStore.open(dataDir);
+    expect(store.getRun('bad-activity')?.activity).not.toBe('bogus');
+  });
+
+  it('persists an explicit follow-up opt-out while omission stays compatible', () => {
+    const store = RunStore.open(dataDir);
+    const disabled = store.createRun({
+      title: 'quiet task',
+      workflow: 'quick-task',
+      task: 'quiet task',
+      generateFollowups: false,
+      steps: [],
+    });
+    const defaulted = store.createRun({
+      title: 'default task',
+      workflow: 'quick-task',
+      task: 'default task',
+      steps: [],
+    });
+    store.flush();
+
+    const reopened = RunStore.open(dataDir);
+    expect(reopened.getRun(disabled.id)?.generateFollowups).toBe(false);
+    expect(reopened.getRun(defaulted.id)?.generateFollowups).toBeUndefined();
+  });
+
+  it('round-trips the autonomous flag while omission stays compatible (#489)', () => {
+    const store = RunStore.open(dataDir);
+    const autonomous = store.createRun({
+      title: 'autonomous task',
+      workflow: 'quick-task',
+      task: 'autonomous task',
+      autonomous: true,
+      steps: [],
+    });
+    const interactive = store.createRun({
+      title: 'interactive task',
+      workflow: 'quick-task',
+      task: 'interactive task',
+      steps: [],
+    });
+    store.flush();
+
+    const reopened = RunStore.open(dataDir);
+    expect(reopened.getRun(autonomous.id)?.autonomous).toBe(true);
+    // Absent = falsy = "not autonomous" — old records and interactive runs alike.
+    expect(reopened.getRun(interactive.id)?.autonomous).toBeUndefined();
   });
 
   it('updateRun fans the new fields out on the run channel (the SSE feed)', () => {
@@ -127,6 +223,27 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
       },
     });
     expect(store.getRun(run.id)?.pullRequestUrl).toBe('https://github.com/open-mercato/cezar/pull/9');
+  });
+
+  it('adopts the CREATED PR, not one referenced earlier in the same event (#495)', () => {
+    const { store, run } = freshRun();
+    store.appendEvent(run.id, {
+      type: 'result',
+      result:
+        'Read the linked PR https://github.com/open-mercato/cezar/pull/1 for context, then ' +
+        'opened a draft pull request: https://github.com/open-mercato/cezar/pull/500',
+    } as never);
+    // The first URL in the text is the referenced one — the created URL wins.
+    expect(store.getRun(run.id)?.pullRequestUrl).toBe('https://github.com/open-mercato/cezar/pull/500');
+  });
+
+  it('falls back to the URL before the phrase when gh prints it first', () => {
+    const { store, run } = freshRun();
+    store.appendEvent(run.id, {
+      type: 'result',
+      result: 'https://github.com/open-mercato/cezar/pull/321\nDraft pull request created.',
+    } as never);
+    expect(store.getRun(run.id)?.pullRequestUrl).toBe('https://github.com/open-mercato/cezar/pull/321');
   });
 });
 
@@ -493,5 +610,142 @@ describe('RunStore — referenced-PR discovery (#407, spec 2026-07-16-pr-autodis
     writeFileSync(join(dataDir, 'runs.json'), JSON.stringify([LEGACY_RUN]), 'utf8');
     const legacyStore = RunStore.open(dataDir);
     expect(legacyStore.getRun('legacy-1')?.referencedPullRequestUrl).toBeUndefined();
+  });
+});
+
+describe('RunStore — agent-declared marker refs (spec 2026-07-18-task-ref-markers)', () => {
+  let dataDir: string;
+  beforeEach(() => {
+    dataDir = mkdtempSync(join(tmpdir(), 'cez-store-'));
+  });
+  afterEach(() => {
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  const freshRun = (task = 'task') => {
+    const store = RunStore.open(dataDir);
+    const run = store.createRun({ title: 't', workflow: 'w', task, steps: [] });
+    return { store, run };
+  };
+
+  it('marker numbers land on the record and persist', () => {
+    const { store, run } = freshRun();
+    store.applyMarkerRefs(run.id, { pr: 442, issue: 433 });
+    store.flush();
+    const loaded = RunStore.open(dataDir).getRun(run.id);
+    expect(loaded?.prNumber).toBe(442);
+    expect(loaded?.issueNumber).toBe(433);
+    expect(loaded?.markerRefs).toEqual({ pr: 442, issue: 433 });
+  });
+
+  it('a declared PR picks the matching candidate among several — where fuzzy resolution gave up', () => {
+    const { store, run } = freshRun();
+    store.appendEvent(run.id, {
+      type: 'result',
+      result:
+        'Comparing https://github.com/open-mercato/cezar/pull/500 with https://github.com/open-mercato/cezar/pull/777',
+    });
+    expect(store.getRun(run.id)?.referencedPullRequestUrl).toBeUndefined(); // ambiguous
+    store.applyMarkerRefs(run.id, { pr: 500 });
+    expect(store.getRun(run.id)?.referencedPullRequestUrl).toBe(
+      'https://github.com/open-mercato/cezar/pull/500',
+    );
+  });
+
+  it('a declared PR clears a fuzzily-adopted chip that contradicts it (the #777 failure)', () => {
+    const { store, run } = freshRun();
+    store.appendEvent(run.id, {
+      type: 'result',
+      result: 'Related work: https://github.com/open-mercato/cezar/pull/777',
+    });
+    expect(store.getRun(run.id)?.referencedPullRequestUrl).toBe(
+      'https://github.com/open-mercato/cezar/pull/777',
+    );
+    store.applyMarkerRefs(run.id, { pr: 500 });
+    const loaded = store.getRun(run.id);
+    expect(loaded?.referencedPullRequestUrl).toBeUndefined();
+    expect(loaded?.prNumber).toBe(500);
+  });
+
+  it('later candidates resolve against the declared number, not the fuzzy rules', () => {
+    const { store, run } = freshRun();
+    store.applyMarkerRefs(run.id, { pr: 500 });
+    store.appendEvent(run.id, {
+      type: 'result',
+      result: 'See https://github.com/open-mercato/cezar/pull/777 for prior art.',
+    });
+    expect(store.getRun(run.id)?.referencedPullRequestUrl).toBeUndefined();
+    store.appendEvent(run.id, {
+      type: 'result',
+      result: 'Now updating https://github.com/open-mercato/cezar/pull/500.',
+    });
+    expect(store.getRun(run.id)?.referencedPullRequestUrl).toBe(
+      'https://github.com/open-mercato/cezar/pull/500',
+    );
+  });
+
+  it('an issue-only declaration leaves the referenced tier alone', () => {
+    const { store, run } = freshRun();
+    store.appendEvent(run.id, {
+      type: 'result',
+      result: 'See https://github.com/open-mercato/cezar/pull/777',
+    });
+    store.applyMarkerRefs(run.id, { issue: 500 });
+    const loaded = store.getRun(run.id);
+    expect(loaded?.referencedPullRequestUrl).toBe('https://github.com/open-mercato/cezar/pull/777');
+    expect(loaded?.issueNumber).toBe(500);
+    expect(loaded?.prNumber).toBeUndefined();
+  });
+
+  it('the created tier is untouched by markers', () => {
+    const { store, run } = freshRun();
+    store.appendEvent(run.id, {
+      type: 'result',
+      result: 'Opened a draft pull request: https://github.com/open-mercato/cezar/pull/42',
+    });
+    store.applyMarkerRefs(run.id, { pr: 500 });
+    expect(store.getRun(run.id)?.pullRequestUrl).toBe(
+      'https://github.com/open-mercato/cezar/pull/42',
+    );
+  });
+
+  it('an empty declaration is a no-op', () => {
+    const { store, run } = freshRun();
+    store.applyMarkerRefs(run.id, {});
+    expect(store.getRun(run.id)?.markerRefs).toBeUndefined();
+  });
+});
+
+describe('RunStore — seq survives a restart (#424 symptom class)', () => {
+  let dataDir: string;
+
+  beforeEach(() => {
+    dataDir = mkdtempSync(join(tmpdir(), 'cez-store-seq-'));
+  });
+
+  afterEach(() => {
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it('continues numbering above the NDJSON max after reopen, so replayed clients keep receiving', () => {
+    const store = RunStore.open(dataDir);
+    const run = store.createRun({ title: 't', workflow: 'w', task: 't', steps: [] });
+    store.appendEvent(run.id, { type: 'note', message: 'one' });
+    store.appendEvent(run.id, { type: 'note', message: 'two' });
+    store.flush();
+
+    // A client that replayed the file now dedups with maxSeq = 2. A restarted
+    // process restarting seqs at 1 would have every resumed event dropped.
+    const reopened = RunStore.open(dataDir, { keepLive: true });
+    const resumed = reopened.appendEvent(run.id, { type: 'note', message: 'after restart' });
+    expect(resumed.seq).toBe(3);
+    const seqs = reopened.readEvents(run.id).map((e) => e.seq);
+    expect(seqs).toEqual([1, 2, 3]);
+  });
+
+  it('starts at 1 for a run with no event file', () => {
+    const store = RunStore.open(dataDir);
+    const run = store.createRun({ title: 't', workflow: 'w', task: 't', steps: [] });
+    expect(store.appendEvent(run.id, { type: 'note', message: 'first' }).seq).toBe(1);
   });
 });
