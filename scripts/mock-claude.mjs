@@ -80,6 +80,14 @@ async function respond(userText, imageCount) {
   // `mock:done` anywhere in the message → the reply ends with the CEZ:DONE
   // completion marker (#347), so the auto-close path is testable dry.
   const doneMarker = userText.includes('mock:done') ? '\n\nCEZ:DONE' : '';
+  // `mock:monitoring` → the reply ends with CEZ:MONITORING, the "still working
+  // on downstream work" marker (#490), so the monitoring-status path is testable dry.
+  const monitoringMarker = userText.includes('mock:monitoring') ? '\n\nCEZ:MONITORING' : '';
+  // `mock:refs` → the reply carries the in-band task-reference markers
+  // (spec 2026-07-18-task-ref-markers), so the declaration path is testable dry.
+  const refsMarkers = userText.includes('mock:refs')
+    ? '\nCEZ:PR=4242\nCEZ:ISSUE=17\nCEZ:TITLE=implementing marker refs'
+    : '';
 
   // `mock:slow` → hold the turn for ~25 s so queue states are observable.
   if (userText.includes('mock:slow')) await sleep(25_000);
@@ -119,6 +127,34 @@ async function respond(userText, imageCount) {
     return;
   }
 
+  // Task auto-naming spec: a naming call (marked `[cez-namer]`) answers a
+  // deterministic short title + a PR classification of the sample number so
+  // dry-run tests can assert the full apply pipeline.
+  if (userText.includes('[cez-namer]')) {
+    const numbered = /(?:^|\D)(\d{1,7})(?:\D|$)/.exec(userText);
+    const name = JSON.stringify({
+      title: 'implementing cr fixes',
+      ...(numbered ? { pr: Number(numbered[1]) } : {}),
+    });
+    emit({
+      type: 'assistant',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: name }],
+        usage: { input_tokens: 200, output_tokens: 30 },
+      },
+    });
+    await sleep(50);
+    emit({
+      type: 'result',
+      subtype: 'success',
+      result: name,
+      usage: { input_tokens: 200, output_tokens: 30 },
+      total_cost_usd: 0.0002,
+    });
+    return;
+  }
+
   // Spec 008: a planning call (marked `[cez-planner]` in the user prompt)
   // gets a canned chain plan. The `code-review` skill is deliberately made up:
   // the planner's sanitizer strips unknown skills, and the step survives on
@@ -153,9 +189,12 @@ async function respond(userText, imageCount) {
 
   if (turn === 1) {
     // Leave a visible trace in the cwd (the task worktree under spec 006) so
-    // the Diff view has something real to show in dry runs.
+    // the Diff view has something real to show in dry runs. Exactly one line
+    // per spawned session: tests read this file back as a per-step trace, so
+    // a multi-line prompt must not become multiple lines here.
     try {
-      appendFileSync('notes.md', `mock notes — ${new Date().toISOString()}: ${userText.slice(0, 100)}\n`);
+      const head = userText.replace(/\s+/g, ' ').trim().slice(0, 400);
+      appendFileSync('notes.md', `mock notes — ${new Date().toISOString()}: ${head}\n`);
     } catch {
       // read-only cwd — the mock still works, just without a diff
     }
@@ -219,7 +258,7 @@ async function respond(userText, imageCount) {
       type: 'assistant',
       message: {
         role: 'assistant',
-        content: [{ type: 'text', text: `Done with the first pass — opened a draft PR: https://github.com/open-mercato/demo/pull/123. Anything to adjust? (dry-run mock)${doneMarker}` }],
+        content: [{ type: 'text', text: `Done with the first pass — opened a draft PR: https://github.com/open-mercato/demo/pull/123. Anything to adjust? (dry-run mock)${refsMarkers}${doneMarker}${monitoringMarker}` }],
         usage: { input_tokens: 300, output_tokens: 90 },
       },
     });
@@ -239,7 +278,7 @@ async function respond(userText, imageCount) {
     type: 'assistant',
     message: {
       role: 'assistant',
-      content: [{ type: 'text', text: `Follow-up #${turn - 1} received: "${userText.slice(0, 100)}".${imgNote} Applied (dry run).${doneMarker}` }],
+      content: [{ type: 'text', text: `Follow-up #${turn - 1} received: "${userText.slice(0, 100)}".${imgNote} Applied (dry run).${refsMarkers}${doneMarker}${monitoringMarker}` }],
       usage: { input_tokens: 200, output_tokens: 60 },
     },
   });

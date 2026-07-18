@@ -14,6 +14,7 @@ import type {
 
 // Re-exported for backends and the run manager that still import them from here.
 export type { AgentSession, SessionOptions } from './agent-runner.js';
+import { buildChildEnv } from './agent-env.js';
 import { costWeightedTokens, type RawUsage } from './usage.js';
 import { readNdjson } from './ndjson.js';
 import {
@@ -47,8 +48,10 @@ export interface ClaudeCliRunnerOptions {
 /**
  * `AgentRunner` over the Claude Code CLI in headless stream-json mode. Auth =
  * the host's logged-in Pro/Max subscription (no API key needed). Sandboxing is
- * `--allowedTools` (default-deny) + running inside the repo `cwd`; `Bash` is
- * narrowed to `Bash(<prefix>:*)` patterns when `bashAllowlist` is set.
+ * `--allowedTools` (default-deny for anything not listed) + running inside the
+ * repo `cwd`; `Bash` is narrowed to `Bash(<prefix>:*)` patterns only when
+ * `bashAllowlist` is set — the zero-config default has no allowlist, so `Bash`
+ * is unrestricted shell access (#430).
  *
  * Session mechanics (multi-turn stdin, EOF watchdog, reopen window) follow
  * github-janitor's `claudeRunner.ts`; the original single-turn adaptation
@@ -89,7 +92,10 @@ export class ClaudeCliRunner implements AgentRunner {
 
     let child: ChildProcessWithoutNullStreams;
     try {
-      child = nodeSpawn(this.bin, args, { cwd: spec.cwd, env: { ...process.env, ...spec.env } });
+      child = nodeSpawn(this.bin, args, {
+        cwd: spec.cwd,
+        env: buildChildEnv({ backend: this.backend, extraEnv: spec.env }),
+      });
     } catch (err) {
       throw wrapSpawnError(err, this.bin);
     }
