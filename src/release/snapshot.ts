@@ -90,15 +90,25 @@ export interface ManifestLike {
  *  snapshot must pin that dependency **exact** (`0.1.5-pr482.123`, no range) so
  *  `npx <alias>@<version>` runs exactly the PR's code — a `^` range would
  *  resolve to whatever newer version exists (spec, resolved Q5). Stable
- *  releases keep their `^` range and never go through this stamper. */
+ *  releases keep their `^` range and never go through this stamper.
+ *
+ *  The alias also inherits `repository`/`homepage`/`bugs` from the root manifest:
+ *  we publish with `--provenance`, and npm rejects (E422) any manifest whose
+ *  `repository.url` doesn't match the building repo. The alias file carries no
+ *  such fields of its own, so it must borrow the root's — which already matches
+ *  and, being a git URL, is unaffected by any npm-name rename. */
 export function stampManifests(
   rootPkg: ManifestLike,
   aliasPkg: ManifestLike,
   version: string,
 ): { root: ManifestLike; alias: ManifestLike } {
+  const inherited: Partial<ManifestLike> = {};
+  for (const field of ['repository', 'homepage', 'bugs'] as const) {
+    if (rootPkg[field] !== undefined) inherited[field] = rootPkg[field];
+  }
   return {
     root: { ...rootPkg, version },
-    alias: { ...aliasPkg, version, dependencies: { [rootPkg.name]: version } },
+    alias: { ...aliasPkg, ...inherited, version, dependencies: { [rootPkg.name]: version } },
   };
 }
 

@@ -104,6 +104,20 @@ describe('stampManifests', () => {
     expect(alias.dependencies).toEqual({ '@open-mercato/cezar': '^0.1.5' });
     expect(stamped.root.bin).toEqual({ cezar: 'dist/index.js' });
   });
+
+  it('lets the alias inherit repository/homepage/bugs from root so provenance validates', () => {
+    const repository = { type: 'git', url: 'https://github.com/open-mercato/cezar' };
+    const rootWithRepo = { ...root, repository, homepage: 'https://example.test', bugs: { url: 'https://example.test/issues' } };
+    const stamped = stampManifests(rootWithRepo, alias, '0.1.5-pr482.123');
+    expect(stamped.alias.repository).toEqual(repository);
+    expect(stamped.alias.homepage).toBe('https://example.test');
+    expect(stamped.alias.bugs).toEqual({ url: 'https://example.test/issues' });
+  });
+
+  it('leaves the alias untouched when root declares no repository', () => {
+    const stamped = stampManifests(root, alias, '0.1.5-pr482.123');
+    expect('repository' in stamped.alias).toBe(false);
+  });
 });
 
 describe('buildInstallLines', () => {
