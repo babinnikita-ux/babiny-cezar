@@ -16,7 +16,8 @@
 export interface SnapshotContext {
   /** `GITHUB_EVENT_NAME` — only `pull_request` and `push` ever publish. */
   eventName: string;
-  /** `GITHUB_REF_NAME` for push events — only `main` and `develop` publish. */
+  /** `GITHUB_REF_NAME` for push events — only `develop` publishes a snapshot;
+   *  `main` is reserved for owner-driven stable releases (see stable.ts). */
   refName: string;
   /** PR number for pull_request events; absent/invalid → no publish. */
   prNumber?: number;
@@ -65,8 +66,11 @@ function resolveChannel(ctx: SnapshotContext): { channel: string; distTag: strin
     return { channel: `pr${n}`, distTag: `pr-${n}` };
   }
   if (ctx.eventName === 'push') {
+    // Only `develop` publishes a snapshot. `main` is deliberately excluded so a
+    // merge to main never touches npm — stable `latest` releases are cut
+    // manually via the Release workflow (stable.ts). Defense in depth: the
+    // workflow's `if` already restricts the push channel to develop.
     if (ctx.refName === 'develop') return { channel: 'develop', distTag: 'develop' };
-    if (ctx.refName === 'main') return { channel: 'main', distTag: 'main' };
     return null;
   }
   return null;

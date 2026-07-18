@@ -3,12 +3,31 @@
 How cezar reaches npm. Two paths, deliberately separate
 (spec: `.ai/specs/2026-07-18-npm-preview-publish.md`, issue #482):
 
-- **Stable releases** (`latest`) are **owner-driven**: a maintainer runs
-  `npm publish` from a tagged checkout of both `.` and `alias-cezar/`. CI never
-  moves `latest`.
+- **Stable releases** (`latest`) are **owner-driven and manual**: a maintainer
+  runs the [`Release`](../.github/workflows/release.yml) workflow from the
+  Actions tab (`workflow_dispatch`) and picks the version bump. CI never moves
+  `latest` — a push to `main` publishes nothing.
 - **Previews** are **CI-driven**: the `publish-snapshot` job in
   [`ci.yml`](../.github/workflows/ci.yml) publishes a snapshot of both packages
-  after every fully green `verify` run.
+  after a fully green `verify` run — on `develop` pushes and same-repo PRs only.
+
+## Stable releases
+
+Run **Actions → Release → Run workflow** from `main` and choose a bump:
+
+| Bump | Effect (base `0.1.5`) |
+|---|---|
+| `patch` | `0.1.6` |
+| `minor` | `0.2.0` |
+| `major` | `1.0.0` |
+| `existing` | publishes the version already committed to `package.json` |
+
+The workflow verifies, builds, then `scripts/release.mjs` stamps both manifests
+(the alias keeps a **caret** range on the scoped package — stable follows
+compatible releases, unlike the exact-pinned snapshots), publishes both with
+`--tag latest --provenance`, commits the bump, tags `v<version>`, and cuts a
+GitHub Release. It's gated behind the `production` environment, so a release can
+require reviewer approval. Without `NPM_TOKEN` it degrades to a loud dry run.
 
 ## Preview channels
 
