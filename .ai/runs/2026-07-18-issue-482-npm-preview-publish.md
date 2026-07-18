@@ -44,13 +44,13 @@ dry-run fallback that keeps CI green while `NPM_TOKEN` is not yet configured.
 
 ### Phase 1: Snapshot decision logic
 
-- [ ] 1.1 Add `src/release/snapshot.ts` (`computeSnapshot`, `stampManifests` — pure, name-agnostic)
-- [ ] 1.2 Add `src/release/snapshot.test.ts` (event/channel matrix, run-attempt suffix, never-`latest`, exact-pin stamping)
+- [x] 1.1 Add `src/release/snapshot.ts` (`computeSnapshot`, `stampManifests` — pure, name-agnostic) — 8a84cca
+- [x] 1.2 Add `src/release/snapshot.test.ts` (event/channel matrix, run-attempt suffix, never-`latest`, exact-pin stamping) — 8a84cca
 
 ### Phase 2: Publish orchestrator
 
-- [ ] 2.1 Add `scripts/release-snapshot.mjs` (env-driven, `--dry-run`, GITHUB_OUTPUT JSON, publish order root→alias)
-- [ ] 2.2 Wire an orchestrator dry-run assertion into the test suite
+- [x] 2.1 Add `scripts/release-snapshot.mjs` (env-driven, `--dry-run`, GITHUB_OUTPUT JSON, publish order root→alias) — 9ea6bdf
+- [x] 2.2 Wire an orchestrator dry-run assertion into the test suite — 9ea6bdf (test/e2e/release-snapshot.test.ts, 3/3)
 
 ### Phase 3: CI workflows
 
