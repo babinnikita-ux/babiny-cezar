@@ -2,23 +2,43 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   ArchiveIcon,
   ArchiveRestoreIcon,
+  BotIcon,
+  BoxesIcon,
+  BracesIcon,
   CheckIcon,
   CircleStopIcon,
+  CodeIcon,
   CopyIcon,
+  CpuIcon,
+  DiamondIcon,
   EllipsisVerticalIcon,
   ExternalLinkIcon,
+  FeatherIcon,
   FileTextIcon,
+  FolderIcon,
+  GemIcon,
+  GlobeIcon,
+  HammerIcon,
+  HexagonIcon,
+  type LucideIcon,
+  MousePointer2Icon,
   PencilIcon,
   PlayIcon,
+  RocketIcon,
+  ShapesIcon,
+  SmartphoneIcon,
+  SparklesIcon,
   SquareTerminalIcon,
   Trash2Icon,
+  WavesIcon,
+  ZapIcon,
 } from 'lucide-react'
 import { Fragment, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 
 import { ApiError, archiveRun, cancelRun, continueRun, deleteRun, openRunIn, openRunInCli } from '@/api/client'
-import { queryKeys, useOpenTargets, usePatchRun, useRunHandoff, useRuns } from '@/api/queries'
-import type { ApiRun } from '@/api/types'
+import { queryKeys, useHealth, useOpenTargets, usePatchRun, useRunHandoff, useRuns } from '@/api/queries'
+import type { ApiRun, OpenTarget } from '@/api/types'
 import { DiffStatLabel } from '@/components/diff-stat'
 import { TitleEditInput, useTitleEditor } from '@/components/editable-title'
 import { Pill } from '@/components/pill'
@@ -38,6 +58,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -192,6 +213,41 @@ export function RunHeader({
   )
 }
 
+/** Icon key (`OpenTarget.icon`, #361) → the Lucide icon that renders it in the menu. Distinct per
+ *  target so the "Open in…" list reads at a glance instead of as a wall of text — a few picks
+ *  lean on the target's own branding (RubyMine → gem, Android Studio → phone, CLion → cpu),
+ *  the rest just aim for visual variety. An icon key the client doesn't recognize (older server,
+ *  newer server) falls back to the menu's own ExternalLinkIcon rather than rendering nothing. */
+const OPEN_IN_ICONS: Record<string, LucideIcon> = {
+  folder: FolderIcon,
+  terminal: SquareTerminalIcon,
+  vscode: CodeIcon,
+  cursor: MousePointer2Icon,
+  zed: ZapIcon,
+  windsurf: WavesIcon,
+  sublime: FeatherIcon,
+  idea: DiamondIcon,
+  pycharm: HexagonIcon,
+  webstorm: GlobeIcon,
+  goland: ShapesIcon,
+  rubymine: GemIcon,
+  phpstorm: BracesIcon,
+  clion: CpuIcon,
+  rider: BoxesIcon,
+  'android-studio': SmartphoneIcon,
+  xcode: HammerIcon,
+  warp: RocketIcon,
+  claude: BotIcon,
+  codex: SparklesIcon,
+  opencode: BotIcon,
+}
+
+/** The icon component for a target — `target.icon` when it's one the UI knows, else the
+ *  same generic glyph the trigger button itself uses. */
+function openInIcon(target: OpenTarget): LucideIcon {
+  return (target.icon && OPEN_IN_ICONS[target.icon]) || ExternalLinkIcon
+}
+
 /**
  * "Open in…" session takeover (#open-in): resume the session in a real terminal, open the run's
  * worktree in a local editor / Finder / terminal / agent CLI, or copy its path. The old standalone
@@ -246,6 +302,7 @@ function OpenInMenu({
           // opening the editor/file-manager entries above. Every other CLI (wrong backend, or no
           // session yet) still opens, just starts clean — no silent cross-backend resume attempt.
           const resumes = cliTargetResumes(run, target.id)
+          const Icon = openInIcon(target)
           return (
             <DropdownMenuItem
               key={target.id}
@@ -253,6 +310,7 @@ function OpenInMenu({
               title={resumes ? "Resume this run's session" : undefined}
               onSelect={() => open.mutate(target.id)}
             >
+              <Icon aria-hidden="true" />
               {target.label}
               {resumes ? ' (resume)' : ''}
             </DropdownMenuItem>
@@ -376,15 +434,15 @@ function EditableTitle({ run }: { run: ApiRun }) {
   )
 }
 
-/** workflow · runner · model · branch chip · ± · tokens · cost (mockup `.meta-row`). Each part
- *  renders only when the record carries it — absence is absence, not a placeholder. */
+/** workflow · branch chip · ± on the left; tokens · cost · agent icon on the right (mockup
+ *  `.meta-row`, #416). Each part renders only when the record carries it — absence is absence,
+ *  not a placeholder. Runner and model no longer sit in the loose dot-list (#416): they read as
+ *  a status for the *active* session, so they move into the agent badge next to the token
+ *  count, revealed on hover/focus rather than always-on text. */
 function MetaRow({ run }: { run: ApiRun }) {
   // `workflowLabel` so an inline chain shows its first step's name, not the bare "(planned)"
   // placeholder — which reads like a status next to the live status pill.
   const parts: ReactNode[] = [<span key="workflow">{workflowLabel(run)}</span>]
-  // Runner only when it is a choice worth noting — Claude is the default everywhere.
-  if (run.runner && run.runner !== 'claude') parts.push(<span key="runner">{run.runner}</span>)
-  if (run.model) parts.push(<span key="model">{run.model}</span>)
   if (run.branch) {
     parts.push(
       <span
@@ -397,18 +455,20 @@ function MetaRow({ run }: { run: ApiRun }) {
     )
   }
   if (run.diffStat) parts.push(<DiffStatLabel key="diff" stat={run.diffStat} />)
+
+  const usage: ReactNode[] = []
   if (run.tokensUsed > 0) {
     // Tokens WITHOUT the mockup's context gauge, on purpose: the gauge needs "used / window",
     // and RunRecord carries only the lifetime `tokensUsed` — no context-window size, no
     // per-session usage. When the protocol starts persisting one, the bar goes here.
-    parts.push(
+    usage.push(
       <span key="tokens" className="tabular-nums">
         {compactTokens(run.tokensUsed)} tokens
       </span>,
     )
   }
   if (run.costUsd) {
-    parts.push(
+    usage.push(
       <span key="cost" className="tabular-nums">
         {formatCost(run.costUsd)}
       </span>,
@@ -430,7 +490,61 @@ function MetaRow({ run }: { run: ApiRun }) {
           {part}
         </Fragment>
       ))}
+      <span className="ml-auto flex shrink-0 items-center gap-1.5">
+        {usage.map((part, index) => (
+          <Fragment key={index}>
+            {index > 0 ? (
+              <span className="text-soft-foreground" aria-hidden="true">
+                ·
+              </span>
+            ) : null}
+            {part}
+          </Fragment>
+        ))}
+        <AgentBadge run={run} />
+      </span>
     </div>
+  )
+}
+
+/** The agent icon by the token counter (#416): hover/focus reveals the runner and model — the
+ *  answer to "what am I actually running here?" — without turning them into permanent text next
+ *  to the live status pill. Always rendered (a run always has an effective runner, `model`
+ *  reads "auto" when the runner picks it), and reuses the same click/keyboard-accessible
+ *  `DropdownMenu` as the rest of this header instead of inventing a hover-only affordance. */
+function AgentBadge({ run }: { run: ApiRun }) {
+  // The record keeps only what the caller ASKED for: `POST /api/runs` persists the raw optional
+  // `runner` (`src/runs/store.ts`), while the run actually executes as
+  // `input.runner ?? config.defaultRunner` (`src/workflows/run.ts`). Mirror that resolution —
+  // hardcoding 'claude' would name the wrong agent on a repo whose `defaultRunner` is
+  // codex/opencode, and "which agent produced this?" is the one question #416 exists to answer.
+  // 'claude' stays the last resort only while health is in flight (it is `config.defaultRunner`'s
+  // own default).
+  const health = useHealth()
+  const runner = run.runner ?? health.data?.defaultRunner ?? 'claude'
+  const model = run.model ?? 'auto'
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          data-slot="agent-badge"
+          title={`${runner} · ${model}`}
+          aria-label={`Agent: ${runner}, model ${model}`}
+          className="flex shrink-0 items-center justify-center rounded-sm p-1 text-soft-foreground hover:bg-muted hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+        >
+          <BotIcon className="size-3.5" aria-hidden="true" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[9rem]">
+        <DropdownMenuLabel className="font-mono text-[11px] font-normal text-muted-foreground">
+          runner: {runner}
+        </DropdownMenuLabel>
+        <DropdownMenuLabel className="font-mono text-[11px] font-normal text-muted-foreground">
+          model: {model}
+        </DropdownMenuLabel>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -503,9 +617,17 @@ function ConfirmDialog({ run, actions }: { run: ApiRun; actions: RunActions }) {
         <AlertDialogHeader>
           <AlertDialogTitle>{confirming === 'delete' ? 'Delete this task?' : 'Cancel this task?'}</AlertDialogTitle>
           <AlertDialogDescription>
-            {confirming === 'delete'
-              ? 'This removes the run, its transcript, its worktree and its branch. There is no undo.'
-              : 'The agent is stopped and the run completes as cancelled. The worktree stays.'}
+            {confirming === 'delete' ? (
+              <>
+                This removes the run, its transcript, its worktree and its branch. There is no
+                undo.
+                <span className="mt-1 block truncate font-medium text-foreground" title={runTitle(run)}>
+                  {runTitle(run)}
+                </span>
+              </>
+            ) : (
+              'The agent is stopped and the run completes as cancelled. The worktree stays.'
+            )}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -518,7 +640,7 @@ function ConfirmDialog({ run, actions }: { run: ApiRun; actions: RunActions }) {
               actions.setConfirming(null)
             }}
           >
-            {confirming === 'delete' ? `Delete ${runTitle(run).slice(0, 40)}` : 'Cancel the run'}
+            {confirming === 'delete' ? 'Delete' : 'Cancel the run'}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
