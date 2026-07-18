@@ -59,4 +59,4 @@ dry-run fallback that keeps CI green while `NPM_TOKEN` is not yet configured.
 
 ### Phase 4: Docs
 
-- [ ] 4.1 `docs/publishing.md` runbook + README Preview-builds section + server-install pinned-preview note
+- [x] 4.1 `docs/publishing.md` runbook + README Preview-builds section + server-install pinned-preview note — e8f9a81
