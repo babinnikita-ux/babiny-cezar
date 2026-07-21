@@ -1,13 +1,13 @@
-import { useConfig, useHealth, useRunnerModels } from '@/api/queries'
-import type { CreateRunInput, Runner } from '@/api/types'
-import { PickerPill, RunnerPill } from '@/components/picker-pill'
+import { useConfig, useHealth, useRunnerModels } from '@/api/queries';
+import type { CreateRunInput, Runner } from '@/api/types';
+import { PickerPill, RunnerPill } from '@/components/picker-pill';
 import {
   availableRunners,
   modelsForRunner,
   modelCatalogStatus,
   resolveModel,
   resolveRunner,
-} from '@/routes/new-task-form'
+} from '@/routes/new-task-form';
 
 /**
  * The runner + model pill pair for the surfaces that START a run outside the /new composer
@@ -26,33 +26,33 @@ import {
 
 /** What the user actually touched. `null` on either field means "never touched". */
 export interface EnginePick {
-  runner: Runner | null
-  model: string | null
+  runner: Runner | null;
+  model: string | null;
 }
 
 /** The effective backend, plus what the body rules need to decide what to send. */
 export interface ResolvedEngine {
-  runner: Runner
-  model: string
+  runner: Runner;
+  model: string;
   /** The backends this host offers — the runner pill renders only when there is a choice. */
-  runners: readonly Runner[]
+  runners: readonly Runner[];
   /** What the server would pick on its own, i.e. what an omitted runner resolves to. */
-  defaultRunner: Runner
+  defaultRunner: Runner;
 }
 
 export function useResolvedEngine(pick: EnginePick): ResolvedEngine {
-  const health = useHealth()
-  const config = useConfig()
-  const catalog = useRunnerModels()
-  const runners = availableRunners(health.data?.checks ?? [])
-  const defaultRunner = health.data?.defaultRunner ?? 'claude'
-  const runner = resolveRunner(pick.runner, runners, defaultRunner)
+  const health = useHealth();
+  const config = useConfig();
+  const catalog = useRunnerModels();
+  const runners = availableRunners(health.data?.checks ?? []);
+  const defaultRunner = health.data?.defaultRunner ?? 'claude';
+  const runner = resolveRunner(pick.runner, runners, defaultRunner);
   return {
     runner,
     model: resolveModel(pick.model, runner, config.data?.defaultModels, catalog.data),
     runners,
     defaultRunner,
-  }
+  };
 }
 
 /**
@@ -78,7 +78,7 @@ export function engineBody(resolved: ResolvedEngine): Pick<CreateRunInput, 'runn
   return {
     runner: resolved.runner === resolved.defaultRunner ? undefined : resolved.runner,
     model: resolved.model || undefined,
-  }
+  };
 }
 
 export function EnginePills({
@@ -86,14 +86,14 @@ export function EnginePills({
   onChange,
   disabled = false,
 }: {
-  pick: EnginePick
-  onChange: (pick: EnginePick) => void
-  disabled?: boolean
+  pick: EnginePick;
+  onChange: (pick: EnginePick) => void;
+  disabled?: boolean;
 }) {
-  const { runner, model, runners } = useResolvedEngine(pick)
-  const config = useConfig()
-  const catalog = useRunnerModels()
-  const models = modelsForRunner(runner, catalog.data, [pick.model, config.data?.defaultModels?.[runner]])
+  const { runner, model, runners } = useResolvedEngine(pick);
+  const config = useConfig();
+  const catalog = useRunnerModels();
+  const models = modelsForRunner(runner, catalog.data, [pick.model, config.data?.defaultModels?.[runner]]);
 
   return (
     <>
@@ -120,5 +120,5 @@ export function EnginePills({
         status={modelCatalogStatus(runner, catalog.data, catalog.isError)}
       />
     </>
-  )
+  );
 }

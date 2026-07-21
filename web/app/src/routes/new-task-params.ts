@@ -7,25 +7,25 @@
  *  falls back to the older `task` spelling, `auto` is the exact string `1`.
  */
 export interface NewTaskParams {
-  skill: string
-  ref: string
-  auto: boolean
-  key: string
+  skill: string;
+  ref: string;
+  auto: boolean;
+  key: string;
   /** The inbox entry this prefill came from (#374), when any — the composer sends it back as
    *  `todoId` on POST /api/runs so the started task is recorded on the entry. NOT part of the
    *  bookmarklet contract: saved links never carry it, and it is inert on its own. */
-  todo: string
+  todo: string;
 }
 
 export function parseNewTaskParams(search: string | URLSearchParams): NewTaskParams {
-  const params = typeof search === 'string' ? new URLSearchParams(search) : search
+  const params = typeof search === 'string' ? new URLSearchParams(search) : search;
   return {
     skill: (params.get('skill') ?? '').trim(),
     ref: (params.get('ref') ?? params.get('task') ?? '').trim(),
     auto: params.get('auto') === '1',
     key: params.get('key') ?? '',
     todo: (params.get('todo') ?? '').trim(),
-  }
+  };
 }
 
 /**
@@ -40,10 +40,10 @@ export function parseNewTaskParams(search: string | URLSearchParams): NewTaskPar
  * exactly as unattended-proof as a plain prefill.
  */
 export function newTaskPrefillHref(params: { skill?: string; ref?: string; todo?: string }): string {
-  const search = new URLSearchParams()
-  if (params.skill) search.set('skill', params.skill)
-  if (params.ref) search.set('ref', params.ref)
-  if (params.todo) search.set('todo', params.todo)
-  const qs = search.toString()
-  return qs ? `/new?${qs}` : '/new'
+  const search = new URLSearchParams();
+  if (params.skill) search.set('skill', params.skill);
+  if (params.ref) search.set('ref', params.ref);
+  if (params.todo) search.set('todo', params.todo);
+  const qs = search.toString();
+  return qs ? `/new?${qs}` : '/new';
 }

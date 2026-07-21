@@ -53,7 +53,9 @@ describe('paths', () => {
   it('a named instance lives under server-instances/, keyed by slug', () => {
     process.env.CEZ_HOME = '/tmp/cez-home-test';
     expect(serverInstancesDir()).toBe('/tmp/cez-home-test/server-instances');
-    expect(serverStatePath('shop-example-com')).toBe('/tmp/cez-home-test/server-instances/shop-example-com.json');
+    expect(serverStatePath('shop-example-com')).toBe(
+      '/tmp/cez-home-test/server-instances/shop-example-com.json',
+    );
     expect(serverLockPath('shop-example-com')).toBe(
       '/tmp/cez-home-test/server-instances/shop-example-com.install.lock',
     );
@@ -87,7 +89,7 @@ it('an EMPTY CEZ_HOME falls back to the default instead of a relative cwd path',
 });
 
 describe('agentHomePaths', () => {
-  it('defaults to the agents\' documented home directories', () => {
+  it("defaults to the agents' documented home directories", () => {
     const paths = agentHomePaths({ HOME: '/home/u' } as NodeJS.ProcessEnv);
     expect(paths.claude).toBe('/home/u/.claude');
     expect(paths.codex).toBe('/home/u/.codex');

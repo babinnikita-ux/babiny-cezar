@@ -1,5 +1,5 @@
-import type { Runner } from '@/api/types'
-import type { TaskSource } from './new-task-form'
+import type { Runner } from '@/api/types';
+import type { TaskSource } from './new-task-form';
 
 /**
  * The new-task draft store (spec: "Queued form state survives navigation (draft store)").
@@ -14,22 +14,22 @@ import type { TaskSource } from './new-task-form'
  * see `storageKey` below for what scopes what.
  */
 export interface NewTaskDraft {
-  text: string
-  source: TaskSource | null
-  runner: Runner | null
-  model: string | null
-  variants: number
+  text: string;
+  source: TaskSource | null;
+  runner: Runner | null;
+  model: string | null;
+  variants: number;
   /** The `Start | Plan first` toggle (#383). Sticky like the pickers: plan-first is a way of
    *  working, not a per-task whim — it survives navigation with the rest of the draft. */
-  planFirst: boolean
+  planFirst: boolean;
   /** Worktree opt-out (#worktree-toggle): false runs in the repo working tree. null → the
    *  remembered `lastWorktree` / default (isolated worktree). */
-  worktree: boolean | null
+  worktree: boolean | null;
   /** Autonomous (#autonomous): true never pauses for the user. null → remembered
    *  `lastAutonomous` / default (off). */
-  autonomous: boolean | null
+  autonomous: boolean | null;
   /** Follow-up generation is default-on. null → remembered value / on. */
-  generateFollowups: boolean | null
+  generateFollowups: boolean | null;
 }
 
 const EMPTY: NewTaskDraft = {
@@ -42,9 +42,9 @@ const EMPTY: NewTaskDraft = {
   worktree: null,
   autonomous: null,
   generateFollowups: null,
-}
+};
 
-const STORAGE_KEY = 'cez-new-task-draft'
+const STORAGE_KEY = 'cez-new-task-draft';
 
 /**
  * The per-project storage key (multi-project spec, "New task": `cez-new-task-draft:<projectId>`).
@@ -58,13 +58,13 @@ const STORAGE_KEY = 'cez-new-task-draft'
  * before this upgrade is still there after it. Only non-boot projects pay the suffix.
  */
 function storageKey(projectId: string | null): string {
-  return projectId === null ? STORAGE_KEY : `${STORAGE_KEY}:${projectId}`
+  return projectId === null ? STORAGE_KEY : `${STORAGE_KEY}:${projectId}`;
 }
 
 /** Coerce arbitrary parsed JSON back into a NewTaskDraft, defaulting anything malformed — the
  *  store must survive a hand-edited or older-shape localStorage value without throwing. */
 function normalize(raw: unknown): NewTaskDraft {
-  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   return {
     text: typeof obj.text === 'string' ? obj.text : '',
     source: isSource(obj.source) ? obj.source : null,
@@ -74,9 +74,8 @@ function normalize(raw: unknown): NewTaskDraft {
     planFirst: obj.planFirst === true,
     worktree: typeof obj.worktree === 'boolean' ? obj.worktree : null,
     autonomous: typeof obj.autonomous === 'boolean' ? obj.autonomous : null,
-    generateFollowups:
-      typeof obj.generateFollowups === 'boolean' ? obj.generateFollowups : null,
-  }
+    generateFollowups: typeof obj.generateFollowups === 'boolean' ? obj.generateFollowups : null,
+  };
 }
 
 function isSource(raw: unknown): raw is TaskSource {
@@ -85,34 +84,34 @@ function isSource(raw: unknown): raw is TaskSource {
     typeof raw === 'object' &&
     ((raw as TaskSource).source === 'skill' || (raw as TaskSource).source === 'workflow') &&
     typeof (raw as TaskSource).ref === 'string'
-  )
+  );
 }
 
 // In-memory cache mirrors storage so reads stay synchronous and cheap; storage is the source of
 // truth across reloads. Keyed by storage key, so one open cockpit holds every project's draft
 // independently — swapping the pill back and forth never round-trips through a stale singleton.
-const cache = new Map<string, NewTaskDraft>()
+const cache = new Map<string, NewTaskDraft>();
 
 export function readDraft(projectId: string | null = null): NewTaskDraft {
-  const key = storageKey(projectId)
-  const cached = cache.get(key)
-  if (cached) return { ...cached }
-  let draft: NewTaskDraft
+  const key = storageKey(projectId);
+  const cached = cache.get(key);
+  if (cached) return { ...cached };
+  let draft: NewTaskDraft;
   try {
-    const stored = localStorage.getItem(key)
-    draft = stored ? normalize(JSON.parse(stored)) : { ...EMPTY }
+    const stored = localStorage.getItem(key);
+    draft = stored ? normalize(JSON.parse(stored)) : { ...EMPTY };
   } catch {
-    draft = { ...EMPTY } // private mode / bad JSON — start clean, still works this session
+    draft = { ...EMPTY }; // private mode / bad JSON — start clean, still works this session
   }
-  cache.set(key, draft)
-  return { ...draft }
+  cache.set(key, draft);
+  return { ...draft };
 }
 
 export function writeDraft(next: NewTaskDraft, projectId: string | null = null): void {
-  const key = storageKey(projectId)
-  cache.set(key, { ...next })
+  const key = storageKey(projectId);
+  cache.set(key, { ...next });
   try {
-    localStorage.setItem(key, JSON.stringify(next))
+    localStorage.setItem(key, JSON.stringify(next));
   } catch {
     // Storage disabled/full — the in-memory cache still survives navigation this session.
   }
@@ -121,16 +120,16 @@ export function writeDraft(next: NewTaskDraft, projectId: string | null = null):
 /** After a successful submit: the text is spent, the picker choices remain — the next task
  *  usually runs the same way (legacy keeps its pills too). */
 export function clearDraftText(projectId: string | null = null): void {
-  writeDraft({ ...readDraft(projectId), text: '' }, projectId)
+  writeDraft({ ...readDraft(projectId), text: '' }, projectId);
 }
 
 /** Test isolation — drop EVERY project's cache and stored draft, so the next read re-consults
  *  storage (a fresh page). */
 export function resetDraft(): void {
-  cache.clear()
+  cache.clear();
   try {
     for (const key of Object.keys(localStorage)) {
-      if (key === STORAGE_KEY || key.startsWith(`${STORAGE_KEY}:`)) localStorage.removeItem(key)
+      if (key === STORAGE_KEY || key.startsWith(`${STORAGE_KEY}:`)) localStorage.removeItem(key);
     }
   } catch {
     // ignore

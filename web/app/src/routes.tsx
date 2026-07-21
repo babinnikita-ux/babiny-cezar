@@ -1,34 +1,27 @@
-import { Suspense, lazy } from 'react'
-import {
-  Navigate,
-  Outlet,
-  Route,
-  Routes,
-  useLocation,
-  useParams,
-} from 'react-router'
+import { Suspense, lazy } from 'react';
+import { Navigate, Outlet, Route, Routes, useLocation, useParams } from 'react-router';
 
-import { useHealth, useProjects } from './api/queries'
-import { ProjectScopeProvider } from './api/project-scope-context'
-import { Navigate as ScopedNavigate } from './lib/project-router'
-import { CompareLoading } from './routes/compare-loading'
-import { GithubLoading } from './routes/github/github-loading'
-import { InboxRoute } from './routes/inbox'
-import { NewTaskRoute } from './routes/new-task'
-import { NotFoundRoute } from './routes/not-found'
-import { RepoGitLoading } from './routes/repo-git/repo-git-loading'
-import { SkillsLoading } from './routes/skills-loading'
-import { UnknownProjectRoute } from './routes/unknown-project'
-import { WorkflowsLoading } from './routes/workflows/workflows-loading'
-import { GitTabLoading } from './routes/task-git/git-tab-loading'
-import { ThreadLoading } from './routes/task-thread/thread-loading'
-import { visibleSettingsSections, type SettingsSectionId } from './routes/settings/registry'
+import { useHealth, useProjects } from './api/queries';
+import { ProjectScopeProvider } from './api/project-scope-context';
+import { Navigate as ScopedNavigate } from './lib/project-router';
+import { CompareLoading } from './routes/compare-loading';
+import { GithubLoading } from './routes/github/github-loading';
+import { InboxRoute } from './routes/inbox';
+import { NewTaskRoute } from './routes/new-task';
+import { NotFoundRoute } from './routes/not-found';
+import { RepoGitLoading } from './routes/repo-git/repo-git-loading';
+import { SkillsLoading } from './routes/skills-loading';
+import { UnknownProjectRoute } from './routes/unknown-project';
+import { WorkflowsLoading } from './routes/workflows/workflows-loading';
+import { GitTabLoading } from './routes/task-git/git-tab-loading';
+import { ThreadLoading } from './routes/task-thread/thread-loading';
+import { visibleSettingsSections, type SettingsSectionId } from './routes/settings/registry';
 import {
   SettingsIndexRoute,
   SettingsSectionRoute,
   settingsSectionPath,
-} from './routes/settings/settings-shell'
-import { TasksOverviewRoute } from './routes/tasks-overview'
+} from './routes/settings/settings-shell';
+import { TasksOverviewRoute } from './routes/tasks-overview';
 
 /** Lazy ON PURPOSE: the thread view carries the markdown stack (Streamdown + remark/rehype,
  *  ~140 KB gz) — as a static import it would sit in the main bundle every visitor pays for
@@ -36,65 +29,60 @@ import { TasksOverviewRoute } from './routes/tasks-overview'
  *  shows while fetching, so the split is invisible to the user. */
 const TaskThreadRoute = lazy(() =>
   import('./routes/task-thread/task-thread').then((m) => ({ default: m.TaskThreadRoute })),
-)
+);
 
 /** Lazy for the same reason: the compare view renders Progress excerpts through Streamdown and
  *  full diffs through the Shiki singleton — thread-chunk weight the home screen must not pay. */
 const CompareVariantsRoute = lazy(() =>
   import('./routes/compare-variants').then((m) => ({ default: m.CompareVariantsRoute })),
-)
+);
 
 /** Lazy because both tabs render the shared run header, which lives in the thread chunk
  *  (markdown stack and all) — a static import here would pull that into the main bundle. */
 const TaskChangesRoute = lazy(() =>
   import('./routes/task-git/task-changes').then((m) => ({ default: m.TaskChangesRoute })),
-)
+);
 const TaskFilesRoute = lazy(() =>
   import('./routes/task-git/task-files').then((m) => ({ default: m.TaskFilesRoute })),
-)
+);
 const TaskCommitsRoute = lazy(() =>
   import('./routes/task-git/task-commits').then((m) => ({ default: m.TaskCommitsRoute })),
-)
+);
 
 /** Lazy because the repo view renders through the `<Diff>` facade and the Shiki singleton —
  *  the same heavy chunk the task git tabs ride; the home screen must not pay for it. */
 const RepoGitRoute = lazy(() =>
   import('./routes/repo-git/repo-git').then((m) => ({ default: m.RepoGitRoute })),
-)
+);
 
 /** Lazy because the GitHub detail pane renders issue/PR bodies through the same markdown
  *  stack the thread carries — thread-chunk weight the home screen must not pay. */
-const GithubRoute = lazy(() =>
-  import('./routes/github/github').then((m) => ({ default: m.GithubRoute })),
-)
+const GithubRoute = lazy(() => import('./routes/github/github').then((m) => ({ default: m.GithubRoute })));
 /** `/github`'s index (#417) — restores the last-selected tab. Same chunk as `GithubRoute`,
  *  just a second named export off the same lazy import. */
 const GithubIndexRoute = lazy(() =>
   import('./routes/github/github').then((m) => ({ default: m.GithubIndexRoute })),
-)
+);
 
 /** Lazy because the builder carries dnd-kit (R6 Step 1.6) — drag machinery only this surface
  *  uses, so only this surface pays for it. */
 const WorkflowsRoute = lazy(() =>
   import('./routes/workflows/workflows').then((m) => ({ default: m.WorkflowsRoute })),
-)
+);
 
 /** Lazy because the skill detail renders the skill body through the same markdown stack the
  *  thread carries — thread-chunk weight the home screen must not pay (it used to ride the main
  *  bundle as a static Settings section). */
-const SkillsRoute = lazy(() => import('./routes/skills').then((m) => ({ default: m.SkillsRoute })))
+const SkillsRoute = lazy(() => import('./routes/skills').then((m) => ({ default: m.SkillsRoute })));
 
 /** `/settings/skills` moved to the top-level `/skills` (out of the Settings shell). Redirect —
  *  preserving the `?skill=` selection and any hash — so pasted links and saved bookmarklets
  *  still land. The scoped Navigate keeps the redirect inside the active project. */
 function SettingsSkillsRedirect() {
-  const location = useLocation()
+  const location = useLocation();
   return (
-    <ScopedNavigate
-      to={{ pathname: '/skills', search: location.search, hash: location.hash }}
-      replace
-    />
-  )
+    <ScopedNavigate to={{ pathname: '/skills', search: location.search, hash: location.hash }} replace />
+  );
 }
 
 /** A settings section that MOVED from the project area to the global one. Its own hop, not an
@@ -103,7 +91,7 @@ function SettingsSkillsRedirect() {
  *  SECOND hop (`LegacyPathRedirect` first), and dropping either half there would silently undo
  *  what that hop just preserved. Plain Navigate — the target is outside every project. */
 function MovedSettingsSectionRedirect({ sectionId }: { sectionId: SettingsSectionId }) {
-  const location = useLocation()
+  const location = useLocation();
   return (
     <Navigate
       to={{
@@ -113,7 +101,7 @@ function MovedSettingsSectionRedirect({ sectionId }: { sectionId: SettingsSectio
       }}
       replace
     />
-  )
+  );
 }
 
 /** What renders while a redirect target is still being resolved (the boot id from `/api/health`,
@@ -124,7 +112,7 @@ function ScopeResolving() {
     <div data-route="scope-resolving" className="flex min-h-full flex-col">
       <p className="px-4 py-6 text-center text-xs text-soft-foreground">Loading…</p>
     </div>
-  )
+  );
 }
 
 /**
@@ -144,10 +132,10 @@ function ScopeResolving() {
  * for an unreachable server — a permanent "Loading…" here would not be.
  */
 function ProjectScopeRoute() {
-  const { projectId = '' } = useParams()
-  const location = useLocation()
-  const projects = useProjects()
-  const health = useHealth()
+  const { projectId = '' } = useParams();
+  const location = useLocation();
+  const projects = useProjects();
+  const health = useHealth();
 
   if (projectId === 'default') {
     // The registry names the boot slug; health's additive `bootProject` (the same slug) is the
@@ -156,27 +144,26 @@ function ProjectScopeRoute() {
     // server-side `default` alias answers every `/api/p/default/*` route as the boot project,
     // so mounting the scope (whose routed views own the honest error states) beats a permanent
     // "Loading…" (the same doctrine as the projects-error path below).
-    const boot =
-      projects.data?.bootProject ?? (projects.isError ? health.data?.bootProject : undefined)
+    const boot = projects.data?.bootProject ?? (projects.isError ? health.data?.bootProject : undefined);
     if (boot !== undefined) {
-      const rest = location.pathname.replace(/^\/p\/default(?=\/|$)/, '')
+      const rest = location.pathname.replace(/^\/p\/default(?=\/|$)/, '');
       return (
         <Navigate
           to={`/p/${encodeURIComponent(boot)}${rest || '/'}${location.search}${location.hash}`}
           replace
         />
-      )
+      );
     }
-    if (!projects.isError) return <ScopeResolving />
+    if (!projects.isError) return <ScopeResolving />;
   }
 
   if (projects.data) {
     const known =
       projects.data.bootProject === projectId ||
-      projects.data.projects.some((project) => project.id === projectId)
-    if (!known) return <UnknownProjectRoute projectId={projectId} registry={projects.data} />
+      projects.data.projects.some((project) => project.id === projectId);
+    if (!known) return <UnknownProjectRoute projectId={projectId} registry={projects.data} />;
   } else if (!projects.isError) {
-    return <ScopeResolving />
+    return <ScopeResolving />;
   }
 
   // The BOOT project mounts UNSCOPED (projectId null): the step-3.1 invariant keeps its API
@@ -184,13 +171,13 @@ function ProjectScopeRoute() {
   // surface — and its cache under the same `'default'`-led keys the shell chrome (which
   // renders outside this provider) already uses. Only non-boot projects pay the `/api/p/<id>`
   // prefix. Links carry the URL prefix either way (project-router falls back to the URL).
-  const scopeId = projects.data?.bootProject === projectId ? null : projectId
+  const scopeId = projects.data?.bootProject === projectId ? null : projectId;
 
   return (
     <ProjectScopeProvider projectId={scopeId}>
       <Outlet />
     </ProjectScopeProvider>
-  )
+  );
 }
 
 /**
@@ -205,8 +192,8 @@ function ProjectScopeRoute() {
  * deep-link capture all start from the project the URL now names.
  */
 function NewTaskProjectRoute() {
-  const { projectId = '' } = useParams()
-  return <NewTaskRoute key={projectId} />
+  const { projectId = '' } = useParams();
+  return <NewTaskRoute key={projectId} />;
 }
 
 /**
@@ -217,21 +204,16 @@ function NewTaskProjectRoute() {
  * state — never a flashed wrong screen. `replace` keeps Back from bouncing off the redirect.
  */
 function LegacyPathRedirect() {
-  const location = useLocation()
-  const health = useHealth()
-  if (health.data === undefined) return <ScopeResolving />
+  const location = useLocation();
+  const health = useHealth();
+  if (health.data === undefined) return <ScopeResolving />;
   // Health always names the boot project; the alias is a just-in-case fallback that still
   // lands (the gate above normalizes `default` from the registry, which always answers one).
-  const boot = health.data.bootProject ?? 'default'
+  const boot = health.data.bootProject ?? 'default';
   // A bare `/p` (or `/p/`) names no project — send it to the boot project's home rather than
   // minting a nonsense `/p/<boot>/p` path.
-  const path = location.pathname === '/p' || location.pathname === '/p/' ? '/' : location.pathname
-  return (
-    <Navigate
-      to={`/p/${encodeURIComponent(boot)}${path}${location.search}${location.hash}`}
-      replace
-    />
-  )
+  const path = location.pathname === '/p' || location.pathname === '/p/' ? '/' : location.pathname;
+  return <Navigate to={`/p/${encodeURIComponent(boot)}${path}${location.search}${location.hash}`} replace />;
 }
 
 /** The route map from the spec's "Routing — every surface is a URL" section.
@@ -457,5 +439,5 @@ export function AppRoutes() {
           truly unknown paths still renders, scoped, after the redirect. */}
       <Route path="*" element={<LegacyPathRedirect />} />
     </Routes>
-  )
+  );
 }

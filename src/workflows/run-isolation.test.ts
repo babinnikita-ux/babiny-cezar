@@ -50,7 +50,9 @@ describe('RunManager repository-root isolation', () => {
     const workflow: WorkflowDef = {
       name: 'must-not-run-in-root',
       source: 'built-in',
-      steps: [{ id: 'check', command: 'node -e "require(\'node:fs\').writeFileSync(\'root-was-touched\',\'yes\')"' }],
+      steps: [
+        { id: 'check', command: "node -e \"require('node:fs').writeFileSync('root-was-touched','yes')\"" },
+      ],
     };
 
     const record = manager.startRun(workflow, { task: 'isolated task' });
@@ -60,7 +62,9 @@ describe('RunManager repository-root isolation', () => {
     expect(store.getRun(record.id)?.error).toContain('worktree creation failed');
     expect(existsSync(join(root, 'root-was-touched'))).toBe(false);
     const notes = store.readEvents(record.id).filter((event) => event.type === 'note');
-    expect(notes.some((event) => String(event.message).includes('stopped before workflow execution'))).toBe(true);
+    expect(notes.some((event) => String(event.message).includes('stopped before workflow execution'))).toBe(
+      true,
+    );
     expect(notes.some((event) => String(event.message).includes('exclusive access'))).toBe(false);
   });
 
@@ -75,7 +79,7 @@ describe('RunManager repository-root isolation', () => {
         {
           id: 'check',
           command:
-            'node -e "const fs=require(\'node:fs\'); const p=\'root-run.lock\'; if(fs.existsSync(p)) process.exit(42); fs.writeFileSync(p,\'locked\'); setTimeout(()=>fs.rmSync(p),100)"',
+            "node -e \"const fs=require('node:fs'); const p='root-run.lock'; if(fs.existsSync(p)) process.exit(42); fs.writeFileSync(p,'locked'); setTimeout(()=>fs.rmSync(p),100)\"",
         },
       ],
     };

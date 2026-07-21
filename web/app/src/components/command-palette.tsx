@@ -1,12 +1,12 @@
-import { MoonIcon, PlusIcon } from 'lucide-react'
-import * as React from 'react'
-import { useHealth, useRuns, useSkills, useUiState } from '@/api/queries'
-import { useNavigate } from '@/lib/project-router'
-import type { RunRecord } from '@/api/types'
-import { visibleNavItems } from '@/components/nav-items'
-import { StatusDot } from '@/components/status-dot'
-import { NEXT_THEME } from '@/components/theme-toggle'
-import { useTheme } from '@/components/theme-provider'
+import { MoonIcon, PlusIcon } from 'lucide-react';
+import * as React from 'react';
+import { useHealth, useRuns, useSkills, useUiState } from '@/api/queries';
+import { useNavigate } from '@/lib/project-router';
+import type { RunRecord } from '@/api/types';
+import { visibleNavItems } from '@/components/nav-items';
+import { StatusDot } from '@/components/status-dot';
+import { NEXT_THEME } from '@/components/theme-toggle';
+import { useTheme } from '@/components/theme-provider';
 import {
   CommandDialog,
   CommandEmpty,
@@ -15,12 +15,12 @@ import {
   CommandItem,
   CommandList,
   CommandShortcut,
-} from '@/components/ui/command'
-import { deriveAttention } from '@/lib/attention'
-import { shortAge } from '@/lib/format'
-import { orderSkillsByUsage } from '@/lib/skills'
-import { runTitle } from '@/lib/task-groups'
-import { useCommandShortcut, useKeyShortcut } from '@/lib/use-command-shortcut'
+} from '@/components/ui/command';
+import { deriveAttention } from '@/lib/attention';
+import { shortAge } from '@/lib/format';
+import { orderSkillsByUsage } from '@/lib/skills';
+import { runTitle } from '@/lib/task-groups';
+import { useCommandShortcut, useKeyShortcut } from '@/lib/use-command-shortcut';
 
 /**
  * The ⌘K command palette (spec, "Cross-cutting"): tasks, views, actions, skills — everything,
@@ -34,38 +34,38 @@ import { useCommandShortcut, useKeyShortcut } from '@/lib/use-command-shortcut'
 /** The programmatic-open seam: a window event rather than a context, so chrome that must stay
  *  presentational (the sidebar hint today, an onboarding nudge tomorrow) can open the palette
  *  without threading a setter through the tree. */
-export const OPEN_COMMAND_PALETTE_EVENT = 'cezar:open-command-palette'
+export const OPEN_COMMAND_PALETTE_EVENT = 'cezar:open-command-palette';
 
 export function openCommandPalette(): void {
-  window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT))
+  window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT));
 }
 
 /** Newest first — the palette's unfiltered Tasks group should lead with what you touched last,
  *  exactly like the sidebar. Stable for equal timestamps (variant groups started together). */
 export function orderRuns(runs: readonly RunRecord[]): RunRecord[] {
-  return [...runs].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+  return [...runs].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 }
 
 export function CommandPalette() {
-  const [open, setOpen] = React.useState(false)
-  const navigate = useNavigate()
+  const [open, setOpen] = React.useState(false);
+  const navigate = useNavigate();
 
-  useCommandShortcut('k', () => setOpen((current) => !current))
+  useCommandShortcut('k', () => setOpen((current) => !current));
   const newTask = React.useCallback(() => {
-    setOpen(false)
-    navigate('/new')
-  }, [navigate])
+    setOpen(false);
+    navigate('/new');
+  }, [navigate]);
   // ⌘N works only in the desktop shell — the browser reserves it (new window), so the page
   // never sees it. `c`-to-create (GitHub/Linear) is the browser-usable accelerator and the one
   // the hint chips advertise; ⌘N stays registered for the Electron shell where it fires.
-  useCommandShortcut('n', newTask)
-  useKeyShortcut('c', newTask)
+  useCommandShortcut('n', newTask);
+  useKeyShortcut('c', newTask);
 
   React.useEffect(() => {
-    const onOpen = () => setOpen(true)
-    window.addEventListener(OPEN_COMMAND_PALETTE_EVENT, onOpen)
-    return () => window.removeEventListener(OPEN_COMMAND_PALETTE_EVENT, onOpen)
-  }, [])
+    const onOpen = () => setOpen(true);
+    window.addEventListener(OPEN_COMMAND_PALETTE_EVENT, onOpen);
+    return () => window.removeEventListener(OPEN_COMMAND_PALETTE_EVENT, onOpen);
+  }, []);
 
   return (
     <CommandDialog
@@ -79,34 +79,34 @@ export function CommandPalette() {
           its queries — notably the skills fetch — run on first open, never on app boot. */}
       <PaletteContent close={() => setOpen(false)} />
     </CommandDialog>
-  )
+  );
 }
 
 function PaletteContent({ close }: { close: () => void }) {
-  const navigate = useNavigate()
-  const { theme, setTheme } = useTheme()
+  const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
   // Runs are already cached by the sidebar's quick-list; skills fetch here, on first open.
-  const runs = useRuns()
-  const skills = useSkills()
+  const runs = useRuns();
+  const skills = useSkills();
   // Skills list most-used → project → global (#519) — the same order every picker renders.
-  const uiState = useUiState()
+  const uiState = useUiState();
   // Health is cached by the shell's chips; here it gates the forge-gated Views row (R6 1.1) —
   // the palette must not offer a GitHub view the sidebar honestly hides.
-  const health = useHealth()
-  const now = Date.now()
+  const health = useHealth();
+  const now = Date.now();
 
-  const orderedRuns = React.useMemo(() => orderRuns(runs.data ?? []), [runs.data])
-  const skillUsage = uiState.data?.skillUsage
+  const orderedRuns = React.useMemo(() => orderRuns(runs.data ?? []), [runs.data]);
+  const skillUsage = uiState.data?.skillUsage;
   const orderedSkills = React.useMemo(
     () => orderSkillsByUsage(skills.data ?? [], skillUsage),
     [skills.data, skillUsage],
-  )
+  );
 
   const go = (to: string) => {
-    close()
-    navigate(to)
-  }
-  const nextTheme = NEXT_THEME[theme]
+    close();
+    navigate(to);
+  };
+  const nextTheme = NEXT_THEME[theme];
 
   return (
     <>
@@ -119,7 +119,7 @@ function PaletteContent({ close }: { close: () => void }) {
             forge: health.data?.forge?.available === true,
             inbox: health.data?.capabilities.followups === true,
           }).map((item) => {
-            const Icon = item.icon
+            const Icon = item.icon;
             return (
               <CommandItem
                 key={item.to}
@@ -133,7 +133,7 @@ function PaletteContent({ close }: { close: () => void }) {
                 <Icon aria-hidden="true" />
                 {item.label}
               </CommandItem>
-            )
+            );
           })}
           <CommandItem
             value="view new task"
@@ -150,7 +150,7 @@ function PaletteContent({ close }: { close: () => void }) {
         {orderedRuns.length > 0 ? (
           <CommandGroup heading="Tasks">
             {orderedRuns.map((run) => {
-              const attention = deriveAttention(run)
+              const attention = deriveAttention(run);
               return (
                 <CommandItem
                   key={run.id}
@@ -162,13 +162,18 @@ function PaletteContent({ close }: { close: () => void }) {
                   data-run-id={run.id}
                   onSelect={() => go(`/tasks/${run.id}`)}
                 >
-                  <StatusDot tone={attention.tone} pulse={attention.pulse} aria-label={attention.label} role="img" />
+                  <StatusDot
+                    tone={attention.tone}
+                    pulse={attention.pulse}
+                    aria-label={attention.label}
+                    role="img"
+                  />
                   <span className="min-w-0 flex-1 truncate">{runTitle(run)}</span>
                   <span className="shrink-0 text-xs text-soft-foreground tabular-nums">
                     {shortAge(run.finishedAt ?? run.createdAt, now)}
                   </span>
                 </CommandItem>
-              )
+              );
             })}
           </CommandGroup>
         ) : null}
@@ -179,8 +184,8 @@ function PaletteContent({ close }: { close: () => void }) {
             data-slot="palette-action"
             data-action="toggle-theme"
             onSelect={() => {
-              setTheme(nextTheme)
-              close()
+              setTheme(nextTheme);
+              close();
             }}
           >
             <MoonIcon aria-hidden="true" />
@@ -215,7 +220,9 @@ function PaletteContent({ close }: { close: () => void }) {
               >
                 <span className="shrink-0 font-medium">{skill.name}</span>
                 {skill.description ? (
-                  <span className="min-w-0 flex-1 truncate text-xs text-soft-foreground">{skill.description}</span>
+                  <span className="min-w-0 flex-1 truncate text-xs text-soft-foreground">
+                    {skill.description}
+                  </span>
                 ) : null}
               </CommandItem>
             ))}
@@ -223,5 +230,5 @@ function PaletteContent({ close }: { close: () => void }) {
         ) : null}
       </CommandList>
     </>
-  )
+  );
 }

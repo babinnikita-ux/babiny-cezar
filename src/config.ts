@@ -17,9 +17,7 @@ const skillsRepoSchema = z.object({
 
 export type SkillsRepoSource = z.infer<typeof skillsRepoSchema>;
 
-export const DEFAULT_SKILLS_REPOS: SkillsRepoSource[] = [
-  { repo: 'open-mercato/skills', ref: 'main' },
-];
+export const DEFAULT_SKILLS_REPOS: SkillsRepoSource[] = [{ repo: 'open-mercato/skills', ref: 'main' }];
 
 /** Last-resort retention when neither the repo nor the workspace says anything. */
 export const DEFAULT_WORKTREE_RETENTION = 10;
@@ -40,7 +38,9 @@ const configSchema = z.object({
    * (never auto-reclaim). Default 10. `.catch(10)` keeps it additive-safe: a
    * bad value degrades to the default instead of discarding the rest.
    */
-  worktreeRetention: worktreeRetentionSchema.default(DEFAULT_WORKTREE_RETENTION).catch(DEFAULT_WORKTREE_RETENTION),
+  worktreeRetention: worktreeRetentionSchema
+    .default(DEFAULT_WORKTREE_RETENTION)
+    .catch(DEFAULT_WORKTREE_RETENTION),
   /**
    * Per-task memory ceiling in MiB (whole process tree). When a running task's
    * RSS crosses this the engine pauses it with a warning and lets the queue

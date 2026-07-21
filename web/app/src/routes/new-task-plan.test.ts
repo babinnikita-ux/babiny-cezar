@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest';
 
-import type { WorkflowStepDef } from '@/api/types'
+import type { WorkflowStepDef } from '@/api/types';
 
 import {
   buildPlannedRunBody,
@@ -9,14 +9,14 @@ import {
   planTaskLine,
   removeStep,
   stepHint,
-} from './new-task-plan'
+} from './new-task-plan';
 
 const STEPS: WorkflowStepDef[] = [
   { id: 'implement', name: 'Implement', prompt: '{{task}}' },
   { id: 'verify', name: 'Verify', command: 'npm test' },
   { id: 'review', name: 'Review', prompt: 'Review the changes' },
-]
-const ids = (steps: WorkflowStepDef[]) => steps.map((s) => s.id)
+];
+const ids = (steps: WorkflowStepDef[]) => steps.map((s) => s.id);
 
 describe('removeStep', () => {
   it.each([
@@ -27,14 +27,14 @@ describe('removeStep', () => {
     { name: 'above range (stale click)', index: 3, expected: ['implement', 'verify', 'review'] },
     { name: 'non-integer', index: 1.5, expected: ['implement', 'verify', 'review'] },
   ])('removes the $name step', ({ index, expected }) => {
-    expect(ids(removeStep(STEPS, index))).toEqual(expected)
-  })
+    expect(ids(removeStep(STEPS, index))).toEqual(expected);
+  });
 
   it('never mutates the input list', () => {
-    removeStep(STEPS, 1)
-    expect(ids(STEPS)).toEqual(['implement', 'verify', 'review'])
-  })
-})
+    removeStep(STEPS, 1);
+    expect(ids(STEPS)).toEqual(['implement', 'verify', 'review']);
+  });
+});
 
 describe('moveStep', () => {
   it.each([
@@ -48,18 +48,18 @@ describe('moveStep', () => {
     { name: 'invalid from ignored', from: 7, to: 0, expected: ['implement', 'verify', 'review'] },
     { name: 'negative from ignored', from: -1, to: 2, expected: ['implement', 'verify', 'review'] },
   ])('$name', ({ from, to, expected }) => {
-    expect(ids(moveStep(STEPS, from, to))).toEqual(expected)
-  })
+    expect(ids(moveStep(STEPS, from, to))).toEqual(expected);
+  });
 
   it('never mutates the input list', () => {
-    moveStep(STEPS, 0, 2)
-    expect(ids(STEPS)).toEqual(['implement', 'verify', 'review'])
-  })
+    moveStep(STEPS, 0, 2);
+    expect(ids(STEPS)).toEqual(['implement', 'verify', 'review']);
+  });
 
   it('is safe on an empty list', () => {
-    expect(moveStep([], 0, 1)).toEqual([])
-  })
-})
+    expect(moveStep([], 0, 1)).toEqual([]);
+  });
+});
 
 describe('stepHint', () => {
   it.each([
@@ -72,33 +72,33 @@ describe('stepHint', () => {
     },
     { name: 'neither → empty', step: { id: 'bare' } as WorkflowStepDef, expected: '' },
   ])('$name', ({ step, expected }) => {
-    expect(stepHint(step)).toBe(expected)
-  })
-})
+    expect(stepHint(step)).toBe(expected);
+  });
+});
 
 describe('planTaskLine', () => {
   it('keeps only the first line', () => {
-    expect(planTaskLine('do the thing\nand then more')).toBe('do the thing')
-  })
+    expect(planTaskLine('do the thing\nand then more')).toBe('do the thing');
+  });
   it('caps long lines with an ellipsis at the requested width', () => {
-    expect(planTaskLine('abcdefgh', 5)).toBe('abcd…')
-    expect(planTaskLine('abcde', 5)).toBe('abcde')
-  })
-})
+    expect(planTaskLine('abcdefgh', 5)).toBe('abcd…');
+    expect(planTaskLine('abcde', 5)).toBe('abcde');
+  });
+});
 
 describe('pendingPlanOf', () => {
   it('carries the task, the answer, and DEFENSIVE copies of steps and images', () => {
-    const images = [{ mediaType: 'image/png', data: 'AAA' }]
+    const images = [{ mediaType: 'image/png', data: 'AAA' }];
     const plan = pendingPlanOf('fix it', images, {
       steps: STEPS,
       rationale: 'why',
       fallback: false,
-    })
-    expect(plan).toEqual({ task: 'fix it', steps: STEPS, rationale: 'why', fallback: false, images })
-    expect(plan.steps).not.toBe(STEPS)
-    expect(plan.images).not.toBe(images)
-  })
-})
+    });
+    expect(plan).toEqual({ task: 'fix it', steps: STEPS, rationale: 'why', fallback: false, images });
+    expect(plan.steps).not.toBe(STEPS);
+    expect(plan.images).not.toBe(images);
+  });
+});
 
 describe('buildPlannedRunBody — the POST /api/runs wire contract for approved plans', () => {
   const base = {
@@ -109,7 +109,7 @@ describe('buildPlannedRunBody — the POST /api/runs wire contract for approved 
     runnerCount: 1,
     variants: 1,
     images: [],
-  }
+  };
 
   it('defaults collapse away: only task + inline steps go on the wire', () => {
     expect(buildPlannedRunBody(base)).toEqual({
@@ -120,37 +120,42 @@ describe('buildPlannedRunBody — the POST /api/runs wire contract for approved 
       variants: undefined,
       images: undefined,
       generateFollowups: undefined,
-    })
-  })
+    });
+  });
 
   it('never sends a workflow name — an edited plan may match no saved chain', () => {
-    expect('workflow' in buildPlannedRunBody(base)).toBe(false)
-  })
+    expect('workflow' in buildPlannedRunBody(base)).toBe(false);
+  });
 
   it.each([
     { name: 'model rides when chosen', patch: { model: 'sonnet' }, key: 'model', expected: 'sonnet' },
-    { name: 'runner rides only on multi-backend hosts', patch: { runnerCount: 2 }, key: 'runner', expected: 'claude' },
+    {
+      name: 'runner rides only on multi-backend hosts',
+      patch: { runnerCount: 2 },
+      key: 'runner',
+      expected: 'claude',
+    },
     { name: 'variants ride above ×1', patch: { variants: 3 }, key: 'variants', expected: 3 },
   ])('$name', ({ patch, key, expected }) => {
-    const body = buildPlannedRunBody({ ...base, ...patch }) as unknown as Record<string, unknown>
-    expect(body[key]).toEqual(expected)
-  })
+    const body = buildPlannedRunBody({ ...base, ...patch }) as unknown as Record<string, unknown>;
+    expect(body[key]).toEqual(expected);
+  });
 
   it('images captured at plan time ride into the run, copied', () => {
-    const images = [{ mediaType: 'image/png', data: 'AAA' }]
-    const body = buildPlannedRunBody({ ...base, images })
-    expect(body.images).toEqual(images)
-    expect(body.images).not.toBe(images)
-  })
+    const images = [{ mediaType: 'image/png', data: 'AAA' }];
+    const body = buildPlannedRunBody({ ...base, images });
+    expect(body.images).toEqual(images);
+    expect(body.images).not.toBe(images);
+  });
 
   it('copies the steps so later overlay edits cannot mutate an in-flight body', () => {
-    const body = buildPlannedRunBody(base)
-    expect(body.steps).toEqual(STEPS)
-    expect(body.steps).not.toBe(STEPS)
-  })
+    const body = buildPlannedRunBody(base);
+    expect(body.steps).toEqual(STEPS);
+    expect(body.steps).not.toBe(STEPS);
+  });
 
   it('sends only the opt-out value for follow-up generation', () => {
-    expect(buildPlannedRunBody({ ...base, generateFollowups: false }).generateFollowups).toBe(false)
-    expect(buildPlannedRunBody({ ...base, generateFollowups: true }).generateFollowups).toBeUndefined()
-  })
-})
+    expect(buildPlannedRunBody({ ...base, generateFollowups: false }).generateFollowups).toBe(false);
+    expect(buildPlannedRunBody({ ...base, generateFollowups: true }).generateFollowups).toBeUndefined();
+  });
+});

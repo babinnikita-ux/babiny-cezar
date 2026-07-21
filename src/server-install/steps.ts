@@ -1,13 +1,7 @@
 import { spawn } from 'node:child_process';
 import { randomInt } from 'node:crypto';
 import { detectEnvironment, type BackendCheck } from '../core/backend-detect.js';
-import {
-  CANCEL,
-  type InstallContext,
-  type InstallStep,
-  type Runner,
-  type StepArtifact,
-} from './types.js';
+import { CANCEL, type InstallContext, type InstallStep, type Runner, type StepArtifact } from './types.js';
 
 /**
  * Platform-agnostic step helpers. The star is `sudoStep`: the wizard runs as a
@@ -189,7 +183,11 @@ export async function sudoStep(ctx: InstallContext, opts: SudoStepOpts): Promise
       const choice = await ui.select<'sudo' | 'delegate'>({
         message: 'How should this privileged command run?',
         options: [
-          { value: 'delegate', label: "I'll run it myself as root", hint: 'paste & run as root, then confirm' },
+          {
+            value: 'delegate',
+            label: "I'll run it myself as root",
+            hint: 'paste & run as root, then confirm',
+          },
           { value: 'sudo', label: 'Run it now via sudo', hint: 'streams output here' },
         ],
         initialValue: 'delegate',
@@ -207,10 +205,14 @@ export async function sudoStep(ctx: InstallContext, opts: SudoStepOpts): Promise
       );
       if (code !== 0) ui.warn(`command exited with code ${code}`);
     } else {
-      ui.info('Copy the command above and run it as root on the server (paste into a root shell, or prefix with sudo), then confirm below.');
+      ui.info(
+        'Copy the command above and run it as root on the server (paste into a root shell, or prefix with sudo), then confirm below.',
+      );
       if (opts.input != null) {
         // Screen-only: pasted as stdin it stays out of argv AND shell history.
-        ui.info(`The command reads from stdin — after starting it, paste this ${opts.inputLabel ?? 'line'} and press Ctrl-D:`);
+        ui.info(
+          `The command reads from stdin — after starting it, paste this ${opts.inputLabel ?? 'line'} and press Ctrl-D:`,
+        );
         ui.message(opts.input);
       }
       if (!ctx.assumeYes) {
@@ -315,7 +317,10 @@ export function depCheckStep(opts: DepStepOpts = {}): InstallStep {
       const pkgs = created?.artifacts ?? [];
       if (pkgs.length === 0) return;
       ctx.ui.note(
-        pkgs.map((a) => a.removeHint ?? a.name ?? '').filter(Boolean).join('\n'),
+        pkgs
+          .map((a) => a.removeHint ?? a.name ?? '')
+          .filter(Boolean)
+          .join('\n'),
         'These tools were installed for cezar but may be used elsewhere — remove manually if you want them gone',
       );
     },

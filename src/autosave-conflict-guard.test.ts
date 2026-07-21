@@ -104,7 +104,9 @@ describe('autosave conflict guard (#471 follow-up)', () => {
     // Requiring the full ordered triple is what keeps those autosaving.
     await trackThenRewrite(
       'doc.md',
-      ['Resolving conflicts', '', '>>>>>>> is the end marker.', '<<<<<<< is the start marker.', ''].join('\n'),
+      ['Resolving conflicts', '', '>>>>>>> is the end marker.', '<<<<<<< is the start marker.', ''].join(
+        '\n',
+      ),
     );
     expect(await autosaveCommit(repo, 'turn end')).toBe('committed');
     expect(warn).not.toHaveBeenCalled();

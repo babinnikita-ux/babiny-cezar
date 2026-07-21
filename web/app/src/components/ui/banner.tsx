@@ -1,7 +1,7 @@
-import { XIcon } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { XIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/utils';
 
 /**
  * A reusable, dismissible chrome banner — the cockpit's first (#391 is its first caller).
@@ -11,12 +11,12 @@ import { cn } from '@/lib/utils'
  */
 export interface BannerProps {
   /** The message. Plain text or a small mix of inline elements (a link, a `<code>` snippet). */
-  children: ReactNode
+  children: ReactNode;
   /** Fires on the close button. The caller decides what "dismissed" means and where it lives. */
-  onDismiss: () => void
+  onDismiss: () => void;
   /** Accessible name for the close button — say what is being dismissed, not just "Dismiss". */
-  dismissLabel: string
-  className?: string
+  dismissLabel: string;
+  className?: string;
 }
 
 export function Banner({ children, onDismiss, dismissLabel, className }: BannerProps) {
@@ -40,5 +40,5 @@ export function Banner({ children, onDismiss, dismissLabel, className }: BannerP
         <XIcon className="size-3.5" aria-hidden="true" />
       </button>
     </div>
-  )
+  );
 }

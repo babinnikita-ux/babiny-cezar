@@ -1,16 +1,16 @@
-import { FolderTreeIcon, TriangleAlertIcon } from 'lucide-react'
-import { useState } from 'react'
-import { useParams } from 'react-router'
+import { FolderTreeIcon, TriangleAlertIcon } from 'lucide-react';
+import { useState } from 'react';
+import { useParams } from 'react-router';
 
-import { ApiError } from '@/api/client'
-import { useRun, useRunFile } from '@/api/queries'
-import type { ApiRun } from '@/api/types'
-import { CenteredState } from '@/components/centered-state'
+import { ApiError } from '@/api/client';
+import { useRun, useRunFile } from '@/api/queries';
+import type { ApiRun } from '@/api/types';
+import { CenteredState } from '@/components/centered-state';
 
-import { RunHeader } from '../task-thread/run-header'
-import { FilePreview } from './file-preview'
-import { FilesTree } from './files-tree'
-import { GitTabLoadError, GitTabLoading } from './git-tab-loading'
+import { RunHeader } from '../task-thread/run-header';
+import { FilePreview } from './file-preview';
+import { FilesTree } from './files-tree';
+import { GitTabLoadError, GitTabLoading } from './git-tab-loading';
 
 /**
  * `/tasks/:id/files` — the session git view's read-only worktree browser (spec §"Session git
@@ -23,21 +23,21 @@ import { GitTabLoadError, GitTabLoading } from './git-tab-loading'
  * because it is the only way to pick a file.
  */
 export function TaskFilesRoute() {
-  const { id } = useParams<{ id: string }>()
-  const run = useRun(id)
+  const { id } = useParams<{ id: string }>();
+  const run = useRun(id);
 
-  if (run.isPending) return <GitTabLoading tab="files" />
-  if (run.isError) return <GitTabLoadError tab="files" error={run.error} />
-  return <FilesView run={run.data} />
+  if (run.isPending) return <GitTabLoading tab="files" />;
+  if (run.isError) return <GitTabLoadError tab="files" error={run.error} />;
+  return <FilesView run={run.data} />;
 }
 
 function FilesView({ run }: { run: ApiRun }) {
   // The root listing doubles as the "is there a worktree at all?" probe — a 409 here is the
   // server's answer for the whole view, same stance as the Changes tab's /changes 409.
-  const root = useRunFile(run.id, '')
-  const [selected, setSelected] = useState<string | null>(null)
+  const root = useRunFile(run.id, '');
+  const [selected, setSelected] = useState<string | null>(null);
 
-  const refused = root.isError && root.error instanceof ApiError && root.error.status === 409
+  const refused = root.isError && root.error instanceof ApiError && root.error.status === 409;
 
   return (
     <div data-route="task-files" className="flex min-h-full flex-col">
@@ -65,5 +65,5 @@ function FilesView({ run }: { run: ApiRun }) {
         </div>
       )}
     </div>
-  )
+  );
 }

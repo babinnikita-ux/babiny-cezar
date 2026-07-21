@@ -113,7 +113,9 @@ describe('server state', () => {
     a.primaryPort = 4322;
     saveServerState(a, 'a-example-com');
 
-    const names = listServerInstances().map((i) => i.instance).sort();
+    const names = listServerInstances()
+      .map((i) => i.instance)
+      .sort();
     expect(names).toEqual(['a-example-com', 'default']);
     expect(nextFreeInstancePort()).toBe(4323); // 4321 + 4322 both taken
   });

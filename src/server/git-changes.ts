@@ -168,21 +168,24 @@ export function splitPatch(patch: string): string[] {
 function unquoteGitPath(raw: string): string {
   if (!raw.startsWith('"') || !raw.endsWith('"')) return raw;
   const inner = raw.slice(1, -1);
-  return inner.replace(/\\([\\"tnrf])|\\([0-7]{3})/g, (_m, esc: string | undefined, oct: string | undefined) => {
-    if (oct) return String.fromCharCode(parseInt(oct, 8));
-    switch (esc) {
-      case 't':
-        return '\t';
-      case 'n':
-        return '\n';
-      case 'r':
-        return '\r';
-      case 'f':
-        return '\f';
-      default:
-        return esc ?? '';
-    }
-  });
+  return inner.replace(
+    /\\([\\"tnrf])|\\([0-7]{3})/g,
+    (_m, esc: string | undefined, oct: string | undefined) => {
+      if (oct) return String.fromCharCode(parseInt(oct, 8));
+      switch (esc) {
+        case 't':
+          return '\t';
+        case 'n':
+          return '\n';
+        case 'r':
+          return '\r';
+        case 'f':
+          return '\f';
+        default:
+          return esc ?? '';
+      }
+    },
+  );
 }
 
 /** The new-side ("b/") path a single `git diff` section describes, or null when
@@ -275,9 +278,10 @@ export async function collectChanges(
       ? await git(dir, ['rev-parse', '--abbrev-ref', 'HEAD'])
       : undefined;
     const headBranch = headBranchResult?.ok ? headBranchResult.stdout.trim() : '';
-    const repointedHead = opts.taskBranch && headBranch && headBranch !== opts.taskBranch
-      ? { headBranch, taskBranch: opts.taskBranch }
-      : undefined;
+    const repointedHead =
+      opts.taskBranch && headBranch && headBranch !== opts.taskBranch
+        ? { headBranch, taskBranch: opts.taskBranch }
+        : undefined;
     const base = repointedHead
       ? 'HEAD'
       : mergeBase.ok && mergeBase.stdout.trim()
@@ -538,7 +542,13 @@ export async function readWorktreePath(
   if (target === gitDir || target.startsWith(gitDir + sep)) {
     return { kind: 'invalid', error: '.git internals are not browsable' };
   }
-  const display = target === rootAbs ? '' : target.slice(rootAbs.length + 1).split(sep).join('/');
+  const display =
+    target === rootAbs
+      ? ''
+      : target
+          .slice(rootAbs.length + 1)
+          .split(sep)
+          .join('/');
 
   let info;
   try {
@@ -597,9 +607,7 @@ export async function readWorktreePath(
 
 // ---- branches -------------------------------------------------------------
 
-export type BranchResult =
-  | { ok: true; branch: string; created: boolean }
-  | { ok: false; error: string };
+export type BranchResult = { ok: true; branch: string; created: boolean } | { ok: false; error: string };
 
 /**
  * Repo-view branch action (`POST /api/repo/branch`): switch to `name` when it
@@ -609,11 +617,7 @@ export type BranchResult =
  * Predictable failures (invalid name, unknown `from`, dirty-tree checkout
  * conflict) come back as `{ ok:false, error }`.
  */
-export async function createOrSwitchBranch(
-  dir: string,
-  name: string,
-  from?: string,
-): Promise<BranchResult> {
+export async function createOrSwitchBranch(dir: string, name: string, from?: string): Promise<BranchResult> {
   // Dash-guard (#431): `name` reaches `git checkout <name>` / `git checkout -b <name>` as a
   // positional operand, so it gets the same explicit guard as `from` below — check-ref-format
   // already rejects option-like names, and the point is not to rely on that alone.
@@ -674,7 +678,10 @@ export async function pushCurrentBranch(dir: string): Promise<PushResult> {
     return { ok: false, error: 'detached HEAD — check out a branch before pushing' };
   }
   const remotesRes = await git(dir, ['remote']);
-  const remotes = remotesRes.stdout.split('\n').map((r) => r.trim()).filter(Boolean);
+  const remotes = remotesRes.stdout
+    .split('\n')
+    .map((r) => r.trim())
+    .filter(Boolean);
   if (remotes.length === 0) {
     return { ok: false, error: 'no remote configured — add one with `git remote add origin <url>`' };
   }

@@ -1,5 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
 
 import {
   browseFs,
@@ -42,9 +42,9 @@ import {
   removeProject,
   sendMessage,
   putAgentConfigFile,
-} from './client'
-import { queryScope } from './project-scope'
-import type { CheckoutProjectInput, MessageInput, PatchRunInput, SetAgentConfigInput } from './types'
+} from './client';
+import { queryScope } from './project-scope';
+import type { CheckoutProjectInput, MessageInput, PatchRunInput, SetAgentConfigInput } from './types';
 
 /**
  * Query keys, in one place and exported, because they are a contract rather than an
@@ -64,11 +64,11 @@ import type { CheckoutProjectInput, MessageInput, PatchRunInput, SetAgentConfigI
  */
 export const queryKeys = {
   get health() {
-    return [queryScope(), 'health'] as const
+    return [queryScope(), 'health'] as const;
   },
   runs: {
     get all() {
-      return [queryScope(), 'runs'] as const
+      return [queryScope(), 'runs'] as const;
     },
     list: () => [queryScope(), 'runs', 'list'] as const,
     detail: (id: string) => [queryScope(), 'runs', 'detail', id] as const,
@@ -83,51 +83,51 @@ export const queryKeys = {
     detail: (groupId: string) => [queryScope(), 'groups', groupId] as const,
   },
   get todos() {
-    return [queryScope(), 'todos'] as const
+    return [queryScope(), 'todos'] as const;
   },
   get workflows() {
-    return [queryScope(), 'workflows'] as const
+    return [queryScope(), 'workflows'] as const;
   },
   get skills() {
-    return [queryScope(), 'skills'] as const
+    return [queryScope(), 'skills'] as const;
   },
   get skillsReady() {
-    return [queryScope(), 'skills', 'ready'] as const
+    return [queryScope(), 'skills', 'ready'] as const;
   },
   get launchKey() {
-    return [queryScope(), 'launch-key'] as const
+    return [queryScope(), 'launch-key'] as const;
   },
   get repo() {
-    return [queryScope(), 'repo'] as const
+    return [queryScope(), 'repo'] as const;
   },
   /** Children of `repo` on purpose: invalidating `queryKeys.repo` (a branch switch, a new
    *  commit) prefix-matches the working-tree diff and every cached commit diff too. */
   get repoChanges() {
-    return [queryScope(), 'repo', 'changes'] as const
+    return [queryScope(), 'repo', 'changes'] as const;
   },
   repoCommit: (sha: string) => [queryScope(), 'repo', 'commit', sha] as const,
   get uiState() {
-    return [queryScope(), 'ui-state'] as const
+    return [queryScope(), 'ui-state'] as const;
   },
   /** The Settings → Agents knobs (`GET /api/config`, R6 1.5). */
   get config() {
-    return [queryScope(), 'config'] as const
+    return [queryScope(), 'config'] as const;
   },
   get agentConfig() {
-    return [queryScope(), 'agent-config'] as const
+    return [queryScope(), 'agent-config'] as const;
   },
   agentConfigFile: (id: string) => [queryScope(), 'agent-config', 'file', id] as const,
   /** The worktree management panel (`GET /api/worktrees`, #483). */
   get worktrees() {
-    return [queryScope(), 'worktrees'] as const
+    return [queryScope(), 'worktrees'] as const;
   },
   github: (params: { limit?: number } = {}) => [queryScope(), 'github', params.limit ?? null] as const,
   githubComments: (kind: 'issue' | 'pr', number: number) =>
     [queryScope(), 'github', 'comments', kind, number] as const,
   get openTargets() {
-    return [queryScope(), 'open-targets'] as const
+    return [queryScope(), 'open-targets'] as const;
   },
-}
+};
 
 /**
  * Workspace-level keys — deliberately NOT scope-led: there is one project registry no matter
@@ -150,14 +150,14 @@ export const workspaceQueryKeys = {
    *  Not scope-led: there is one filesystem behind the workspace, not one per project. */
   fsBrowseRoot: ['workspace', 'fs-browse'] as const,
   fsBrowse: (path: string | null) => [...workspaceQueryKeys.fsBrowseRoot, path] as const,
-}
+};
 
 export function useRunnerModels() {
   return useQuery({
     queryKey: workspaceQueryKeys.models('codex'),
     queryFn: ({ signal }) => getRunnerModels({ signal }),
     staleTime: 5 * 60 * 1_000,
-  })
+  });
 }
 
 /** The workspace project registry (`GET /api/projects`): the `/p/:projectId` route gate's
@@ -167,7 +167,7 @@ export function useProjects() {
   return useQuery({
     queryKey: workspaceQueryKeys.projects,
     queryFn: ({ signal }) => getProjects({ signal }),
-  })
+  });
 }
 
 /** One directory listing for the add-project folder picker (step 4.2). `path: null` asks for
@@ -179,7 +179,7 @@ export function useFsBrowse(path: string | null) {
     queryKey: workspaceQueryKeys.fsBrowse(path),
     queryFn: ({ signal }) => browseFs(path ?? undefined, { signal }),
     retry: false,
-  })
+  });
 }
 
 /**
@@ -194,11 +194,11 @@ export function useFsBrowse(path: string | null) {
  * the caller navigates to the existing entry either way.
  */
 export function useRegisterProject() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (root: string) => registerProject(root),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.projects }),
-  })
+  });
 }
 
 /**
@@ -222,21 +222,21 @@ export function useRegisterProject() {
  * project), and re-asking cannot change those answers.
  */
 export function useRemoveProject() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (projectId: string) => removeProject(projectId),
     retry: false,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.projects }),
-  })
+  });
 }
 
 export function useCheckoutProject() {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: CheckoutProjectInput) => checkoutProject(input),
     retry: false,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.projects }),
-  })
+  });
 }
 
 /** Version + update check + repo/branch + tool probes. Feeds the sidebar's repo and version
@@ -254,7 +254,7 @@ export function useHealth() {
     queryKey: queryKeys.health,
     queryFn: ({ signal }) => getHealth({ signal }),
     refetchInterval: 5000,
-  })
+  });
 }
 
 /** The local "Open in…" targets (#open-in). Machine-level and stable, so it caches broadly;
@@ -264,7 +264,7 @@ export function useOpenTargets() {
     queryKey: queryKeys.openTargets,
     queryFn: ({ signal }) => getOpenTargets({ signal }),
     staleTime: 5 * 60_000,
-  })
+  });
 }
 
 /** The authoritative run list. */
@@ -272,7 +272,7 @@ export function useRuns() {
   return useQuery({
     queryKey: queryKeys.runs.list(),
     queryFn: ({ signal }) => getRuns({ signal }),
-  })
+  });
 }
 
 /**
@@ -297,7 +297,7 @@ export function useProjectRuns(projectId: string, enabled = true, boot = false) 
     queryKey: [boot ? 'default' : projectId, 'runs', 'list'] as const,
     queryFn: ({ signal }) => getProjectRuns(projectId, { signal }),
     enabled,
-  })
+  });
 }
 
 /** One run, authoritative. `id` may be absent while a route param is still unresolved. */
@@ -306,7 +306,7 @@ export function useRun(id: string | undefined) {
     queryKey: queryKeys.runs.detail(id ?? ''),
     queryFn: ({ signal }) => getRun(id as string, { signal }),
     enabled: Boolean(id),
-  })
+  });
 }
 
 export function useRunDiff(id: string | undefined) {
@@ -314,7 +314,7 @@ export function useRunDiff(id: string | undefined) {
     queryKey: queryKeys.runs.diff(id ?? ''),
     queryFn: ({ signal }) => getRunDiff(id as string, { signal }),
     enabled: Boolean(id),
-  })
+  });
 }
 
 /** The structured worktree diff behind the Changes tab (R5). A 409 ("no worktree — …") is a
@@ -336,7 +336,7 @@ export function useRunChanges(id: string | undefined, live = false) {
     // task's Changes tab re-fetches instead of serving the last, possibly-empty snapshot.
     refetchOnWindowFocus: true,
     staleTime: 0,
-  })
+  });
 }
 
 /** One worktree path for the Files tab (R5): the root/dir listings the tree lazy-loads and
@@ -349,7 +349,7 @@ export function useRunFile(id: string | undefined, path: string | undefined) {
     queryFn: ({ signal }) => getRunFile(id as string, path as string, { signal }),
     enabled: Boolean(id) && path !== undefined,
     retry: false,
-  })
+  });
 }
 
 /** The variant-compare data for `/compare/:groupId` (spec 010). Freshness while variants are
@@ -361,7 +361,7 @@ export function useGroup(groupId: string | undefined) {
     queryKey: queryKeys.groups.detail(groupId ?? ''),
     queryFn: ({ signal }) => getGroup(groupId as string, { signal }),
     enabled: Boolean(groupId),
-  })
+  });
 }
 
 /** A run's commit list (Commits tab). Polls while active so new commits appear as the agent
@@ -373,7 +373,7 @@ export function useRunCommits(id: string | undefined, live = false) {
     enabled: Boolean(id),
     retry: false,
     refetchInterval: live ? 5000 : false,
-  })
+  });
 }
 
 /** One of a run's commits, structured like the Changes tab. */
@@ -383,7 +383,7 @@ export function useRunCommit(id: string | undefined, sha: string | undefined) {
     queryFn: ({ signal }) => getRunCommit(id as string, sha as string, { signal }),
     enabled: Boolean(id) && Boolean(sha),
     retry: false,
-  })
+  });
 }
 
 /** The handoff journal behind the header's Notes panel. `enabled` gates the fetch on the panel
@@ -393,7 +393,7 @@ export function useRunHandoff(id: string | undefined, enabled = true) {
     queryKey: queryKeys.runs.handoff(id ?? ''),
     queryFn: ({ signal }) => getRunHandoff(id as string, { signal }),
     enabled: Boolean(id) && enabled,
-  })
+  });
 }
 
 /** The follow-up inbox. Drives the nav badge. */
@@ -406,43 +406,43 @@ export function useTodos(enabled = true) {
     queryKey: queryKeys.todos,
     queryFn: ({ signal }) => getTodos({ signal }),
     enabled,
-  })
+  });
 }
 
 export function useWorkflows() {
   return useQuery({
     queryKey: queryKeys.workflows,
     queryFn: ({ signal }) => getWorkflows({ signal }),
-  })
+  });
 }
 
 /** `enabled` gates the fetch for surfaces that need skills only once interacted with — the
  *  composer's `/` autocomplete fetches on first trigger, never on every thread visit. (The
  *  palette gets the same laziness structurally: its content mounts only while open.) */
 export function useSkills(enabled = true) {
-  const queryClient = useQueryClient()
-  const skillsKey = queryKeys.skills
-  const skillsScope = skillsKey[0]
+  const queryClient = useQueryClient();
+  const skillsKey = queryKeys.skills;
+  const skillsScope = skillsKey[0];
   const skills = useQuery({
     queryKey: skillsKey,
     queryFn: ({ signal }) => getSkills({ signal }),
     enabled,
-  })
+  });
   const ready = useQuery({
     queryKey: queryKeys.skillsReady,
     queryFn: ({ signal }) => getSkillsWhenReady({ signal }),
     enabled: enabled && skills.isSuccess,
     staleTime: Infinity,
     retry: false,
-  })
+  });
 
   useEffect(() => {
     // Treat the follow-up as best-effort. The fast catalog remains authoritative
     // if an older server/proxy answers this additive request unexpectedly.
-    if (Array.isArray(ready.data)) queryClient.setQueryData([skillsScope, 'skills'], ready.data)
-  }, [queryClient, ready.data, skillsScope])
+    if (Array.isArray(ready.data)) queryClient.setQueryData([skillsScope, 'skills'], ready.data);
+  }, [queryClient, ready.data, skillsScope]);
 
-  return skills
+  return skills;
 }
 
 /** The bookmarklet auto-start secret (spec 011). Mounted ONLY by the Settings → Skills
@@ -454,14 +454,14 @@ export function useLaunchKey() {
     queryFn: ({ signal }) => getLaunchKey({ signal }),
     // The key is stable for the server's lifetime — refetching it buys nothing.
     staleTime: Infinity,
-  })
+  });
 }
 
 export function useRepo() {
   return useQuery({
     queryKey: queryKeys.repo,
     queryFn: ({ signal }) => getRepo({ signal }),
-  })
+  });
 }
 
 /** The main working tree's structured diff behind the repo view's Changes section (R5 1.7).
@@ -471,7 +471,7 @@ export function useRepoChanges() {
     queryKey: queryKeys.repoChanges,
     queryFn: ({ signal }) => getRepoChanges({ signal }),
     retry: false,
-  })
+  });
 }
 
 /** One commit's structured diff (R5 repo view). A 409 ("unknown commit") is an answer retries
@@ -482,7 +482,7 @@ export function useRepoCommit(sha: string | undefined) {
     queryFn: ({ signal }) => getRepoCommit(sha as string, { signal }),
     enabled: Boolean(sha),
     retry: false,
-  })
+  });
 }
 
 /** The Settings → Agents knobs (R6 1.5): base branch, default runner, system prompt, per-runner
@@ -491,7 +491,7 @@ export function useConfig() {
   return useQuery({
     queryKey: queryKeys.config,
     queryFn: ({ signal }) => getConfig({ signal }),
-  })
+  });
 }
 
 /** The worktree management panel (#483). Invalidated by the global event stream when a run
@@ -500,14 +500,14 @@ export function useWorktrees() {
   return useQuery({
     queryKey: queryKeys.worktrees,
     queryFn: ({ signal }) => getWorktrees({ signal }),
-  })
+  });
 }
 
 export function useUiState() {
   return useQuery({
     queryKey: queryKeys.uiState,
     queryFn: ({ signal }) => getUiState({ signal }),
-  })
+  });
 }
 
 /** The selected project's agent-owned config files and precedence metadata. */
@@ -515,7 +515,7 @@ export function useAgentConfig() {
   return useQuery({
     queryKey: queryKeys.agentConfig,
     queryFn: ({ signal }) => getAgentConfig({ signal }),
-  })
+  });
 }
 
 export function useAgentConfigFile(id: string | null) {
@@ -523,23 +523,23 @@ export function useAgentConfigFile(id: string | null) {
     queryKey: queryKeys.agentConfigFile(id ?? ''),
     queryFn: ({ signal }) => getAgentConfigFile(id as string, { signal }),
     enabled: id !== null,
-  })
+  });
 }
 
 export function usePutAgentConfigFile(id: string) {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   // Capture the scope at hook render time. A save may finish after the user has
   // switched projects; recomputing these getters in onSuccess would otherwise
   // write the previous project's response into the newly active cache.
-  const listingKey = queryKeys.agentConfig
-  const fileKey = queryKeys.agentConfigFile(id)
+  const listingKey = queryKeys.agentConfig;
+  const fileKey = queryKeys.agentConfigFile(id);
   return useMutation({
     mutationFn: (body: SetAgentConfigInput) => putAgentConfigFile(id, body),
     onSuccess: (result) => {
-      queryClient.setQueryData(fileKey, result)
-      void queryClient.invalidateQueries({ queryKey: listingKey })
+      queryClient.setQueryData(fileKey, result);
+      void queryClient.invalidateQueries({ queryKey: listingKey });
     },
-  })
+  });
 }
 
 /** The cross-project GUI state (`~/.cezar/ui-state.json`). Read once and cached — the sidebar
@@ -548,7 +548,7 @@ export function useWorkspaceUiState() {
   return useQuery({
     queryKey: workspaceQueryKeys.uiState,
     queryFn: ({ signal }) => getWorkspaceUiState({ signal }),
-  })
+  });
 }
 
 /** The global settings slice of `~/.cezar/config.json` — Settings → Resources (step 3.5) and
@@ -557,17 +557,17 @@ export function useWorkspaceConfig() {
   return useQuery({
     queryKey: workspaceQueryKeys.config,
     queryFn: ({ signal }) => getWorkspaceConfig({ signal }),
-  })
+  });
 }
 
 /** Rename a run (#389): `PATCH /api/runs/:id`. Invalidates `runs.*` so the list and the detail
  *  view refetch the authoritative record. The run header's inline title edit sits on this. */
 export function usePatchRun(id: string) {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (patch: PatchRunInput) => patchRun(id, patch),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all }),
-  })
+  });
 }
 
 /** Deliver a reply into a live session (`POST /api/runs/:id/messages`). The transcript itself
@@ -575,11 +575,11 @@ export function usePatchRun(id: string) {
  *  record (status flips waiting → running). Errors are the CALLER's to surface — the composer
  *  restores the draft and toasts, so no toast fires here. */
 export function useSendMessage(id: string) {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (message: MessageInput) => sendMessage(id, message),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all }),
-  })
+  });
 }
 
 /** Edit a message stacked on a queued run (`PATCH /api/runs/:id/queued-messages/:msgId`, #472).
@@ -588,21 +588,21 @@ export function useSendMessage(id: string) {
  *  `useSendMessage`: a 409 means the run started, and the bubble goes read-only on the next
  *  frame anyway. */
 export function useEditQueuedMessage(id: string) {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ msgId, message }: { msgId: string; message: MessageInput }) =>
       editQueuedMessage(id, msgId, message),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all }),
-  })
+  });
 }
 
 /** Remove a message stacked on a queued run (`DELETE /api/runs/:id/queued-messages/:msgId`). */
 export function useRemoveQueuedMessage(id: string) {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (msgId: string) => removeQueuedMessage(id, msgId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all }),
-  })
+  });
 }
 
 /** Issues + PRs through the forge (`/api/github`). `enabled` exists for the GitHub tab's
@@ -614,7 +614,7 @@ export function useGithub(params: { limit?: number } = {}, enabled = true) {
     queryKey: queryKeys.github(params),
     queryFn: ({ signal }) => getGithub({ limit: params.limit }, { signal }),
     enabled,
-  })
+  });
 }
 
 /** The comment thread for one issue/PR (`/api/github/comments/…`, #499). Fetched only while a
@@ -626,5 +626,5 @@ export function useGithubComments(kind: 'issue' | 'pr', number: number, enabled 
     queryFn: ({ signal }) => getGithubComments(kind, number, {}, { signal }),
     enabled,
     staleTime: 60_000,
-  })
+  });
 }

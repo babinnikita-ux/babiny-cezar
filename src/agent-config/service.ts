@@ -48,7 +48,8 @@ export interface AgentConfigListing {
   userMcp: UserMcpListing | null;
 }
 
-const HOSTED_REASON = 'agent config is edited from the machine that owns the checkout (this cockpit runs in hosted mode)';
+const HOSTED_REASON =
+  'agent config is edited from the machine that owns the checkout (this cockpit runs in hosted mode)';
 /** ~/.claude.json can be large (per-project history); cap the read. */
 const CLAUDE_JSON_CAP = 2 * 1024 * 1024;
 
@@ -70,7 +71,8 @@ export async function readUserMcpServers(env: NodeJS.ProcessEnv): Promise<UserMc
     if (size > CLAUDE_JSON_CAP) return { path, servers: [], readable: false };
     const raw = await readFile(path, 'utf8');
     const parsed = JSON.parse(raw) as { mcpServers?: Record<string, unknown> };
-    const servers = parsed.mcpServers && typeof parsed.mcpServers === 'object' ? Object.keys(parsed.mcpServers) : [];
+    const servers =
+      parsed.mcpServers && typeof parsed.mcpServers === 'object' ? Object.keys(parsed.mcpServers) : [];
     return { path, servers, readable: true };
   } catch (err) {
     // ENOENT → readable (no servers); anything else → not readable

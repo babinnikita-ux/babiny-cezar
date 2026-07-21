@@ -14,7 +14,12 @@ import { basename, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RunStore } from '../runs/store.js';
 import type { RunManager } from '../workflows/run.js';
-import { allocateProjectSlug, clearProjectProbeCache, listProjects, registerProject } from '../workspace/projects.js';
+import {
+  allocateProjectSlug,
+  clearProjectProbeCache,
+  listProjects,
+  registerProject,
+} from '../workspace/projects.js';
 import { ProjectContexts } from './project-context.js';
 import { apiRequest } from './loopback-request.testkit.js';
 import { mergeWriteWorkspaceConfig } from '../workspace/config.js';

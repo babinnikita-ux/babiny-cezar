@@ -40,13 +40,20 @@ describe('queued prompt stack routes (#472)', () => {
         if (rung !== 'queued') return null;
         const message: QueuedMessage = {
           id: `msg-${(store.getRun(id)?.queuedMessages?.length ?? 0) + 1}`,
-          text: content.filter((b) => b.type === 'text').map((b) => b.text ?? '').join('\n'),
+          text: content
+            .filter((b) => b.type === 'text')
+            .map((b) => b.text ?? '')
+            .join('\n'),
           createdAt: '2026-07-21T10:00:00.000Z',
         };
         store.updateRun(id, { queuedMessages: [...(store.getRun(id)?.queuedMessages ?? []), message] });
         return message;
       },
-      editQueuedMessage: (id: string, msgId: string, edit: { text?: string; images?: Array<{ type: string }> }) => {
+      editQueuedMessage: (
+        id: string,
+        msgId: string,
+        edit: { text?: string; images?: Array<{ type: string }> },
+      ) => {
         if (rung !== 'queued') return null;
         const stack = store.getRun(id)?.queuedMessages ?? [];
         const at = stack.findIndex((m) => m.id === msgId);
@@ -92,7 +99,11 @@ describe('queued prompt stack routes (#472)', () => {
   const post = (body: unknown) => send(`/api/runs/${record.id}/messages`, 'POST', body);
   const seed = (...texts: string[]) =>
     store.updateRun(record.id, {
-      queuedMessages: texts.map((text, i) => ({ id: `msg-${i + 1}`, text, createdAt: '2026-07-21T10:00:00.000Z' })),
+      queuedMessages: texts.map((text, i) => ({
+        id: `msg-${i + 1}`,
+        text,
+        createdAt: '2026-07-21T10:00:00.000Z',
+      })),
     });
 
   // ---- the three-rung ladder ------------------------------------------------
@@ -171,7 +182,12 @@ describe('queued prompt stack routes (#472)', () => {
   it('rejects an over-cap image count across the stack', async () => {
     store.updateRun(record.id, {
       queuedMessages: [
-        { id: 'msg-1', text: 'with images', images: Array.from({ length: 7 }, (_, i) => `/i/${i}.png`), createdAt: 'x' },
+        {
+          id: 'msg-1',
+          text: 'with images',
+          images: Array.from({ length: 7 }, (_, i) => `/i/${i}.png`),
+          createdAt: 'x',
+        },
       ],
     });
     const res = await post({
@@ -243,12 +259,14 @@ describe('queued prompt stack routes (#472)', () => {
 
   it('preserves attached images when a PATCH only supplies text', async () => {
     store.updateRun(record.id, {
-      queuedMessages: [{
-        id: 'msg-1',
-        text: 'typo',
-        images: [`/api/runs/${record.id}/images/pasted-1.png`],
-        createdAt: '2026-07-21T10:00:00.000Z',
-      }],
+      queuedMessages: [
+        {
+          id: 'msg-1',
+          text: 'typo',
+          images: [`/api/runs/${record.id}/images/pasted-1.png`],
+          createdAt: '2026-07-21T10:00:00.000Z',
+        },
+      ],
     });
 
     const res = await patchMsg('msg-1', { text: 'fixed' });

@@ -2,8 +2,26 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, userInfo } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CANCEL, PreflightError, type InstallContext, type InstallStep, type PlatformStrategy, type StepArtifact } from '../types.js';
-import { depCheckStep, generatePassword, owned, shared, shquote, StepAborted, StepCancelled, StepSkipped, sudoStep, verifyCommand } from '../steps.js';
+import {
+  CANCEL,
+  PreflightError,
+  type InstallContext,
+  type InstallStep,
+  type PlatformStrategy,
+  type StepArtifact,
+} from '../types.js';
+import {
+  depCheckStep,
+  generatePassword,
+  owned,
+  shared,
+  shquote,
+  StepAborted,
+  StepCancelled,
+  StepSkipped,
+  sudoStep,
+  verifyCommand,
+} from '../steps.js';
 
 /**
  * The `ubuntu-vps` strategy: stand up an authenticated, proxied cezar on a bare
@@ -201,7 +219,8 @@ const nginxProxyStep: InstallStep = {
     //    the cockpit. Suggest the current OS user as a sensible default.
     const suggestedUser = currentUsername();
     const userAnswer = await ctx.ui.text({
-      message: 'Cockpit login username (HTTPS Basic-Auth — you type this in the browser to reach the cockpit)',
+      message:
+        'Cockpit login username (HTTPS Basic-Auth — you type this in the browser to reach the cockpit)',
       placeholder: suggestedUser,
       initialValue: suggestedUser,
       // htpasswd's line format is `user:hash` — a ":" in the username would
@@ -256,7 +275,9 @@ const nginxProxyStep: InstallStep = {
     // validators — refuse rather than write an empty-password htpasswd (a public
     // cockpit anyone can open). A real install must set a password interactively.
     if (!ctx.dryRun && String(password).length < 6) {
-      throw new StepAborted('a cockpit password (≥6 chars) is required — run server-install without --yes to set one');
+      throw new StepAborted(
+        'a cockpit password (≥6 chars) is required — run server-install without --yes to set one',
+      );
     }
     // Keep the credentials in memory (never persisted) so the final verify step
     // can prove an authenticated request actually reaches cezar over the proxy.
@@ -268,9 +289,12 @@ const nginxProxyStep: InstallStep = {
     //    nginx's auth_basic expects.
     let hash = '<dry-run-hash>';
     if (!ctx.dryRun) {
-      const out = await ctx.runner.capture('openssl', ['passwd', '-apr1', '-stdin'], { input: `${String(password)}\n` });
+      const out = await ctx.runner.capture('openssl', ['passwd', '-apr1', '-stdin'], {
+        input: `${String(password)}\n`,
+      });
       hash = out.stdout.trim();
-      if (out.code !== 0 || !hash) throw new StepAborted('failed to hash the password (openssl) — cannot write htpasswd');
+      if (out.code !== 0 || !hash)
+        throw new StepAborted('failed to hash the password (openssl) — cannot write htpasswd');
     }
     // nginx workers run as www-data and read auth_basic_user_file per request,
     // so the file must be group-readable by www-data — 0640 root:root would make
@@ -323,7 +347,8 @@ const nginxProxyStep: InstallStep = {
           verify: async (c) => {
             if ((await c.runner.capture('sudo', ['-n', 'true'])).code === 0) {
               return (
-                (await c.runner.capture('sudo', ['-n', 'bash', '-lc', "ufw status | grep -qi 'Nginx Full'"])).code === 0
+                (await c.runner.capture('sudo', ['-n', 'bash', '-lc', "ufw status | grep -qi 'Nginx Full'"]))
+                  .code === 0
               );
             }
             // No root and no human in the loop (`--yes`): nobody ran the
@@ -342,7 +367,9 @@ const nginxProxyStep: InstallStep = {
         });
       } catch (err) {
         if (!(err instanceof StepSkipped)) throw err;
-        ctx.ui.warn('Firewall left unchanged — make sure ports 80 and 443 are reachable, or the cockpit will not load.');
+        ctx.ui.warn(
+          'Firewall left unchanged — make sure ports 80 and 443 are reachable, or the cockpit will not load.',
+        );
       }
     }
 
@@ -351,7 +378,8 @@ const nginxProxyStep: InstallStep = {
       owned('symlink', { path: vhostEnbl }),
       owned('htpasswd', { path: htpasswd, name: user }),
     ];
-    if (defaultWasEnabled) artifacts.push(owned('nginx-default', { path: '/etc/nginx/sites-enabled/default' }));
+    if (defaultWasEnabled)
+      artifacts.push(owned('nginx-default', { path: '/etc/nginx/sites-enabled/default' }));
     if (!nginxWasPresent) {
       artifacts.push(shared('package', { name: 'nginx', removeHint: 'sudo apt-get remove -y nginx' }));
     }
@@ -370,7 +398,10 @@ const nginxProxyStep: InstallStep = {
     const sharedPkgs = (created?.artifacts ?? []).filter((a) => a.kind === 'shared');
     if (sharedPkgs.length > 0) {
       ctx.ui.note(
-        sharedPkgs.map((a) => a.removeHint ?? a.name ?? '').filter(Boolean).join('\n'),
+        sharedPkgs
+          .map((a) => a.removeHint ?? a.name ?? '')
+          .filter(Boolean)
+          .join('\n'),
         'Installed for cezar but possibly used elsewhere — remove manually if unwanted',
       );
     }
@@ -510,7 +541,10 @@ const sslStep: InstallStep = {
     const pkgs = (created?.artifacts ?? []).filter((a) => a.type === 'package');
     if (pkgs.length > 0) {
       ctx.ui.note(
-        pkgs.map((a) => a.removeHint ?? a.name ?? '').filter(Boolean).join('\n'),
+        pkgs
+          .map((a) => a.removeHint ?? a.name ?? '')
+          .filter(Boolean)
+          .join('\n'),
         'Installed for cezar but possibly used elsewhere — remove manually if unwanted',
       );
     }
@@ -528,14 +562,24 @@ const sslStep: InstallStep = {
  * absolute `"<node> <entry.js>"`. We still set `Environment=PATH` (with the
  * installer's node dir) for any child process the app spawns.
  */
-export function systemdUnit(repoRoot: string, port: number, scope: 'user' | 'system', execStart: string): string {
+export function systemdUnit(
+  repoRoot: string,
+  port: number,
+  scope: 'user' | 'system',
+  execStart: string,
+): string {
   const userLine = scope === 'system' ? `User=${userInfo().username}\n` : '';
   const installTarget = scope === 'system' ? 'multi-user.target' : 'default.target';
   // Give the service the operator's own PATH (node dir + the login PATH the CLI
   // merged in, e.g. ~/.local/bin and nvm) so cezar can spawn claude / gh / codex
   // at runtime — systemd's default PATH has none of those.
-  const pathDirs = [dirname(process.execPath), ...(process.env.PATH ?? '').split(':'), '/usr/local/bin', '/usr/bin', '/bin']
-    .filter((d, i, a) => d && d !== '.' && a.indexOf(d) === i);
+  const pathDirs = [
+    dirname(process.execPath),
+    ...(process.env.PATH ?? '').split(':'),
+    '/usr/local/bin',
+    '/usr/bin',
+    '/bin',
+  ].filter((d, i, a) => d && d !== '.' && a.indexOf(d) === i);
   // systemd expands `%` specifiers in Environment/ExecStart values — a literal
   // `%` (possible in an nvm dir name) must be doubled or the unit fails to load.
   const sysd = (s: string) => s.replace(/%/g, '%%');
@@ -599,14 +643,24 @@ async function resolveExecStart(ctx: InstallContext): Promise<string> {
   // A standalone node binary has no adjacent npx — fall back to the login
   // shell's, or ExecStart would 203/EXEC (the exact bug 9fea263 fixed).
   if (!existsSync(npxPath)) {
-    const found = (await ctx.runner.capture('bash', ['-lc', 'command -v npx'])).stdout.trim().split('\n').pop()?.trim();
+    const found = (await ctx.runner.capture('bash', ['-lc', 'command -v npx'])).stdout
+      .trim()
+      .split('\n')
+      .pop()
+      ?.trim();
     if (found) npxPath = found;
   }
 
   let globalBin: string | undefined;
   if (!existsSync(entry) && !/[/\\]_npx[/\\]/.test(pkgRoot)) {
-    const out = (await ctx.runner.capture('bash', ['-lc', `command -v ${OFFICIAL_CLI_PKG} || command -v cezar`])).stdout.trim();
-    globalBin = out.split('\n').map((s) => s.trim()).filter(Boolean).pop();
+    const out = (
+      await ctx.runner.capture('bash', ['-lc', `command -v ${OFFICIAL_CLI_PKG} || command -v cezar`])
+    ).stdout.trim();
+    globalBin = out
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .pop();
     if (!globalBin) {
       ctx.ui.warn(
         `Could not locate a built cezar to run (${entry} missing, no global ${OFFICIAL_CLI_PKG}).\n` +
@@ -633,7 +687,9 @@ const autostartStep: InstallStep = {
     // unit (via sudoStep) when the user bus is not reachable. `show-environment`
     // exits 0 iff the user manager is up — on a headless SSH box with no session
     // it fails (exit 1, not 127), which the old `!== 127` test misread as "up".
-    const userBus = ctx.dryRun ? true : (await ctx.runner.capture('systemctl', ['--user', 'show-environment'])).code === 0;
+    const userBus = ctx.dryRun
+      ? true
+      : (await ctx.runner.capture('systemctl', ['--user', 'show-environment'])).code === 0;
 
     if (userBus) {
       const unitPath = join(homedir(), '.config', 'systemd', 'user', UNIT_NAME);
@@ -664,8 +720,14 @@ const autostartStep: InstallStep = {
             r.stdout.includes('Linger=yes'),
           ),
       });
-      await confirmCezarRunning(ctx, 'systemctl --user status cezar', 'journalctl --user -u cezar -n 50 --no-pager');
-      const artifacts: StepArtifact[] = [owned('service', { name: UNIT_NAME, scope: 'user', path: unitPath })];
+      await confirmCezarRunning(
+        ctx,
+        'systemctl --user status cezar',
+        'journalctl --user -u cezar -n 50 --no-pager',
+      );
+      const artifacts: StepArtifact[] = [
+        owned('service', { name: UNIT_NAME, scope: 'user', path: unitPath }),
+      ];
       if (!lingerWasOn) artifacts.push(owned('linger', { name: osUser }));
       return { artifacts };
     }
@@ -678,8 +740,16 @@ const autostartStep: InstallStep = {
       extra: `systemctl daemon-reload && systemctl enable --now ${UNIT_NAME}`,
       verify: (c) => verifyCommand(c, 'systemctl', ['is-enabled', UNIT_NAME]),
     });
-    await confirmCezarRunning(ctx, 'sudo systemctl status cezar', 'sudo journalctl -u cezar -n 50 --no-pager');
-    return { artifacts: [owned('service', { name: UNIT_NAME, scope: 'system', path: `/etc/systemd/system/${UNIT_NAME}` })] };
+    await confirmCezarRunning(
+      ctx,
+      'sudo systemctl status cezar',
+      'sudo journalctl -u cezar -n 50 --no-pager',
+    );
+    return {
+      artifacts: [
+        owned('service', { name: UNIT_NAME, scope: 'system', path: `/etc/systemd/system/${UNIT_NAME}` }),
+      ],
+    };
   },
   async undo(ctx, created) {
     const UNIT_NAME = unitName(ctx);
@@ -722,7 +792,9 @@ const identityStep: InstallStep = {
   },
   async run(ctx): Promise<{ artifacts: StepArtifact[] }> {
     if (ctx.dryRun) {
-      ctx.ui.info('DRY RUN — would verify auth (401 for anon) AND that an authenticated request reaches cezar.');
+      ctx.ui.info(
+        'DRY RUN — would verify auth (401 for anon) AND that an authenticated request reaches cezar.',
+      );
       return { artifacts: [] };
     }
     const port = ctx.state.primaryPort;
@@ -777,9 +849,18 @@ const identityStep: InstallStep = {
     }
 
     const problems: string[] = [];
-    if (!upstreamUp) problems.push(`cezar is not listening on 127.0.0.1:${port} — the service is down, so nginx returns 502`);
-    if (!authEnforced) problems.push(`nginx did not challenge an anonymous request (got "${anonCode}") — basic auth may not be active`);
-    if (authedOk === false) problems.push('an authenticated request did not reach cezar (bad credentials, or the upstream is down)');
+    if (!upstreamUp)
+      problems.push(
+        `cezar is not listening on 127.0.0.1:${port} — the service is down, so nginx returns 502`,
+      );
+    if (!authEnforced)
+      problems.push(
+        `nginx did not challenge an anonymous request (got "${anonCode}") — basic auth may not be active`,
+      );
+    if (authedOk === false)
+      problems.push(
+        'an authenticated request did not reach cezar (bad credentials, or the upstream is down)',
+      );
     ctx.ui.error(
       `The cockpit is NOT fully working yet:\n` +
         problems.map((p) => `  • ${p}`).join('\n') +
@@ -843,7 +924,8 @@ export const ubuntuVps: PlatformStrategy = {
     if (scope === 'user') {
       await ctx.runner.interactive('systemctl', ['--user', 'daemon-reload']);
       const code = await ctx.runner.interactive('systemctl', ['--user', 'restart', UNIT_NAME]);
-      if (code !== 0) ctx.ui.warn('systemctl --user restart returned non-zero — check `systemctl --user status cezar`.');
+      if (code !== 0)
+        ctx.ui.warn('systemctl --user restart returned non-zero — check `systemctl --user status cezar`.');
     } else {
       await sudoStep(ctx, {
         description: 'Reload systemd and restart the cezar service.',
@@ -854,7 +936,9 @@ export const ubuntuVps: PlatformStrategy = {
     await confirmCezarRunning(
       ctx,
       scope === 'user' ? 'systemctl --user status cezar' : 'sudo systemctl status cezar',
-      scope === 'user' ? 'journalctl --user -u cezar -n 50 --no-pager' : 'sudo journalctl -u cezar -n 50 --no-pager',
+      scope === 'user'
+        ? 'journalctl --user -u cezar -n 50 --no-pager'
+        : 'sudo journalctl -u cezar -n 50 --no-pager',
     );
     await identityStep.run(ctx); // throws StepAborted if the cockpit isn't fully working
   },

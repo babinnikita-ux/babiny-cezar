@@ -1,6 +1,6 @@
-import { ZoomableImage } from '@/components/zoomable-image'
+import { ZoomableImage } from '@/components/zoomable-image';
 
-import type { DiffFileChange } from './types'
+import type { DiffFileChange } from './types';
 
 /**
  * The image-diff preview (#365), shared by BOTH renderers — `diff-view.tsx` (the real engine)
@@ -21,7 +21,7 @@ import type { DiffFileChange } from './types'
  * at all. Everything else — SVG and friends — falls through to the normal rows.
  */
 export function shouldPreviewImage(file: DiffFileChange): boolean {
-  return file.image === true && (file.binary === true || file.patch === '')
+  return file.image === true && (file.binary === true || file.patch === '');
 }
 
 /**
@@ -34,19 +34,23 @@ export function ImagePreview({
   imageSrc,
   onOpenInApp,
 }: {
-  file: DiffFileChange
-  imageSrc?: (path: string) => string
-  onOpenInApp?: (path: string) => void
+  file: DiffFileChange;
+  imageSrc?: (path: string) => string;
+  onOpenInApp?: (path: string) => void;
 }) {
   if (file.status === 'deleted') {
-    return <ImageNote>Image deleted — only the new side can be previewed.</ImageNote>
+    return <ImageNote>Image deleted — only the new side can be previewed.</ImageNote>;
   }
   if (!imageSrc) {
-    return <ImageNote>Binary file — no text diff.</ImageNote>
+    return <ImageNote>Binary file — no text diff.</ImageNote>;
   }
   return (
     <div data-slot="diff-image-preview" className="flex flex-col items-center gap-2 p-4">
-      <ZoomableImage src={imageSrc(file.path)} alt={file.path} className="max-h-[60vh] max-w-full rounded-sm" />
+      <ZoomableImage
+        src={imageSrc(file.path)}
+        alt={file.path}
+        className="max-h-[60vh] max-w-full rounded-sm"
+      />
       {onOpenInApp ? (
         <button
           type="button"
@@ -58,9 +62,9 @@ export function ImagePreview({
         </button>
       ) : null}
     </div>
-  )
+  );
 }
 
 function ImageNote({ children }: { children: React.ReactNode }) {
-  return <p className="px-4 py-2.5 text-xs text-soft-foreground">{children}</p>
+  return <p className="px-4 py-2.5 text-xs text-soft-foreground">{children}</p>;
 }

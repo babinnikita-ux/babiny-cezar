@@ -249,7 +249,10 @@ describe('RunStore — PR auto-link only on real creation (#fake-pr)', () => {
 
 describe('RunStore — secret redaction before persistence (#427)', () => {
   let dataDir: string;
-  const saved = { GITHUB_TOKEN: process.env.GITHUB_TOKEN, CEZ_REDACT_SECRETS: process.env.CEZ_REDACT_SECRETS };
+  const saved = {
+    GITHUB_TOKEN: process.env.GITHUB_TOKEN,
+    CEZ_REDACT_SECRETS: process.env.CEZ_REDACT_SECRETS,
+  };
   beforeEach(() => {
     dataDir = mkdtempSync(join(tmpdir(), 'cez-store-'));
   });
@@ -392,7 +395,12 @@ describe('RunStore — secret redaction before persistence (#427)', () => {
       task: 'task',
       steps: [{ id: 'task', name: 'Do the task', kind: 'agent' }],
     });
-    store.updateStep(run.id, 'task', { status: 'done', sessionId: 'sess-123', backend: 'codex', tokensUsed: 42 });
+    store.updateStep(run.id, 'task', {
+      status: 'done',
+      sessionId: 'sess-123',
+      backend: 'codex',
+      tokensUsed: 42,
+    });
     const step = store.getRun(run.id)?.steps[0];
     expect(step?.status).toBe('done');
     expect(step?.sessionId).toBe('sess-123');
@@ -705,9 +713,7 @@ describe('RunStore — agent-declared marker refs (spec 2026-07-18-task-ref-mark
       result: 'Opened a draft pull request: https://github.com/open-mercato/cezar/pull/42',
     });
     store.applyMarkerRefs(run.id, { pr: 500 });
-    expect(store.getRun(run.id)?.pullRequestUrl).toBe(
-      'https://github.com/open-mercato/cezar/pull/42',
-    );
+    expect(store.getRun(run.id)?.pullRequestUrl).toBe('https://github.com/open-mercato/cezar/pull/42');
   });
 
   it('an empty declaration is a no-op', () => {
@@ -787,9 +793,7 @@ describe('RunStore — referenced-issue discovery (spec 2026-07-21-report-ref-di
       result:
         'Working https://github.com/open-mercato/cezar/issues/433, related to https://github.com/open-mercato/cezar/issues/12.',
     });
-    expect(store.getRun(run.id)?.referencedIssueUrl).toBe(
-      'https://github.com/open-mercato/cezar/issues/433',
-    );
+    expect(store.getRun(run.id)?.referencedIssueUrl).toBe('https://github.com/open-mercato/cezar/issues/433');
   });
 
   it('a declared CEZ:ISSUE filters the candidates and owns issueNumber', () => {
@@ -913,8 +917,6 @@ describe('RunStore — queuedMessages (#472)', () => {
         { id: 'm1', text: 'use gho_thisisarealsecrettoken123456', createdAt: '2026-07-21T10:00:00.000Z' },
       ],
     });
-    expect(store.getRun(run.id)?.queuedMessages?.[0]?.text).toBe(
-      'use gho_thisisarealsecrettoken123456',
-    );
+    expect(store.getRun(run.id)?.queuedMessages?.[0]?.text).toBe('use gho_thisisarealsecrettoken123456');
   });
 });

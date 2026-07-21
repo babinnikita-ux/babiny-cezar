@@ -1,6 +1,6 @@
-import { LoaderCircleIcon } from 'lucide-react'
+import { LoaderCircleIcon } from 'lucide-react';
 
-import { CenteredState } from '@/components/centered-state'
+import { CenteredState } from '@/components/centered-state';
 
 /**
  * The GitHub tab's loading state, in its own module ON PURPOSE (same rule as ThreadLoading):
@@ -18,5 +18,5 @@ export function GithubLoading() {
         subtitle="Fetching open issues and pull requests."
       />
     </div>
-  )
+  );
 }

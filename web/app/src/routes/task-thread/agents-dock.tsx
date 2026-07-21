@@ -1,10 +1,10 @@
-import { BotIcon, ChevronDownIcon } from 'lucide-react'
-import { useState } from 'react'
+import { BotIcon, ChevronDownIcon } from 'lucide-react';
+import { useState } from 'react';
 
-import type { ToolStatus } from '@/protocol/ui-events'
-import { cn } from '@/lib/utils'
+import type { ToolStatus } from '@/protocol/ui-events';
+import { cn } from '@/lib/utils';
 
-import { activeSubagent, subagentActivityText, subagentCounts, type SubagentSummary } from './subagent-dock'
+import { activeSubagent, subagentActivityText, subagentCounts, type SubagentSummary } from './subagent-dock';
 
 /**
  * The Agents dock (spec `.ai/specs/2026-07-20-grouped-subagent-display.md` §"Agents dock",
@@ -23,11 +23,11 @@ import { activeSubagent, subagentActivityText, subagentCounts, type SubagentSumm
 
 /** Collapse memory per run id — the plan dock's module-level map pattern, same reasoning:
  *  the choice survives route changes for the session without inventing server persistence. */
-const openByRun = new Map<string, boolean>()
+const openByRun = new Map<string, boolean>();
 
 /** Desktop starts expanded, phones collapsed. jsdom has no matchMedia — that counts as desktop. */
 function defaultOpen(): boolean {
-  return typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 768px)').matches
+  return typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 768px)').matches;
 }
 
 export function AgentsDock({
@@ -35,22 +35,22 @@ export function AgentsDock({
   agents,
   onSelect,
 }: {
-  runId: string
-  agents: SubagentSummary[]
+  runId: string;
+  agents: SubagentSummary[];
   /** Phase 2: opens the drill-down sheet. Absent ⇒ rows are static display. */
-  onSelect?: (id: string) => void
+  onSelect?: (id: string) => void;
 }) {
-  const [open, setOpen] = useState(() => openByRun.get(runId) ?? defaultOpen())
+  const [open, setOpen] = useState(() => openByRun.get(runId) ?? defaultOpen());
   // No fan-out to show — the overwhelming majority of runs never mount this at all.
-  if (agents.length === 0) return null
+  if (agents.length === 0) return null;
 
-  const { done, total } = subagentCounts(agents)
-  const active = activeSubagent(agents)
+  const { done, total } = subagentCounts(agents);
+  const active = activeSubagent(agents);
   const toggle = () =>
     setOpen((value) => {
-      openByRun.set(runId, !value)
-      return !value
-    })
+      openByRun.set(runId, !value);
+      return !value;
+    });
 
   return (
     <section
@@ -64,7 +64,10 @@ export function AgentsDock({
         type="button"
         onClick={toggle}
         aria-expanded={open}
-        className={cn('flex w-full items-center gap-2 px-3.5 text-left text-[13px]', open ? 'pt-2 pb-1.5' : 'py-2')}
+        className={cn(
+          'flex w-full items-center gap-2 px-3.5 text-left text-[13px]',
+          open ? 'pt-2 pb-1.5' : 'py-2',
+        )}
       >
         <BotIcon aria-hidden className="size-3.5 shrink-0 text-soft-foreground" />
         <span className="shrink-0 font-semibold">Agents</span>
@@ -78,7 +81,10 @@ export function AgentsDock({
         ) : null}
         <ChevronDownIcon
           aria-hidden
-          className={cn('ml-auto size-3.5 shrink-0 text-soft-foreground transition-transform', !open && 'rotate-180')}
+          className={cn(
+            'ml-auto size-3.5 shrink-0 text-soft-foreground transition-transform',
+            !open && 'rotate-180',
+          )}
         />
       </button>
       {open ? (
@@ -89,7 +95,7 @@ export function AgentsDock({
         </ul>
       ) : null}
     </section>
-  )
+  );
 }
 
 /** Rows keep stream order and never re-sort on completion — a finishing agent must not make
@@ -114,7 +120,7 @@ function AgentRow({ agent, onSelect }: { agent: SubagentSummary; onSelect?: (id:
         {agent.toolCalls} {agent.toolCalls === 1 ? 'tool' : 'tools'}
       </span>
     </>
-  )
+  );
 
   return (
     <li data-slot="agent-item" data-status={agent.status} className="min-w-0 text-[13px]">
@@ -131,7 +137,7 @@ function AgentRow({ agent, onSelect }: { agent: SubagentSummary; onSelect?: (id:
         <div className="flex min-h-5 min-w-0 items-center gap-2.5">{body}</div>
       )}
     </li>
-  )
+  );
 }
 
 /**
@@ -159,7 +165,7 @@ function AgentIcon({ status, stalled = false }: { status: ToolStatus; stalled?: 
       >
         <circle cx="12" cy="12" r="8.5" />
       </svg>
-    )
+    );
   }
   if (status === 'completed') {
     return (
@@ -177,7 +183,7 @@ function AgentIcon({ status, stalled = false }: { status: ToolStatus; stalled?: 
         <circle cx="12" cy="12" r="9" opacity=".35" />
         <path d="m8.5 12.2 2.4 2.4 4.6-5" />
       </svg>
-    )
+    );
   }
   if (status === 'failed' || status === 'declined') {
     return (
@@ -194,7 +200,7 @@ function AgentIcon({ status, stalled = false }: { status: ToolStatus; stalled?: 
         <circle cx="12" cy="12" r="9" opacity=".35" />
         <path d="m9 9 6 6M15 9l-6 6" />
       </svg>
-    )
+    );
   }
   return (
     <svg
@@ -208,5 +214,5 @@ function AgentIcon({ status, stalled = false }: { status: ToolStatus; stalled?: 
       <circle className="stroke-pending" cx="12" cy="12" r="8.5" strokeWidth="2" />
       <path className="fill-pending" d="M12 3.5 A8.5 8.5 0 0 1 12 20.5 Z" />
     </svg>
-  )
+  );
 }

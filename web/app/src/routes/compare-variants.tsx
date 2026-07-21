@@ -1,16 +1,16 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckIcon, ChevronRightIcon, ScaleIcon, SearchXIcon } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { useParams } from 'react-router'
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { CheckIcon, ChevronRightIcon, ScaleIcon, SearchXIcon } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router';
 
-import { Link, useNavigate } from '@/lib/project-router'
+import { Link, useNavigate } from '@/lib/project-router';
 
-import { ApiError, pickVariant } from '@/api/client'
-import { queryKeys, useGroup, useRuns } from '@/api/queries'
-import type { GroupVariant } from '@/api/types'
-import { CenteredState } from '@/components/centered-state'
-import { Pill } from '@/components/pill'
-import { RunDiff } from '@/components/run-diff'
+import { ApiError, pickVariant } from '@/api/client';
+import { queryKeys, useGroup, useRuns } from '@/api/queries';
+import type { GroupVariant } from '@/api/types';
+import { CenteredState } from '@/components/centered-state';
+import { Pill } from '@/components/pill';
+import { RunDiff } from '@/components/run-diff';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,18 +20,18 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { Button } from '@/components/ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { toast } from '@/components/ui/toaster'
-import { deriveAttention } from '@/lib/attention'
-import { compactTokens } from '@/lib/format'
-import { groupTitle } from '@/lib/task-groups'
-import { TERMINAL_STATUSES, formatCost } from '@/lib/tasks-table'
-import { cn } from '@/lib/utils'
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { toast } from '@/components/ui/toaster';
+import { deriveAttention } from '@/lib/attention';
+import { compactTokens } from '@/lib/format';
+import { groupTitle } from '@/lib/task-groups';
+import { TERMINAL_STATUSES, formatCost } from '@/lib/tasks-table';
+import { cn } from '@/lib/utils';
 
-import { Markdown } from './task-thread/markdown'
-import { CompareLoading } from './compare-loading'
+import { Markdown } from './task-thread/markdown';
+import { CompareLoading } from './compare-loading';
 
 /**
  * `/compare/:groupId` — the variants compare view (spec 010, §"Task thread" variants bullet),
@@ -47,29 +47,29 @@ import { CompareLoading } from './compare-loading'
  * success this navigates to its thread, where the review gate renders.
  */
 export function CompareVariantsRoute() {
-  const { groupId } = useParams<{ groupId: string }>()
-  const group = useGroup(groupId)
-  const queryClient = useQueryClient()
+  const { groupId } = useParams<{ groupId: string }>();
+  const group = useGroup(groupId);
+  const queryClient = useQueryClient();
 
   // Freshness without polling (the sync doctrine): the group endpoint is not on the SSE stream,
   // but the runs list IS (stream-patched in place). Watching the members' status/archived pairs
   // there and invalidating the group query when they move keeps the columns and the pick gate
   // live while variants finish — one refetch per real transition, zero timers.
-  const runs = useRuns()
+  const runs = useRuns();
   const memberStates = (runs.data ?? [])
     .filter((run) => run.groupId === groupId)
     .map((run) => `${run.id}:${run.status}:${run.archived}`)
     .sort()
-    .join(',')
+    .join(',');
   useEffect(() => {
-    if (!groupId) return
-    void queryClient.invalidateQueries({ queryKey: queryKeys.groups.detail(groupId) })
-  }, [queryClient, groupId, memberStates])
+    if (!groupId) return;
+    void queryClient.invalidateQueries({ queryKey: queryKeys.groups.detail(groupId) });
+  }, [queryClient, groupId, memberStates]);
 
-  if (group.isPending) return <CompareLoading />
+  if (group.isPending) return <CompareLoading />;
 
   if (group.isError) {
-    const notFound = group.error instanceof ApiError && group.error.status === 404
+    const notFound = group.error instanceof ApiError && group.error.status === 404;
     return (
       <div data-route="compare" className="flex min-h-full flex-col">
         <CenteredState
@@ -88,33 +88,33 @@ export function CompareVariantsRoute() {
           }
         />
       </div>
-    )
+    );
   }
 
-  return <CompareView groupId={groupId as string} variants={group.data.runs} />
+  return <CompareView groupId={groupId as string} variants={group.data.runs} />;
 }
 
 function CompareView({ groupId, variants }: { groupId: string; variants: GroupVariant[] }) {
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const [confirming, setConfirming] = useState<GroupVariant | null>(null)
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [confirming, setConfirming] = useState<GroupVariant | null>(null);
 
-  const allTerminal = variants.every((variant) => TERMINAL_STATUSES.has(variant.status))
-  const title = variants[0] ? groupTitle(variants[0]) : ''
+  const allTerminal = variants.every((variant) => TERMINAL_STATUSES.has(variant.status));
+  const title = variants[0] ? groupTitle(variants[0]) : '';
 
   const pick = useMutation({
     mutationFn: (runId: string) => pickVariant(groupId, runId),
     onSuccess: (result, runId) => {
       // The losers changed (cancelled/archived/worktree-less) and the winner may now be at
       // review — refetch everything derived from runs, then land on the winner's thread.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.groups.detail(groupId) })
-      void navigate(`/tasks/${result.winner?.id ?? runId}`)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.runs.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.groups.detail(groupId) });
+      void navigate(`/tasks/${result.winner?.id ?? runId}`);
     },
     // The server's words verbatim — "this variant is still active — wait for it to finish
     // first" was written for the person reading it.
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
-  })
+  });
 
   return (
     <div data-route="compare" className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-5 md:px-6">
@@ -126,17 +126,14 @@ function CompareView({ groupId, variants }: { groupId: string; variants: GroupVa
           </span>
         </h1>
         <p className="text-[13px] text-muted-foreground">
-          {variants.length} variants of the same task, each in its own worktree — pick the diff you
-          want to keep. The others are cancelled and archived, their worktrees and branches removed.
+          {variants.length} variants of the same task, each in its own worktree — pick the diff you want to
+          keep. The others are cancelled and archived, their worktrees and branches removed.
         </p>
       </header>
 
       <div
         data-slot="compare-columns"
-        className={cn(
-          'grid grid-cols-1 gap-3',
-          variants.length >= 3 ? 'md:grid-cols-3' : 'md:grid-cols-2',
-        )}
+        className={cn('grid grid-cols-1 gap-3', variants.length >= 3 ? 'md:grid-cols-3' : 'md:grid-cols-2')}
       >
         {variants.map((variant) => (
           <VariantColumn
@@ -161,9 +158,8 @@ function CompareView({ groupId, variants }: { groupId: string; variants: GroupVa
             <AlertDialogTitle>Pick variant {confirming?.variant}?</AlertDialogTitle>
             <AlertDialogDescription>
               Variant {confirming?.variant}'s changes go to the review gate. The other{' '}
-              {variants.length - 1 === 1 ? 'variant is' : `${variants.length - 1} variants are`}{' '}
-              cancelled if still open, archived, and their worktrees and branches removed. There is
-              no undo.
+              {variants.length - 1 === 1 ? 'variant is' : `${variants.length - 1} variants are`} cancelled if
+              still open, archived, and their worktrees and branches removed. There is no undo.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -171,8 +167,8 @@ function CompareView({ groupId, variants }: { groupId: string; variants: GroupVa
             <AlertDialogAction
               data-slot="confirm-pick"
               onClick={() => {
-                if (confirming) pick.mutate(confirming.id)
-                setConfirming(null)
+                if (confirming) pick.mutate(confirming.id);
+                setConfirming(null);
               }}
             >
               <CheckIcon aria-hidden="true" />
@@ -182,7 +178,7 @@ function CompareView({ groupId, variants }: { groupId: string; variants: GroupVa
         </AlertDialogContent>
       </AlertDialog>
     </div>
-  )
+  );
 }
 
 /** One variant column: letter, status, spend, git's own --stat summary, the Progress excerpt,
@@ -193,13 +189,13 @@ function VariantColumn({
   pickPending,
   onPick,
 }: {
-  variant: GroupVariant
-  allTerminal: boolean
-  pickPending: boolean
-  onPick: () => void
+  variant: GroupVariant;
+  allTerminal: boolean;
+  pickPending: boolean;
+  onPick: () => void;
 }) {
-  const attention = deriveAttention(variant)
-  const cost = formatCost(variant.costUsd)
+  const attention = deriveAttention(variant);
+  const cost = formatCost(variant.costUsd);
   return (
     <article
       data-slot="variant-column"
@@ -269,13 +265,13 @@ function VariantColumn({
         Pick this one
       </Button>
     </article>
-  )
+  );
 }
 
 /** A variant's full worktree diff, collapsed by default — `RunDiff` mounts (and fetches) only
  *  on first expand, so opening the compare view costs three stats, not three full diffs. */
 function VariantDiff({ variant }: { variant: GroupVariant }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(false);
   return (
     <Collapsible
       open={open}
@@ -297,5 +293,5 @@ function VariantDiff({ variant }: { variant: GroupVariant }) {
         </div>
       </CollapsibleContent>
     </Collapsible>
-  )
+  );
 }

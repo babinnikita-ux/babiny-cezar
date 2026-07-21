@@ -52,15 +52,33 @@ const EDITORS: EditorDef[] = [
   // JetBrains (#361 gap 3): Toolbox's "generate shell scripts" produces one bare-name launcher
   // per product on every OS (idea, pycharm, …); the .app names below cover the Community /
   // Ultimate / Professional edition splits Toolbox and the standalone installers both produce.
-  { id: 'idea', label: 'IntelliJ IDEA', icon: 'idea', cli: 'idea', mac: ['IntelliJ IDEA', 'IntelliJ IDEA CE', 'IntelliJ IDEA Ultimate'] },
-  { id: 'pycharm', label: 'PyCharm', icon: 'pycharm', cli: 'pycharm', mac: ['PyCharm', 'PyCharm CE', 'PyCharm Professional'] },
+  {
+    id: 'idea',
+    label: 'IntelliJ IDEA',
+    icon: 'idea',
+    cli: 'idea',
+    mac: ['IntelliJ IDEA', 'IntelliJ IDEA CE', 'IntelliJ IDEA Ultimate'],
+  },
+  {
+    id: 'pycharm',
+    label: 'PyCharm',
+    icon: 'pycharm',
+    cli: 'pycharm',
+    mac: ['PyCharm', 'PyCharm CE', 'PyCharm Professional'],
+  },
   { id: 'webstorm', label: 'WebStorm', icon: 'webstorm', cli: 'webstorm', mac: 'WebStorm' },
   { id: 'goland', label: 'GoLand', icon: 'goland', cli: 'goland', mac: 'GoLand' },
   { id: 'rubymine', label: 'RubyMine', icon: 'rubymine', cli: 'rubymine', mac: 'RubyMine' },
   { id: 'phpstorm', label: 'PhpStorm', icon: 'phpstorm', cli: 'phpstorm', mac: 'PhpStorm' },
   { id: 'clion', label: 'CLion', icon: 'clion', cli: 'clion', mac: 'CLion' },
   { id: 'rider', label: 'Rider', icon: 'rider', cli: 'rider', mac: 'Rider' },
-  { id: 'android-studio', label: 'Android Studio', icon: 'android-studio', cli: 'studio', mac: 'Android Studio' },
+  {
+    id: 'android-studio',
+    label: 'Android Studio',
+    icon: 'android-studio',
+    cli: 'studio',
+    mac: 'Android Studio',
+  },
   { id: 'xcode', label: 'Xcode', icon: 'xcode', mac: 'Xcode' },
   { id: 'warp', label: 'Warp', icon: 'warp', cli: 'warp', mac: 'Warp' },
 ];
@@ -125,10 +143,28 @@ function editorAvailable(editor: EditorDef): boolean {
 /** Coding-agent CLIs a session can be handed off to (#cli-handoff). Selecting one opens a
  *  terminal that resumes THIS run's session when the runner matches, or launches a fresh CLI in
  *  the worktree otherwise. The actual command is built server-side (needs the run's session). */
-const AGENT_CLIS: Array<{ runner: 'claude' | 'codex' | 'opencode'; label: string; icon: string; bin: string; envBin?: string }> = [
-  { runner: 'claude', label: 'Claude CLI', icon: 'claude', bin: 'claude', envBin: process.env.CEZ_CLAUDE_BIN },
+const AGENT_CLIS: Array<{
+  runner: 'claude' | 'codex' | 'opencode';
+  label: string;
+  icon: string;
+  bin: string;
+  envBin?: string;
+}> = [
+  {
+    runner: 'claude',
+    label: 'Claude CLI',
+    icon: 'claude',
+    bin: 'claude',
+    envBin: process.env.CEZ_CLAUDE_BIN,
+  },
   { runner: 'codex', label: 'Codex CLI', icon: 'codex', bin: 'codex', envBin: process.env.CEZ_CODEX_BIN },
-  { runner: 'opencode', label: 'OpenCode', icon: 'opencode', bin: 'opencode', envBin: process.env.CEZ_OPENCODE_BIN },
+  {
+    runner: 'opencode',
+    label: 'OpenCode',
+    icon: 'opencode',
+    bin: 'opencode',
+    envBin: process.env.CEZ_OPENCODE_BIN,
+  },
 ];
 
 /** The runner behind a `cli:<runner>` open target, or null when the id isn't a CLI handoff. */
@@ -207,7 +243,8 @@ export async function openInApp(targetId: string, dir: string): Promise<boolean>
     const resolved = resolveOnPath(editor.cli);
     if (resolved) return runDetached(resolved, [launchPathFor(resolved, dir)]);
   }
-  if (editor.mac && macAppExists(editor.mac)) return runDetached('open', ['-a', pickInstalledMacApp(editor.mac), dir]);
+  if (editor.mac && macAppExists(editor.mac))
+    return runDetached('open', ['-a', pickInstalledMacApp(editor.mac), dir]);
   return false;
 }
 

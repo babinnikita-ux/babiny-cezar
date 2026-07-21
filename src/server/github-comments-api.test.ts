@@ -88,7 +88,9 @@ describe('the github comments API', () => {
 
   it('includes a merge event for a PR but not for an issue', async () => {
     const pr = (await (await apiRequest(app, '/api/github/comments/pr/137')).json()) as ForgeCommentsData;
-    const issue = (await (await apiRequest(app, '/api/github/comments/issue/142')).json()) as ForgeCommentsData;
+    const issue = (await (
+      await apiRequest(app, '/api/github/comments/issue/142')
+    ).json()) as ForgeCommentsData;
     expect(pr.events!.some((e) => e.kind === 'merged')).toBe(true);
     expect(issue.events!.some((e) => e.kind === 'merged')).toBe(false);
   });

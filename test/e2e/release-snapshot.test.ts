@@ -52,50 +52,54 @@ function runScript(fixtureRoot: string, extraEnv: Record<string, string>, args: 
   return execFile(process.execPath, [script, ...args], { env, maxBuffer: 10 * 1024 * 1024 });
 }
 
-test('dry-run publish stamps both manifests, pins the alias exact, and emits the result JSON', { timeout: 120_000 }, async () => {
-  const root = await makeFixture();
-  try {
-    await writeFile(join(root, 'github-output.txt'), '');
-    await runScript(
-      root,
-      {
-        GITHUB_EVENT_NAME: 'pull_request',
-        PR_NUMBER: '77',
-        PR_HEAD_REPO: 'open-mercato/cezar',
-        GITHUB_REPOSITORY: 'open-mercato/cezar',
-        GITHUB_RUN_NUMBER: '5',
-        GITHUB_RUN_ATTEMPT: '1',
-      },
-      ['--dry-run'],
-    );
+test(
+  'dry-run publish stamps both manifests, pins the alias exact, and emits the result JSON',
+  { timeout: 120_000 },
+  async () => {
+    const root = await makeFixture();
+    try {
+      await writeFile(join(root, 'github-output.txt'), '');
+      await runScript(
+        root,
+        {
+          GITHUB_EVENT_NAME: 'pull_request',
+          PR_NUMBER: '77',
+          PR_HEAD_REPO: 'open-mercato/cezar',
+          GITHUB_REPOSITORY: 'open-mercato/cezar',
+          GITHUB_RUN_NUMBER: '5',
+          GITHUB_RUN_ATTEMPT: '1',
+        },
+        ['--dry-run'],
+      );
 
-    const rootPkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')) as { version: string };
-    const aliasPkg = JSON.parse(await readFile(join(root, 'alias-cezar', 'package.json'), 'utf8')) as {
-      version: string;
-      dependencies: Record<string, string>;
-    };
-    assert.equal(rootPkg.version, '0.9.9-pr77.5');
-    assert.equal(aliasPkg.version, '0.9.9-pr77.5');
-    assert.deepEqual(aliasPkg.dependencies, { '@scope/fake-root': '0.9.9-pr77.5' });
+      const rootPkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')) as { version: string };
+      const aliasPkg = JSON.parse(await readFile(join(root, 'alias-cezar', 'package.json'), 'utf8')) as {
+        version: string;
+        dependencies: Record<string, string>;
+      };
+      assert.equal(rootPkg.version, '0.9.9-pr77.5');
+      assert.equal(aliasPkg.version, '0.9.9-pr77.5');
+      assert.deepEqual(aliasPkg.dependencies, { '@scope/fake-root': '0.9.9-pr77.5' });
 
-    const output = await readFile(join(root, 'github-output.txt'), 'utf8');
-    assert.match(output, /^attempted=true$/m);
-    assert.match(output, /^dryRun=true$/m);
-    const resultLine = output.split('\n').find((line) => line.startsWith('result='));
-    assert.ok(resultLine, 'GITHUB_OUTPUT should carry the result JSON');
-    const result = JSON.parse(resultLine.slice('result='.length)) as {
-      distTag: string;
-      installLines: string[];
-    };
-    assert.equal(result.distTag, 'pr-77');
-    assert.ok(
-      result.installLines.some((line) => line.includes('npx fake-alias@0.9.9-pr77.5')),
-      'install lines should use the actual alias name and exact version',
-    );
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-});
+      const output = await readFile(join(root, 'github-output.txt'), 'utf8');
+      assert.match(output, /^attempted=true$/m);
+      assert.match(output, /^dryRun=true$/m);
+      const resultLine = output.split('\n').find((line) => line.startsWith('result='));
+      assert.ok(resultLine, 'GITHUB_OUTPUT should carry the result JSON');
+      const result = JSON.parse(resultLine.slice('result='.length)) as {
+        distTag: string;
+        installLines: string[];
+      };
+      assert.equal(result.distTag, 'pr-77');
+      assert.ok(
+        result.installLines.some((line) => line.includes('npx fake-alias@0.9.9-pr77.5')),
+        'install lines should use the actual alias name and exact version',
+      );
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);
 
 test('a missing NPM token forces a dry run instead of failing the job', { timeout: 120_000 }, async () => {
   const root = await makeFixture();

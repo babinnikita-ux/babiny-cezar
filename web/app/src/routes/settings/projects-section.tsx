@@ -1,11 +1,11 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { FoldersIcon } from 'lucide-react'
-import { useState } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { FoldersIcon } from 'lucide-react';
+import { useState } from 'react';
 
-import { putWorkspaceConfig } from '@/api/client'
-import { useProjects, useRemoveProject, useWorkspaceConfig, workspaceQueryKeys } from '@/api/queries'
-import type { ProjectListEntry, ProjectsResponse, WorkspaceConfigResponse } from '@/api/types'
-import { CenteredState } from '@/components/centered-state'
+import { putWorkspaceConfig } from '@/api/client';
+import { useProjects, useRemoveProject, useWorkspaceConfig, workspaceQueryKeys } from '@/api/queries';
+import type { ProjectListEntry, ProjectsResponse, WorkspaceConfigResponse } from '@/api/types';
+import { CenteredState } from '@/components/centered-state';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,10 +15,10 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { Button } from '@/components/ui/button'
-import { toast } from '@/components/ui/toaster'
-import { SettingsField } from './settings-field'
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/toaster';
+import { SettingsField } from './settings-field';
 
 /**
  * Global settings → Projects (multi-project spec, step 4.4; mockup
@@ -47,7 +47,7 @@ import { SettingsField } from './settings-field'
  */
 
 /** Which project the confirm dialog is about — `null` while it is closed. */
-type Confirming = ProjectListEntry | null
+type Confirming = ProjectListEntry | null;
 
 /** Human wording for a registry status probe. `not-git` is fully usable (single-queue
  *  degraded mode), so it reads as a note rather than a fault; only `missing` is a problem. */
@@ -55,26 +55,26 @@ const STATUS_LABEL: Record<ProjectListEntry['status'], string> = {
   ok: 'ok',
   'not-git': 'no git repo',
   missing: 'folder not found',
-}
+};
 
 /** `2026-07-20T…` → `Jul 20`, in the reader's locale. Registry timestamps are ISO strings; an
  *  unparseable one (hand-edited config) degrades to an em dash rather than `Invalid Date`. */
 function shortDate(iso: string): string {
-  const at = new Date(iso)
-  if (Number.isNaN(at.getTime())) return '—'
-  return at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return '—';
+  return at.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 export function ProjectsSection() {
-  const config = useWorkspaceConfig()
-  const projects = useProjects()
+  const config = useWorkspaceConfig();
+  const projects = useProjects();
 
   if (config.isPending || projects.isPending) {
     return (
       <p data-slot="projects-loading" className="p-4 text-[13px] text-soft-foreground md:p-6">
         Loading projects…
       </p>
-    )
+    );
   }
   if (config.isError || projects.isError) {
     return (
@@ -85,18 +85,12 @@ export function ProjectsSection() {
         subtitle={(config.error ?? projects.error)?.message}
         heading="h2"
       />
-    )
+    );
   }
-  return <ProjectsPane config={config.data} registry={projects.data} />
+  return <ProjectsPane config={config.data} registry={projects.data} />;
 }
 
-function ProjectsPane({
-  config,
-  registry,
-}: {
-  config: WorkspaceConfigResponse
-  registry: ProjectsResponse
-}) {
+function ProjectsPane({ config, registry }: { config: WorkspaceConfigResponse; registry: ProjectsResponse }) {
   return (
     <div
       data-slot="projects-section"
@@ -125,7 +119,7 @@ function ProjectsPane({
       />
       <RegistryTable registry={registry} />
     </div>
-  )
+  );
 }
 
 /** A workspace folder — edited locally, saved explicitly, and validated by the SERVER. */
@@ -140,17 +134,17 @@ function WorkspaceRootField({
   footer,
   refreshProjects = false,
 }: {
-  configKey: 'browseRoot' | 'projectsDir'
-  value: string
-  title: string
-  hint: string
-  placeholder: string
-  slot: 'browse' | 'checkout'
-  savedLabel: string
-  footer: string
-  refreshProjects?: boolean
+  configKey: 'browseRoot' | 'projectsDir';
+  value: string;
+  title: string;
+  hint: string;
+  placeholder: string;
+  slot: 'browse' | 'checkout';
+  savedLabel: string;
+  footer: string;
+  refreshProjects?: boolean;
 }) {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   // The merged config the PUT answers with lands straight in the workspace-config query. The
   // projects response carries projectsDir for the clone dialog, while every fs-browse result is
   // relative to browseRoot. Invalidate the corresponding authoritative cache after either save.
@@ -158,22 +152,22 @@ function WorkspaceRootField({
     mutationFn: (next: string) =>
       putWorkspaceConfig(configKey === 'browseRoot' ? { browseRoot: next } : { projectsDir: next }),
     onSuccess: (result) => {
-      queryClient.setQueryData(workspaceQueryKeys.config, result)
+      queryClient.setQueryData(workspaceQueryKeys.config, result);
       if (configKey === 'browseRoot') {
-        void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.fsBrowseRoot })
+        void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.fsBrowseRoot });
       } else if (refreshProjects) {
-        void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.projects })
+        void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.projects });
       }
     },
-  })
-  const [value, setValue] = useState(configuredValue)
-  const trimmed = value.trim()
-  const unchanged = trimmed === configuredValue
+  });
+  const [value, setValue] = useState(configuredValue);
+  const trimmed = value.trim();
+  const unchanged = trimmed === configuredValue;
   // The 400's message ("not writable: …"), shown until the next attempt. `save.error` is the
   // ApiError `errorFor` built from the server's own `{ error }` — passed through untouched,
   // because paraphrasing "permission denied on /opt/checkouts" as "invalid path" throws away
   // the only sentence that tells the user what to fix.
-  const serverError = save.isError ? save.error.message : null
+  const serverError = save.isError ? save.error.message : null;
 
   return (
     <SettingsField
@@ -195,10 +189,10 @@ function WorkspaceRootField({
           disabled={save.isPending}
           placeholder={placeholder}
           onChange={(event) => {
-            setValue(event.target.value)
+            setValue(event.target.value);
             // Editing clears the stale failure: the message names a path that is no longer in
             // the field, so leaving it up would be a lie about the current value.
-            if (save.isError) save.reset()
+            if (save.isError) save.reset();
           }}
           className="block w-full max-w-sm rounded-md border border-input bg-card px-3 py-1.5 font-mono text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-danger disabled:opacity-50"
         />
@@ -208,9 +202,7 @@ function WorkspaceRootField({
           size="sm"
           data-action={`projects-save-${slot}-root`}
           disabled={unchanged || trimmed === '' || save.isPending}
-          onClick={() =>
-            save.mutate(trimmed, { onSuccess: () => toast(`${savedLabel} set to ${trimmed}`) })
-          }
+          onClick={() => save.mutate(trimmed, { onSuccess: () => toast(`${savedLabel} set to ${trimmed}`) })}
         >
           Save
         </Button>
@@ -222,30 +214,28 @@ function WorkspaceRootField({
           {serverError} — setting unchanged
         </p>
       ) : (
-        <p className="text-[11px] text-soft-foreground">
-          {footer}
-        </p>
+        <p className="text-[11px] text-soft-foreground">{footer}</p>
       )}
     </SettingsField>
-  )
+  );
 }
 
 function RegistryTable({ registry }: { registry: ProjectsResponse }) {
-  const [confirming, setConfirming] = useState<Confirming>(null)
-  const remove = useRemoveProject()
+  const [confirming, setConfirming] = useState<Confirming>(null);
+  const remove = useRemoveProject();
 
   const confirmRemoval = () => {
-    if (!confirming) return
-    const { id, name } = confirming
-    setConfirming(null)
+    if (!confirming) return;
+    const { id, name } = confirming;
+    setConfirming(null);
     remove.mutate(id, {
       // "Removed from the workspace", not "Deleted": the toast is the last word the user reads
       // about a button they may have pressed nervously.
       onSuccess: () => toast(`${name} removed from the workspace — its files are untouched`),
       // The 409s (running tasks, the boot project) explain themselves; show the server's words.
       onError: (error: Error) => toast(error.message, { tone: 'danger' }),
-    })
-  }
+    });
+  };
 
   return (
     <SettingsField
@@ -262,10 +252,18 @@ function RegistryTable({ registry }: { registry: ProjectsResponse }) {
             <caption className="sr-only">Projects registered in this workspace</caption>
             <thead>
               <tr className="border-b border-border text-left text-[12px] text-soft-foreground">
-                <th scope="col" className="px-3 py-2 font-medium">Project</th>
-                <th scope="col" className="px-3 py-2 font-medium">Status</th>
-                <th scope="col" className="px-3 py-2 font-medium">Added</th>
-                <th scope="col" className="px-3 py-2 font-medium text-right">Actions</th>
+                <th scope="col" className="px-3 py-2 font-medium">
+                  Project
+                </th>
+                <th scope="col" className="px-3 py-2 font-medium">
+                  Status
+                </th>
+                <th scope="col" className="px-3 py-2 font-medium">
+                  Added
+                </th>
+                <th scope="col" className="px-3 py-2 font-medium text-right">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -288,10 +286,13 @@ function RegistryTable({ registry }: { registry: ProjectsResponse }) {
           <AlertDialogHeader>
             <AlertDialogTitle>Remove {confirming?.name} from the workspace?</AlertDialogTitle>
             <AlertDialogDescription>
-              This only unregisters the project — <strong>nothing on disk is deleted</strong>. The
-              folder, its git history and its task history all stay exactly where they are, and
-              opening it again re-registers it with everything intact.
-              <span className="mt-1 block truncate font-mono text-[11px] text-foreground" title={confirming?.root}>
+              This only unregisters the project — <strong>nothing on disk is deleted</strong>. The folder, its
+              git history and its task history all stay exactly where they are, and opening it again
+              re-registers it with everything intact.
+              <span
+                className="mt-1 block truncate font-mono text-[11px] text-foreground"
+                title={confirming?.root}
+              >
                 {confirming?.root}
               </span>
             </AlertDialogDescription>
@@ -309,7 +310,7 @@ function RegistryTable({ registry }: { registry: ProjectsResponse }) {
         </AlertDialogContent>
       </AlertDialog>
     </SettingsField>
-  )
+  );
 }
 
 function ProjectRow({
@@ -318,10 +319,10 @@ function ProjectRow({
   disabled,
   onRemove,
 }: {
-  project: ProjectListEntry
-  isBoot: boolean
-  disabled: boolean
-  onRemove: () => void
+  project: ProjectListEntry;
+  isBoot: boolean;
+  disabled: boolean;
+  onRemove: () => void;
 }) {
   return (
     <tr data-slot="project-row" data-project={project.id} className="border-b border-border last:border-0">
@@ -334,7 +335,9 @@ function ProjectRow({
       <td className="px-3 py-2">
         <span
           data-slot="project-status"
-          className={project.status === 'missing' ? 'text-[12px] text-danger' : 'text-[12px] text-soft-foreground'}
+          className={
+            project.status === 'missing' ? 'text-[12px] text-danger' : 'text-[12px] text-soft-foreground'
+          }
         >
           {STATUS_LABEL[project.status]}
         </span>
@@ -362,5 +365,5 @@ function ProjectRow({
         </Button>
       </td>
     </tr>
-  )
+  );
 }

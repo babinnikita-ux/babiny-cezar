@@ -39,7 +39,11 @@ describe('composeSystemPrompt', () => {
   const H = 'HANDOFF CONTRACT';
   it.each([
     ['contract only', [undefined, undefined, H], H],
-    ['skill + contract (the pre-2.3 composition, unchanged)', ['SKILL BODY', undefined, H], `SKILL BODY\n\n---\n\n${H}`],
+    [
+      'skill + contract (the pre-2.3 composition, unchanged)',
+      ['SKILL BODY', undefined, H],
+      `SKILL BODY\n\n---\n\n${H}`,
+    ],
     ['extra + contract', [undefined, 'EXTRA', H], `EXTRA\n\n---\n\n${H}`],
     ['skill + extra + contract', ['SKILL BODY', 'EXTRA', H], `SKILL BODY\n\n---\n\nEXTRA\n\n---\n\n${H}`],
     ['blank parts drop out', ['', '   ', H], H],
@@ -221,11 +225,11 @@ describe('systemPrompt end-to-end (dry run)', () => {
     expect(prompt).toBe(composeSystemPrompt(CONFIG_PROMPT, HANDOFF_INSTRUCTIONS));
   }, 30_000);
 
-
-
   it('live refresh: the namer applies turn context through the mock (direct drive)', async () => {
     const record = manager.startRun(skillWorkflow, { task: '437' });
-    type NamerSeam = { autoNameRun(id: string, skill: string | undefined, task: string, live?: object): Promise<void> };
+    type NamerSeam = {
+      autoNameRun(id: string, skill: string | undefined, task: string, live?: object): Promise<void>;
+    };
     await (manager as unknown as NamerSeam).autoNameRun(record.id, 'om-auto-review-pr', '437', {
       turnText: 'fixed the watchdog race',
       diffStat: '2 files, +10 -3',
@@ -295,7 +299,9 @@ describe('systemPrompt end-to-end (dry run)', () => {
     expect(after?.titleOrigin).toBe('marker');
     // A namer answer landing later (mock: "implementing cr fixes" + pr 437)
     // must not displace the agent's own declaration.
-    type NamerSeam = { autoNameRun(id: string, skill: string | undefined, task: string, live?: object): Promise<void> };
+    type NamerSeam = {
+      autoNameRun(id: string, skill: string | undefined, task: string, live?: object): Promise<void>;
+    };
     await (manager as unknown as NamerSeam).autoNameRun(record.id, 'om-auto-review-pr', '437', {
       turnText: 'fixed the watchdog race',
       diffStat: '2 files, +10 -3',
@@ -429,9 +435,7 @@ describe('systemPrompt end-to-end (dry run)', () => {
       if (Date.now() > deadline) throw new Error('continuation did not start in time');
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    expect(capturedSystemPrompt(1)).toBe(
-      composeSystemPrompt(CONFIG_PROMPT, HANDOFF_ONLY_INSTRUCTIONS),
-    );
+    expect(capturedSystemPrompt(1)).toBe(composeSystemPrompt(CONFIG_PROMPT, HANDOFF_ONLY_INSTRUCTIONS));
     expect(capturedSystemPrompt(1)).not.toContain('CEZ_TODOS_FILE');
     expect(existsSync(todosFile)).toBe(false);
     expect(existsSync(inheritedTodos)).toBe(false);

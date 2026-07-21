@@ -68,7 +68,8 @@ export class CodexAppServerRpc {
   }
 
   dispatchResponse(message: CodexAppServerMessage): boolean {
-    if (typeof message.id !== 'number' || (message.result === undefined && message.error === undefined)) return false;
+    if (typeof message.id !== 'number' || (message.result === undefined && message.error === undefined))
+      return false;
     const pending = this.pending.get(message.id);
     if (!pending) return false;
     this.pending.delete(message.id);

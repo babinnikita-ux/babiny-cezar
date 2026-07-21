@@ -9,12 +9,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { basename, dirname } from 'node:path';
-import {
-  DEFAULT_SERVER_INSTANCE,
-  serverInstancesDir,
-  serverLockPath,
-  serverStatePath,
-} from '../paths.js';
+import { DEFAULT_SERVER_INSTANCE, serverInstancesDir, serverLockPath, serverStatePath } from '../paths.js';
 import { freshServerState, serverStateSchema, type ServerState, type StepOutcome } from './types.js';
 
 /**

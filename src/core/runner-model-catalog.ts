@@ -73,10 +73,7 @@ export class RunnerModelCatalog {
     return refresh;
   }
 
-  async #refresh(
-    runner: RunnerId,
-    cached: CachedCatalog | undefined,
-  ): Promise<RunnerModelCatalogResult> {
+  async #refresh(runner: RunnerId, cached: CachedCatalog | undefined): Promise<RunnerModelCatalogResult> {
     try {
       const adapter = this.#adapters[runner];
       if (!adapter) throw new Error('adapter unavailable');
@@ -87,7 +84,11 @@ export class RunnerModelCatalog {
     } catch {
       const reason = unavailableReason(runner);
       if (cached) {
-        this.#cache.set(runner, { models: cached.models, expiresAt: this.#now() + this.#ttlMs, failureReason: reason });
+        this.#cache.set(runner, {
+          models: cached.models,
+          expiresAt: this.#now() + this.#ttlMs,
+          failureReason: reason,
+        });
         return { runner, models: cached.models, source: 'cache', stale: true, reason };
       }
       this.#cache.set(runner, { models: [], expiresAt: this.#now() + this.#ttlMs, failureReason: reason });

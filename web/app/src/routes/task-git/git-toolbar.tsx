@@ -5,23 +5,23 @@ import {
   GitPullRequestIcon,
   SquareTerminalIcon,
   UploadIcon,
-} from 'lucide-react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+} from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
-import type { DiffStat } from '@/api/types'
-import { DiffStatLabel } from '@/components/diff-stat'
-import type { DiffMode } from '@/components/diff'
-import { Button } from '@/components/ui/button'
+import type { DiffStat } from '@/api/types';
+import { DiffStatLabel } from '@/components/diff-stat';
+import type { DiffMode } from '@/components/diff';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import type { GitAction, GitActionBar, GitActionId } from '@/lib/git-actions'
-import { isHttpUrl } from '@/lib/utils'
+} from '@/components/ui/dropdown-menu';
+import type { GitAction, GitActionBar, GitActionId } from '@/lib/git-actions';
+import { isHttpUrl } from '@/lib/utils';
 
-import { BranchChip, DiffViewToggles } from './diff-controls'
+import { BranchChip, DiffViewToggles } from './diff-controls';
 
 /**
  * The Changes tab's toolbar (spec #390). Deliberately DUMB about git: it renders whatever
@@ -41,14 +41,14 @@ export function GitToolbar({
   onWrapChange,
   onAction,
 }: {
-  bar: GitActionBar
-  branch?: string
-  stat?: DiffStat
-  mode: DiffMode
-  wrap: boolean
-  onModeChange: (mode: DiffMode) => void
-  onWrapChange: (wrap: boolean) => void
-  onAction: (id: GitActionId) => void
+  bar: GitActionBar;
+  branch?: string;
+  stat?: DiffStat;
+  mode: DiffMode;
+  wrap: boolean;
+  onModeChange: (mode: DiffMode) => void;
+  onWrapChange: (wrap: boolean) => void;
+  onAction: (id: GitActionId) => void;
 }) {
   return (
     <div
@@ -94,7 +94,7 @@ export function GitToolbar({
         ) : null}
       </span>
     </div>
-  )
+  );
 }
 
 const ACTION_ICONS: Record<GitActionId, ReactNode> = {
@@ -103,7 +103,7 @@ const ACTION_ICONS: Record<GitActionId, ReactNode> = {
   'create-pr': <GitPullRequestIcon aria-hidden="true" />,
   'view-pr': <ExternalLinkIcon aria-hidden="true" />,
   'open-terminal': <SquareTerminalIcon aria-hidden="true" />,
-}
+};
 
 /** One policy entry → one button. `view-pr` renders as a real link when the policy's href is a
  *  safe URL, and disabled when it is not; everything else clicks through to the parent's
@@ -113,9 +113,9 @@ function ActionButton({
   variant,
   onAction,
 }: {
-  action: GitAction
-  variant: 'primary' | 'outline'
-  onAction: (id: GitActionId) => void
+  action: GitAction;
+  variant: 'primary' | 'outline';
+  onAction: (id: GitActionId) => void;
 }) {
   // href protocol guard (#431): treat the PR link as a link only for http(s) URLs. A refused
   // href must NOT fall through to the generic button below — the policy hardcodes view-pr as
@@ -135,7 +135,7 @@ function ActionButton({
           {ACTION_ICONS[action.id]}
           {action.label}
         </Button>
-      )
+      );
     }
     return (
       <Button asChild variant={variant} size="sm" data-action={action.id}>
@@ -144,7 +144,7 @@ function ActionButton({
           {action.label}
         </a>
       </Button>
-    )
+    );
   }
   return (
     <Button
@@ -158,7 +158,7 @@ function ActionButton({
       {ACTION_ICONS[action.id]}
       {action.label}
     </Button>
-  )
+  );
 }
 
 /**
@@ -168,50 +168,50 @@ function ActionButton({
  * the real value, so tests and screenshots never catch a fake zero.
  */
 export function AnimatedDiffStat({ stat }: { stat: DiffStat }) {
-  const adds = useAnimatedNumber(stat.adds)
-  const dels = useAnimatedNumber(stat.dels)
+  const adds = useAnimatedNumber(stat.adds);
+  const dels = useAnimatedNumber(stat.dels);
   return (
     <span data-slot="changes-stat">
       <DiffStatLabel stat={{ adds, dels, files: stat.files }} />
     </span>
-  )
+  );
 }
 
 function useAnimatedNumber(target: number): number {
-  const [value, setValue] = useState(target)
-  const fromRef = useRef(target)
+  const [value, setValue] = useState(target);
+  const fromRef = useRef(target);
 
   useEffect(() => {
-    const from = fromRef.current
-    if (from === target) return
+    const from = fromRef.current;
+    if (from === target) return;
     const reduced =
       typeof window.matchMedia === 'function' &&
-      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     if (reduced || typeof requestAnimationFrame !== 'function') {
-      fromRef.current = target
-      setValue(target)
-      return
+      fromRef.current = target;
+      setValue(target);
+      return;
     }
-    const start = performance.now()
-    const duration = 350
-    let raf = 0
+    const start = performance.now();
+    const duration = 350;
+    let raf = 0;
     const tick = (now: number) => {
-      const t = Math.min(1, (now - start) / duration)
-      const eased = 1 - (1 - t) ** 3
-      setValue(Math.round(from + (target - from) * eased))
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - (1 - t) ** 3;
+      setValue(Math.round(from + (target - from) * eased));
       if (t < 1) {
-        raf = requestAnimationFrame(tick)
+        raf = requestAnimationFrame(tick);
       } else {
-        fromRef.current = target
+        fromRef.current = target;
       }
-    }
-    raf = requestAnimationFrame(tick)
+    };
+    raf = requestAnimationFrame(tick);
     return () => {
-      cancelAnimationFrame(raf)
-      fromRef.current = target
-      setValue(target)
-    }
-  }, [target])
+      cancelAnimationFrame(raf);
+      fromRef.current = target;
+      setValue(target);
+    };
+  }, [target]);
 
-  return value
+  return value;
 }

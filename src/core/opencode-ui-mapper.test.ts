@@ -89,7 +89,10 @@ function startedState(): OpencodeUiMapperState {
   let state = opencodeSessionStarted(SESSION_ID, createOpencodeUiState()).state;
   state = opencodeTurnStarted(state).state;
   return mapOpencodeEvent(
-    { type: 'message.updated', properties: { info: { id: 'msg_a', sessionID: SESSION_ID, role: 'assistant' } } },
+    {
+      type: 'message.updated',
+      properties: { info: { id: 'msg_a', sessionID: SESSION_ID, role: 'assistant' } },
+    },
     state,
   ).state;
 }
@@ -143,16 +146,23 @@ describe('mapOpencodeEvent edge cases', () => {
   it('parts of non-assistant (or not-yet-known) messages map to zero events', () => {
     let state = startedState();
     state = mapOpencodeEvent(
-      { type: 'message.updated', properties: { info: { id: 'msg_user', sessionID: SESSION_ID, role: 'user' } } },
+      {
+        type: 'message.updated',
+        properties: { info: { id: 'msg_user', sessionID: SESSION_ID, role: 'user' } },
+      },
       state,
     ).state;
     // The user's own prompt echoes over the same feed…
     expect(
-      mapOpencodeEvent(part({ id: 'prt_u1', messageID: 'msg_user', type: 'text', text: 'do the thing' }), state).events,
+      mapOpencodeEvent(
+        part({ id: 'prt_u1', messageID: 'msg_user', type: 'text', text: 'do the thing' }),
+        state,
+      ).events,
     ).toEqual([]);
     // …and a part whose message role is unknown is "not assistant yet".
     expect(
-      mapOpencodeEvent(part({ id: 'prt_q1', messageID: 'msg_unseen', type: 'text', text: 'early' }), state).events,
+      mapOpencodeEvent(part({ id: 'prt_q1', messageID: 'msg_unseen', type: 'text', text: 'early' }), state)
+        .events,
     ).toEqual([]);
   });
 
@@ -172,16 +182,25 @@ describe('mapOpencodeEvent edge cases', () => {
     const grown = mapOpencodeEvent(part({ id: 'prt_t', type: 'text', text: 'Hello world' }), state);
     expect(grown.events).toEqual([{ type: 'item.delta', itemId: 'prt_t', field: 'text', delta: ' world' }]);
     // …without mutating the previous state (explicit-state contract).
-    expect(mapOpencodeEvent(part({ id: 'prt_t', type: 'text', text: 'Hello world' }), state).events).toHaveLength(1);
+    expect(
+      mapOpencodeEvent(part({ id: 'prt_t', type: 'text', text: 'Hello world' }), state).events,
+    ).toHaveLength(1);
   });
 
   it('a server-sent delta field wins over cursor diffing and keeps the cursor consistent', () => {
     let state = startedState();
     state = mapOpencodeEvent(part({ id: 'prt_t', type: 'text', text: 'Hello' }), state).state;
-    const viaDelta = mapOpencodeEvent(part({ id: 'prt_t', type: 'text', text: 'Hello world' }, ' world'), state);
-    expect(viaDelta.events).toEqual([{ type: 'item.delta', itemId: 'prt_t', field: 'text', delta: ' world' }]);
+    const viaDelta = mapOpencodeEvent(
+      part({ id: 'prt_t', type: 'text', text: 'Hello world' }, ' world'),
+      state,
+    );
+    expect(viaDelta.events).toEqual([
+      { type: 'item.delta', itemId: 'prt_t', field: 'text', delta: ' world' },
+    ]);
     // A follow-up full-text-only update covering the same text adds nothing.
-    expect(mapOpencodeEvent(part({ id: 'prt_t', type: 'text', text: 'Hello world' }), viaDelta.state).events).toEqual([]);
+    expect(
+      mapOpencodeEvent(part({ id: 'prt_t', type: 'text', text: 'Hello world' }), viaDelta.state).events,
+    ).toEqual([]);
   });
 
   it('time.end completes a text part exactly once', () => {
@@ -197,77 +216,162 @@ describe('mapOpencodeEvent edge cases', () => {
     ]);
     state = done.state;
     expect(
-      mapOpencodeEvent(part({ id: 'prt_t', type: 'text', text: 'All set.', time: { start: 1, end: 2 } }), state).events,
+      mapOpencodeEvent(
+        part({ id: 'prt_t', type: 'text', text: 'All set.', time: { start: 1, end: 2 } }),
+        state,
+      ).events,
     ).toEqual([]);
   });
 
   it('opencode is the only backend with a real pending phase — first sight of a pending tool emits status pending', () => {
     const state = startedState();
     const [started] = mapOpencodeEvent(
-      part({ id: 'prt_b', type: 'tool', tool: 'bash', state: { status: 'pending', input: { command: 'ls' } } }),
+      part({
+        id: 'prt_b',
+        type: 'tool',
+        tool: 'bash',
+        state: { status: 'pending', input: { command: 'ls' } },
+      }),
       state,
     ).events;
     expect(started).toEqual({
       type: 'item.started',
-      item: { kind: 'tool', id: 'prt_b', name: 'bash', toolKind: 'execute', title: 'Ran ls', status: 'pending', input: { command: 'ls' } },
+      item: {
+        kind: 'tool',
+        id: 'prt_b',
+        name: 'bash',
+        toolKind: 'execute',
+        title: 'Ran ls',
+        status: 'pending',
+        input: { command: 'ls' },
+      },
     });
   });
 
   it('tool state carries across updates: pending→running flips via item.updated, error settles as failed', () => {
     let state = startedState();
     state = mapOpencodeEvent(
-      part({ id: 'prt_b', type: 'tool', tool: 'bash', state: { status: 'pending', input: { command: 'ls' } } }),
+      part({
+        id: 'prt_b',
+        type: 'tool',
+        tool: 'bash',
+        state: { status: 'pending', input: { command: 'ls' } },
+      }),
       state,
     ).state;
     const running = mapOpencodeEvent(
-      part({ id: 'prt_b', type: 'tool', tool: 'bash', state: { status: 'running', input: { command: 'ls' }, title: 'ls', time: { start: 1 } } }),
+      part({
+        id: 'prt_b',
+        type: 'tool',
+        tool: 'bash',
+        state: { status: 'running', input: { command: 'ls' }, title: 'ls', time: { start: 1 } },
+      }),
       state,
     );
     expect(running.events).toEqual([
       {
         type: 'item.updated',
-        item: { kind: 'tool', id: 'prt_b', name: 'bash', toolKind: 'execute', title: 'ls', status: 'running', input: { command: 'ls' } },
+        item: {
+          kind: 'tool',
+          id: 'prt_b',
+          name: 'bash',
+          toolKind: 'execute',
+          title: 'ls',
+          status: 'running',
+          input: { command: 'ls' },
+        },
       },
     ]);
     state = running.state;
     // A repeated running update with the same title is a no-op…
-    expect(mapOpencodeEvent(
-      part({ id: 'prt_b', type: 'tool', tool: 'bash', state: { status: 'running', input: { command: 'ls' }, title: 'ls' } }),
-      state,
-    ).events).toEqual([]);
+    expect(
+      mapOpencodeEvent(
+        part({
+          id: 'prt_b',
+          type: 'tool',
+          tool: 'bash',
+          state: { status: 'running', input: { command: 'ls' }, title: 'ls' },
+        }),
+        state,
+      ).events,
+    ).toEqual([]);
     // …but a new live title re-renders the card.
-    expect(mapOpencodeEvent(
-      part({ id: 'prt_b', type: 'tool', tool: 'bash', state: { status: 'running', input: { command: 'ls' }, title: 'ls -la' } }),
-      state,
-    ).events).toEqual([
+    expect(
+      mapOpencodeEvent(
+        part({
+          id: 'prt_b',
+          type: 'tool',
+          tool: 'bash',
+          state: { status: 'running', input: { command: 'ls' }, title: 'ls -la' },
+        }),
+        state,
+      ).events,
+    ).toEqual([
       {
         type: 'item.updated',
-        item: { kind: 'tool', id: 'prt_b', name: 'bash', toolKind: 'execute', title: 'ls -la', status: 'running', input: { command: 'ls' } },
+        item: {
+          kind: 'tool',
+          id: 'prt_b',
+          name: 'bash',
+          toolKind: 'execute',
+          title: 'ls -la',
+          status: 'running',
+          input: { command: 'ls' },
+        },
       },
     ]);
     const failed = mapOpencodeEvent(
-      part({ id: 'prt_b', type: 'tool', tool: 'bash', state: { status: 'error', input: { command: 'ls' }, error: 'killed', time: { start: 1, end: 2 } } }),
+      part({
+        id: 'prt_b',
+        type: 'tool',
+        tool: 'bash',
+        state: { status: 'error', input: { command: 'ls' }, error: 'killed', time: { start: 1, end: 2 } },
+      }),
       state,
     );
     expect(failed.events).toEqual([
       {
         type: 'item.completed',
-        item: { kind: 'tool', id: 'prt_b', name: 'bash', toolKind: 'execute', title: 'ls', status: 'failed', input: { command: 'ls' }, error: 'killed' },
+        item: {
+          kind: 'tool',
+          id: 'prt_b',
+          name: 'bash',
+          toolKind: 'execute',
+          title: 'ls',
+          status: 'failed',
+          input: { command: 'ls' },
+          error: 'killed',
+        },
       },
     ]);
     // A duplicate settled snapshot emits nothing.
-    expect(mapOpencodeEvent(
-      part({ id: 'prt_b', type: 'tool', tool: 'bash', state: { status: 'error', input: { command: 'ls' }, error: 'killed' } }),
-      failed.state,
-    ).events).toEqual([]);
+    expect(
+      mapOpencodeEvent(
+        part({
+          id: 'prt_b',
+          type: 'tool',
+          tool: 'bash',
+          state: { status: 'error', input: { command: 'ls' }, error: 'killed' },
+        }),
+        failed.state,
+      ).events,
+    ).toEqual([]);
   });
 
   it('a tool part first seen already completed is a lone final snapshot', () => {
     const [event] = mapOpencodeEvent(
-      part({ id: 'prt_g', type: 'tool', tool: 'read', state: { status: 'completed', input: { filePath: 'src/a.ts' }, output: 'contents' } }),
+      part({
+        id: 'prt_g',
+        type: 'tool',
+        tool: 'read',
+        state: { status: 'completed', input: { filePath: 'src/a.ts' }, output: 'contents' },
+      }),
       startedState(),
     ).events;
-    expect(event).toMatchObject({ type: 'item.completed', item: { status: 'completed', output: 'contents' } });
+    expect(event).toMatchObject({
+      type: 'item.completed',
+      item: { status: 'completed', output: 'contents' },
+    });
   });
 
   it('identical todowrite snapshots emit plan.updated once (full-replacement, deduplicated)', () => {
@@ -303,9 +407,17 @@ describe('mapOpencodeEvent edge cases', () => {
       }),
       state,
     );
-    expect(mapped.events).toContainEqual({ type: 'plan.updated', entries: [{ content: 'ok', status: 'pending' }] });
+    expect(mapped.events).toContainEqual({
+      type: 'plan.updated',
+      entries: [{ content: 'ok', status: 'pending' }],
+    });
     const noPlan = mapOpencodeEvent(
-      part({ id: 'prt_td2', type: 'tool', tool: 'todowrite', state: { status: 'completed', input: { todos: 'nope' } } }),
+      part({
+        id: 'prt_td2',
+        type: 'tool',
+        tool: 'todowrite',
+        state: { status: 'completed', input: { todos: 'nope' } },
+      }),
       state,
     );
     expect(noPlan.events.filter((e) => e.type === 'plan.updated')).toHaveLength(0);
@@ -350,14 +462,22 @@ describe('mapOpencodeEvent edge cases', () => {
       }),
       startedState(),
     );
-    expect(mapped.events).toContainEqual({ type: 'plan.updated', entries: [{ content: 'Odd one', status: 'pending' }] });
+    expect(mapped.events).toContainEqual({
+      type: 'plan.updated',
+      entries: [{ content: 'Odd one', status: 'pending' }],
+    });
   });
 
   // opencode publishes the tool part BEFORE the arguments finish parsing, with
   // `input: {}` — that must not wipe the plan the previous snapshot established.
   it('a pending part with unparsed input emits no plan', () => {
     const mapped = mapOpencodeEvent(
-      part({ id: 'prt_td', type: 'tool', tool: 'todowrite', state: { status: 'pending', input: {}, raw: '' } }),
+      part({
+        id: 'prt_td',
+        type: 'tool',
+        tool: 'todowrite',
+        state: { status: 'pending', input: {}, raw: '' },
+      }),
       startedState(),
     );
     expect(mapped.events.filter((e) => e.type === 'plan.updated')).toHaveLength(0);
@@ -389,16 +509,30 @@ describe('mapOpencodeEvent edge cases', () => {
   it('cost propagation: message.updated carries USD; step-finish increments; the larger total wins per message', () => {
     let state = startedState();
     const step = mapOpencodeEvent(
-      part({ id: 'prt_sf1', type: 'step-finish', cost: 0.001, tokens: { input: 100, output: 20, reasoning: 0, cache: { read: 0, write: 0 } } }),
+      part({
+        id: 'prt_sf1',
+        type: 'step-finish',
+        cost: 0.001,
+        tokens: { input: 100, output: 20, reasoning: 0, cache: { read: 0, write: 0 } },
+      }),
       state,
     );
     expect(step.events).toEqual([
-      { type: 'usage.updated', usage: { input: 100, output: 20, total: 120, cacheRead: 0, cacheWrite: 0, reasoning: 0 }, costUsd: 0.001 },
+      {
+        type: 'usage.updated',
+        usage: { input: 100, output: 20, total: 120, cacheRead: 0, cacheWrite: 0, reasoning: 0 },
+        costUsd: 0.001,
+      },
     ]);
     state = step.state;
     // A second step accumulates.
     const step2 = mapOpencodeEvent(
-      part({ id: 'prt_sf2', type: 'step-finish', cost: 0.002, tokens: { input: 50, output: 10, reasoning: 0, cache: { read: 0, write: 0 } } }),
+      part({
+        id: 'prt_sf2',
+        type: 'step-finish',
+        cost: 0.002,
+        tokens: { input: 50, output: 10, reasoning: 0, cache: { read: 0, write: 0 } },
+      }),
       state,
     );
     expect(step2.events[0]).toMatchObject({ usage: { input: 150, output: 30, total: 180 }, costUsd: 0.003 });
@@ -409,7 +543,13 @@ describe('mapOpencodeEvent edge cases', () => {
       {
         type: 'message.updated',
         properties: {
-          info: { id: 'msg_a', sessionID: SESSION_ID, role: 'assistant', cost: 0.003, tokens: { input: 150, output: 30, reasoning: 0, cache: { read: 0, write: 0 } } },
+          info: {
+            id: 'msg_a',
+            sessionID: SESSION_ID,
+            role: 'assistant',
+            cost: 0.003,
+            tokens: { input: 150, output: 30, reasoning: 0, cache: { read: 0, write: 0 } },
+          },
         },
       },
       state,
@@ -420,7 +560,13 @@ describe('mapOpencodeEvent edge cases', () => {
       {
         type: 'message.updated',
         properties: {
-          info: { id: 'msg_a', sessionID: SESSION_ID, role: 'assistant', cost: 0.004, tokens: { input: 150, output: 60, reasoning: 0, cache: { read: 0, write: 0 } } },
+          info: {
+            id: 'msg_a',
+            sessionID: SESSION_ID,
+            role: 'assistant',
+            cost: 0.004,
+            tokens: { input: 150, output: 60, reasoning: 0, cache: { read: 0, write: 0 } },
+          },
         },
       },
       stale.state,
@@ -431,12 +577,16 @@ describe('mapOpencodeEvent edge cases', () => {
   it('session.idle closes the current turn once; stray and repeated idles close nothing', () => {
     let state = opencodeSessionStarted(SESSION_ID, createOpencodeUiState()).state;
     // Idle before any prompt POST → nothing to close.
-    expect(mapOpencodeEvent({ type: 'session.idle', properties: { sessionID: SESSION_ID } }, state).events).toEqual([]);
+    expect(
+      mapOpencodeEvent({ type: 'session.idle', properties: { sessionID: SESSION_ID } }, state).events,
+    ).toEqual([]);
     state = opencodeTurnStarted(state).state;
     const closed = mapOpencodeEvent({ type: 'session.idle', properties: { sessionID: SESSION_ID } }, state);
     expect(closed.events).toEqual([{ type: 'turn.completed', turnId: 'turn_1', stopReason: 'end_turn' }]);
     // The idle is consumed — a duplicate closes nothing.
-    expect(mapOpencodeEvent({ type: 'session.idle', properties: { sessionID: SESSION_ID } }, closed.state).events).toEqual([]);
+    expect(
+      mapOpencodeEvent({ type: 'session.idle', properties: { sessionID: SESSION_ID } }, closed.state).events,
+    ).toEqual([]);
     // The next prompt mints turn_2.
     const turn2 = opencodeTurnStarted(closed.state);
     expect(turn2.events).toEqual([{ type: 'turn.started', turnId: 'turn_2' }]);
@@ -446,23 +596,32 @@ describe('mapOpencodeEvent edge cases', () => {
     let state = opencodeSessionStarted(SESSION_ID, createOpencodeUiState()).state;
     state = opencodeTurnStarted(state).state;
     const errored = mapOpencodeEvent(
-      { type: 'session.error', properties: { sessionID: SESSION_ID, error: { name: 'UnknownError', data: { message: 'boom' } } } },
+      {
+        type: 'session.error',
+        properties: { sessionID: SESSION_ID, error: { name: 'UnknownError', data: { message: 'boom' } } },
+      },
       state,
     );
     expect(errored.events).toEqual([{ type: 'session.error', message: 'boom', fatal: false }]);
-    const idle = mapOpencodeEvent({ type: 'session.idle', properties: { sessionID: SESSION_ID } }, errored.state);
+    const idle = mapOpencodeEvent(
+      { type: 'session.idle', properties: { sessionID: SESSION_ID } },
+      errored.state,
+    );
     expect(idle.events).toEqual([{ type: 'turn.completed', turnId: 'turn_1', stopReason: 'error' }]);
     // The error flag does not leak into the next turn.
     const next = opencodeTurnStarted(idle.state).state;
-    expect(mapOpencodeEvent({ type: 'session.idle', properties: { sessionID: SESSION_ID } }, next).events).toEqual([
-      { type: 'turn.completed', turnId: 'turn_2', stopReason: 'end_turn' },
-    ]);
+    expect(
+      mapOpencodeEvent({ type: 'session.idle', properties: { sessionID: SESSION_ID } }, next).events,
+    ).toEqual([{ type: 'turn.completed', turnId: 'turn_2', stopReason: 'end_turn' }]);
   });
 
   it('foreign-session parts are dropped outside a subtask scope and nested inside one', () => {
     let state = startedState();
     state = mapOpencodeEvent(
-      { type: 'message.updated', properties: { info: { id: 'msg_child', sessionID: 'ses_child', role: 'assistant' } } },
+      {
+        type: 'message.updated',
+        properties: { info: { id: 'msg_child', sessionID: 'ses_child', role: 'assistant' } },
+      },
       state,
     ).state;
     const orphan = mapOpencodeEvent(
@@ -484,7 +643,10 @@ describe('mapOpencodeEvent edge cases', () => {
       item: { kind: 'message', id: 'prt_f1', role: 'assistant', text: '', parentItemId: 'prt_st' },
     });
     // The child session going idle completes the subtask item and closes the scope.
-    const childIdle = mapOpencodeEvent({ type: 'session.idle', properties: { sessionID: 'ses_child' } }, nested.state);
+    const childIdle = mapOpencodeEvent(
+      { type: 'session.idle', properties: { sessionID: 'ses_child' } },
+      nested.state,
+    );
     expect(childIdle.events).toEqual([
       {
         type: 'item.completed',
@@ -500,8 +662,10 @@ describe('mapOpencodeEvent edge cases', () => {
       },
     ]);
     expect(
-      mapOpencodeEvent(part({ id: 'prt_f2', messageID: 'msg_child', sessionID: 'ses_child', type: 'text', text: 'late' }), childIdle.state)
-        .events,
+      mapOpencodeEvent(
+        part({ id: 'prt_f2', messageID: 'msg_child', sessionID: 'ses_child', type: 'text', text: 'late' }),
+        childIdle.state,
+      ).events,
     ).toEqual([]);
   });
 
@@ -512,11 +676,20 @@ describe('mapOpencodeEvent edge cases', () => {
       state,
     ).state;
     state = mapOpencodeEvent(
-      { type: 'message.updated', properties: { info: { id: 'msg_child', sessionID: 'ses_child', role: 'assistant' } } },
+      {
+        type: 'message.updated',
+        properties: { info: { id: 'msg_child', sessionID: 'ses_child', role: 'assistant' } },
+      },
       state,
     ).state;
     state = mapOpencodeEvent(
-      part({ id: 'prt_child', messageID: 'msg_child', sessionID: 'ses_child', type: 'text', text: 'working' }),
+      part({
+        id: 'prt_child',
+        messageID: 'msg_child',
+        sessionID: 'ses_child',
+        type: 'text',
+        text: 'working',
+      }),
       state,
     ).state;
 
@@ -533,8 +706,15 @@ describe('mapOpencodeEvent edge cases', () => {
         input: { prompt: 'dig in', description: 'Investigate', agent: 'general' },
       },
     });
-    expect(mainIdle.events.at(-1)).toEqual({ type: 'turn.completed', turnId: 'turn_1', stopReason: 'end_turn' });
-    expect(mapOpencodeEvent({ type: 'session.idle', properties: { sessionID: 'ses_child' } }, mainIdle.state).events).toEqual([]);
+    expect(mainIdle.events.at(-1)).toEqual({
+      type: 'turn.completed',
+      turnId: 'turn_1',
+      stopReason: 'end_turn',
+    });
+    expect(
+      mapOpencodeEvent({ type: 'session.idle', properties: { sessionID: 'ses_child' } }, mainIdle.state)
+        .events,
+    ).toEqual([]);
   });
 
   it('session.started is emitted once and requires an id', () => {
@@ -583,13 +763,20 @@ describe('OpencodeServerRunner v2 wiring (against the bundled mock server)', () 
     expect(v2.filter((e) => e.type === 'session.started')).toHaveLength(1);
     expect(v2[1]).toEqual({ type: 'turn.started', turnId: 'turn_1' });
 
-    expect(v2).toContainEqual({ type: 'item.delta', itemId: 'prt_mock_t1', field: 'text', delta: 'Checking the working tree.' });
+    expect(v2).toContainEqual({
+      type: 'item.delta',
+      itemId: 'prt_mock_t1',
+      field: 'text',
+      delta: 'Checking the working tree.',
+    });
     const pending = v2.find(
-      (e): e is Extract<UiEvent, { type: 'item.started' }> => e.type === 'item.started' && e.item.id === 'prt_mock_c1',
+      (e): e is Extract<UiEvent, { type: 'item.started' }> =>
+        e.type === 'item.started' && e.item.id === 'prt_mock_c1',
     );
     expect(pending?.item).toMatchObject({ kind: 'tool', name: 'bash', status: 'pending' });
     const cmdDone = v2.find(
-      (e): e is Extract<UiEvent, { type: 'item.completed' }> => e.type === 'item.completed' && e.item.id === 'prt_mock_c1',
+      (e): e is Extract<UiEvent, { type: 'item.completed' }> =>
+        e.type === 'item.completed' && e.item.id === 'prt_mock_c1',
     );
     expect(cmdDone?.item).toMatchObject({
       toolKind: 'execute',

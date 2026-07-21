@@ -1,12 +1,12 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckIcon, ChevronDownIcon, NotebookPenIcon, PlusIcon, SparklesIcon, XIcon } from 'lucide-react'
-import { useRef, useState, type ReactNode } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { CheckIcon, ChevronDownIcon, NotebookPenIcon, PlusIcon, SparklesIcon, XIcon } from 'lucide-react';
+import { useRef, useState, type ReactNode } from 'react';
 
-import { putUiState } from '@/api/client'
-import { queryKeys, useSkills, useUiState } from '@/api/queries'
-import type { Skill } from '@/api/types'
-import { CenteredState } from '@/components/centered-state'
-import { Button } from '@/components/ui/button'
+import { putUiState } from '@/api/client';
+import { queryKeys, useSkills, useUiState } from '@/api/queries';
+import type { Skill } from '@/api/types';
+import { CenteredState } from '@/components/centered-state';
+import { Button } from '@/components/ui/button';
 import {
   Command,
   CommandEmpty,
@@ -14,19 +14,19 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from '@/components/ui/command'
-import { Input } from '@/components/ui/input'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Textarea } from '@/components/ui/textarea'
-import { toast } from '@/components/ui/toaster'
+} from '@/components/ui/command';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from '@/components/ui/toaster';
 import {
   DEFAULT_PROMPT_TEMPLATES,
   makeTemplateId,
   normalizePromptTemplates,
   type PromptTemplate,
-} from '@/lib/prompt-templates'
-import { isProjectSkill, multiWordFilter, partitionSkillsForDisplay, skillKeywords } from '@/lib/skills'
-import { cn } from '@/lib/utils'
+} from '@/lib/prompt-templates';
+import { isProjectSkill, multiWordFilter, partitionSkillsForDisplay, skillKeywords } from '@/lib/skills';
+import { cn } from '@/lib/utils';
 
 /**
  * Settings → Prompt templates (#413): "add the settings pane for editing these prompt templates
@@ -40,14 +40,14 @@ import { cn } from '@/lib/utils'
  * prompt, because a PUT on every keystroke would be a worse control, not a simpler one.
  */
 export function PromptTemplatesSection() {
-  const uiState = useUiState()
+  const uiState = useUiState();
 
   if (uiState.isPending) {
     return (
       <p data-slot="prompt-templates-loading" className="p-4 text-[13px] text-soft-foreground md:p-6">
         Loading prompt templates…
       </p>
-    )
+    );
   }
   if (uiState.isError) {
     return (
@@ -58,37 +58,37 @@ export function PromptTemplatesSection() {
         subtitle={uiState.error.message}
         heading="h2"
       />
-    )
+    );
   }
   // Keyed on whether the server has ever written this key: an untouched repo (undefined) and an
   // explicitly-cleared one ([]) both come through `normalizePromptTemplates` correctly already,
   // so the form below never has to know the difference.
-  return <PromptTemplatesForm initial={normalizePromptTemplates(uiState.data.promptTemplates)} />
+  return <PromptTemplatesForm initial={normalizePromptTemplates(uiState.data.promptTemplates)} />;
 }
 
 function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
-  const queryClient = useQueryClient()
-  const skills = useSkills()
+  const queryClient = useQueryClient();
+  const skills = useSkills();
   // Already cached by the section gate above; read again here for the picker's #519 tiers.
-  const uiState = useUiState()
-  const [templates, setTemplates] = useState<PromptTemplate[]>(initial)
-  const [newLabel, setNewLabel] = useState('')
-  const [newText, setNewText] = useState('')
+  const uiState = useUiState();
+  const [templates, setTemplates] = useState<PromptTemplate[]>(initial);
+  const [newLabel, setNewLabel] = useState('');
+  const [newText, setNewText] = useState('');
 
   const save = useMutation({
     mutationFn: (next: PromptTemplate[]) => putUiState({ promptTemplates: next }),
     onSuccess: (merged) => {
-      queryClient.setQueryData(queryKeys.uiState, merged)
-      toast('Prompt templates saved')
+      queryClient.setQueryData(queryKeys.uiState, merged);
+      toast('Prompt templates saved');
     },
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
-  })
+  });
 
-  const dirty = JSON.stringify(templates) !== JSON.stringify(initial)
-  const invalid = templates.some((t) => t.label.trim() === '' || t.text.trim() === '')
+  const dirty = JSON.stringify(templates) !== JSON.stringify(initial);
+  const invalid = templates.some((t) => t.label.trim() === '' || t.text.trim() === '');
 
   const updateTemplate = (id: string, patch: Partial<Pick<PromptTemplate, 'label' | 'text'>>) =>
-    setTemplates((current) => current.map((t) => (t.id === id ? { ...t, ...patch } : t)))
+    setTemplates((current) => current.map((t) => (t.id === id ? { ...t, ...patch } : t)));
 
   /** Assign/unassign a skill. Unassigning the last one DROPS the key rather than leaving `[]`,
    *  matching what `normalizePromptTemplates` produces — otherwise assign-then-unassign would
@@ -96,29 +96,28 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
   const toggleTemplateSkill = (id: string, name: string) =>
     setTemplates((current) =>
       current.map((template) => {
-        if (template.id !== id) return template
-        const assigned = template.skills ?? []
+        if (template.id !== id) return template;
+        const assigned = template.skills ?? [];
         const next = assigned.includes(name)
           ? assigned.filter((existing) => existing !== name)
-          : [...assigned, name]
-        const { skills: _previous, ...rest } = template
-        return next.length > 0 ? { ...rest, skills: next } : rest
+          : [...assigned, name];
+        const { skills: _previous, ...rest } = template;
+        return next.length > 0 ? { ...rest, skills: next } : rest;
       }),
-    )
+    );
 
-  const removeTemplate = (id: string) =>
-    setTemplates((current) => current.filter((t) => t.id !== id))
+  const removeTemplate = (id: string) => setTemplates((current) => current.filter((t) => t.id !== id));
 
   const addTemplate = () => {
-    const label = newLabel.trim()
-    const text = newText.trim()
-    if (!label || !text) return
-    setTemplates((current) => [...current, { id: makeTemplateId(), label, text }])
-    setNewLabel('')
-    setNewText('')
-  }
+    const label = newLabel.trim();
+    const text = newText.trim();
+    if (!label || !text) return;
+    setTemplates((current) => [...current, { id: makeTemplateId(), label, text }]);
+    setNewLabel('');
+    setNewText('');
+  };
 
-  const resetToDefaults = () => setTemplates(DEFAULT_PROMPT_TEMPLATES.map((t) => ({ ...t })))
+  const resetToDefaults = () => setTemplates(DEFAULT_PROMPT_TEMPLATES.map((t) => ({ ...t })));
 
   return (
     <div
@@ -264,7 +263,7 @@ function PromptTemplatesForm({ initial }: { initial: PromptTemplate[] }) {
         </div>
       </Field>
     </div>
-  )
+  );
 }
 
 /**
@@ -283,19 +282,19 @@ function TemplateSkillsPicker({
   selected,
   onToggle,
 }: {
-  label: string
-  skills: readonly Skill[]
-  skillUsage: Readonly<Record<string, number>> | undefined
-  selected: readonly string[]
-  onToggle: (name: string) => void
+  label: string;
+  skills: readonly Skill[];
+  skillUsage: Readonly<Record<string, number>> | undefined;
+  selected: readonly string[];
+  onToggle: (name: string) => void;
 }) {
-  const [open, setOpen] = useState(false)
-  const listRef = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
   // The #519 display tiers — the same most-used → project → global order every picker renders.
-  const { mostUsed, project, global } = partitionSkillsForDisplay(skills, skillUsage)
+  const { mostUsed, project, global } = partitionSkillsForDisplay(skills, skillUsage);
 
   const skillItem = (skill: Skill, emphasized: boolean) => {
-    const isSelected = selected.includes(skill.name)
+    const isSelected = selected.includes(skill.name);
     return (
       <CommandItem
         key={skill.path}
@@ -307,20 +306,16 @@ function TemplateSkillsPicker({
         data-selected={isSelected ? 'true' : undefined}
         onSelect={() => onToggle(skill.name)}
       >
-        <span className={cn('shrink-0 font-mono text-xs', emphasized && 'font-semibold')}>
-          {skill.name}
-        </span>
+        <span className={cn('shrink-0 font-mono text-xs', emphasized && 'font-semibold')}>{skill.name}</span>
         {skill.description ? (
-          <span className="min-w-0 flex-1 truncate text-xs text-soft-foreground">
-            {skill.description}
-          </span>
+          <span className="min-w-0 flex-1 truncate text-xs text-soft-foreground">{skill.description}</span>
         ) : null}
         {isSelected ? (
           <CheckIcon aria-hidden="true" className="ml-auto size-3.5 shrink-0 text-primary" />
         ) : null}
       </CommandItem>
-    )
-  }
+    );
+  };
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -367,7 +362,7 @@ function TemplateSkillsPicker({
         </Command>
       </PopoverContent>
     </Popover>
-  )
+  );
 }
 
 /** The Appearance/Agents sections' field chassis — same rhythm, so Settings reads as one surface. */
@@ -380,5 +375,5 @@ function Field({ title, hint, children }: { title: string; hint: string; childre
       </div>
       {children}
     </section>
-  )
+  );
 }

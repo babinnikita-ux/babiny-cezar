@@ -9,7 +9,10 @@ import { createAutoUi } from './ui.js';
 import { nginxVhost } from './platforms/ubuntu-vps.js';
 import type { Runner } from './types.js';
 
-const noRunner: Runner = { capture: async () => ({ code: 0, stdout: '', stderr: '' }), interactive: async () => 0 };
+const noRunner: Runner = {
+  capture: async () => ({ code: 0, stdout: '', stderr: '' }),
+  interactive: async () => 0,
+};
 
 describe('registry', () => {
   it('resolves ubuntu-vps and lists available ids', () => {

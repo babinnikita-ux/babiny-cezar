@@ -15,21 +15,21 @@
  * legacy `/api/*` surface (BACKWARD_COMPATIBILITY.md).
  */
 
-let activeProjectId: string | null = null
+let activeProjectId: string | null = null;
 
 /** Written by ProjectScopeProvider on mount/param change (and cleared on unmount). Everything
  *  else only reads. */
 export function setApiScope(projectId: string | null): void {
-  activeProjectId = projectId === '' ? null : projectId
+  activeProjectId = projectId === '' ? null : projectId;
 }
 
 export function getApiScope(): string | null {
-  return activeProjectId
+  return activeProjectId;
 }
 
 /** The scoped API base — what the context carries and what deep links embed. */
 export function apiBase(): string {
-  return activeProjectId === null ? '/api' : `/api/p/${encodeURIComponent(activeProjectId)}`
+  return activeProjectId === null ? '/api' : `/api/p/${encodeURIComponent(activeProjectId)}`;
 }
 
 /**
@@ -40,7 +40,7 @@ export function apiBase(): string {
  * server-side.
  */
 export function queryScope(): string {
-  return activeProjectId ?? 'default'
+  return activeProjectId ?? 'default';
 }
 
 /**
@@ -50,7 +50,7 @@ export function queryScope(): string {
  * `/api/fs/*` (the folder picker —
  * one filesystem, not one per project), and `/api/health` (CORS-open, boot-bound by design).
  */
-const WORKSPACE_LEVEL = /^\/api\/(?:health$|models(?:$|[/?])|projects(?:$|[/?])|workspace\/|fs\/)/
+const WORKSPACE_LEVEL = /^\/api\/(?:health$|models(?:$|[/?])|projects(?:$|[/?])|workspace\/|fs\/)/;
 
 /**
  * Prefix a root-relative `/api/...` path with the active project scope.
@@ -64,9 +64,9 @@ const WORKSPACE_LEVEL = /^\/api\/(?:health$|models(?:$|[/?])|projects(?:$|[/?])|
  * cached data keeps the server's own unscoped URLs and is re-scoped wherever it is used.
  */
 export function scopeApiPath(path: string): string {
-  if (activeProjectId === null) return path
-  if (!path.startsWith('/api/')) return path
-  if (path.startsWith('/api/p/')) return path
-  if (WORKSPACE_LEVEL.test(path)) return path
-  return `/api/p/${encodeURIComponent(activeProjectId)}${path.slice('/api'.length)}`
+  if (activeProjectId === null) return path;
+  if (!path.startsWith('/api/')) return path;
+  if (path.startsWith('/api/p/')) return path;
+  if (WORKSPACE_LEVEL.test(path)) return path;
+  return `/api/p/${encodeURIComponent(activeProjectId)}${path.slice('/api'.length)}`;
 }

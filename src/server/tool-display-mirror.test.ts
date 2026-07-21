@@ -45,7 +45,11 @@ const TABLE: Array<{ name: string; input?: unknown; expected: ToolDisplay }> = [
     input: { filePath: 'web/app/src/App.tsx' },
     expected: { toolKind: 'edit', title: 'Edit web/app/src/App.tsx' },
   },
-  { name: 'Write', input: { file_path: 'README.md' }, expected: { toolKind: 'edit', title: 'Write README.md' } },
+  {
+    name: 'Write',
+    input: { file_path: 'README.md' },
+    expected: { toolKind: 'edit', title: 'Write README.md' },
+  },
   {
     name: 'NotebookEdit',
     input: { notebook_path: 'analysis.ipynb' },
@@ -64,7 +68,11 @@ const TABLE: Array<{ name: string; input?: unknown; expected: ToolDisplay }> = [
   { name: 'fileChange', input: { changes: [] }, expected: { toolKind: 'edit', title: 'Edit' } },
 
   // read / search
-  { name: 'Read', input: { file_path: 'package.json' }, expected: { toolKind: 'read', title: 'Read package.json' } },
+  {
+    name: 'Read',
+    input: { file_path: 'package.json' },
+    expected: { toolKind: 'read', title: 'Read package.json' },
+  },
   {
     name: 'Grep',
     input: { pattern: 'AgentEvent', path: 'src/core' },
@@ -158,7 +166,11 @@ const TABLE: Array<{ name: string; input?: unknown; expected: ToolDisplay }> = [
   {
     name: 'Bash',
     input: { command: `echo ${'x'.repeat(500)}` },
-    expected: { toolKind: 'execute', title: `Ran ${`echo ${'x'.repeat(500)}`.slice(0, 119)}…`, subtitle: undefined },
+    expected: {
+      toolKind: 'execute',
+      title: `Ran ${`echo ${'x'.repeat(500)}`.slice(0, 119)}…`,
+      subtitle: undefined,
+    },
   },
 ];
 
@@ -182,7 +194,17 @@ describe('web protocol mirror — toolDisplay says exactly what the server says'
       { file_path: { not: 'a string' } },
       Object.create(null),
     ];
-    const names = ['Bash', 'fileChange', 'Read', 'Grep', 'Task', 'Agent', 'Skill', 'mcpToolCall', 'TotallyUnknown'];
+    const names = [
+      'Bash',
+      'fileChange',
+      'Read',
+      'Grep',
+      'Task',
+      'Agent',
+      'Skill',
+      'mcpToolCall',
+      'TotallyUnknown',
+    ];
     for (const name of names) {
       for (const input of junkInputs) {
         expect(webToolDisplay(name, input)).toEqual(toolDisplay(name, input));

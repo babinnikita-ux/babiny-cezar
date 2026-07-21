@@ -25,9 +25,7 @@ function fakeBackend(over: Partial<PromptBackend>): PromptBackend {
 describe('createClackUi', () => {
   it('maps a cancelled prompt to the CANCEL sentinel, never throws', async () => {
     const ui = createClackUi(fakeBackend({ select: vi.fn().mockResolvedValue(CANCEL_SYMBOL) }));
-    await expect(ui.select({ message: 'pick', options: [{ value: 'a', label: 'A' }] })).resolves.toBe(
-      CANCEL,
-    );
+    await expect(ui.select({ message: 'pick', options: [{ value: 'a', label: 'A' }] })).resolves.toBe(CANCEL);
   });
 
   it('returns the value when the user answers', async () => {
@@ -68,10 +66,17 @@ describe('createAutoUi', () => {
     ).rejects.toThrow(/too short/);
     // a valid answer (via overrides) passes
     const withAnswer = createAutoUi({ pw: 'longenough' }, () => {}, { strictValidate: true });
-    expect(await withAnswer.password({ message: 'pw', validate: (v) => (v.length >= 6 ? undefined : 'too short') })).toBe('longenough');
+    expect(
+      await withAnswer.password({
+        message: 'pw',
+        validate: (v) => (v.length >= 6 ? undefined : 'too short'),
+      }),
+    ).toBe('longenough');
     // lenient (dry-run) mode walks on with the placeholder-grade value
     const lenient = createAutoUi();
-    expect(await lenient.password({ message: 'pw', validate: (v) => (v.length >= 6 ? undefined : 'too short') })).toBe('');
+    expect(
+      await lenient.password({ message: 'pw', validate: (v) => (v.length >= 6 ? undefined : 'too short') }),
+    ).toBe('');
   });
 
   it('honors per-message answer overrides', async () => {

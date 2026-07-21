@@ -1,13 +1,13 @@
-import { ArrowUpRightIcon, ChevronDownIcon, ScaleIcon } from 'lucide-react'
-import * as React from 'react'
-import { useRuns } from '@/api/queries'
-import { Link, scopeTo, useProjectMatch } from '@/lib/project-router'
-import type { RunRecord } from '@/api/types'
-import { DiffStatLabel } from '@/components/diff-stat'
-import { useListView } from '@/components/list-view'
-import { StatusDot } from '@/components/status-dot'
-import { deriveAttention } from '@/lib/attention'
-import { compactTokens, shortAge } from '@/lib/format'
+import { ArrowUpRightIcon, ChevronDownIcon, ScaleIcon } from 'lucide-react';
+import * as React from 'react';
+import { useRuns } from '@/api/queries';
+import { Link, scopeTo, useProjectMatch } from '@/lib/project-router';
+import type { RunRecord } from '@/api/types';
+import { DiffStatLabel } from '@/components/diff-stat';
+import { useListView } from '@/components/list-view';
+import { StatusDot } from '@/components/status-dot';
+import { deriveAttention } from '@/lib/attention';
+import { compactTokens, shortAge } from '@/lib/format';
 import {
   groupRuns,
   listCounts,
@@ -15,10 +15,10 @@ import {
   type ListView,
   type QuickListBucket,
   type QuickListRow,
-} from '@/lib/task-groups'
-import { taskPrUrl } from '@/lib/tasks-table'
-import { useNow } from '@/lib/use-now'
-import { cn, isHttpUrl } from '@/lib/utils'
+} from '@/lib/task-groups';
+import { taskPrUrl } from '@/lib/tasks-table';
+import { useNow } from '@/lib/use-now';
+import { cn, isHttpUrl } from '@/lib/utils';
 
 /**
  * The sidebar's task quick-list (spec, "App shell & navigation"): Active/Archived tabs, then the
@@ -35,16 +35,16 @@ export function TaskQuickList({
   currentRunId = null,
   now = Date.now(),
 }: {
-  runs: RunRecord[]
-  view: ListView
-  onViewChange: (view: ListView) => void
+  runs: RunRecord[];
+  view: ListView;
+  onViewChange: (view: ListView) => void;
   /** The run open at `/tasks/:id`, so its row can show as active. */
-  currentRunId?: string | null
+  currentRunId?: string | null;
   /** Injected so the ages are not racing the clock in tests. */
-  now?: number
+  now?: number;
 }) {
-  const counts = listCounts(runs)
-  const buckets = groupRuns(runs, view)
+  const counts = listCounts(runs);
+  const buckets = groupRuns(runs, view);
 
   return (
     <div data-slot="quick-list">
@@ -73,7 +73,7 @@ export function TaskQuickList({
         <QuickListBuckets buckets={buckets} currentRunId={currentRunId} now={now} />
       )}
     </div>
-  )
+  );
 }
 
 /**
@@ -89,19 +89,19 @@ export function QuickListBuckets({
   now = Date.now(),
   scope = null,
 }: {
-  buckets: QuickListBucket[]
-  currentRunId?: string | null
-  now?: number
-  scope?: string | null
+  buckets: QuickListBucket[];
+  currentRunId?: string | null;
+  now?: number;
+  scope?: string | null;
 }) {
   // Which variant groups are open. Local: it is view state about this list, nothing else reads it.
-  const [expanded, setExpanded] = React.useState<ReadonlySet<string>>(() => new Set())
+  const [expanded, setExpanded] = React.useState<ReadonlySet<string>>(() => new Set());
   const toggleGroup = (groupId: string) =>
     setExpanded((current) => {
-      const next = new Set(current)
-      if (!next.delete(groupId)) next.add(groupId)
-      return next
-    })
+      const next = new Set(current);
+      if (!next.delete(groupId)) next.add(groupId);
+      return next;
+    });
 
   return (
     <>
@@ -124,7 +124,7 @@ export function QuickListBuckets({
         </div>
       ))}
     </>
-  )
+  );
 }
 
 function ViewTab({
@@ -134,13 +134,13 @@ function ViewTab({
   count,
   children,
 }: {
-  view: ListView
-  current: ListView
-  onSelect: (view: ListView) => void
-  count: number
-  children: React.ReactNode
+  view: ListView;
+  current: ListView;
+  onSelect: (view: ListView) => void;
+  count: number;
+  children: React.ReactNode;
 }) {
-  const isActive = view === current
+  const isActive = view === current;
   return (
     <button
       type="button"
@@ -152,14 +152,14 @@ function ViewTab({
       onClick={() => onSelect(view)}
       className={cn(
         'flex h-7 flex-1 items-center justify-center gap-1.5 rounded-[7px] text-[12.5px] font-medium text-muted-foreground',
-        isActive && 'bg-card font-semibold text-foreground shadow-xs'
+        isActive && 'bg-card font-semibold text-foreground shadow-xs',
       )}
     >
       {children}
       {/* No "0": an empty bucket says so by being empty. */}
       {count > 0 ? <span className="font-mono text-[11px] tabular-nums">{count}</span> : null}
     </button>
-  )
+  );
 }
 
 function Row({
@@ -170,12 +170,12 @@ function Row({
   expanded,
   onToggle,
 }: {
-  row: QuickListRow
-  currentRunId: string | null
-  now: number
-  scope: string | null
-  expanded: boolean
-  onToggle: (groupId: string) => void
+  row: QuickListRow;
+  currentRunId: string | null;
+  now: number;
+  scope: string | null;
+  expanded: boolean;
+  onToggle: (groupId: string) => void;
 }) {
   if (row.kind === 'run') {
     return (
@@ -186,7 +186,7 @@ function Row({
         now={now}
         scope={scope}
       />
-    )
+    );
   }
   return (
     <>
@@ -202,7 +202,10 @@ function Row({
           className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-[7px] text-left"
         >
           <ChevronDownIcon
-            className={cn('size-3 shrink-0 text-soft-foreground transition-transform', !expanded && '-rotate-90')}
+            className={cn(
+              'size-3 shrink-0 text-soft-foreground transition-transform',
+              !expanded && '-rotate-90',
+            )}
             aria-hidden="true"
           />
           <span className="min-w-0 flex-1 truncate text-[13px] font-medium">{row.title}</span>
@@ -234,7 +237,7 @@ function Row({
           ))
         : null}
     </>
-  )
+  );
 }
 
 /**
@@ -251,26 +254,26 @@ function RunRow({
   scope,
   variant = false,
 }: {
-  run: RunRecord
-  queuePosition: number | null
-  currentRunId: string | null
-  now: number
+  run: RunRecord;
+  queuePosition: number | null;
+  currentRunId: string | null;
+  now: number;
   /** Explicit `/p/<id>` link scope for a non-active project's row; null = the active scope. */
-  scope: string | null
+  scope: string | null;
   /** A member row under an expanded group tile: indented, letter-chipped, and labelled with what
    *  actually distinguishes the variants (runner and spend) rather than the shared title. */
-  variant?: boolean
+  variant?: boolean;
 }) {
-  const attention = deriveAttention(run)
-  const isActive = run.id === currentRunId
-  const prUrl = taskPrUrl(run)
+  const attention = deriveAttention(run);
+  const isActive = run.id === currentRunId;
+  const prUrl = taskPrUrl(run);
   // A variant row spends its width on what distinguishes the variants (runner and spend) rather
   // than on an age they all share — they started together. Per the mockup.
   const age = variant
     ? ''
     : queuePosition !== null
       ? `#${queuePosition}`
-      : shortAge(run.finishedAt ?? run.createdAt, now)
+      : shortAge(run.finishedAt ?? run.createdAt, now);
 
   return (
     <div
@@ -279,11 +282,7 @@ function RunRow({
       // The row's highlight is a wrapper concern (the PR chip sits outside the Link), so the
       // active state has to be readable here rather than only from the Link's `aria-current`.
       data-active={isActive ? 'true' : undefined}
-      className={cn(
-        'flex items-center rounded-sm hover:bg-muted',
-        isActive && 'bg-muted',
-        variant && 'pl-4'
-      )}
+      className={cn('flex items-center rounded-sm hover:bg-muted', isActive && 'bg-muted', variant && 'pl-4')}
     >
       <Link
         to={scopeTo(scope, `/tasks/${run.id}`)}
@@ -326,15 +325,15 @@ function RunRow({
         </a>
       ) : null}
     </div>
-  )
+  );
 }
 
 /** A variant row's subtitle: what differs between A and B — the backend and what it has spent.
  *  `runner` is absent on records predating the choice; those are Claude by definition. */
 function variantLabel(run: RunRecord): string {
-  const parts: string[] = [run.runner ?? 'claude']
-  if (run.tokensUsed > 0) parts.push(compactTokens(run.tokensUsed))
-  return parts.join(' · ')
+  const parts: string[] = [run.runner ?? 'claude'];
+  if (run.tokensUsed > 0) parts.push(compactTokens(run.tokensUsed));
+  return parts.join(' · ');
 }
 
 /**
@@ -343,16 +342,16 @@ function variantLabel(run: RunRecord): string {
  * the sidebar and the Tasks table (Step 3.4) always show the same filter.
  */
 export function TaskQuickListContainer() {
-  const runs = useRuns()
-  const [view, setView] = useListView()
+  const runs = useRuns();
+  const [view, setView] = useListView();
   // Project-prefix-agnostic matches (step 3.2): `/p/<id>/tasks/:id` must light its row too.
-  const match = useProjectMatch('/tasks/:id/*')
-  const exact = useProjectMatch('/tasks/:id')
-  const now = useNow(30_000)
+  const match = useProjectMatch('/tasks/:id/*');
+  const exact = useProjectMatch('/tasks/:id');
+  const now = useNow(30_000);
 
   // Nothing at all until the list has answered: a skeleton here would be inventing rows, and an
   // empty state would claim "No tasks yet" before we know whether there are any.
-  if (!runs.data) return null
+  if (!runs.data) return null;
 
   return (
     <TaskQuickList
@@ -363,5 +362,5 @@ export function TaskQuickListContainer() {
       currentRunId={match?.params.id ?? exact?.params.id ?? null}
       now={now}
     />
-  )
+  );
 }

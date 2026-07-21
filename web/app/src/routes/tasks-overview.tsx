@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArchiveIcon,
   ArrowUpRightIcon,
@@ -8,24 +8,24 @@ import {
   ScaleIcon,
   SearchIcon,
   SearchXIcon,
-} from 'lucide-react'
-import * as React from 'react'
-import { Link, useNavigate } from '@/lib/project-router'
+} from 'lucide-react';
+import * as React from 'react';
+import { Link, useNavigate } from '@/lib/project-router';
 
-import { archiveFinished, patchRun } from '@/api/client'
-import { useRunUsage } from '@/api/global-events'
-import { queryKeys, useRuns } from '@/api/queries'
-import type { RunRecord } from '@/api/types'
-import { CenteredState } from '@/components/centered-state'
-import { DiffStatLabel } from '@/components/diff-stat'
-import { TitleEditInput, useTitleEditor } from '@/components/editable-title'
-import { useListView } from '@/components/list-view'
-import { Pill } from '@/components/pill'
-import { Button } from '@/components/ui/button'
-import { toast } from '@/components/ui/toaster'
-import { deriveAttention } from '@/lib/attention'
-import { compactTokens, shortAge } from '@/lib/format'
-import { listCounts, queuePositions, runTitle, sortRuns, type ListView } from '@/lib/task-groups'
+import { archiveFinished, patchRun } from '@/api/client';
+import { useRunUsage } from '@/api/global-events';
+import { queryKeys, useRuns } from '@/api/queries';
+import type { RunRecord } from '@/api/types';
+import { CenteredState } from '@/components/centered-state';
+import { DiffStatLabel } from '@/components/diff-stat';
+import { TitleEditInput, useTitleEditor } from '@/components/editable-title';
+import { useListView } from '@/components/list-view';
+import { Pill } from '@/components/pill';
+import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/toaster';
+import { deriveAttention } from '@/lib/attention';
+import { compactTokens, shortAge } from '@/lib/format';
+import { listCounts, queuePositions, runTitle, sortRuns, type ListView } from '@/lib/task-groups';
 import {
   compareGroups,
   filterRuns,
@@ -35,9 +35,9 @@ import {
   usageCells,
   workflowLabel,
   type UsageCell,
-} from '@/lib/tasks-table'
-import { useNow } from '@/lib/use-now'
-import { cn, isHttpUrl } from '@/lib/utils'
+} from '@/lib/tasks-table';
+import { useNow } from '@/lib/use-now';
+import { cn, isHttpUrl } from '@/lib/utils';
 
 /**
  * The Tasks overview — the table that IS the home at `/` (spec, "Task list & table", per PR
@@ -61,25 +61,25 @@ export function TasksOverview({
 }: {
   /** Undefined while `/api/runs` has not answered: the header renders, the body stays empty —
    *  an empty state before we know there are no runs would be a lie. */
-  runs: RunRecord[] | undefined
-  view: ListView
-  onViewChange: (view: ListView) => void
-  onArchiveFinished: () => void
+  runs: RunRecord[] | undefined;
+  view: ListView;
+  onViewChange: (view: ListView) => void;
+  onArchiveFinished: () => void;
   /** Inline rename from the table's Task cell (spec step 15) — the route wires this to
    *  `PATCH /api/runs/:id`, the same flow as the run header's pencil. */
-  onRename: (id: string, title: string) => void
+  onRename: (id: string, title: string) => void;
   /** Injected so the ages are not racing the clock in tests. */
-  now?: number
+  now?: number;
 }) {
-  const [query, setQuery] = React.useState('')
-  const all = runs ?? []
-  const counts = listCounts(all)
-  const visible = sortRuns(filterRuns(all, query), view)
+  const [query, setQuery] = React.useState('');
+  const all = runs ?? [];
+  const counts = listCounts(all);
+  const visible = sortRuns(filterRuns(all, query), view);
   // Positions come from the full list, never the filtered one: a search must not renumber the
   // queue the engine is actually going to drain.
-  const positions = queuePositions(all)
-  const strips = compareGroups(filterRuns(all, query), view)
-  const finished = finishedRunCount(all)
+  const positions = queuePositions(all);
+  const strips = compareGroups(filterRuns(all, query), view);
+  const finished = finishedRunCount(all);
 
   return (
     <div data-route="tasks" className="flex min-h-full flex-col">
@@ -188,8 +188,8 @@ export function TasksOverview({
           >
             <ScaleIcon className="size-[15px] shrink-0 text-soft-foreground" aria-hidden="true" />
             <span>
-              <strong className="font-semibold text-foreground">{group.title}</strong> — {group.count} variants
-              finished
+              <strong className="font-semibold text-foreground">{group.title}</strong> — {group.count}{' '}
+              variants finished
             </span>
             <Button asChild variant="outline" size="sm" className="md:ml-auto">
               <Link to={`/compare/${group.groupId}`}>Compare</Link>
@@ -209,7 +209,7 @@ export function TasksOverview({
         <PlusIcon className="size-[22px]" aria-hidden="true" />
       </Link>
     </div>
-  )
+  );
 }
 
 /**
@@ -219,8 +219,8 @@ export function TasksOverview({
  * a fact, so those stay flat. `heading="h2"` because the page's h1 is the header's "Tasks".
  */
 function TasksEmptyState({ view, query }: { view: ListView; query: string }) {
-  const needle = query.trim()
-  const kind = needle ? 'search-miss' : view === 'archived' ? 'archive' : 'no-tasks'
+  const needle = query.trim();
+  const kind = needle ? 'search-miss' : view === 'archived' ? 'archive' : 'no-tasks';
   return (
     <div data-slot="tasks-empty" data-empty-kind={kind} className="flex flex-1 flex-col">
       {kind === 'search-miss' ? (
@@ -258,7 +258,7 @@ function TasksEmptyState({ view, query }: { view: ListView; query: string }) {
         />
       )}
     </div>
-  )
+  );
 }
 
 function OverviewTab({
@@ -268,13 +268,13 @@ function OverviewTab({
   count,
   children,
 }: {
-  view: ListView
-  current: ListView
-  onSelect: (view: ListView) => void
-  count: number
-  children: React.ReactNode
+  view: ListView;
+  current: ListView;
+  onSelect: (view: ListView) => void;
+  count: number;
+  children: React.ReactNode;
 }) {
-  const isActive = view === current
+  const isActive = view === current;
   return (
     <button
       type="button"
@@ -286,13 +286,13 @@ function OverviewTab({
       onClick={() => onSelect(view)}
       className={cn(
         'flex h-7 items-center justify-center gap-1.5 rounded-[7px] px-3 text-[12.5px] font-medium text-muted-foreground',
-        isActive && 'bg-card font-semibold text-foreground shadow-xs'
+        isActive && 'bg-card font-semibold text-foreground shadow-xs',
       )}
     >
       {children}
       {count > 0 ? <span className="font-mono text-[11px] tabular-nums">{count}</span> : null}
     </button>
-  )
+  );
 }
 
 function Th({ children, right = false }: { children: React.ReactNode; right?: boolean }) {
@@ -300,15 +300,15 @@ function Th({ children, right = false }: { children: React.ReactNode; right?: bo
     <th
       className={cn(
         'h-[38px] border-b border-border px-2.5 text-left text-[11px] font-semibold tracking-[0.05em] whitespace-nowrap text-soft-foreground uppercase first:pl-4 last:pr-4',
-        right && 'text-right'
+        right && 'text-right',
       )}
     >
       {children}
     </th>
-  )
+  );
 }
 
-const TD_BASE = 'h-11 border-b border-border px-2.5 whitespace-nowrap first:pl-4 last:pr-4'
+const TD_BASE = 'h-11 border-b border-border px-2.5 whitespace-nowrap first:pl-4 last:pr-4';
 
 /**
  * One run, one row.
@@ -324,24 +324,24 @@ function TableRow({
   onRename,
   now,
 }: {
-  run: RunRecord
-  queuePosition: number | null
-  onRename: (id: string, title: string) => void
-  now: number
+  run: RunRecord;
+  queuePosition: number | null;
+  onRename: (id: string, title: string) => void;
+  now: number;
 }) {
-  const navigate = useNavigate()
-  const attention = deriveAttention(run)
-  const to = `/tasks/${run.id}`
-  const cost = formatCost(run.costUsd)
-  const reference = taskReference(run)
+  const navigate = useNavigate();
+  const attention = deriveAttention(run);
+  const to = `/tasks/${run.id}`;
+  const cost = formatCost(run.costUsd);
+  const reference = taskReference(run);
 
   return (
     <tr
       data-slot="task-table-row"
       data-run-id={run.id}
       onClick={(event) => {
-        if ((event.target as Element).closest('a, button, input')) return
-        navigate(to)
+        if ((event.target as Element).closest('a, button, input')) return;
+        navigate(to);
       }}
       className="group/row cursor-pointer hover:bg-muted"
     >
@@ -357,7 +357,9 @@ function TableRow({
       <td className={TD_BASE}>{run.branch ? <BranchChip branch={run.branch} /> : <Dash />}</td>
       {/* ± — refreshed on every turn-end (#389); still an honest dash on records that predate it. */}
       <td className={TD_BASE}>{run.diffStat ? <DiffStatLabel stat={run.diffStat} /> : <Dash />}</td>
-      <td className={TD_BASE}>{reference ? <ReferenceChip reference={reference} taskTitle={runTitle(run)} /> : <Dash />}</td>
+      <td className={TD_BASE}>
+        {reference ? <ReferenceChip reference={reference} taskTitle={runTitle(run)} /> : <Dash />}
+      </td>
       <td className={cn(TD_BASE, 'text-right font-mono text-xs text-muted-foreground tabular-nums')}>
         {compactTokens(run.tokensUsed)}
       </td>
@@ -379,7 +381,7 @@ function TableRow({
         {shortAge(run.startedAt ?? run.createdAt, now)}
       </td>
     </tr>
-  )
+  );
 }
 
 /**
@@ -393,15 +395,15 @@ function TitleCell({
   to,
   onRename,
 }: {
-  run: RunRecord
-  to: string
-  onRename: (id: string, title: string) => void
+  run: RunRecord;
+  to: string;
+  onRename: (id: string, title: string) => void;
 }) {
-  const title = runTitle(run)
-  const editor = useTitleEditor(title, (next) => onRename(run.id, next))
+  const title = runTitle(run);
+  const editor = useTitleEditor(title, (next) => onRename(run.id, next));
 
   if (editor.editing) {
-    return <TitleEditInput editor={editor} className="text-[13px] font-medium" />
+    return <TitleEditInput editor={editor} className="text-[13px] font-medium" />;
   }
 
   return (
@@ -419,7 +421,7 @@ function TitleCell({
         <PencilIcon className="size-3" aria-hidden="true" />
       </button>
     </span>
-  )
+  );
 }
 
 /**
@@ -428,14 +430,14 @@ function TitleCell({
  * so a tick that says nothing about this run re-renders nothing.
  */
 function UsageTds({ run }: { run: RunRecord }) {
-  const sample = useRunUsage(run.id)
-  const cells = usageCells(run, sample)
+  const sample = useRunUsage(run.id);
+  const cells = usageCells(run, sample);
   return (
     <>
       <UsageTd column="cpu" cell={cells.cpu} />
       <UsageTd column="mem" cell={cells.mem} />
     </>
-  )
+  );
 }
 
 function UsageTd({ column, cell }: { column: 'cpu' | 'mem'; cell: UsageCell }) {
@@ -449,12 +451,12 @@ function UsageTd({ column, cell }: { column: 'cpu' | 'mem'; cell: UsageCell }) {
         'text-right font-mono tabular-nums',
         cell.kind === 'live' && 'bg-violet/5 text-xs font-medium text-foreground',
         cell.kind === 'peak' && 'text-[11.5px] text-soft-foreground',
-        cell.kind === 'none' && 'text-xs text-soft-foreground'
+        cell.kind === 'none' && 'text-xs text-soft-foreground',
       )}
     >
       {cell.text || '—'}
     </td>
-  )
+  );
 }
 
 /** One run, one card — the `<md` framing of the same row. */
@@ -463,14 +465,14 @@ function TaskCard({
   queuePosition,
   now,
 }: {
-  run: RunRecord
-  queuePosition: number | null
-  now: number
+  run: RunRecord;
+  queuePosition: number | null;
+  now: number;
 }) {
-  const navigate = useNavigate()
-  const attention = deriveAttention(run)
-  const to = `/tasks/${run.id}`
-  const reference = taskReference(run)
+  const navigate = useNavigate();
+  const attention = deriveAttention(run);
+  const to = `/tasks/${run.id}`;
+  const reference = taskReference(run);
 
   return (
     // The whole card is a pointer target for convenience; role/tabIndex/onKeyDown give it the
@@ -483,14 +485,14 @@ function TaskCard({
       role="button"
       tabIndex={0}
       onClick={(event) => {
-        if ((event.target as Element).closest('a')) return
-        navigate(to)
+        if ((event.target as Element).closest('a')) return;
+        navigate(to);
       }}
       onKeyDown={(event) => {
-        if (event.target !== event.currentTarget) return
-        if (event.key !== 'Enter' && event.key !== ' ') return
-        event.preventDefault()
-        navigate(to)
+        if (event.target !== event.currentTarget) return;
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        navigate(to);
       }}
       className="cursor-pointer rounded-lg border border-border bg-card px-3.5 py-3 shadow-xs"
     >
@@ -535,17 +537,15 @@ function TaskCard({
             ) : null}
           </>
         )}
-        {reference ? (
-          <ReferenceChip reference={reference} taskTitle={runTitle(run)} className="h-5" />
-        ) : null}
+        {reference ? <ReferenceChip reference={reference} taskTitle={runTitle(run)} className="h-5" /> : null}
       </div>
     </div>
-  )
+  );
 }
 
 /** An honest em dash: this cell has nothing true to show. */
 function Dash() {
-  return <span className="text-xs text-soft-foreground">—</span>
+  return <span className="text-xs text-soft-foreground">—</span>;
 }
 
 function Sep() {
@@ -553,7 +553,7 @@ function Sep() {
     <span className="text-soft-foreground" aria-hidden="true">
       ·
     </span>
-  )
+  );
 }
 
 function BranchChip({ branch }: { branch: string }) {
@@ -561,7 +561,7 @@ function BranchChip({ branch }: { branch: string }) {
     <span className="rounded-[6px] bg-muted px-1.5 py-0.5 font-mono text-[11.5px] font-medium text-muted-foreground">
       {branch}
     </span>
-  )
+  );
 }
 
 /** The out-of-app link. One style for every PR — the record carries no merged/closed state to
@@ -571,15 +571,15 @@ function ReferenceChip({
   taskTitle,
   className,
 }: {
-  reference: NonNullable<ReturnType<typeof taskReference>>
-  taskTitle: string
-  className?: string
+  reference: NonNullable<ReturnType<typeof taskReference>>;
+  taskTitle: string;
+  className?: string;
 }) {
-  const { kind, number, url } = reference
+  const { kind, number, url } = reference;
   const chipClass = cn(
     'inline-flex h-[22px] items-center gap-1 rounded-full border border-violet/35 px-2 font-mono text-[11px] font-semibold text-violet',
-    className
-  )
+    className,
+  );
   // href protocol guard (#431): render a link only for http(s) URLs; a
   // non-http value (e.g. a `javascript:` PR URL scraped from a transcript)
   // degrades to inert text instead of an executable link.
@@ -588,7 +588,7 @@ function ReferenceChip({
       <span data-slot={kind === 'PR' ? 'pr-chip' : 'issue-chip'} className={chipClass}>
         {kind === 'Issue' ? 'Issue ' : ''}#{number}
       </span>
-    )
+    );
   }
   return (
     <a
@@ -603,7 +603,7 @@ function ReferenceChip({
       {kind === 'Issue' ? 'Issue ' : ''}#{number}
       <ArrowUpRightIcon className="size-2.5" aria-hidden="true" />
     </a>
-  )
+  );
 }
 
 /**
@@ -613,21 +613,21 @@ function ReferenceChip({
  * likely have patched each archived run already, but the endpoint's answer is the truth.
  */
 export function TasksOverviewRoute() {
-  const runs = useRuns()
-  const [view, setView] = useListView()
-  const queryClient = useQueryClient()
+  const runs = useRuns();
+  const [view, setView] = useListView();
+  const queryClient = useQueryClient();
   const archive = useMutation({
     mutationFn: archiveFinished,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all }),
-  })
+  });
   // The table's inline rename — `usePatchRun` is per-run, so the any-row variant carries the id
   // in its variables. Same endpoint, same invalidation, same danger toast as the run header.
   const rename = useMutation({
     mutationFn: ({ id, title }: { id: string; title: string }) => patchRun(id, { title }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all }),
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
-  })
-  const now = useNow(30_000)
+  });
+  const now = useNow(30_000);
 
   return (
     <TasksOverview
@@ -638,5 +638,5 @@ export function TasksOverviewRoute() {
       onRename={(id, title) => rename.mutate({ id, title })}
       now={now}
     />
-  )
+  );
 }

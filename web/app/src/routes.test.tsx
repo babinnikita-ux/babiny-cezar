@@ -1,34 +1,37 @@
-import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter, useLocation } from 'react-router'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter, useLocation } from 'react-router';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createQueryClient } from './api/query-client'
-import { queryKeys, workspaceQueryKeys } from './api/queries'
-import type { ProjectsResponse } from './api/types'
-import { AppearanceProvider } from './components/appearance-provider'
-import { ListViewProvider } from './components/list-view'
-import { ThemeProvider } from './components/theme-provider'
-import { AppRoutes } from './routes'
-import { resetDraft } from './routes/new-task-draft'
+import { createQueryClient } from './api/query-client';
+import { queryKeys, workspaceQueryKeys } from './api/queries';
+import type { ProjectsResponse } from './api/types';
+import { AppearanceProvider } from './components/appearance-provider';
+import { ListViewProvider } from './components/list-view';
+import { ThemeProvider } from './components/theme-provider';
+import { AppRoutes } from './routes';
+import { resetDraft } from './routes/new-task-draft';
 
 // The `/` overview fetches `/api/runs` on mount. A never-answering fetch keeps every route
 // honestly in its loading state — this file is about the URL map, not about data.
 beforeEach(() => {
-  vi.stubGlobal('fetch', vi.fn(() => new Promise<never>(() => {})))
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(() => new Promise<never>(() => {})),
+  );
   // The /new draft store is a module singleton by design — isolate it per test.
-  resetDraft()
-})
+  resetDraft();
+});
 
 // Explicit rather than relying on RTL's auto-cleanup, which only runs when vitest `globals` is on.
 afterEach(() => {
-  cleanup()
-  vi.unstubAllGlobals()
-})
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 /** The boot project (multi-project spec, step 3.2) — what `/api/health.bootProject` and
  *  `/api/projects.bootProject` name, and where every legacy flat URL redirects. */
-const BOOT = 'boot'
+const BOOT = 'boot';
 
 /** A full-enough `/api/health` answer: the redirect gate reads `bootProject`, and the routes
  *  behind it (inbox, /new) read `capabilities` — a partial seed would crash what a real health
@@ -43,7 +46,7 @@ const HEALTH = {
   capabilities: { localHandoff: true, followups: true },
   projects: [{ id: BOOT, name: 'cezar' }],
   bootProject: BOOT,
-}
+};
 
 const REGISTRY: ProjectsResponse = {
   projects: [
@@ -68,12 +71,12 @@ const REGISTRY: ProjectsResponse = {
   ],
   bootProject: BOOT,
   projectsDir: '~/cezar/projects',
-}
+};
 
 /** The address bar, readable from assertions: MemoryRouter keeps its location internal, so the
  *  probe publishes it — that is how the tests prove params and query survive the redirects. */
 function LocationProbe() {
-  const location = useLocation()
+  const location = useLocation();
   return (
     <div
       data-testid="location"
@@ -81,7 +84,7 @@ function LocationProbe() {
       data-search={location.search}
       data-hash={location.hash}
     />
-  )
+  );
 }
 
 /** Cold-load the router at a URL, exactly as a pasted deep link would — under the same providers
@@ -89,12 +92,12 @@ function LocationProbe() {
  *  gates need are already cached, the way a warm app has them; `seed: false` is the cold state
  *  where the boot id is still unknown. */
 function renderAt(entry: string, { seed = true }: { seed?: boolean } = {}) {
-  const client = createQueryClient()
+  const client = createQueryClient();
   if (seed) {
     // Scope is unset while seeding, so `queryKeys.health` is the unscoped `['default','health']`
     // key the legacy-redirect gate reads.
-    client.setQueryData(queryKeys.health, HEALTH)
-    client.setQueryData(workspaceQueryKeys.projects, REGISTRY)
+    client.setQueryData(queryKeys.health, HEALTH);
+    client.setQueryData(workspaceQueryKeys.projects, REGISTRY);
   }
   render(
     <QueryClientProvider client={client}>
@@ -109,24 +112,24 @@ function renderAt(entry: string, { seed = true }: { seed?: boolean } = {}) {
         </AppearanceProvider>
       </ThemeProvider>
     </QueryClientProvider>,
-  )
-  return client
+  );
+  return client;
 }
 
 function routeName(): string | null {
-  return document.querySelector('[data-route]')?.getAttribute('data-route') ?? null
+  return document.querySelector('[data-route]')?.getAttribute('data-route') ?? null;
 }
 
 function currentPathname(): string | null {
-  return screen.getByTestId('location').getAttribute('data-pathname')
+  return screen.getByTestId('location').getAttribute('data-pathname');
 }
 
 function currentSearch(): string | null {
-  return screen.getByTestId('location').getAttribute('data-search')
+  return screen.getByTestId('location').getAttribute('data-search');
 }
 
 function currentHash(): string | null {
-  return screen.getByTestId('location').getAttribute('data-hash')
+  return screen.getByTestId('location').getAttribute('data-hash');
 }
 
 /** The URL contract from the spec's "Routing — every surface is a URL" section, now under the
@@ -169,23 +172,23 @@ const ROUTE_CASES: Array<[url: string, route: string, title: string]> = [
   ['/settings/worktrees', 'settings-worktrees', 'Worktrees'],
   ['/settings/bookmarklets', 'settings-bookmarklets', 'Bookmarklets'],
   ['/settings/prompt-templates', 'settings-prompt-templates', 'Prompt templates'],
-]
+];
 
 describe('scoped route map (/p/:projectId)', () => {
   for (const [url, route, title] of ROUTE_CASES) {
     it(`/p/${BOOT}${url} → ${route}`, () => {
-      renderAt(`/p/${BOOT}${url}`)
-      expect(routeName()).toBe(route)
-      expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(title)
-    })
+      renderAt(`/p/${BOOT}${url}`);
+      expect(routeName()).toBe(route);
+      expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(title);
+    });
   }
 
   // The tab lives in the path, so /tasks/:id/changes must not fall back to the thread.
   it('a task tab deep link renders the tab, not the thread', () => {
-    renderAt(`/p/${BOOT}/tasks/abc123/changes`)
-    expect(document.querySelector('[data-route="task-thread"]')).toBeNull()
-    expect(screen.queryByRole('heading', { name: 'Loading task…' })).toBeNull()
-  })
+    renderAt(`/p/${BOOT}/tasks/abc123/changes`);
+    expect(document.querySelector('[data-route="task-thread"]')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Loading task…' })).toBeNull();
+  });
 
   // MCP lives inside Agent config; keyboard remains hidden and unrouted.
   const unknown = [
@@ -196,32 +199,32 @@ describe('scoped route map (/p/:projectId)', () => {
     '/settings/keyboard',
     '/tasks/abc123/nope',
     '/compare',
-  ]
+  ];
   for (const url of unknown) {
     it(`/p/${BOOT}${url} → the 404 route`, () => {
-      renderAt(`/p/${BOOT}${url}`)
-      expect(routeName()).toBe('not-found')
-    })
+      renderAt(`/p/${BOOT}${url}`);
+      expect(routeName()).toBe('not-found');
+    });
   }
 
   // Step 4.1: the 404 is a CenteredState with a way home, not a bare stub — and its way home
   // stays inside the active project (the scope-aware Link).
   it('the 404 renders a CenteredState with a back-to-tasks action scoped to the project', () => {
-    renderAt(`/p/${BOOT}/definitely-not-a-route`)
-    expect(routeName()).toBe('not-found')
-    expect(document.querySelector('[data-route="not-found"] [data-slot="centered-state"]')).not.toBeNull()
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Page not found')
-    expect(screen.getByRole('link', { name: 'Back to tasks' }).getAttribute('href')).toBe(`/p/${BOOT}/`)
-  })
+    renderAt(`/p/${BOOT}/definitely-not-a-route`);
+    expect(routeName()).toBe('not-found');
+    expect(document.querySelector('[data-route="not-found"] [data-slot="centered-state"]')).not.toBeNull();
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Page not found');
+    expect(screen.getByRole('link', { name: 'Back to tasks' }).getAttribute('href')).toBe(`/p/${BOOT}/`);
+  });
 
   // The area rule (nav links, tab links…) — spot-checked through the Settings shell, whose
   // section links are plain flat `to`s routed through the scope-aware Link.
   it('navigation links generated inside a project carry its prefix', () => {
-    renderAt(`/p/${BOOT}/settings`)
-    const link = document.querySelector('[data-slot="settings-index"] a[data-section="agents"]')
-    expect(link?.getAttribute('href')).toBe(`/p/${BOOT}/settings/agents`)
-  })
-})
+    renderAt(`/p/${BOOT}/settings`);
+    const link = document.querySelector('[data-slot="settings-index"] a[data-section="agents"]');
+    expect(link?.getAttribute('href')).toBe(`/p/${BOOT}/settings/agents`);
+  });
+});
 
 /**
  * Global settings (step 3.5) — the one area OUTSIDE `/p/:projectId`. Two things must hold: the
@@ -235,128 +238,128 @@ describe('the global settings area (/settings/global)', () => {
     ['/settings/global/notifications', 'settings-global-notifications', 'Notifications'],
     ['/settings/global/resources', 'settings-global-resources', 'Resources'],
     ['/settings/global/projects', 'settings-global-projects', 'Projects'],
-  ]
+  ];
   for (const [url, route, title] of GLOBAL_CASES) {
     it(`${url} → ${route}, unscoped`, () => {
-      renderAt(url)
-      expect(routeName()).toBe(route)
+      renderAt(url);
+      expect(routeName()).toBe(route);
       // Never redirected into a project: the pathname is the one that was asked for.
-      expect(currentPathname()).toBe(url)
-      expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(title)
-    })
+      expect(currentPathname()).toBe(url);
+      expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(title);
+    });
   }
 
   // A moved section's old URL, in both spellings a bookmark can have it.
   for (const id of ['appearance', 'notifications', 'resources']) {
     it(`/p/${BOOT}/settings/${id} redirects to the global twin`, () => {
-      renderAt(`/p/${BOOT}/settings/${id}`)
-      expect(currentPathname()).toBe(`/settings/global/${id}`)
-      expect(routeName()).toBe(`settings-global-${id}`)
-    })
+      renderAt(`/p/${BOOT}/settings/${id}`);
+      expect(currentPathname()).toBe(`/settings/global/${id}`);
+      expect(routeName()).toBe(`settings-global-${id}`);
+    });
 
     it(`the legacy flat /settings/${id} lands on the global twin too`, () => {
-      renderAt(`/settings/${id}`)
-      expect(currentPathname()).toBe(`/settings/global/${id}`)
-    })
+      renderAt(`/settings/${id}`);
+      expect(currentPathname()).toBe(`/settings/global/${id}`);
+    });
 
     it(`/settings/${id} carries query AND hash through BOTH redirect hops`, () => {
       // The legacy flat URL takes two hops — `LegacyPathRedirect` into the boot project, then
       // the moved-section redirect out to the global twin. `settingsSectionPath` returns a bare
       // pathname, so the second hop is exactly where a bookmark's `?…#…` used to disappear.
-      renderAt(`/settings/${id}?tab=x&y=a%2Fb#anchor`)
-      expect(currentPathname()).toBe(`/settings/global/${id}`)
-      expect(currentSearch()).toBe('?tab=x&y=a%2Fb')
-      expect(currentHash()).toBe('#anchor')
-    })
+      renderAt(`/settings/${id}?tab=x&y=a%2Fb#anchor`);
+      expect(currentPathname()).toBe(`/settings/global/${id}`);
+      expect(currentSearch()).toBe('?tab=x&y=a%2Fb');
+      expect(currentHash()).toBe('#anchor');
+    });
 
     it(`/p/${BOOT}/settings/${id} carries query AND hash on the single hop`, () => {
-      renderAt(`/p/${BOOT}/settings/${id}?tab=x#anchor`)
-      expect(currentPathname()).toBe(`/settings/global/${id}`)
-      expect(currentSearch()).toBe('?tab=x')
-      expect(currentHash()).toBe('#anchor')
-    })
+      renderAt(`/p/${BOOT}/settings/${id}?tab=x#anchor`);
+      expect(currentPathname()).toBe(`/settings/global/${id}`);
+      expect(currentSearch()).toBe('?tab=x');
+      expect(currentHash()).toBe('#anchor');
+    });
   }
-})
+});
 
 /** Legacy flat URLs (BACKWARD_COMPATIBILITY.md): every pre-multi-project path redirects to the
  *  boot project's scoped twin with params intact — old bookmarks keep landing. */
 describe('legacy flat URLs redirect to the boot project', () => {
   for (const [url, route] of ROUTE_CASES) {
     it(`${url} → /p/${BOOT}${url}`, () => {
-      renderAt(url)
-      expect(routeName()).toBe(route)
-      expect(currentPathname()).toBe(`/p/${BOOT}${url === '/' ? '/' : url}`)
-    })
+      renderAt(url);
+      expect(routeName()).toBe(route);
+      expect(currentPathname()).toBe(`/p/${BOOT}${url === '/' ? '/' : url}`);
+    });
   }
 
   it('preserves a query byte-for-byte across the redirect', () => {
     // /skills keeps its `?skill=` selection in the URL, so the address bar itself proves the
     // redirect carried the query untouched (the /new composer consumes-then-clears its own).
-    const search = '?skill=om-code-review&x=a%2Fb&auto=1'
-    renderAt(`/skills${search}`)
-    expect(currentPathname()).toBe(`/p/${BOOT}/skills`)
-    expect(currentSearch()).toBe(search)
-    expect(routeName()).toBe('skills')
-  })
+    const search = '?skill=om-code-review&x=a%2Fb&auto=1';
+    renderAt(`/skills${search}`);
+    expect(currentPathname()).toBe(`/p/${BOOT}/skills`);
+    expect(currentSearch()).toBe(search);
+    expect(routeName()).toBe('skills');
+  });
 
   it('preserves the hash too — /settings/skills through both hops', () => {
     // `/settings/skills` moved to `/skills`, so a legacy flat link redirects twice. Query
     // survival was already asserted; the hash is the half that was silently dropped.
-    renderAt('/settings/skills?skill=om-code-review#usage')
-    expect(currentPathname()).toBe(`/p/${BOOT}/skills`)
-    expect(currentSearch()).toBe('?skill=om-code-review')
-    expect(currentHash()).toBe('#usage')
-    expect(routeName()).toBe('skills')
-  })
+    renderAt('/settings/skills?skill=om-code-review#usage');
+    expect(currentPathname()).toBe(`/p/${BOOT}/skills`);
+    expect(currentSearch()).toBe('?skill=om-code-review');
+    expect(currentHash()).toBe('#usage');
+    expect(routeName()).toBe('skills');
+  });
 
   it('delivers the full bookmarklet grammar into the composer (spec 011 contract)', () => {
-    renderAt('/new?skill=om-code-review&ref=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fpull%2F1&auto=1&key=s3cret')
-    expect(currentPathname()).toBe(`/p/${BOOT}/new`)
-    expect(routeName()).toBe('new')
+    renderAt('/new?skill=om-code-review&ref=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fpull%2F1&auto=1&key=s3cret');
+    expect(currentPathname()).toBe(`/p/${BOOT}/new`);
+    expect(routeName()).toBe('new');
     // auto=1 + key armed the unattended start — only possible if every param survived.
-    expect(document.querySelector('[data-slot="auto-starting"]')).not.toBeNull()
-    expect(document.body.textContent).not.toContain('s3cret')
-  })
+    expect(document.querySelector('[data-slot="auto-starting"]')).not.toBeNull();
+    expect(document.body.textContent).not.toContain('s3cret');
+  });
 
   it('renders the quiet resolving state while the boot id is unknown — never a wrong screen', () => {
-    renderAt('/tasks/abc123', { seed: false })
-    expect(routeName()).toBe('scope-resolving')
-    expect(currentPathname()).toBe('/tasks/abc123')
-  })
+    renderAt('/tasks/abc123', { seed: false });
+    expect(routeName()).toBe('scope-resolving');
+    expect(currentPathname()).toBe('/tasks/abc123');
+  });
 
   it('an unknown legacy path still ends at the scoped 404', () => {
-    renderAt('/definitely-not-a-route')
-    expect(routeName()).toBe('not-found')
-    expect(currentPathname()).toBe(`/p/${BOOT}/definitely-not-a-route`)
-  })
+    renderAt('/definitely-not-a-route');
+    expect(routeName()).toBe('not-found');
+    expect(currentPathname()).toBe(`/p/${BOOT}/definitely-not-a-route`);
+  });
 
   it('a bare /p names no project and lands on the boot project home', () => {
-    renderAt('/p')
-    expect(routeName()).toBe('tasks')
-    expect(currentPathname()).toBe(`/p/${BOOT}/`)
-  })
-})
+    renderAt('/p');
+    expect(routeName()).toBe('tasks');
+    expect(currentPathname()).toBe(`/p/${BOOT}/`);
+  });
+});
 
 /** `/p/default/…` is the reserved boot alias (never an allocated slug): it resolves to the boot
  *  project and normalizes to the real slug in the address bar. */
 describe('the /p/default alias', () => {
   it('normalizes /p/default/tasks/x to /p/<boot>/tasks/x', () => {
-    renderAt('/p/default/tasks/x')
-    expect(routeName()).toBe('task-thread')
-    expect(currentPathname()).toBe(`/p/${BOOT}/tasks/x`)
-  })
+    renderAt('/p/default/tasks/x');
+    expect(routeName()).toBe('task-thread');
+    expect(currentPathname()).toBe(`/p/${BOOT}/tasks/x`);
+  });
 
   it('keeps the query while normalizing', () => {
-    renderAt('/p/default/skills?skill=om-code-review')
-    expect(currentPathname()).toBe(`/p/${BOOT}/skills`)
-    expect(currentSearch()).toBe('?skill=om-code-review')
-  })
+    renderAt('/p/default/skills?skill=om-code-review');
+    expect(currentPathname()).toBe(`/p/${BOOT}/skills`);
+    expect(currentSearch()).toBe('?skill=om-code-review');
+  });
 
   it('normalizes the bare /p/default to the boot project home', () => {
-    renderAt('/p/default')
-    expect(routeName()).toBe('tasks')
-    expect(currentPathname()).toBe(`/p/${BOOT}/`)
-  })
+    renderAt('/p/default');
+    expect(routeName()).toBe('tasks');
+    expect(currentPathname()).toBe(`/p/${BOOT}/`);
+  });
 
   it('a registry error still resolves the alias via health instead of loading forever', async () => {
     // `/api/projects` down, `/api/health` already answered (it names the same boot slug): the
@@ -368,13 +371,13 @@ describe('the /p/default alias', () => {
           return new Response(JSON.stringify({ error: 'down' }), {
             status: 500,
             headers: { 'content-type': 'application/json' },
-          })
+          });
         }
-        return new Promise<never>(() => {})
+        return new Promise<never>(() => {});
       }),
-    )
-    const client = createQueryClient()
-    client.setQueryData(queryKeys.health, HEALTH)
+    );
+    const client = createQueryClient();
+    client.setQueryData(queryKeys.health, HEALTH);
     render(
       <QueryClientProvider client={client}>
         <ThemeProvider>
@@ -388,11 +391,11 @@ describe('the /p/default alias', () => {
           </AppearanceProvider>
         </ThemeProvider>
       </QueryClientProvider>,
-    )
+    );
     // The client retries a 5xx once with ~1 s of backoff before erroring — give it room.
-    await waitFor(() => expect(currentPathname()).toBe(`/p/${BOOT}/tasks/x`), { timeout: 4000 })
-    expect(routeName()).toBe('task-thread')
-  })
+    await waitFor(() => expect(currentPathname()).toBe(`/p/${BOOT}/tasks/x`), { timeout: 4000 });
+    expect(routeName()).toBe('task-thread');
+  });
 
   it('with the registry errored and no health either, the alias mounts the scope rather than spin', async () => {
     // Nothing can name the real boot slug, but the server-side `default` alias answers every
@@ -405,71 +408,70 @@ describe('the /p/default alias', () => {
           return new Response(JSON.stringify({ error: 'down' }), {
             status: 500,
             headers: { 'content-type': 'application/json' },
-          })
+          });
         }
-        return new Promise<never>(() => {})
+        return new Promise<never>(() => {});
       }),
-    )
-    renderAt('/p/default', { seed: false })
+    );
+    renderAt('/p/default', { seed: false });
     // The client retries a 5xx once with ~1 s of backoff before erroring — give it room.
-    await waitFor(() => expect(routeName()).toBe('tasks'), { timeout: 4000 })
-    expect(currentPathname()).toBe('/p/default')
-  })
-})
+    await waitFor(() => expect(routeName()).toBe('tasks'), { timeout: 4000 });
+    expect(currentPathname()).toBe('/p/default');
+  });
+});
 
 /** A deep link to a project this server never registered: the cockpit twin of the API's 404 —
  *  name the problem, list what IS registered, link out. */
 describe('unknown project ids', () => {
   it('renders the not-registered screen with the registry list', () => {
-    renderAt('/p/nope/tasks/x')
-    expect(routeName()).toBe('unknown-project')
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('nope')
-    const links = Array.from(
-      document.querySelectorAll('[data-slot="registered-projects"] a'),
-    ).map((a) => a.getAttribute('href'))
-    expect(links).toEqual([`/p/${BOOT}/`, '/p/other/'])
-  })
+    renderAt('/p/nope/tasks/x');
+    expect(routeName()).toBe('unknown-project');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toContain('nope');
+    const links = Array.from(document.querySelectorAll('[data-slot="registered-projects"] a')).map((a) =>
+      a.getAttribute('href'),
+    );
+    expect(links).toEqual([`/p/${BOOT}/`, '/p/other/']);
+  });
 
   it('stays honestly resolving while the registry is still loading', () => {
-    renderAt('/p/nope/tasks/x', { seed: false })
-    expect(routeName()).toBe('scope-resolving')
-  })
-})
+    renderAt('/p/nope/tasks/x', { seed: false });
+    expect(routeName()).toBe('scope-resolving');
+  });
+});
 
 /** The bookmarklet contract (spec 011), protected by BACKWARD_COMPATIBILITY.md:
  *  `/new?skill=&ref=&auto=1&key=`. Since R4 Step 1.3 `auto=1` arms the real unattended start
  *  (the full matrix lives in routes/new-task.test.tsx); this file keeps the URL contract —
  *  through the legacy redirect, exactly as a saved bookmarklet arrives. */
 describe('/new query params', () => {
-  const textarea = () =>
-    screen.getByLabelText('Describe a task for the agent') as HTMLTextAreaElement
+  const textarea = () => screen.getByLabelText('Describe a task for the agent') as HTMLTextAreaElement;
 
   it('prefills the composer from a non-auto deep link', () => {
-    renderAt('/new?skill=om-code-review&ref=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fpull%2F1')
-    expect(routeName()).toBe('new')
-    expect(textarea().value).toBe('https://github.com/o/r/pull/1')
-  })
+    renderAt('/new?skill=om-code-review&ref=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fpull%2F1');
+    expect(routeName()).toBe('new');
+    expect(textarea().value).toBe('https://github.com/o/r/pull/1');
+  });
 
   it('an armed auto=1 link shows the starting surface, never the composer mid-flight', () => {
     // fetch never answers here, so the key check is honestly in flight: no composer to type
     // into, no run POSTed, and the key nowhere in the DOM.
-    renderAt('/new?skill=om-code-review&ref=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fpull%2F1&auto=1&key=s3cret')
-    expect(routeName()).toBe('new')
-    expect(document.querySelector('[data-slot="auto-starting"]')).not.toBeNull()
-    expect(screen.queryByLabelText('Describe a task for the agent')).toBeNull()
-    expect(document.body.textContent).not.toContain('s3cret')
-  })
+    renderAt('/new?skill=om-code-review&ref=https%3A%2F%2Fgithub.com%2Fo%2Fr%2Fpull%2F1&auto=1&key=s3cret');
+    expect(routeName()).toBe('new');
+    expect(document.querySelector('[data-slot="auto-starting"]')).not.toBeNull();
+    expect(screen.queryByLabelText('Describe a task for the agent')).toBeNull();
+    expect(document.body.textContent).not.toContain('s3cret');
+  });
 
   it('renders an empty composer without params', () => {
-    renderAt('/new')
-    expect(routeName()).toBe('new')
-    expect(textarea().value).toBe('')
-  })
+    renderAt('/new');
+    expect(routeName()).toBe('new');
+    expect(textarea().value).toBe('');
+  });
 
   it('never prints the launch key anywhere on the page', () => {
-    renderAt('/new?key=s3cret')
-    expect(routeName()).toBe('new')
-    expect(document.body.textContent).not.toContain('s3cret')
-    expect(textarea().value).toBe('')
-  })
-})
+    renderAt('/new?key=s3cret');
+    expect(routeName()).toBe('new');
+    expect(document.body.textContent).not.toContain('s3cret');
+    expect(textarea().value).toBe('');
+  });
+});

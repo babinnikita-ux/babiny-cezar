@@ -1,17 +1,17 @@
-import { FileDiffIcon, TriangleAlertIcon } from 'lucide-react'
-import { useMemo, useRef, useState } from 'react'
+import { FileDiffIcon, TriangleAlertIcon } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
 
-import { ApiError } from '@/api/client'
-import { useRepoChanges } from '@/api/queries'
-import type { ChangedFile } from '@/api/types'
-import { CenteredState } from '@/components/centered-state'
-import { Diff, type DiffHandle, type DiffMode } from '@/components/diff'
-import { useIsDesktop } from '@/lib/use-desktop'
+import { ApiError } from '@/api/client';
+import { useRepoChanges } from '@/api/queries';
+import type { ChangedFile } from '@/api/types';
+import { CenteredState } from '@/components/centered-state';
+import { Diff, type DiffHandle, type DiffMode } from '@/components/diff';
+import { useIsDesktop } from '@/lib/use-desktop';
 
-import { ChangesTree } from '../task-git/changes-tree'
-import { DiffViewToggles } from '../task-git/diff-controls'
-import { buildFileTree } from '../task-git/file-tree'
-import { AnimatedDiffStat } from '../task-git/git-toolbar'
+import { ChangesTree } from '../task-git/changes-tree';
+import { DiffViewToggles } from '../task-git/diff-controls';
+import { buildFileTree } from '../task-git/file-tree';
+import { AnimatedDiffStat } from '../task-git/git-toolbar';
 
 /**
  * The repo view's Changes segment (R5 Step 1.7): the MAIN working tree's uncommitted diff
@@ -26,31 +26,31 @@ import { AnimatedDiffStat } from '../task-git/git-toolbar'
 /** One shared empty array for the not-yet-loaded case: a fresh `[]` per render would make
  *  `files` a new reference every time and re-run the tree memo on every render. Read-only by
  *  convention — nothing here mutates the list. */
-const NO_FILES: ChangedFile[] = []
+const NO_FILES: ChangedFile[] = [];
 
 export function RepoChangesSection() {
-  const changes = useRepoChanges()
-  const desktop = useIsDesktop()
+  const changes = useRepoChanges();
+  const desktop = useIsDesktop();
 
-  const [mode, setMode] = useState<DiffMode>('unified')
-  const [wrap, setWrap] = useState(false)
-  const [selected, setSelected] = useState<string | null>(null)
-  const diffRef = useRef<DiffHandle | null>(null)
+  const [mode, setMode] = useState<DiffMode>('unified');
+  const [wrap, setWrap] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
+  const diffRef = useRef<DiffHandle | null>(null);
 
   // A 409 is the server's answer ("not a git repository"), not an outage.
-  const refused = changes.isError && changes.error instanceof ApiError && changes.error.status === 409
+  const refused = changes.isError && changes.error instanceof ApiError && changes.error.status === 409;
 
-  const files = changes.data?.files ?? NO_FILES
-  const tree = useMemo(() => buildFileTree(files), [files])
+  const files = changes.data?.files ?? NO_FILES;
+  const tree = useMemo(() => buildFileTree(files), [files]);
 
-  const effectiveMode: DiffMode = desktop ? mode : 'unified'
-  const effectiveWrap = desktop ? wrap : true
+  const effectiveMode: DiffMode = desktop ? mode : 'unified';
+  const effectiveWrap = desktop ? wrap : true;
 
   // Through the facade's handle, not the DOM — see the task Changes tab's note.
   const selectFile = (path: string) => {
-    setSelected(path)
-    diffRef.current?.scrollToPath(path)
-  }
+    setSelected(path);
+    diffRef.current?.scrollToPath(path);
+  };
 
   return (
     <section data-slot="repo-changes" className="flex min-h-0 flex-1 flex-col">
@@ -91,9 +91,15 @@ export function RepoChangesSection() {
           <aside className="sticky top-28 hidden w-60 shrink-0 md:block lg:w-72">
             <ChangesTree root={tree} selected={selected} onSelect={selectFile} />
           </aside>
-          <Diff files={files} viewRef={diffRef} mode={effectiveMode} wrap={effectiveWrap} className="min-w-0 flex-1" />
+          <Diff
+            files={files}
+            viewRef={diffRef}
+            mode={effectiveMode}
+            wrap={effectiveWrap}
+            className="min-w-0 flex-1"
+          />
         </div>
       )}
     </section>
-  )
+  );
 }

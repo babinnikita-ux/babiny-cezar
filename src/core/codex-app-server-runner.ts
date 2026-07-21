@@ -10,11 +10,7 @@ import type {
   SessionOptions,
 } from './agent-runner.js';
 import { prependSystemPrompt } from './agent-runner.js';
-import {
-  AUTO_END_DELAY_MS,
-  DEFAULT_RUN_TIMEOUT_MS,
-  KILL_GRACE_MS,
-} from './claude-cli-runner.js';
+import { AUTO_END_DELAY_MS, DEFAULT_RUN_TIMEOUT_MS, KILL_GRACE_MS } from './claude-cli-runner.js';
 import { parseAskRequest, type AskQuestion } from './ask.js';
 import { readNdjson } from './ndjson.js';
 import {
@@ -283,9 +279,9 @@ class CodexSession implements AgentSession {
     this.rejectPendingUserInput('turn interrupted');
     // Best-effort graceful cancel of the in-flight turn, then hard stop.
     if (this.threadId && this.activeTurnId) {
-      void this.rpc.request('turn/interrupt', { threadId: this.threadId, turnId: this.activeTurnId }).catch(
-        () => undefined,
-      );
+      void this.rpc
+        .request('turn/interrupt', { threadId: this.threadId, turnId: this.activeTurnId })
+        .catch(() => undefined);
     }
     if (!this.child.killed) this.child.kill('SIGTERM');
   }
@@ -351,7 +347,10 @@ class CodexSession implements AgentSession {
 
   private dispatch(msg: CodexAppServerMessage): void {
     if (this.rpc.dispatchResponse(msg)) return;
-    if (msg.method === 'item/tool/requestUserInput' && (typeof msg.id === 'number' || typeof msg.id === 'string')) {
+    if (
+      msg.method === 'item/tool/requestUserInput' &&
+      (typeof msg.id === 'number' || typeof msg.id === 'string')
+    ) {
       this.handleUserInputRequest(msg.id, msg.params ?? {});
       return;
     }
@@ -361,7 +360,10 @@ class CodexSession implements AgentSession {
   private handleUserInputRequest(rpcId: number | string, params: Record<string, unknown>): void {
     const questions = codexAskQuestions(params.questions);
     if (!questions) {
-      this.rpc.respond({ id: rpcId, error: { code: -32602, message: 'unsupported or malformed requestUserInput payload' } });
+      this.rpc.respond({
+        id: rpcId,
+        error: { code: -32602, message: 'unsupported or malformed requestUserInput payload' },
+      });
       return;
     }
     if (this.pendingUserInput) this.rejectPendingUserInput('superseded by a newer requestUserInput');
@@ -482,13 +484,15 @@ function codexAskQuestions(value: unknown): AskQuestion[] | null {
     const header = stringField(question, 'header');
     const prompt = stringField(question, 'question');
     if (!id || !header || !prompt || !Array.isArray(question.options)) return null;
-    const options = question.options.map((option) => {
-      if (!option || typeof option !== 'object' || Array.isArray(option)) return null;
-      const record = option as Record<string, unknown>;
-      const label = stringField(record, 'label');
-      const description = stringField(record, 'description');
-      return label ? { label, ...(description ? { description } : {}) } : null;
-    }).filter((option): option is { label: string; description?: string } => option !== null);
+    const options = question.options
+      .map((option) => {
+        if (!option || typeof option !== 'object' || Array.isArray(option)) return null;
+        const record = option as Record<string, unknown>;
+        const label = stringField(record, 'label');
+        const description = stringField(record, 'description');
+        return label ? { label, ...(description ? { description } : {}) } : null;
+      })
+      .filter((option): option is { label: string; description?: string } => option !== null);
     questions.push({ id, header, question: prompt, options, multiSelect: false });
   }
   return parseAskRequest({ questions })?.questions ?? null;
@@ -496,14 +500,23 @@ function codexAskQuestions(value: unknown): AskQuestion[] | null {
 
 function userInputAnswers(questions: AskQuestion[], text: string): Record<string, { answers: string[] }> {
   const lines = text.split(/\r?\n/);
-  const hasStructuredAnswer = questions.some((question) => lines.some((line) => line.startsWith(`${question.header}:`)));
+  const hasStructuredAnswer = questions.some((question) =>
+    lines.some((line) => line.startsWith(`${question.header}:`)),
+  );
   const answers: Record<string, { answers: string[] }> = {};
   for (const [index, question] of questions.entries()) {
     const prefix = `${question.header}:`;
     const matching = lines.find((line) => line.startsWith(prefix));
-    const raw = matching?.slice(prefix.length).trim() ?? (!hasStructuredAnswer && index === 0 ? text.trim() : '');
+    const raw =
+      matching?.slice(prefix.length).trim() ?? (!hasStructuredAnswer && index === 0 ? text.trim() : '');
     answers[question.id ?? String(index)] = {
-      answers: raw === '' ? [] : raw.split(',').map((answer) => answer.trim()).filter(Boolean),
+      answers:
+        raw === ''
+          ? []
+          : raw
+              .split(',')
+              .map((answer) => answer.trim())
+              .filter(Boolean),
     };
   }
   return answers;

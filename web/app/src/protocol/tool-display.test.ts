@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest';
 
-import { toolDisplay, type ToolDisplay } from './tool-display'
+import { toolDisplay, type ToolDisplay } from './tool-display';
 
 /**
  * The web half of the display-model guard. The heavy lifting lives on the server side —
@@ -57,13 +57,13 @@ describe('protocol/tool-display — the mirror works under the bundle resolver',
       expected: { toolKind: 'other', title: 'SomeCustomTool', subtitle: 'do a thing' },
     },
   ])('$name → $expected.title', ({ name, input, expected }) => {
-    expect(toolDisplay(name, input)).toEqual(expected)
-  })
+    expect(toolDisplay(name, input)).toEqual(expected);
+  });
 
   it('never throws on wire junk', () => {
     for (const input of [undefined, null, 42, [], { command: { nested: true } }, Object.create(null)]) {
-      expect(typeof toolDisplay('Bash', input).title).toBe('string')
-      expect(typeof toolDisplay(undefined as unknown as string, input).title).toBe('string')
+      expect(typeof toolDisplay('Bash', input).title).toBe('string');
+      expect(typeof toolDisplay(undefined as unknown as string, input).title).toBe('string');
     }
-  })
-})
+  });
+});

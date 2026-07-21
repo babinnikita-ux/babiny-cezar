@@ -5,17 +5,17 @@
  * in jsdom. The component only ever calls these with `textarea.value` and `selectionStart`.
  */
 
-export type TriggerChar = '/' | '@'
+export type TriggerChar = '/' | '@';
 
 export interface TriggerState {
-  trigger: TriggerChar
+  trigger: TriggerChar;
   /** Index of the trigger character itself in the text. */
-  start: number
+  start: number;
   /** What the user typed after the trigger, up to the caret — the filter query. */
-  query: string
+  query: string;
 }
 
-const TRIGGERS: ReadonlySet<string> = new Set<TriggerChar>(['/', '@'])
+const TRIGGERS: ReadonlySet<string> = new Set<TriggerChar>(['/', '@']);
 
 /**
  * Is the caret inside an open `/skill` or `@file` token?
@@ -27,14 +27,14 @@ const TRIGGERS: ReadonlySet<string> = new Set<TriggerChar>(['/', '@'])
  */
 export function detectTrigger(text: string, caret: number): TriggerState | null {
   for (let i = caret - 1; i >= 0; i -= 1) {
-    const char = text[i]!
-    if (/\s/.test(char)) return null
+    const char = text[i]!;
+    if (/\s/.test(char)) return null;
     if (TRIGGERS.has(char)) {
-      if (i > 0 && !/\s/.test(text[i - 1]!)) return null // mid-word: URL, e-mail, path…
-      return { trigger: char as TriggerChar, start: i, query: text.slice(i + 1, caret) }
+      if (i > 0 && !/\s/.test(text[i - 1]!)) return null; // mid-word: URL, e-mail, path…
+      return { trigger: char as TriggerChar, start: i, query: text.slice(i + 1, caret) };
     }
   }
-  return null
+  return null;
 }
 
 /**
@@ -49,9 +49,9 @@ export function applyCompletion(
   caret: number,
   completion: string,
 ): { text: string; caret: number } {
-  const inserted = `${state.trigger}${completion} `
+  const inserted = `${state.trigger}${completion} `;
   return {
     text: text.slice(0, state.start) + inserted + text.slice(caret),
     caret: state.start + inserted.length,
-  }
+  };
 }

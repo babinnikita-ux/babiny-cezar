@@ -1,4 +1,4 @@
-import type { HighlighterCore } from 'shiki/core'
+import type { HighlighterCore } from 'shiki/core';
 
 /**
  * The ONE Shiki highlighter for the whole cockpit (spec, "Task thread" tech picks;
@@ -25,15 +25,15 @@ import type { HighlighterCore } from 'shiki/core'
 
 /** A highlighted line: what both the markdown code blocks and R5's diffs render. */
 export interface SynToken {
-  content: string
+  content: string;
   /** A `var(--syn-*)` reference, or undefined for plaintext runs. */
-  color?: string
+  color?: string;
 }
 
 export interface SynHighlight {
-  tokens: SynToken[][]
-  fg: string
-  bg: string
+  tokens: SynToken[][];
+  fg: string;
+  bg: string;
 }
 
 /**
@@ -74,16 +74,28 @@ export const SYN_THEME = {
     },
     { scope: ['comment', 'punctuation.definition.comment'], settings: { foreground: 'var(--syn-com)' } },
     {
-      scope: ['constant.numeric', 'constant.character', 'constant.other', 'support.constant', 'keyword.other.unit'],
+      scope: [
+        'constant.numeric',
+        'constant.character',
+        'constant.other',
+        'support.constant',
+        'keyword.other.unit',
+      ],
       settings: { foreground: 'var(--syn-num)' },
     },
     {
-      scope: ['punctuation', 'keyword.operator', 'meta.brace', 'punctuation.separator', 'punctuation.terminator'],
+      scope: [
+        'punctuation',
+        'keyword.operator',
+        'meta.brace',
+        'punctuation.separator',
+        'punctuation.terminator',
+      ],
       settings: { foreground: 'var(--syn-punc)' },
     },
     { scope: ['variable', 'entity.name.variable'], settings: { foreground: 'var(--syn-var)' } },
   ],
-}
+};
 
 /** The grammar allowlist: what agent transcripts actually fence, one lazy chunk each. */
 const LANG_LOADERS: Record<string, () => Promise<unknown>> = {
@@ -104,7 +116,7 @@ const LANG_LOADERS: Record<string, () => Promise<unknown>> = {
   go: () => import('@shikijs/langs/go'),
   rust: () => import('@shikijs/langs/rust'),
   sql: () => import('@shikijs/langs/sql'),
-}
+};
 
 /** Fence spellings for the grammars above (what `@shikijs/langs` registers as aliases, spelled
  *  out so support can be answered without loading anything). */
@@ -125,44 +137,44 @@ const ALIASES: Record<string, string> = {
   rs: 'rust',
   vue: 'html',
   xml: 'html',
-}
+};
 
 /** Languages that mean "no grammar" — rendered as plaintext without touching Shiki at all. */
-const PLAIN = new Set(['', 'plaintext', 'text', 'txt', 'plain'])
+const PLAIN = new Set(['', 'plaintext', 'text', 'txt', 'plain']);
 
 /** The canonical grammar id for a fence language, or null when we don't carry one. */
 export function canonicalLang(lang: string): string | null {
-  const key = lang.trim().toLowerCase()
-  if (key in LANG_LOADERS) return key
-  return ALIASES[key] ?? null
+  const key = lang.trim().toLowerCase();
+  if (key in LANG_LOADERS) return key;
+  return ALIASES[key] ?? null;
 }
 
 export function isPlainLang(lang: string): boolean {
-  return PLAIN.has(lang.trim().toLowerCase())
+  return PLAIN.has(lang.trim().toLowerCase());
 }
 
 /** Every fence spelling the singleton will highlight (canonical ids + aliases + plaintext). */
 export function supportedLanguages(): string[] {
-  return [...Object.keys(LANG_LOADERS), ...Object.keys(ALIASES), ...PLAIN].filter((l) => l !== '')
+  return [...Object.keys(LANG_LOADERS), ...Object.keys(ALIASES), ...PLAIN].filter((l) => l !== '');
 }
 
 /** Extension → the highlighter's fence language, or null for "don't highlight". Shared by the
  *  diff facade's per-file tokens and the Files tab's preview (R5). */
 export function langForPath(path: string): string | null {
-  const name = path.slice(path.lastIndexOf('/') + 1)
-  const dot = name.lastIndexOf('.')
-  if (dot <= 0) return null
-  const ext = name.slice(dot + 1).toLowerCase()
-  const extra: Record<string, string> = { mts: 'typescript', cts: 'typescript', htm: 'html' }
-  return canonicalLang(extra[ext] ?? ext)
+  const name = path.slice(path.lastIndexOf('/') + 1);
+  const dot = name.lastIndexOf('.');
+  if (dot <= 0) return null;
+  const ext = name.slice(dot + 1).toLowerCase();
+  const extra: Record<string, string> = { mts: 'typescript', cts: 'typescript', htm: 'html' };
+  return canonicalLang(extra[ext] ?? ext);
 }
 
 // ---- singleton state --------------------------------------------------------------------------
 
-let core: HighlighterCore | null = null
-let corePromise: Promise<HighlighterCore> | null = null
-const loadedLangs = new Set<string>()
-const langPromises = new Map<string, Promise<void>>()
+let core: HighlighterCore | null = null;
+let corePromise: Promise<HighlighterCore> | null = null;
+const loadedLangs = new Set<string>();
+const langPromises = new Map<string, Promise<void>>();
 
 /** Boot the core exactly once: `shiki/core` + the JS regex engine, both as lazy chunks. */
 function ensureCore(): Promise<HighlighterCore> {
@@ -174,32 +186,32 @@ function ensureCore(): Promise<HighlighterCore> {
         // `forgiving`: a grammar rule the JS engine cannot compile degrades that rule to
         // plaintext instead of throwing — the documented safety valve for the no-WASM setup.
         engine: createJavaScriptRegexEngine({ forgiving: true }),
-      })
-      return core
+      });
+      return core;
     },
-  )
-  return corePromise
+  );
+  return corePromise;
 }
 
 /** Load one grammar (idempotent). Resolves even on failure — failure means plaintext, not error. */
 export function ensureLang(lang: string): Promise<void> {
-  const canonical = canonicalLang(lang)
-  if (canonical === null || loadedLangs.has(canonical)) return Promise.resolve()
-  let pending = langPromises.get(canonical)
+  const canonical = canonicalLang(lang);
+  if (canonical === null || loadedLangs.has(canonical)) return Promise.resolve();
+  let pending = langPromises.get(canonical);
   if (!pending) {
     pending = ensureCore()
       .then(async (highlighter) => {
-        await highlighter.loadLanguage((await LANG_LOADERS[canonical]!()) as never)
-        loadedLangs.add(canonical)
+        await highlighter.loadLanguage((await LANG_LOADERS[canonical]!()) as never);
+        loadedLangs.add(canonical);
       })
       .catch(() => {
         // A failed grammar fetch must not wedge the promise cache in a rejected state forever —
         // drop it so a later render can retry, and let the caller fall back to plaintext now.
-        langPromises.delete(canonical)
-      })
-    langPromises.set(canonical, pending)
+        langPromises.delete(canonical);
+      });
+    langPromises.set(canonical, pending);
   }
-  return pending
+  return pending;
 }
 
 function plaintext(code: string): SynHighlight {
@@ -207,7 +219,7 @@ function plaintext(code: string): SynHighlight {
     tokens: code.split('\n').map((line) => [{ content: line }]),
     fg: 'var(--syn-var)',
     bg: 'transparent',
-  }
+  };
 }
 
 export interface HighlightOptions {
@@ -222,7 +234,7 @@ export interface HighlightOptions {
    * their wall clock is shared with every parallel worker vitest spawned — under full-suite
    * load the budget trips on trivial lines and the assertion flakes.
    */
-  tokenizeTimeLimit?: number
+  tokenizeTimeLimit?: number;
 }
 
 /**
@@ -230,39 +242,47 @@ export interface HighlightOptions {
  * Streaming markdown re-highlights the growing tail block on every chunk — after the first
  * async load this is the path every subsequent chunk takes.
  */
-export function highlightSync(code: string, lang: string, options: HighlightOptions = {}): SynHighlight | null {
-  if (isPlainLang(lang)) return plaintext(code)
-  const canonical = canonicalLang(lang)
-  if (canonical === null) return plaintext(code) // unknown fence info — honest plaintext, sync
-  if (!core || !loadedLangs.has(canonical)) return null
+export function highlightSync(
+  code: string,
+  lang: string,
+  options: HighlightOptions = {},
+): SynHighlight | null {
+  if (isPlainLang(lang)) return plaintext(code);
+  const canonical = canonicalLang(lang);
+  if (canonical === null) return plaintext(code); // unknown fence info — honest plaintext, sync
+  if (!core || !loadedLangs.has(canonical)) return null;
   try {
     const result = core.codeToTokens(code, {
       lang: canonical as never,
       theme: SYN_THEME.name,
       tokenizeTimeLimit: options.tokenizeTimeLimit,
-    })
+    });
     return {
       tokens: result.tokens.map((line) => line.map(({ content, color }) => ({ content, color }))),
       fg: result.fg ?? 'var(--syn-var)',
       bg: 'transparent',
-    }
+    };
   } catch {
-    return plaintext(code)
+    return plaintext(code);
   }
 }
 
 /** Highlight, loading the core and the grammar on the way when needed. Never rejects. */
-export async function highlight(code: string, lang: string, options: HighlightOptions = {}): Promise<SynHighlight> {
-  const sync = highlightSync(code, lang, options)
-  if (sync) return sync
-  await ensureLang(lang)
-  return highlightSync(code, lang, options) ?? plaintext(code)
+export async function highlight(
+  code: string,
+  lang: string,
+  options: HighlightOptions = {},
+): Promise<SynHighlight> {
+  const sync = highlightSync(code, lang, options);
+  if (sync) return sync;
+  await ensureLang(lang);
+  return highlightSync(code, lang, options) ?? plaintext(code);
 }
 
 /** Test seam: drop the singleton so a suite can assert cold-boot behavior. */
 export function resetHighlighterForTests(): void {
-  core = null
-  corePromise = null
-  loadedLangs.clear()
-  langPromises.clear()
+  core = null;
+  corePromise = null;
+  loadedLangs.clear();
+  langPromises.clear();
 }

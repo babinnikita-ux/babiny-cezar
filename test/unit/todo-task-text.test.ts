@@ -13,7 +13,11 @@ import { todoTaskText, type TodoItem } from '../../src/todos.js';
  * fixture and inbox.test.tsx goes red instead. The drift always surfaces.
  */
 interface Fixture {
-  cases: Array<{ name: string; todo: Pick<TodoItem, 'summary' | 'suggestedPrompt' | 'suggestedArgs'>; expected: string }>;
+  cases: Array<{
+    name: string;
+    todo: Pick<TodoItem, 'summary' | 'suggestedPrompt' | 'suggestedArgs'>;
+    expected: string;
+  }>;
 }
 
 const fixture = JSON.parse(

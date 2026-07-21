@@ -1,5 +1,5 @@
-import { useQueryClient, type QueryClient } from '@tanstack/react-query'
-import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query';
+import { createContext, useContext, useEffect, useState, useSyncExternalStore, type ReactNode } from 'react';
 
 import {
   applyRunDeleted,
@@ -10,10 +10,10 @@ import {
   parseWorkspaceEvent,
   type GlobalEvent,
   type UsageStore,
-} from './events'
-import { getApiScope } from './project-scope'
-import { queryKeys, workspaceQueryKeys } from './queries'
-import type { ApiRun, HealthResponse, ProcessUsage } from './types'
+} from './events';
+import { getApiScope } from './project-scope';
+import { queryKeys, workspaceQueryKeys } from './queries';
+import type { ApiRun, HealthResponse, ProcessUsage } from './types';
 
 /**
  * The app's one connection to `GET /api/workspace/events`, and the two halves of the sync
@@ -35,21 +35,21 @@ import type { ApiRun, HealthResponse, ProcessUsage } from './types'
  * argument as ever, and a project switch changes the filter, not the socket.
  */
 
-const SSE_URL = '/api/workspace/events'
+const SSE_URL = '/api/workspace/events';
 
 /** `EventSource.CLOSED`. Spelled as the literal so nothing here depends on the global's statics —
  *  the same reason the constructor is read off `globalThis` below. */
-const CLOSED = 2
+const CLOSED = 2;
 
 /** How long to wait before rebuilding a stream the browser gave up on. Long enough that a server
  *  restart isn't hammered while it boots, short enough that the cockpit is live again before the
  *  reader notices. Only reached in the permanent-failure case: an ordinary drop is EventSource's
  *  own retry, which we neither can nor should replace. */
-const REOPEN_DELAY_MS = 3_000
+const REOPEN_DELAY_MS = 3_000;
 
 /** Everything the stream is allowed to say. An unknown name never reaches `parseGlobalEvent`,
  *  because SSE only delivers named events to a matching listener in the first place. */
-const EVENT_NAMES = ['run', 'run-deleted', 'todos', 'usage', 'ping'] as const
+const EVENT_NAMES = ['run', 'run-deleted', 'todos', 'usage', 'ping'] as const;
 
 /**
  * The workspace-only names (server: `WorkspaceEventName`). Unlike the list above these are not
@@ -57,11 +57,11 @@ const EVENT_NAMES = ['run', 'run-deleted', 'todos', 'usage', 'ping'] as const
  * projects query (the sidebar grows/loses a group without a reload) and fan out to whoever
  * subscribed via `onWorkspaceEvent`.
  */
-const WORKSPACE_EVENT_NAMES = ['project-added', 'project-removed', 'checkout-progress'] as const
+const WORKSPACE_EVENT_NAMES = ['project-added', 'project-removed', 'checkout-progress'] as const;
 
-type WorkspaceEventName = (typeof WORKSPACE_EVENT_NAMES)[number]
+type WorkspaceEventName = (typeof WORKSPACE_EVENT_NAMES)[number];
 
-const workspaceListeners = new Set<(name: WorkspaceEventName, payload: unknown) => void>()
+const workspaceListeners = new Set<(name: WorkspaceEventName, payload: unknown) => void>();
 
 /**
  * Subscribe to the workspace-level events on the one stream. Returns an unsubscribe.
@@ -72,13 +72,11 @@ const workspaceListeners = new Set<(name: WorkspaceEventName, payload: unknown) 
  * Payloads are handed over RAW (parsed JSON, unvalidated): each listener knows the shape of the
  * event it asked for, and inventing a second parser here would only duplicate events.ts.
  */
-export function onWorkspaceEvent(
-  listener: (name: WorkspaceEventName, payload: unknown) => void,
-): () => void {
-  workspaceListeners.add(listener)
+export function onWorkspaceEvent(listener: (name: WorkspaceEventName, payload: unknown) => void): () => void {
+  workspaceListeners.add(listener);
   return () => {
-    workspaceListeners.delete(listener)
-  }
+    workspaceListeners.delete(listener);
+  };
 }
 
 /**
@@ -99,11 +97,11 @@ export function onWorkspaceEvent(
  * fetch fifty runs to come back.
  */
 function reconcile(queryClient: QueryClient): void {
-  void queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
-  void queryClient.invalidateQueries({ queryKey: queryKeys.todos })
-  void queryClient.invalidateQueries({ queryKey: queryKeys.health })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.runs.all });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.todos });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.health });
   // The worktree panel's list/total (#483) — a run finishing or a reclaim changes it.
-  void queryClient.invalidateQueries({ queryKey: queryKeys.worktrees })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.worktrees });
 }
 
 /**
@@ -114,7 +112,9 @@ function reconcile(queryClient: QueryClient): void {
  * the reducers refuse to invent caches from stream messages anyway.
  */
 function activeProject(queryClient: QueryClient): string | undefined {
-  return getApiScope() ?? (queryClient.getQueryData(queryKeys.health) as HealthResponse | undefined)?.bootProject
+  return (
+    getApiScope() ?? (queryClient.getQueryData(queryKeys.health) as HealthResponse | undefined)?.bootProject
+  );
 }
 
 /** Fold one stream message into the cache. The reducers it calls are pure and table-tested in
@@ -122,50 +122,50 @@ function activeProject(queryClient: QueryClient): string | undefined {
 function applyGlobalEvent(queryClient: QueryClient, usage: UsageStore, event: GlobalEvent): void {
   switch (event.type) {
     case 'run': {
-      queryClient.setQueryData<ApiRun[]>(queryKeys.runs.list(), (list) => applyRunEvent(list, event.run))
+      queryClient.setQueryData<ApiRun[]>(queryKeys.runs.list(), (list) => applyRunEvent(list, event.run));
       // Only a detail cache that exists: `setQueryData` would happily create one, leaving an entry
       // for a run nobody opened — and, worse, one built from a summary rather than from
       // `GET /api/runs/:id`, which the next reader would then be served as if it were fetched.
-      const key = queryKeys.runs.detail(event.run.id)
+      const key = queryKeys.runs.detail(event.run.id);
       if (queryClient.getQueryData(key) !== undefined) {
-        queryClient.setQueryData<ApiRun>(key, (previous) => mergeRun(previous, event.run))
+        queryClient.setQueryData<ApiRun>(key, (previous) => mergeRun(previous, event.run));
       }
       // The Changes tab stops polling once a run leaves the active set (queries.ts:
       // refetchInterval only lives while active), so end-of-run writes would otherwise wait
       // for the next SSE reconnect's reconcile(). Invalidate the changes cache on the run event
       // itself — but only when one already exists, so a background tab that never opened the
       // Changes view doesn't fetch a diff nobody is looking at (same stance as the detail guard).
-      const changesKey = queryKeys.runs.changes(event.run.id)
+      const changesKey = queryKeys.runs.changes(event.run.id);
       if (queryClient.getQueryData(changesKey) !== undefined) {
-        void queryClient.invalidateQueries({ queryKey: changesKey })
+        void queryClient.invalidateQueries({ queryKey: changesKey });
       }
       // A terminal transition can reclaim (or re-materialize) a worktree (#483); keep the
       // panel live. invalidateQueries only refetches while the panel is actually mounted.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.worktrees })
-      return
+      void queryClient.invalidateQueries({ queryKey: queryKeys.worktrees });
+      return;
     }
     case 'run-deleted': {
-      queryClient.setQueryData<ApiRun[]>(queryKeys.runs.list(), (list) => applyRunDeleted(list, event.id))
+      queryClient.setQueryData<ApiRun[]>(queryKeys.runs.list(), (list) => applyRunDeleted(list, event.id));
       // Removed, not set to undefined: the run is gone server-side, so its detail and diff caches
       // are garbage. Anything still mounted on them refetches and gets the server's 404 — the
       // truth — instead of rendering a record that no longer exists.
-      queryClient.removeQueries({ queryKey: queryKeys.runs.detail(event.id) })
-      queryClient.removeQueries({ queryKey: queryKeys.runs.diff(event.id) })
+      queryClient.removeQueries({ queryKey: queryKeys.runs.detail(event.id) });
+      queryClient.removeQueries({ queryKey: queryKeys.runs.diff(event.id) });
       // Its worktree goes with it — refresh the panel (#483).
-      void queryClient.invalidateQueries({ queryKey: queryKeys.worktrees })
-      return
+      void queryClient.invalidateQueries({ queryKey: queryKeys.worktrees });
+      return;
     }
     case 'todos':
       // A complete array every time (the server re-reads the file), so it replaces outright and
       // may seed a cache no one fetched yet — unlike `run`, this payload *is* the whole answer.
-      queryClient.setQueryData(queryKeys.todos, event.items)
-      return
+      queryClient.setQueryData(queryKeys.todos, event.items);
+      return;
     case 'usage':
-      usage.set(event.usage)
-      return
+      usage.set(event.usage);
+      return;
     case 'ping':
       // A keep-alive. It says the socket is open, which we already know by receiving it.
-      return
+      return;
   }
 }
 
@@ -178,68 +178,68 @@ function applyGlobalEvent(queryClient: QueryClient, usage: UsageStore, event: Gl
  * copies of the same messages and then stall every other request behind them.
  */
 export function useGlobalEvents(usage: UsageStore, url: string = SSE_URL): void {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     // jsdom has no EventSource, and neither would a prerender. Read it off `globalThis` so the
     // check and the construction see the same binding (`vi.stubGlobal` is what the tests install).
-    const Source = globalThis.EventSource
-    if (typeof Source !== 'function') return
+    const Source = globalThis.EventSource;
+    if (typeof Source !== 'function') return;
 
-    let source: EventSource | null = null
-    let reopenTimer: ReturnType<typeof setTimeout> | undefined
-    let everOpened = false
-    let disposed = false
+    let source: EventSource | null = null;
+    let reopenTimer: ReturnType<typeof setTimeout> | undefined;
+    let everOpened = false;
+    let disposed = false;
 
     const reopenLater = (): void => {
-      if (disposed || reopenTimer !== undefined) return
+      if (disposed || reopenTimer !== undefined) return;
       reopenTimer = setTimeout(() => {
-        reopenTimer = undefined
-        if (!disposed) connect()
-      }, REOPEN_DELAY_MS)
-    }
+        reopenTimer = undefined;
+        if (!disposed) connect();
+      }, REOPEN_DELAY_MS);
+    };
 
     const connect = (): void => {
-      source?.close()
-      source = new Source(url)
+      source?.close();
+      source = new Source(url);
 
       source.addEventListener('open', () => {
         // Not the first one: at boot the queries are fetching anyway, and invalidating them here
         // would only ask the same questions twice. Every later open is a *re*connect — we were
         // disconnected, events happened without us, and the cache is now a guess.
-        if (everOpened) reconcile(queryClient)
-        everOpened = true
-      })
+        if (everOpened) reconcile(queryClient);
+        everOpened = true;
+      });
 
       for (const name of EVENT_NAMES) {
         source.addEventListener(name, (event) => {
-          const parsed = parseWorkspaceEvent(name, (event as MessageEvent<string>).data)
-          if (!parsed) return
+          const parsed = parseWorkspaceEvent(name, (event as MessageEvent<string>).data);
+          if (!parsed) return;
           // Another project's news patches nothing here: this scope's caches hold this
           // project's data only, and the reconcile-on-switch (3.2's provider swap) refetches
           // the rest. `ping` (project null) always passes — liveness is not project-owned.
-          if (parsed.project !== null && parsed.project !== activeProject(queryClient)) return
-          applyGlobalEvent(queryClient, usage, parsed.event)
-        })
+          if (parsed.project !== null && parsed.project !== activeProject(queryClient)) return;
+          applyGlobalEvent(queryClient, usage, parsed.event);
+        });
       }
 
       for (const name of WORKSPACE_EVENT_NAMES) {
         source.addEventListener(name, (event) => {
-          let payload: unknown
+          let payload: unknown;
           try {
-            payload = JSON.parse((event as MessageEvent<string>).data)
+            payload = JSON.parse((event as MessageEvent<string>).data);
           } catch {
-            return
+            return;
           }
           // A registry mutation changes the sidebar for every open tab, not just the one that
           // clicked. `checkout-progress` is deliberately NOT in this branch: a clone emits a
           // line every few hundred ms, and re-listing the registry on each would turn one clone
           // into a request flood (the dialog's own success handler invalidates once, at the end).
           if (name !== 'checkout-progress') {
-            void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.projects })
+            void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.projects });
           }
-          for (const listener of workspaceListeners) listener(name, payload)
-        })
+          for (const listener of workspaceListeners) listener(name, payload);
+        });
       }
 
       source.addEventListener('error', () => {
@@ -248,62 +248,62 @@ export function useGlobalEvents(usage: UsageStore, url: string = SSE_URL): void 
         // what a restarting server produces (the request is answered with a non-2xx while it
         // boots). Nothing would ever reopen it, so the cockpit would sit there looking live and
         // showing yesterday's state.
-        if (source?.readyState === CLOSED) reopenLater()
-      })
-    }
+        if (source?.readyState === CLOSED) reopenLater();
+      });
+    };
 
     const onVisibilityChange = (): void => {
-      if (document.visibilityState !== 'visible') return
+      if (document.visibilityState !== 'visible') return;
       // The phone-in-a-pocket case: mobile browsers freeze background tabs, so the stream may have
       // been dead for an hour with no error handler ever running. Whatever is on screen right now
       // is what the reader is about to trust, so ask the server before they read it.
-      reconcile(queryClient)
+      reconcile(queryClient);
       if (!source || source.readyState === CLOSED) {
         // Don't make them wait out a backoff that started while they were away.
-        clearTimeout(reopenTimer)
-        reopenTimer = undefined
-        connect()
+        clearTimeout(reopenTimer);
+        reopenTimer = undefined;
+        connect();
       }
-    }
+    };
 
     const onPageHide = (): void => {
       // Full navigation away. React never unmounts for those — the document goes to the
       // back/forward cache still holding this socket, and six cached documents exhaust the
       // browser's per-origin connection pool: the *next* page load then hangs waiting for a
       // free socket. Close eagerly; pageshow reopens if the document ever comes back.
-      clearTimeout(reopenTimer)
-      reopenTimer = undefined
-      source?.close()
-    }
+      clearTimeout(reopenTimer);
+      reopenTimer = undefined;
+      source?.close();
+    };
 
     const onPageShow = (event: PageTransitionEvent): void => {
       // Only a bfcache restore (`persisted`) finds this document alive with its stream closed
       // by onPageHide; on a normal load this effect just ran and the stream is fresh.
-      if (!event.persisted) return
-      reconcile(queryClient)
-      connect()
-    }
+      if (!event.persisted) return;
+      reconcile(queryClient);
+      connect();
+    };
 
-    document.addEventListener('visibilitychange', onVisibilityChange)
-    window.addEventListener('pagehide', onPageHide)
-    window.addEventListener('pageshow', onPageShow)
-    connect()
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('pageshow', onPageShow);
+    connect();
 
     return () => {
-      disposed = true
-      clearTimeout(reopenTimer)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-      window.removeEventListener('pagehide', onPageHide)
-      window.removeEventListener('pageshow', onPageShow)
+      disposed = true;
+      clearTimeout(reopenTimer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('pageshow', onPageShow);
       // Explicit: an EventSource keeps its socket (and its retry loop) alive on its own, so a
       // dropped reference leaks a connection per remount, and StrictMode remounts every effect.
-      source?.close()
-      source = null
-    }
-  }, [queryClient, usage, url])
+      source?.close();
+      source = null;
+    };
+  }, [queryClient, usage, url]);
 }
 
-const UsageContext = createContext<UsageStore | null>(null)
+const UsageContext = createContext<UsageStore | null>(null);
 
 /**
  * Mounts the global stream and publishes the live usage map.
@@ -313,9 +313,9 @@ const UsageContext = createContext<UsageStore | null>(null)
 export function GlobalEventsProvider({ children }: { children: ReactNode }) {
   // One store per provider instance, created lazily: a module-level singleton would let one test's
   // ticks bleed into the next, and StrictMode's double-invoked render still yields exactly one.
-  const [usage] = useState(createUsageStore)
-  useGlobalEvents(usage)
-  return <UsageContext.Provider value={usage}>{children}</UsageContext.Provider>
+  const [usage] = useState(createUsageStore);
+  useGlobalEvents(usage);
+  return <UsageContext.Provider value={usage}>{children}</UsageContext.Provider>;
 }
 
 /**
@@ -326,12 +326,12 @@ export function GlobalEventsProvider({ children }: { children: ReactNode }) {
  * nothing it would see before the first tick instead of crashing a tree over telemetry.
  */
 export function useUsage(): Record<string, ProcessUsage> {
-  const store = useContext(UsageContext)
+  const store = useContext(UsageContext);
   return useSyncExternalStore(
     store ? store.subscribe : noopSubscribe,
     store ? store.get : getEmptyUsage,
     getEmptyUsage,
-  )
+  );
 }
 
 /**
@@ -343,14 +343,14 @@ export function useUsage(): Record<string, ProcessUsage> {
  * bails out — while `useUsage()` would hand it a new map object every tick.
  */
 export function useRunUsage(runId: string | undefined): ProcessUsage | undefined {
-  const store = useContext(UsageContext)
-  const get = store ? store.get : getEmptyUsage
+  const store = useContext(UsageContext);
+  const get = store ? store.get : getEmptyUsage;
   return useSyncExternalStore(
     store ? store.subscribe : noopSubscribe,
     () => (runId ? get()[runId] : undefined),
     () => undefined,
-  )
+  );
 }
 
-const noopSubscribe = (): (() => void) => () => undefined
-const getEmptyUsage = (): Record<string, ProcessUsage> => EMPTY_USAGE
+const noopSubscribe = (): (() => void) => () => undefined;
+const getEmptyUsage = (): Record<string, ProcessUsage> => EMPTY_USAGE;

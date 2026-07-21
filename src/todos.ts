@@ -46,7 +46,10 @@ async function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
   const next = new Promise<void>((r) => {
     release = r;
   });
-  locks.set(key, prev.then(() => next));
+  locks.set(
+    key,
+    prev.then(() => next),
+  );
   try {
     await prev;
     return await fn();
@@ -83,7 +86,9 @@ async function readRaw(dataDir: string): Promise<{ items: TodoItem[]; needsRewri
   for (const entry of parsed) {
     const result = todoSchema.safeParse(entry);
     if (!result.success) {
-      console.warn(`[cez] skipped a malformed todos.json entry: ${result.error.issues.map((i) => i.message).join('; ')}`);
+      console.warn(
+        `[cez] skipped a malformed todos.json entry: ${result.error.issues.map((i) => i.message).join('; ')}`,
+      );
       continue;
     }
     if (!result.data.id) {
@@ -132,9 +137,7 @@ export async function removeTodo(dataDir: string, id: string): Promise<boolean> 
  *  source for `POST /api/todos/:id/start`; the cockpit's prefill copy
  *  (`web/app/src/routes/inbox.tsx`, #374) lives in another process and cannot import this, so
  *  the two are pinned to the shared cases in `test/fixtures/todo-task-text.json`. */
-export function todoTaskText(
-  todo: Pick<TodoItem, 'summary' | 'suggestedPrompt' | 'suggestedArgs'>,
-): string {
+export function todoTaskText(todo: Pick<TodoItem, 'summary' | 'suggestedPrompt' | 'suggestedArgs'>): string {
   let task = (todo.suggestedPrompt ?? todo.summary).trim() || todo.summary;
   if (todo.suggestedArgs) task += `\n\nArguments: ${todo.suggestedArgs}`;
   return task;

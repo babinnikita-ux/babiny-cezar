@@ -24,14 +24,25 @@ const npmExecpath = process.env.npm_execpath;
 const packArgs = ['pack', '--dry-run', '--json'];
 const npmCli = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const stdout = npmExecpath
-  ? execFileSync(process.execPath, [npmExecpath, ...packArgs], { cwd: repoRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
-  : execFileSync(npmCli, packArgs, { cwd: repoRoot, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, shell: process.platform === 'win32' });
+  ? execFileSync(process.execPath, [npmExecpath, ...packArgs], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+    })
+  : execFileSync(npmCli, packArgs, {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024,
+      shell: process.platform === 'win32',
+    });
 
 /** @type {{ files?: { path: string }[] }[]} */
 const reports = JSON.parse(stdout);
 const files = (reports[0]?.files ?? []).map((f) => f.path);
 if (files.length === 0) {
-  console.error('check:pack: `npm pack --dry-run --json` reported no files — refusing to publish an empty package');
+  console.error(
+    'check:pack: `npm pack --dry-run --json` reported no files — refusing to publish an empty package',
+  );
   process.exit(1);
 }
 

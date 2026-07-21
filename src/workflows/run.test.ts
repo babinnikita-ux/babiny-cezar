@@ -54,7 +54,12 @@ describe('RunManager.recordTurnEnd', () => {
 
   /** A run with a real worktree forked off main, holding an edit + a new file. */
   async function makeWorktreeRun(): Promise<RunRecord> {
-    const record = store.createRun({ title: 'fix the login bug', workflow: 'quick-task', task: 'fix the login bug', steps: [] });
+    const record = store.createRun({
+      title: 'fix the login bug',
+      workflow: 'quick-task',
+      task: 'fix the login bug',
+      steps: [],
+    });
     const wt = await createWorktree(repoRoot, record.id, 'main');
     store.updateRun(record.id, { worktreePath: wt.path, branch: wt.branch, baseBranch: wt.baseBranch });
     writeFileSync(join(wt.path, 'a.txt'), 'one\nTWO\nthree\n'); // 1 add, 1 del
@@ -74,7 +79,10 @@ describe('RunManager.recordTurnEnd', () => {
 
     // Second turn: the diff stat keeps refreshing.
     writeFileSync(join(store.getRun(record.id)!.worktreePath!, 'more.txt'), 'z\n');
-    await manager.recordTurnEnd(record.id, 'Now I rewrote everything from scratch with a different approach.');
+    await manager.recordTurnEnd(
+      record.id,
+      'Now I rewrote everything from scratch with a different approach.',
+    );
     const later = store.getRun(record.id);
     expect(later?.titleSummary).toBeUndefined();
     expect(later?.diffStat).toEqual({ adds: 4, dels: 1, files: 3 });
@@ -101,7 +109,12 @@ describe('RunManager.recordTurnEnd', () => {
   });
 
   it('applies in-band CEZ markers from the turn text (spec 2026-07-18-task-ref-markers)', async () => {
-    const record = store.createRun({ title: 't', workflow: 'w', task: 'implement comment threads', steps: [] });
+    const record = store.createRun({
+      title: 't',
+      workflow: 'w',
+      task: 'implement comment threads',
+      steps: [],
+    });
     await manager.recordTurnEnd(
       record.id,
       'Progress so far.\nCEZ:PR=500\nCEZ:ISSUE=433\nCEZ:TITLE=implementing comment threads\nMore to come.',
@@ -196,9 +209,10 @@ describe('RunManager.continueRun override', () => {
   it('starts fresh when Continue switches to a backend that does not own the session', () => {
     const id = resumableRun();
     const calls: unknown[][] = [];
-    (manager as unknown as { runContinuation: (...args: unknown[]) => Promise<void> }).runContinuation = async (...args) => {
-      calls.push(args);
-    };
+    (manager as unknown as { runContinuation: (...args: unknown[]) => Promise<void> }).runContinuation =
+      async (...args) => {
+        calls.push(args);
+      };
 
     expect(manager.continueRun(id, { runner: 'codex' })).toEqual({ ok: true });
     expect(calls[0]?.[2]).toBeUndefined();
@@ -209,9 +223,10 @@ describe('RunManager.continueRun override', () => {
     const id = resumableRun();
     store.updateStep(id, 's1', { backend: 'claude' });
     const calls: unknown[][] = [];
-    (manager as unknown as { runContinuation: (...args: unknown[]) => Promise<void> }).runContinuation = async (...args) => {
-      calls.push(args);
-    };
+    (manager as unknown as { runContinuation: (...args: unknown[]) => Promise<void> }).runContinuation =
+      async (...args) => {
+        calls.push(args);
+      };
 
     expect(manager.continueRun(id, { runner: 'claude' })).toEqual({ ok: true });
     expect(calls[0]?.[2]).toBe('sess-1');
@@ -226,7 +241,7 @@ describe('RunManager.continueRun override', () => {
     expect(after?.model).toBe('sonnet');
   });
 
-  it("an empty model clears the pin so the runner picks the model (auto)", () => {
+  it('an empty model clears the pin so the runner picks the model (auto)', () => {
     const id = resumableRun();
     manager.continueRun(id, { model: '' });
     expect(store.getRun(id)?.model).toBeUndefined();
@@ -276,7 +291,12 @@ describe('RunManager.continueRun override', () => {
   });
 
   it('guards legacy records too — no persisted runner resolves to claude, like runContinuation', () => {
-    const record = store.createRun({ title: 't', workflow: 'quick-task', task: 't', steps: [{ id: 's1', name: 'Work', kind: 'agent' }] });
+    const record = store.createRun({
+      title: 't',
+      workflow: 'quick-task',
+      task: 't',
+      steps: [{ id: 's1', name: 'Work', kind: 'agent' }],
+    });
     store.updateRun(record.id, { status: 'done', finishedAt: new Date().toISOString() });
     store.updateStep(record.id, 's1', { sessionId: 'sess-1' });
     const result = manager.continueRun(record.id, { model: 'gpt-5.1-codex' });
@@ -291,7 +311,13 @@ describe('RunManager.continueRun override', () => {
   });
 
   it('refuses to continue a run with no resumable session (no override persisted)', () => {
-    const record = store.createRun({ title: 't', workflow: 'quick-task', task: 't', runner: 'claude', steps: [] });
+    const record = store.createRun({
+      title: 't',
+      workflow: 'quick-task',
+      task: 't',
+      runner: 'claude',
+      steps: [],
+    });
     store.updateRun(record.id, { status: 'done' });
     const result = manager.continueRun(record.id, { runner: 'codex' });
     expect(result.ok).toBe(false);
@@ -358,7 +384,8 @@ describe('RunManager.settleSuccess — optional review gate', () => {
     return store.getRun(record.id) as RunRecord;
   }
 
-  const settle = (id: string) => (manager as unknown as { settleSuccess(id: string): Promise<void> }).settleSuccess(id);
+  const settle = (id: string) =>
+    (manager as unknown as { settleSuccess(id: string): Promise<void> }).settleSuccess(id);
 
   it('gate off (default) + changes → done, diff left in the worktree', async () => {
     const record = await changedRun();
@@ -434,7 +461,7 @@ describe('a chain of 2 selected skills runs BOTH steps, in order (#410)', () => 
     rmSync(repoRoot, { recursive: true, force: true });
   });
 
-  it('runs both skill steps to completion, and the second step\'s prompt carries the chain guard', async () => {
+  it("runs both skill steps to completion, and the second step's prompt carries the chain guard", async () => {
     // Exactly the shape `githubRunBody` / `skillChainSteps` build for 2
     // selected skills: one agent step per skill, every step's prompt just
     // `{{task}}` — no per-step differentiation from the GUI side.
@@ -442,8 +469,18 @@ describe('a chain of 2 selected skills runs BOTH steps, in order (#410)', () => 
       name: '(planned)',
       source: 'built-in',
       steps: [
-        { id: 'om-auto-review-pr', name: 'om-auto-review-pr', skill: 'om-auto-review-pr', prompt: '{{task}}' },
-        { id: 'om-auto-verify-pr-ui', name: 'om-auto-verify-pr-ui', skill: 'om-auto-verify-pr-ui', prompt: '{{task}}' },
+        {
+          id: 'om-auto-review-pr',
+          name: 'om-auto-review-pr',
+          skill: 'om-auto-review-pr',
+          prompt: '{{task}}',
+        },
+        {
+          id: 'om-auto-verify-pr-ui',
+          name: 'om-auto-verify-pr-ui',
+          skill: 'om-auto-verify-pr-ui',
+          prompt: '{{task}}',
+        },
       ],
     };
     // `mock:done` makes the mock's turn end with CEZ:DONE — needed so the
@@ -990,9 +1027,7 @@ describe('RunManager queued-stack mutators (#472)', () => {
     starting.add(r.id);
     expect(manager.deferMessage(r.id, text('buffer me'))).toBe(true);
     expect(
-      (manager as unknown as { deferredMessages: Map<string, ContentBlock[][]> }).deferredMessages.get(
-        r.id,
-      ),
+      (manager as unknown as { deferredMessages: Map<string, ContentBlock[][]> }).deferredMessages.get(r.id),
     ).toHaveLength(1);
   });
 
@@ -1026,7 +1061,7 @@ describe('RunManager queued-stack mutators (#472)', () => {
     expect(buffer.get(r.id)).toHaveLength(1);
 
     // Flush with no open session — `sendMessage` refuses.
-    ;(manager as unknown as { flushDeferred(id: string): void }).flushDeferred(r.id);
+    (manager as unknown as { flushDeferred(id: string): void }).flushDeferred(r.id);
     expect(buffer.get(r.id)).toHaveLength(1);
 
     // Now a session that accepts it: the buffer drains.
@@ -1038,7 +1073,7 @@ describe('RunManager queued-stack mutators (#472)', () => {
       delivered.push(content);
       return true;
     };
-    ;(manager as unknown as { flushDeferred(id: string): void }).flushDeferred(r.id);
+    (manager as unknown as { flushDeferred(id: string): void }).flushDeferred(r.id);
     expect(delivered).toHaveLength(1);
     expect(buffer.has(r.id)).toBe(false);
   });
@@ -1063,7 +1098,10 @@ describe('RunManager.hydrateQueuedInput (#472)', () => {
   let store: RunStore;
   let manager: RunManager;
 
-  type Hydrate = (runId: string, input: { task: string }) => {
+  type Hydrate = (
+    runId: string,
+    input: { task: string },
+  ) => {
     task: string;
     stackedImages?: ContentBlock[];
   };
@@ -1149,7 +1187,9 @@ describe('RunManager.hydrateQueuedInput (#472)', () => {
     const hydrated = hydrate(r.id, r.task);
     expect(hydrated.task).toBe('look at this\n\nsee the mock');
     expect(hydrated.stackedImages).toBeUndefined();
-    expect(store.readEvents(r.id).some((e) => e.type === 'note' && String(e.message).includes('gone-1.png'))).toBe(true);
+    expect(
+      store.readEvents(r.id).some((e) => e.type === 'note' && String(e.message).includes('gone-1.png')),
+    ).toBe(true);
   });
 });
 
@@ -1264,9 +1304,7 @@ describe('recover() carries the queued stack exactly once (#472)', () => {
     store.updateRun(r.id, {
       status: 'queued',
       workflowDef: WORKFLOW as unknown as Record<string, unknown>,
-      queuedMessages: [
-        { id: 'm1', text: 'the stacked bit', createdAt: '2026-07-21T10:00:00.000Z' },
-      ],
+      queuedMessages: [{ id: 'm1', text: 'the stacked bit', createdAt: '2026-07-21T10:00:00.000Z' }],
     });
 
     const expected = 'the original task\n\nthe stacked bit';
@@ -1294,7 +1332,9 @@ describe('native Codex requestUserInput parks and resumes the run (#565)', () =>
   const savedDryRun = process.env.CEZ_DRY_RUN;
   const savedCodexBin = process.env.CEZ_CODEX_BIN;
   const workflow: WorkflowDef = {
-    name: 'quick-task', source: 'built-in', steps: [{ id: 'task', name: 'Task', prompt: '{{task}}' }],
+    name: 'quick-task',
+    source: 'built-in',
+    steps: [{ id: 'task', name: 'Task', prompt: '{{task}}' }],
   };
 
   beforeEach(async () => {
@@ -1311,8 +1351,10 @@ describe('native Codex requestUserInput parks and resumes the run (#565)', () =>
 
   afterEach(() => {
     if (runId) manager.cancel(runId);
-    if (savedDryRun === undefined) delete process.env.CEZ_DRY_RUN; else process.env.CEZ_DRY_RUN = savedDryRun;
-    if (savedCodexBin === undefined) delete process.env.CEZ_CODEX_BIN; else process.env.CEZ_CODEX_BIN = savedCodexBin;
+    if (savedDryRun === undefined) delete process.env.CEZ_DRY_RUN;
+    else process.env.CEZ_DRY_RUN = savedDryRun;
+    if (savedCodexBin === undefined) delete process.env.CEZ_CODEX_BIN;
+    else process.env.CEZ_CODEX_BIN = savedCodexBin;
     store.flush();
     rmSync(repoRoot, { recursive: true, force: true });
   });
@@ -1327,7 +1369,9 @@ describe('native Codex requestUserInput parks and resumes the run (#565)', () =>
 
   it('persists the ask, parks immediately, then routes the answer to the pending RPC', async () => {
     const record = manager.startRun(workflow, {
-      task: 'mock:native-codex-ask choose a library', runner: 'codex', worktree: false,
+      task: 'mock:native-codex-ask choose a library',
+      runner: 'codex',
+      worktree: false,
     });
     runId = record.id;
     await waitFor(() => store.getRun(record.id)?.status === 'waiting');

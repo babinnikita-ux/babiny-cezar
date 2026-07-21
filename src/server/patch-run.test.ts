@@ -28,7 +28,12 @@ describe('PATCH /api/runs/:id', () => {
       manager: {} as unknown as RunManager, // the PATCH route never touches it
       version: '0.0.0-test',
     });
-    run = store.createRun({ title: 'fix the login bug', workflow: 'quick-task', task: 'fix the login bug', steps: [] });
+    run = store.createRun({
+      title: 'fix the login bug',
+      workflow: 'quick-task',
+      task: 'fix the login bug',
+      steps: [],
+    });
   });
 
   afterEach(() => {

@@ -1,7 +1,7 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
-import { canonicalLang, highlight, highlightSync, type SynToken } from '@/lib/highlighter'
-import { cn } from '@/lib/utils'
+import { canonicalLang, highlight, highlightSync, type SynToken } from '@/lib/highlighter';
+import { cn } from '@/lib/utils';
 
 /**
  * A raw, syntax-highlighted text editor: a transparent-text `<textarea>` over a
@@ -16,60 +16,59 @@ import { cn } from '@/lib/utils'
  */
 
 /** Past this many lines, skip highlighting — plaintext beats jank (matches the diff/file-preview cap). */
-const HIGHLIGHT_MAX_LINES = 1500
+const HIGHLIGHT_MAX_LINES = 1500;
 
 /** Tokens for the whole text through the shared singleton: sync when the grammar is resident,
  *  async-load once otherwise, plaintext for unknown/oversized. Mirrors file-preview's useFileTokens. */
 function useCodeTokens(text: string, lang: string): SynToken[][] {
-  const plain = useMemo(() => text.split('\n').map((line) => [{ content: line }]), [text])
-  const canonical = useMemo(() => canonicalLang(lang), [lang])
-  const oversized = plain.length > HIGHLIGHT_MAX_LINES
-  const [loaded, setLoaded] = useState<{ key: string; tokens: SynToken[][] } | null>(null)
+  const plain = useMemo(() => text.split('\n').map((line) => [{ content: line }]), [text]);
+  const canonical = useMemo(() => canonicalLang(lang), [lang]);
+  const oversized = plain.length > HIGHLIGHT_MAX_LINES;
+  const [loaded, setLoaded] = useState<{ key: string; tokens: SynToken[][] } | null>(null);
 
   useEffect(() => {
-    if (canonical === null || oversized) return
-    let cancelled = false
+    if (canonical === null || oversized) return;
+    let cancelled = false;
     void highlight(text, canonical).then((result) => {
-      if (!cancelled) setLoaded({ key: text, tokens: result.tokens })
-    })
+      if (!cancelled) setLoaded({ key: text, tokens: result.tokens });
+    });
     return () => {
-      cancelled = true
-    }
-  }, [text, canonical, oversized])
+      cancelled = true;
+    };
+  }, [text, canonical, oversized]);
 
-  if (canonical === null || oversized) return plain
-  if (loaded?.key === text) return loaded.tokens
-  return highlightSync(text, canonical)?.tokens ?? plain
+  if (canonical === null || oversized) return plain;
+  if (loaded?.key === text) return loaded.tokens;
+  return highlightSync(text, canonical)?.tokens ?? plain;
 }
 
 export interface CodeEditorProps {
-  value: string
-  onChange?: (next: string) => void
+  value: string;
+  onChange?: (next: string) => void;
   /** Highlighter fence language (the catalog's `format`: json | jsonc | toml | markdown). */
-  language: string
-  readOnly?: boolean
-  className?: string
-  'aria-label'?: string
+  language: string;
+  readOnly?: boolean;
+  className?: string;
+  'aria-label'?: string;
 }
 
 /** Shared layout so the textarea and the highlighted underlay align to the pixel. */
-const SURFACE =
-  'm-0 min-h-full w-full whitespace-pre font-mono text-xs leading-[1.7] px-3 py-2 [tab-size:2]'
+const SURFACE = 'm-0 min-h-full w-full whitespace-pre font-mono text-xs leading-[1.7] px-3 py-2 [tab-size:2]';
 
 export function CodeEditor({ value, onChange, language, readOnly, className, ...aria }: CodeEditorProps) {
-  const tokens = useCodeTokens(value, language)
-  const preRef = useRef<HTMLPreElement>(null)
-  const taRef = useRef<HTMLTextAreaElement>(null)
+  const tokens = useCodeTokens(value, language);
+  const preRef = useRef<HTMLPreElement>(null);
+  const taRef = useRef<HTMLTextAreaElement>(null);
 
   // Keep the underlay scrolled in lockstep with the textarea (the scroller).
   const syncScroll = () => {
-    const ta = taRef.current
-    const pre = preRef.current
-    if (!ta || !pre) return
-    pre.scrollTop = ta.scrollTop
-    pre.scrollLeft = ta.scrollLeft
-  }
-  useLayoutEffect(syncScroll, [value])
+    const ta = taRef.current;
+    const pre = preRef.current;
+    if (!ta || !pre) return;
+    pre.scrollTop = ta.scrollTop;
+    pre.scrollLeft = ta.scrollLeft;
+  };
+  useLayoutEffect(syncScroll, [value]);
 
   return (
     <div
@@ -119,5 +118,5 @@ export function CodeEditor({ value, onChange, language, readOnly, className, ...
         {...aria}
       />
     </div>
-  )
+  );
 }

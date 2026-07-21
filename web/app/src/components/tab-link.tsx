@@ -1,8 +1,8 @@
-import type { ReactNode } from 'react'
+import type { ReactNode } from 'react';
 
-import { Link } from '@/lib/project-router'
+import { Link } from '@/lib/project-router';
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/utils';
 
 /** One underline tab (mockup `.tab`) — the segment grammar the run header's
  *  Session | Changes | Files row uses, extracted (R5 1.7) so the repo view's
@@ -14,12 +14,12 @@ export function TabLink({
   onClick,
   children,
 }: {
-  to: string
-  active?: boolean
+  to: string;
+  active?: boolean;
   /** Fires alongside the navigation (e.g. persisting the choice, #417) — it does not
    *  intercept it; `<Link>` still navigates unless the handler itself prevents it. */
-  onClick?: () => void
-  children: ReactNode
+  onClick?: () => void;
+  children: ReactNode;
 }) {
   return (
     <Link
@@ -35,5 +35,5 @@ export function TabLink({
     >
       {children}
     </Link>
-  )
+  );
 }

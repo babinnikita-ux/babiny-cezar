@@ -1,4 +1,4 @@
-import * as React from 'react'
+import * as React from 'react';
 
 /**
  * The one "cmd-or-ctrl + key" helper (spec, cross-cutting keyboard rule): macOS and
@@ -13,17 +13,17 @@ import * as React from 'react'
 /** Is the user typing here? Inputs, textareas, selects, and anything contenteditable.
  *  `getAttribute` fallback because jsdom does not implement `isContentEditable`. */
 export function isEditableTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false
-  const tag = target.tagName
-  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
-  if (target.isContentEditable) return true
-  return target.closest('[contenteditable=""], [contenteditable="true"]') !== null
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+  if (target.isContentEditable) return true;
+  return target.closest('[contenteditable=""], [contenteditable="true"]') !== null;
 }
 
 /** The one editable place a command shortcut still fires: the ⌘K palette's own input —
  *  otherwise ⌘K could open the palette but never close it again. cmdk stamps the attribute. */
 function isCommandPaletteInput(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && target.closest('[cmdk-input]') !== null
+  return target instanceof HTMLElement && target.closest('[cmdk-input]') !== null;
 }
 
 /** The shape the predicate reads — a structural subset of KeyboardEvent so tests can hand in
@@ -31,7 +31,7 @@ function isCommandPaletteInput(target: EventTarget | null): boolean {
 export type CommandShortcutEvent = Pick<
   KeyboardEvent,
   'key' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey' | 'repeat' | 'target'
->
+>;
 
 /**
  * Does this keydown mean "cmd-or-ctrl + `key`"?
@@ -43,12 +43,12 @@ export type CommandShortcutEvent = Pick<
  *  - `key` compares case-insensitively so Caps Lock (which reports `K`) still matches.
  */
 export function shouldTriggerCommandShortcut(event: CommandShortcutEvent, key: string): boolean {
-  if (typeof event.key !== 'string' || event.key.toLowerCase() !== key.toLowerCase()) return false
-  if (!event.metaKey && !event.ctrlKey) return false
-  if (event.altKey || event.shiftKey) return false
-  if (event.repeat) return false
-  if (isEditableTarget(event.target) && !isCommandPaletteInput(event.target)) return false
-  return true
+  if (typeof event.key !== 'string' || event.key.toLowerCase() !== key.toLowerCase()) return false;
+  if (!event.metaKey && !event.ctrlKey) return false;
+  if (event.altKey || event.shiftKey) return false;
+  if (event.repeat) return false;
+  if (isEditableTarget(event.target) && !isCommandPaletteInput(event.target)) return false;
+  return true;
 }
 
 /**
@@ -59,20 +59,20 @@ export function shouldTriggerCommandShortcut(event: CommandShortcutEvent, key: s
  * lives in a ref so a fresh closure per render never re-subscribes the listener.
  */
 export function useCommandShortcut(key: string, handler: (event: KeyboardEvent) => void): void {
-  const handlerRef = React.useRef(handler)
+  const handlerRef = React.useRef(handler);
   React.useLayoutEffect(() => {
-    handlerRef.current = handler
-  })
+    handlerRef.current = handler;
+  });
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!shouldTriggerCommandShortcut(event, key)) return
-      event.preventDefault()
-      handlerRef.current(event)
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [key])
+      if (!shouldTriggerCommandShortcut(event, key)) return;
+      event.preventDefault();
+      handlerRef.current(event);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [key]);
 }
 
 /**
@@ -86,11 +86,11 @@ export function useCommandShortcut(key: string, handler: (event: KeyboardEvent) 
  * a bare letter is a keystroke someone is probably typing.
  */
 export function shouldTriggerKeyShortcut(event: CommandShortcutEvent, key: string): boolean {
-  if (typeof event.key !== 'string' || event.key.toLowerCase() !== key.toLowerCase()) return false
-  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return false
-  if (event.repeat) return false
-  if (isEditableTarget(event.target)) return false
-  return true
+  if (typeof event.key !== 'string' || event.key.toLowerCase() !== key.toLowerCase()) return false;
+  if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return false;
+  if (event.repeat) return false;
+  if (isEditableTarget(event.target)) return false;
+  return true;
 }
 
 /**
@@ -98,17 +98,17 @@ export function shouldTriggerKeyShortcut(event: CommandShortcutEvent, key: strin
  * lone letter has no browser default to claim. Mirrors `useCommandShortcut`'s ref plumbing.
  */
 export function useKeyShortcut(key: string, handler: (event: KeyboardEvent) => void): void {
-  const handlerRef = React.useRef(handler)
+  const handlerRef = React.useRef(handler);
   React.useLayoutEffect(() => {
-    handlerRef.current = handler
-  })
+    handlerRef.current = handler;
+  });
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (!shouldTriggerKeyShortcut(event, key)) return
-      handlerRef.current(event)
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [key])
+      if (!shouldTriggerKeyShortcut(event, key)) return;
+      handlerRef.current(event);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [key]);
 }

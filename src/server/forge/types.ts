@@ -145,9 +145,7 @@ export interface ForgePrStatus {
 
 export type ForgeRefKind = 'repo' | 'issue' | 'pr' | 'branch' | 'commit';
 
-export type DraftPrOutcome =
-  | { ok: true; url: string; dryRun: boolean }
-  | { ok: false; error: string };
+export type DraftPrOutcome = { ok: true; url: string; dryRun: boolean } | { ok: false; error: string };
 
 export interface DraftPrInput {
   repoRoot: string;

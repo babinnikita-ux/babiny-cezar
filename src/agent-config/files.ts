@@ -94,7 +94,8 @@ export async function writeConfigFile(
     return {
       ok: false,
       status: 400,
-      error: 'refusing to overwrite a non-empty config file with empty content — delete the file manually if you mean to remove it',
+      error:
+        'refusing to overwrite a non-empty config file with empty content — delete the file manually if you mean to remove it',
     };
   }
 

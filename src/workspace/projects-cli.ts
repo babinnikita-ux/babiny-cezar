@@ -104,7 +104,11 @@ async function addCommand(root: string, io: ProjectsCommandIo): Promise<number> 
   const entry = await registerProject(root);
   // Registration dedupes by realpath, so a second `add` of the same folder
   // (or a symlink to it) reports the entry that already exists.
-  io.log(known.has(entry.id) ? `  = ${entry.id} (already registered)  ${entry.root}` : `  + ${entry.id}  ${entry.root}`);
+  io.log(
+    known.has(entry.id)
+      ? `  = ${entry.id} (already registered)  ${entry.root}`
+      : `  + ${entry.id}  ${entry.root}`,
+  );
   return 0;
 }
 

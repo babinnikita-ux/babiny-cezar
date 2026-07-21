@@ -1,20 +1,20 @@
-import { ArrowLeftIcon, GitCommitHorizontalIcon, SearchXIcon, TriangleAlertIcon } from 'lucide-react'
-import { useState } from 'react'
-import { useParams } from 'react-router'
+import { ArrowLeftIcon, GitCommitHorizontalIcon, SearchXIcon, TriangleAlertIcon } from 'lucide-react';
+import { useState } from 'react';
+import { useParams } from 'react-router';
 
-import { Link } from '@/lib/project-router'
+import { Link } from '@/lib/project-router';
 
-import { ApiError } from '@/api/client'
-import { useRepoCommit } from '@/api/queries'
-import type { LogEntry } from '@/api/types'
-import { CenteredState } from '@/components/centered-state'
-import { Diff, type DiffMode } from '@/components/diff'
-import { DiffStatLabel } from '@/components/diff-stat'
-import { Button } from '@/components/ui/button'
-import { useIsDesktop } from '@/lib/use-desktop'
+import { ApiError } from '@/api/client';
+import { useRepoCommit } from '@/api/queries';
+import type { LogEntry } from '@/api/types';
+import { CenteredState } from '@/components/centered-state';
+import { Diff, type DiffMode } from '@/components/diff';
+import { DiffStatLabel } from '@/components/diff-stat';
+import { Button } from '@/components/ui/button';
+import { useIsDesktop } from '@/lib/use-desktop';
 
-import { CommitList } from '../task-git/commit-list'
-import { DiffViewToggles } from '../task-git/diff-controls'
+import { CommitList } from '../task-git/commit-list';
+import { DiffViewToggles } from '../task-git/diff-controls';
 
 /**
  * The repo view's Commits segment (R5 Step 1.7): the recent-commit log the existing
@@ -23,8 +23,8 @@ import { DiffViewToggles } from '../task-git/diff-controls'
  * same `<Diff>` facade as everything else. Same mobile rule: unified+wrap forced below `md`.
  */
 export function RepoCommitsSection({ log }: { log: LogEntry[] }) {
-  const { sha } = useParams<{ sha: string }>()
-  if (sha) return <CommitDiffView sha={sha} />
+  const { sha } = useParams<{ sha: string }>();
+  if (sha) return <CommitDiffView sha={sha} />;
 
   if (log.length === 0) {
     return (
@@ -35,7 +35,7 @@ export function RepoCommitsSection({ log }: { log: LogEntry[] }) {
         title="No commits yet"
         subtitle="The log is empty — this repository has no commits to show."
       />
-    )
+    );
   }
   return (
     <CommitList
@@ -49,20 +49,20 @@ export function RepoCommitsSection({ log }: { log: LogEntry[] }) {
         href: `/git/commits/${commit.hash}`,
       }))}
     />
-  )
+  );
 }
 
 function CommitDiffView({ sha }: { sha: string }) {
-  const commit = useRepoCommit(sha)
-  const desktop = useIsDesktop()
-  const [mode, setMode] = useState<DiffMode>('unified')
-  const [wrap, setWrap] = useState(false)
+  const commit = useRepoCommit(sha);
+  const desktop = useIsDesktop();
+  const [mode, setMode] = useState<DiffMode>('unified');
+  const [wrap, setWrap] = useState(false);
 
   // 409 = the server's answer (unknown sha, not a hash) — a dead link, not an outage.
-  const refused = commit.isError && commit.error instanceof ApiError && commit.error.status === 409
+  const refused = commit.isError && commit.error instanceof ApiError && commit.error.status === 409;
 
-  const effectiveMode: DiffMode = desktop ? mode : 'unified'
-  const effectiveWrap = desktop ? wrap : true
+  const effectiveMode: DiffMode = desktop ? mode : 'unified';
+  const effectiveWrap = desktop ? wrap : true;
 
   return (
     <section data-slot="repo-commit" data-sha={sha} className="flex min-h-0 flex-1 flex-col">
@@ -116,5 +116,5 @@ function CommitDiffView({ sha }: { sha: string }) {
         </>
       )}
     </section>
-  )
+  );
 }

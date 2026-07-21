@@ -17,17 +17,21 @@ export interface CodexModelDiscoveryOptions {
   spawn?: (bin: string, cwd: string) => ChildProcessWithoutNullStreams;
 }
 
-const modelSchema = z.object({
-  model: z.string(),
-  displayName: z.string().optional(),
-  description: z.string().optional(),
-  hidden: z.boolean().optional(),
-}).passthrough();
+const modelSchema = z
+  .object({
+    model: z.string(),
+    displayName: z.string().optional(),
+    description: z.string().optional(),
+    hidden: z.boolean().optional(),
+  })
+  .passthrough();
 
-const pageSchema = z.object({
-  data: z.array(modelSchema),
-  nextCursor: z.string().nullable().optional(),
-}).passthrough();
+const pageSchema = z
+  .object({
+    data: z.array(modelSchema),
+    nextCursor: z.string().nullable().optional(),
+  })
+  .passthrough();
 
 const DEFAULT_DISCOVERY_TIMEOUT_MS = 5_000;
 const MAX_MODEL_PAGES = 25;
@@ -35,10 +39,7 @@ const MAX_MODELS = 500;
 
 /** Discover the visible catalog exposed by the authenticated host Codex CLI. */
 export async function discoverCodexModels(options: CodexModelDiscoveryOptions): Promise<ModelOption[]> {
-  const child = (options.spawn ?? spawnCodexAppServer)(
-    resolveCodexExecutable(options.bin),
-    options.cwd,
-  );
+  const child = (options.spawn ?? spawnCodexAppServer)(resolveCodexExecutable(options.bin), options.cwd);
   const rpc = new CodexAppServerRpc(child);
   let readerError: Error | undefined;
   const reader = (async () => {
@@ -79,11 +80,7 @@ export async function discoverCodexModels(options: CodexModelDiscoveryOptions): 
   });
 
   try {
-    return await Promise.race([
-      discoverPages(rpc),
-      exited,
-      deadline,
-    ]);
+    return await Promise.race([discoverPages(rpc), exited, deadline]);
   } finally {
     if (timeout) clearTimeout(timeout);
     endCodexAppServer(child);

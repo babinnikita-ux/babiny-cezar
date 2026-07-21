@@ -1,23 +1,23 @@
-import { ArrowLeftIcon, GitCommitHorizontalIcon, SearchXIcon, TriangleAlertIcon } from 'lucide-react'
-import { useState } from 'react'
-import { useParams } from 'react-router'
+import { ArrowLeftIcon, GitCommitHorizontalIcon, SearchXIcon, TriangleAlertIcon } from 'lucide-react';
+import { useState } from 'react';
+import { useParams } from 'react-router';
 
-import { Link } from '@/lib/project-router'
+import { Link } from '@/lib/project-router';
 
-import { ApiError } from '@/api/client'
-import { useRun, useRunCommit, useRunCommits } from '@/api/queries'
-import type { ApiRun, RunCommit } from '@/api/types'
-import { CenteredState } from '@/components/centered-state'
-import { Diff, type DiffMode } from '@/components/diff'
-import { DiffStatLabel } from '@/components/diff-stat'
-import { Button } from '@/components/ui/button'
-import { useIsDesktop } from '@/lib/use-desktop'
+import { ApiError } from '@/api/client';
+import { useRun, useRunCommit, useRunCommits } from '@/api/queries';
+import type { ApiRun, RunCommit } from '@/api/types';
+import { CenteredState } from '@/components/centered-state';
+import { Diff, type DiffMode } from '@/components/diff';
+import { DiffStatLabel } from '@/components/diff-stat';
+import { Button } from '@/components/ui/button';
+import { useIsDesktop } from '@/lib/use-desktop';
 
-import { isRunActive } from '../task-thread/run-actions'
-import { RunHeader } from '../task-thread/run-header'
-import { CommitList } from './commit-list'
-import { GitTabLoadError, GitTabLoading } from './git-tab-loading'
-import { DiffViewToggles } from './diff-controls'
+import { isRunActive } from '../task-thread/run-actions';
+import { RunHeader } from '../task-thread/run-header';
+import { CommitList } from './commit-list';
+import { GitTabLoadError, GitTabLoading } from './git-tab-loading';
+import { DiffViewToggles } from './diff-controls';
 
 /**
  * `/tasks/:id/commits` — the run's own commits (`<base>..HEAD`), each opening its structured diff
@@ -25,17 +25,17 @@ import { DiffViewToggles } from './diff-controls'
  * view use. Mirrors the repo Commits segment, scoped to the task worktree.
  */
 export function TaskCommitsRoute() {
-  const { id } = useParams<{ id: string }>()
-  const run = useRun(id)
+  const { id } = useParams<{ id: string }>();
+  const run = useRun(id);
 
-  if (run.isPending) return <GitTabLoading tab="changes" />
-  if (run.isError) return <GitTabLoadError tab="changes" error={run.error} />
-  return <CommitsView run={run.data} />
+  if (run.isPending) return <GitTabLoading tab="changes" />;
+  if (run.isError) return <GitTabLoadError tab="changes" error={run.error} />;
+  return <CommitsView run={run.data} />;
 }
 
 function CommitsView({ run }: { run: ApiRun }) {
-  const { sha } = useParams<{ sha: string }>()
-  const commits = useRunCommits(run.id, isRunActive(run.status))
+  const { sha } = useParams<{ sha: string }>();
+  const commits = useRunCommits(run.id, isRunActive(run.status));
 
   return (
     <div data-route="task-commits" className="flex min-h-full flex-col">
@@ -78,21 +78,25 @@ function CommitsView({ run }: { run: ApiRun }) {
         />
       )}
     </div>
-  )
+  );
 }
 
 function CommitDiffView({ runId, sha }: { runId: string; sha: string }) {
-  const commit = useRunCommit(runId, sha)
-  const desktop = useIsDesktop()
-  const [mode, setMode] = useState<DiffMode>('unified')
-  const [wrap, setWrap] = useState(false)
+  const commit = useRunCommit(runId, sha);
+  const desktop = useIsDesktop();
+  const [mode, setMode] = useState<DiffMode>('unified');
+  const [wrap, setWrap] = useState(false);
 
-  const refused = commit.isError && commit.error instanceof ApiError && commit.error.status === 409
-  const effectiveMode: DiffMode = desktop ? mode : 'unified'
-  const effectiveWrap = desktop ? wrap : true
+  const refused = commit.isError && commit.error instanceof ApiError && commit.error.status === 409;
+  const effectiveMode: DiffMode = desktop ? mode : 'unified';
+  const effectiveWrap = desktop ? wrap : true;
 
   return (
-    <section data-slot="task-commit" data-sha={sha} className="mx-auto flex min-h-0 w-full max-w-[820px] flex-1 flex-col">
+    <section
+      data-slot="task-commit"
+      data-sha={sha}
+      className="mx-auto flex min-h-0 w-full max-w-[820px] flex-1 flex-col"
+    >
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 border-b border-border px-4 py-2 md:px-6">
         <Button asChild variant="ghost" size="sm" data-slot="commit-back">
           <Link to={`/tasks/${runId}/commits`}>
@@ -143,5 +147,5 @@ function CommitDiffView({ runId, sha }: { runId: string; sha: string }) {
         </>
       )}
     </section>
-  )
+  );
 }

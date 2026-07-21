@@ -19,7 +19,7 @@ function run(partial: {
     status: partial.status,
     createdAt: partial.createdAt ?? '2026-01-01T00:00:00.000Z',
     finishedAt: partial.finishedAt,
-    worktreePath: partial.worktreePath === null ? undefined : partial.worktreePath ?? `/wt/${partial.id}`,
+    worktreePath: partial.worktreePath === null ? undefined : (partial.worktreePath ?? `/wt/${partial.id}`),
     worktreeReclaimedAt: partial.worktreeReclaimedAt,
     steps: [],
   } as unknown as RunRecord;
@@ -61,7 +61,12 @@ describe('selectReclaimableWorktrees (#483)', () => {
   it('excludes runs with no worktree dir and already-reclaimed runs', () => {
     const runs = [
       run({ id: 'nodir', status: 'done', worktreePath: null, finishedAt: '2026-07-01T00:00:00Z' }),
-      run({ id: 'gone', status: 'done', worktreeReclaimedAt: '2026-07-05T00:00:00Z', finishedAt: '2026-07-02T00:00:00Z' }),
+      run({
+        id: 'gone',
+        status: 'done',
+        worktreeReclaimedAt: '2026-07-05T00:00:00Z',
+        finishedAt: '2026-07-02T00:00:00Z',
+      }),
       run({ id: 'live-dir', status: 'done', finishedAt: '2026-07-03T00:00:00Z' }),
     ];
     // Only live-dir is reclaimable; keep=0 would disable, so use keep=... none over budget.
@@ -87,6 +92,8 @@ describe('selectReclaimableWorktrees (#483)', () => {
     expect(isReclaimable(run({ id: 'x', status: 'done' }))).toBe(true);
     expect(isReclaimable(run({ id: 'x', status: 'review' }))).toBe(false);
     expect(isReclaimable(run({ id: 'x', status: 'done', worktreePath: null }))).toBe(false);
-    expect(isReclaimable(run({ id: 'x', status: 'done', worktreeReclaimedAt: '2026-07-05T00:00:00Z' }))).toBe(false);
+    expect(isReclaimable(run({ id: 'x', status: 'done', worktreeReclaimedAt: '2026-07-05T00:00:00Z' }))).toBe(
+      false,
+    );
   });
 });

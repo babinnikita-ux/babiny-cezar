@@ -134,6 +134,12 @@ test('chainStepNote labels a step by its name first, then its skill, then generi
   assert.ok(named?.includes('"Implement"'));
   assert.ok(!named?.includes('project-conventions'));
 
-  const bare = chainStepNote([{ id: 'step-1', prompt: '{{task}}' }, { id: 'step-2', prompt: '{{task}}' }], 0);
+  const bare = chainStepNote(
+    [
+      { id: 'step-1', prompt: '{{task}}' },
+      { id: 'step-2', prompt: '{{task}}' },
+    ],
+    0,
+  );
   assert.ok(bare?.includes('this step'));
 });

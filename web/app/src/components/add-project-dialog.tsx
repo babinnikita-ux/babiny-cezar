@@ -1,11 +1,11 @@
-import { ChevronRightIcon, CornerLeftUpIcon, FolderIcon } from 'lucide-react'
-import { useState } from 'react'
-import { useNavigate } from 'react-router'
+import { ChevronRightIcon, CornerLeftUpIcon, FolderIcon } from 'lucide-react';
+import { useState } from 'react';
+import { useNavigate } from 'react-router';
 
-import { useFsBrowse, useProjects, useRegisterProject } from '@/api/queries'
-import type { FsBrowseDir } from '@/api/types'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { useFsBrowse, useProjects, useRegisterProject } from '@/api/queries';
+import type { FsBrowseDir } from '@/api/types';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -13,8 +13,8 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { cn } from '@/lib/utils'
+} from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 /**
  * "Add project → Open local folder" (multi-project spec, "Add project" / step 4.2).
@@ -41,47 +41,47 @@ export function AddProjectDialog({
   open,
   onOpenChange,
 }: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
   // `null` = the independently configured browse root. The dialog never spells that path itself
   // — it only ever echoes what it was told.
-  const [path, setPath] = useState<string | null>(null)
-  const [selected, setSelected] = useState<FsBrowseDir | null>(null)
-  const listing = useFsBrowse(path)
-  const projects = useProjects()
-  const register = useRegisterProject()
-  const navigate = useNavigate()
+  const [path, setPath] = useState<string | null>(null);
+  const [selected, setSelected] = useState<FsBrowseDir | null>(null);
+  const listing = useFsBrowse(path);
+  const projects = useProjects();
+  const register = useRegisterProject();
+  const navigate = useNavigate();
 
   // Registry roots are realpath'd server-side; a listed `path` may be a symlink's own spelling,
   // so this match is best-effort — it decorates a row, it never blocks one. (A duplicate is not
   // an error anyway: the 409 carries the existing entry and we navigate to it.)
-  const registered = new Set((projects.data?.projects ?? []).map((project) => project.root))
+  const registered = new Set((projects.data?.projects ?? []).map((project) => project.root));
 
   const enter = (dir: string) => {
-    setPath(dir)
-    setSelected(null)
-    register.reset() // a stale "that folder is your home directory" must not haunt the next one
-  }
+    setPath(dir);
+    setSelected(null);
+    register.reset(); // a stale "that folder is your home directory" must not haunt the next one
+  };
 
   // Nothing selected means "add the folder I am looking at" — the mockup's footer path. That is
   // also the only way to add the browse root itself.
-  const target = selected?.path ?? listing.data?.path ?? null
+  const target = selected?.path ?? listing.data?.path ?? null;
   /** `null` at the browse root (and while loading) — the "up" row exists only when it leads
    *  somewhere the server is willing to list. */
-  const parent = listing.data?.parent ?? null
+  const parent = listing.data?.parent ?? null;
 
   const add = () => {
-    if (target === null || register.isPending) return
+    if (target === null || register.isPending) return;
     register.mutate(target, {
       onSuccess: ({ project }) => {
-        onOpenChange(false)
+        onOpenChange(false);
         // Raw react-router `useNavigate`, not the scope-aware wrapper: this is a deliberate
         // cross-project jump, and `/p/…` targets pass through the wrapper untouched anyway.
-        navigate(`/p/${encodeURIComponent(project.id)}/`)
+        navigate(`/p/${encodeURIComponent(project.id)}/`);
       },
-    })
-  }
+    });
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -208,5 +208,5 @@ export function AddProjectDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

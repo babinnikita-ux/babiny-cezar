@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState, type ImgHTMLAttributes } from 'react'
-import { createPortal } from 'react-dom'
+import { useEffect, useRef, useState, type ImgHTMLAttributes } from 'react';
+import { createPortal } from 'react-dom';
 
-import { scopeApiPath } from '@/api/project-scope'
+import { scopeApiPath } from '@/api/project-scope';
 
 /**
  * An image that enlarges to a full-screen lightbox on click (#image-zoom). Used for conversation
@@ -22,33 +22,33 @@ export function ZoomableImage({
   className,
   ...rest
 }: {
-  src: string
-  alt?: string
-  className?: string
+  src: string;
+  alt?: string;
+  className?: string;
 } & Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'alt' | 'className' | 'onClick'>) {
-  const [open, setOpen] = useState(false)
-  const trigger = useRef<HTMLButtonElement>(null)
-  const closer = useRef<HTMLButtonElement>(null)
-  const src = scopeApiPath(rawSrc)
+  const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const closer = useRef<HTMLButtonElement>(null);
+  const src = scopeApiPath(rawSrc);
 
   useEffect(() => {
-    if (!open) return
+    if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open])
+      if (event.key === 'Escape') setOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
 
   // Keyboard round trip: opening parks focus on the overlay's dismiss button, closing hands it
   // back to the thumbnail so Tab resumes where the reader left off. `wasOpen` keeps the restore
   // from firing on mount, where nothing was focused here to begin with.
-  const wasOpen = useRef(false)
+  const wasOpen = useRef(false);
   useEffect(() => {
-    if (open) closer.current?.focus()
-    else if (wasOpen.current) trigger.current?.focus({ preventScroll: true })
-    wasOpen.current = open
-  }, [open])
+    if (open) closer.current?.focus();
+    else if (wasOpen.current) trigger.current?.focus({ preventScroll: true });
+    wasOpen.current = open;
+  }, [open]);
 
   return (
     <>
@@ -95,5 +95,5 @@ export function ZoomableImage({
           )
         : null}
     </>
-  )
+  );
 }

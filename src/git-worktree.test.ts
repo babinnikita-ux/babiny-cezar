@@ -35,7 +35,11 @@ afterEach(() => {
 });
 
 describe('parseShortstat', () => {
-  const cases: Array<{ name: string; input: string; expected: { adds: number; dels: number; files: number } }> = [
+  const cases: Array<{
+    name: string;
+    input: string;
+    expected: { adds: number; dels: number; files: number };
+  }> = [
     {
       name: 'full form',
       input: ' 3 files changed, 10 insertions(+), 2 deletions(-)',
@@ -182,7 +186,7 @@ describe('worktreeShortstat (real git)', () => {
     }
   });
 
-  it('counts only the task\'s own changes after the base is merged back in', async () => {
+  it("counts only the task's own changes after the base is merged back in", async () => {
     // Regression: anchoring to a moving base *name* (via merge-base) must stay
     // correct when the task syncs with its base — the routine merge that a
     // pinned fork commit would have inflated by swallowing every upstream commit.

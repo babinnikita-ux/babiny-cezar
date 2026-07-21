@@ -16,7 +16,13 @@ import { RunStore } from '../runs/store.js';
 import type { RunManager } from '../workflows/run.js';
 import { mergeWriteWorkspaceConfig } from '../workspace/config.js';
 import { clearProjectProbeCache, registerProject } from '../workspace/projects.js';
-import { checkoutRepo, cleanupCheckout, isValidCheckoutName, parseRepoRef, type CloneRunner } from './checkout.js';
+import {
+  checkoutRepo,
+  cleanupCheckout,
+  isValidCheckoutName,
+  parseRepoRef,
+  type CloneRunner,
+} from './checkout.js';
 import { apiRequest } from './loopback-request.testkit.js';
 import {
   WorkspaceEventBus,
@@ -362,7 +368,10 @@ describe('POST /api/projects/checkout', () => {
     const seen: { event: string; data: unknown }[] = [];
     bus.on((event, data) => seen.push({ event, data }));
 
-    const { status, body } = await post({ url: 'open-mercato/cezar', checkoutId: 'co-9' }, { workspaceEvents: bus });
+    const { status, body } = await post(
+      { url: 'open-mercato/cezar', checkoutId: 'co-9' },
+      { workspaceEvents: bus },
+    );
     expect(status).toBe(200);
     expect(body.project).toMatchObject({
       name: 'cezar',

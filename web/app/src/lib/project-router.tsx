@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo } from 'react';
 import {
   Link as RouterLink,
   matchPath,
@@ -12,9 +12,9 @@ import {
   type NavigateProps,
   type NavLinkProps,
   type To,
-} from 'react-router'
+} from 'react-router';
 
-import { useProjectScope } from '@/api/project-scope-context'
+import { useProjectScope } from '@/api/project-scope-context';
 
 /**
  * Scope-aware navigation (multi-project spec, step 3.2): every cockpit route lives under
@@ -33,12 +33,12 @@ import { useProjectScope } from '@/api/project-scope-context'
  */
 
 /** `/p/<id>` at the start of a pathname. One segment, nothing else — `/proxy` must not match. */
-const PROJECT_PREFIX_RE = /^\/p\/([^/]+)(?=\/|$)/
+const PROJECT_PREFIX_RE = /^\/p\/([^/]+)(?=\/|$)/;
 
 /** The project id a pathname is scoped to, or null for legacy flat paths. */
 export function pathnameProjectId(pathname: string): string | null {
-  const id = PROJECT_PREFIX_RE.exec(pathname)?.[1]
-  return id === undefined ? null : decodeURIComponent(id)
+  const id = PROJECT_PREFIX_RE.exec(pathname)?.[1];
+  return id === undefined ? null : decodeURIComponent(id);
 }
 
 /**
@@ -47,29 +47,29 @@ export function pathnameProjectId(pathname: string): string | null {
  * they reason about the route map, which is project-agnostic.
  */
 export function stripProjectPrefix(pathname: string): string {
-  const match = PROJECT_PREFIX_RE.exec(pathname)
-  if (!match) return pathname
-  const rest = pathname.slice(match[0].length)
-  return rest === '' ? '/' : rest
+  const match = PROJECT_PREFIX_RE.exec(pathname);
+  if (!match) return pathname;
+  const rest = pathname.slice(match[0].length);
+  return rest === '' ? '/' : rest;
 }
 
 function scopePathname(projectId: string, pathname: string): string {
   // Relative targets resolve against the current (already scoped) location; `/p/…` targets are
   // explicit cross-project links. Both pass through untouched.
-  if (!pathname.startsWith('/')) return pathname
-  if (pathname === '/p' || pathname.startsWith('/p/')) return pathname
-  return `/p/${encodeURIComponent(projectId)}${pathname}`
+  if (!pathname.startsWith('/')) return pathname;
+  if (pathname === '/p' || pathname.startsWith('/p/')) return pathname;
+  return `/p/${encodeURIComponent(projectId)}${pathname}`;
 }
 
 /** Prefix a navigation target with a project scope. `null` scope is the identity. */
 export function scopeTo(projectId: string | null, to: To): To {
-  if (projectId === null) return to
+  if (projectId === null) return to;
   if (typeof to === 'string') {
     // A string target may carry search/hash (`/skills?skill=x`) — prefixing preserves them.
-    return scopePathname(projectId, to)
+    return scopePathname(projectId, to);
   }
-  if (to.pathname === undefined) return to
-  return { ...to, pathname: scopePathname(projectId, to.pathname) }
+  if (to.pathname === undefined) return to;
+  return { ...to, pathname: scopePathname(projectId, to.pathname) };
 }
 
 /**
@@ -81,47 +81,47 @@ export function scopeTo(projectId: string | null, to: To): To {
  * `projectId` null) yet still lives under `/p/<boot>/`, so the URL fallback is what answers.
  */
 export function useActiveProjectId(): string | null {
-  const { projectId } = useProjectScope()
-  const { pathname } = useLocation()
-  return projectId ?? pathnameProjectId(pathname)
+  const { projectId } = useProjectScope();
+  const { pathname } = useLocation();
+  return projectId ?? pathnameProjectId(pathname);
 }
 
 /** The step-3.2 helper: turn a flat route target into one scoped to the active project. */
 export function useProjectPath(): (to: To) => To {
-  const projectId = useActiveProjectId()
-  return useCallback((to: To) => scopeTo(projectId, to), [projectId])
+  const projectId = useActiveProjectId();
+  return useCallback((to: To) => scopeTo(projectId, to), [projectId]);
 }
 
 /** `matchPath` against the flat route map, ignoring any `/p/:projectId` prefix. */
 export function useProjectMatch(pattern: string): ReturnType<typeof matchPath> {
-  const { pathname } = useLocation()
-  return useMemo(() => matchPath(pattern, stripProjectPrefix(pathname)), [pattern, pathname])
+  const { pathname } = useLocation();
+  return useMemo(() => matchPath(pattern, stripProjectPrefix(pathname)), [pattern, pathname]);
 }
 
 /** Drop-in `react-router` `Link` that keeps the target inside the active project. */
 export function Link({ to, ...props }: LinkProps & { ref?: React.Ref<HTMLAnchorElement> }) {
-  const toScoped = useProjectPath()
-  return <RouterLink {...props} to={toScoped(to)} />
+  const toScoped = useProjectPath();
+  return <RouterLink {...props} to={toScoped(to)} />;
 }
 
 /** Drop-in `NavLink` — the scoped `to` also keeps its own active matching correct. */
 export function NavLink({ to, ...props }: NavLinkProps & { ref?: React.Ref<HTMLAnchorElement> }) {
-  const toScoped = useProjectPath()
-  return <RouterNavLink {...props} to={toScoped(to)} />
+  const toScoped = useProjectPath();
+  return <RouterNavLink {...props} to={toScoped(to)} />;
 }
 
 /** Drop-in `Navigate` for in-tree redirects (`/settings/skills` → `/skills` and friends). */
 export function Navigate({ to, ...props }: NavigateProps) {
-  const toScoped = useProjectPath()
-  return <RouterNavigate {...props} to={toScoped(to)} />
+  const toScoped = useProjectPath();
+  return <RouterNavigate {...props} to={toScoped(to)} />;
 }
 
 /** Drop-in `useNavigate`. Deltas (`navigate(-1)`) pass through; targets get scoped. */
 export function useNavigate(): NavigateFunction {
-  const navigate = useRouterNavigate()
-  const toScoped = useProjectPath()
+  const navigate = useRouterNavigate();
+  const toScoped = useProjectPath();
   return useMemo<NavigateFunction>(() => {
     return ((to: To | number, options?: NavigateOptions) =>
-      typeof to === 'number' ? navigate(to) : navigate(toScoped(to), options)) as NavigateFunction
-  }, [navigate, toScoped])
+      typeof to === 'number' ? navigate(to) : navigate(toScoped(to), options)) as NavigateFunction;
+  }, [navigate, toScoped]);
 }

@@ -5,28 +5,28 @@ import {
   SettingsIcon,
   SparklesIcon,
   WorkflowIcon,
-} from 'lucide-react'
-import type { ComponentType, SVGProps } from 'react'
+} from 'lucide-react';
+import type { ComponentType, SVGProps } from 'react';
 
-import { GithubIcon } from '@/components/icons'
+import { GithubIcon } from '@/components/icons';
 
 export type NavItem = {
   /** Where the item navigates. Also its identity — `activeNavPath` returns this. */
-  to: string
-  label: string
-  icon: ComponentType<SVGProps<SVGSVGElement>>
+  to: string;
+  label: string;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
   /** Path prefixes that light this item up. See `activeNavPath` for the longest-prefix rule. */
-  match: string[]
+  match: string[];
   /** Step 4.2 fills the Inbox count; the slot exists so the row's geometry is final now. */
-  badge?: boolean
+  badge?: boolean;
   /** Forge-gated (R6 Step 1.1): the item exists only while `/api/health` reports the forge
    *  driver available — see `visibleNavItems`. */
-  forge?: boolean
+  forge?: boolean;
   /** Inbox-gated (#471): the item exists only while `/api/health` reports
    *  `capabilities.followups` — the global inbox is opt-in via `CEZ_FOLLOWUPS=1`.
    *  See `visibleNavItems`. */
-  inbox?: boolean
-}
+  inbox?: boolean;
+};
 
 /** The sidebar nav from the spec's "App shell & navigation" section, in mockup order.
  *
@@ -42,15 +42,15 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/skills', label: 'Skills', icon: SparklesIcon, match: ['/skills'] },
   { to: '/workflows', label: 'Workflows', icon: WorkflowIcon, match: ['/workflows'] },
   { to: '/settings', label: 'Settings', icon: SettingsIcon, match: ['/settings'] },
-]
+];
 
 /** What `/api/health` says exists. Both default to `false` — see `visibleNavItems`. */
 export type NavAvailability = {
   /** `forge.available` (spec §"GitHub tab (forge tab)"). */
-  forge?: boolean
+  forge?: boolean;
   /** `capabilities.followups` — the opt-in global inbox (#471). */
-  inbox?: boolean
-}
+  inbox?: boolean;
+};
 
 /**
  * The nav items a surface should actually render: a gated item drops out — nav item AND tab —
@@ -64,7 +64,7 @@ export type NavAvailability = {
  * this, so the two can never disagree.
  */
 export function visibleNavItems({ forge = false, inbox = false }: NavAvailability = {}): NavItem[] {
-  return NAV_ITEMS.filter((item) => (item.forge ? forge : true) && (item.inbox ? inbox : true))
+  return NAV_ITEMS.filter((item) => (item.forge ? forge : true) && (item.inbox ? inbox : true));
 }
 
 /** Does `pathname` sit inside the area rooted at `prefix`?
@@ -73,8 +73,8 @@ export function visibleNavItems({ forge = false, inbox = false }: NavAvailabilit
  *  would make the `/` root match literally every route.
  */
 function inArea(pathname: string, prefix: string): boolean {
-  if (prefix === '/') return pathname === '/'
-  return pathname === prefix || pathname.startsWith(prefix + '/')
+  if (prefix === '/') return pathname === '/';
+  return pathname === prefix || pathname.startsWith(prefix + '/');
 }
 
 /**
@@ -86,19 +86,19 @@ function inArea(pathname: string, prefix: string): boolean {
  * `/settings/agents` lights Settings, `/git/commits` lights Git.
  */
 export function activeNavPath(pathname: string): string | null {
-  let best: { to: string; length: number } | null = null
+  let best: { to: string; length: number } | null = null;
   for (const item of NAV_ITEMS) {
     for (const prefix of item.match) {
       if (inArea(pathname, prefix) && (best === null || prefix.length > best.length)) {
-        best = { to: item.to, length: prefix.length }
+        best = { to: item.to, length: prefix.length };
       }
     }
   }
-  return best?.to ?? null
+  return best?.to ?? null;
 }
 
 /** The nav item that owns `pathname` — the mobile top bar titles itself from this. */
 export function activeNavItem(pathname: string): NavItem | null {
-  const to = activeNavPath(pathname)
-  return NAV_ITEMS.find((item) => item.to === to) ?? null
+  const to = activeNavPath(pathname);
+  return NAV_ITEMS.find((item) => item.to === to) ?? null;
 }

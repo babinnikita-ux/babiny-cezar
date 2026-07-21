@@ -7,7 +7,10 @@ import { StepAborted } from '../steps.js';
 import { createAutoUi } from '../ui.js';
 import type { InstallContext, InstallStep, Runner, Ui } from '../types.js';
 
-const okRunner: Runner = { capture: async () => ({ code: 0, stdout: '', stderr: '' }), interactive: async () => 0 };
+const okRunner: Runner = {
+  capture: async () => ({ code: 0, stdout: '', stderr: '' }),
+  interactive: async () => 0,
+};
 
 function ctxWith(over: { ui?: Ui; runner?: Runner; dryRun?: boolean }): InstallContext {
   return {
@@ -54,7 +57,11 @@ describe('ubuntu-vps ssl step', () => {
   });
 
   it('dry-run records the cert as a shared artifact and sets publicUrl', async () => {
-    const ui = { ...createAutoUi(), text: async (o: { message: string }) => (o.message.includes('Domain') ? 'cezar.example.com' : 'you@example.com') } as Ui;
+    const ui = {
+      ...createAutoUi(),
+      text: async (o: { message: string }) =>
+        o.message.includes('Domain') ? 'cezar.example.com' : 'you@example.com',
+    } as Ui;
     const ctx = ctxWith({ dryRun: true, ui });
     const created = await stepById('ssl').run(ctx);
     const cert = created?.artifacts.find((a) => a.type === 'cert');
@@ -67,7 +74,16 @@ describe('ubuntu-vps ssl step', () => {
     const note = vi.fn();
     const ui = { ...createAutoUi(), note } as Ui;
     const ctx = ctxWith({ ui });
-    await stepById('ssl').undo(ctx, { artifacts: [{ kind: 'shared', type: 'cert', name: 'x.example.com', removeHint: 'sudo certbot delete --cert-name x.example.com' }] });
+    await stepById('ssl').undo(ctx, {
+      artifacts: [
+        {
+          kind: 'shared',
+          type: 'cert',
+          name: 'x.example.com',
+          removeHint: 'sudo certbot delete --cert-name x.example.com',
+        },
+      ],
+    });
     expect(note).toHaveBeenCalledOnce();
     expect(note.mock.calls[0]?.[0]).toContain('certbot delete');
   });
@@ -80,11 +96,19 @@ describe('ubuntu-vps nginx-proxy security', () => {
       text: async (o: { message: string }) => (o.message.toLowerCase().includes('username') ? 'ops' : ''),
       password: async () => password,
     } as Ui;
-    return { ...ctxWith({ ui }), assumeYes: true, runner: { capture, interactive: async () => 0 } } as InstallContext;
+    return {
+      ...ctxWith({ ui }),
+      assumeYes: true,
+      runner: { capture, interactive: async () => 0 },
+    } as InstallContext;
   }
 
   it('feeds the password to openssl via stdin, never as an argv (H2)', async () => {
-    const capture = vi.fn(async (_p: string, _a: string[], _o?: { input?: string }) => ({ code: 0, stdout: 'hash', stderr: '' }));
+    const capture = vi.fn(async (_p: string, _a: string[], _o?: { input?: string }) => ({
+      code: 0,
+      stdout: 'hash',
+      stderr: '',
+    }));
     await stepById('nginx-proxy').run(secCtx('hunter2', capture));
     const openssl = capture.mock.calls.find((c) => c[0] === 'openssl');
     expect(openssl?.[1]).toEqual(['passwd', '-apr1', '-stdin']);
@@ -94,7 +118,11 @@ describe('ubuntu-vps nginx-proxy security', () => {
   });
 
   it('refuses an empty/too-short password instead of creating an open cockpit (H1)', async () => {
-    const capture = vi.fn(async (_p: string, _a: string[], _o?: { input?: string }) => ({ code: 0, stdout: '', stderr: '' }));
+    const capture = vi.fn(async (_p: string, _a: string[], _o?: { input?: string }) => ({
+      code: 0,
+      stdout: '',
+      stderr: '',
+    }));
     await expect(stepById('nginx-proxy').run(secCtx('', capture))).rejects.toBeInstanceOf(StepAborted);
   });
 });
@@ -163,7 +191,9 @@ describe('ubuntu-vps nginx-proxy identity (interactive, dry-run)', () => {
       // credential prompt: pick the first option ("Generate a strong password for me")
       select: async (o: { options: Array<{ value: string }> }) => o.options[0]?.value,
       password,
-      note: (m: string) => { notes.push(m); },
+      note: (m: string) => {
+        notes.push(m);
+      },
     } as unknown as Ui;
     // Interactive path (assumeYes:false) is where the generate/manual menu lives.
     const ctx = { ...ctxWith({ dryRun: true, ui }), assumeYes: false } as InstallContext;
@@ -201,17 +231,25 @@ describe('serviceExecStart', () => {
   const base = { node: '/n/node', entry: '/pkg/dist/index.js', npxPath: '/n/npx' };
 
   it('runs the built entry for a stable checkout/global install', () => {
-    expect(serviceExecStart({ ...base, pkgRoot: '/pkg', entryExists: true })).toBe('/n/node /pkg/dist/index.js');
+    expect(serviceExecStart({ ...base, pkgRoot: '/pkg', entryExists: true })).toBe(
+      '/n/node /pkg/dist/index.js',
+    );
   });
 
   it('uses the official npx alias when launched from the ephemeral _npx cache', () => {
-    expect(serviceExecStart({ ...base, pkgRoot: '/home/u/.npm/_npx/abcd/node_modules/cezar-cli', entryExists: false }))
-      .toBe('/n/npx --yes cezar-cli');
+    expect(
+      serviceExecStart({
+        ...base,
+        pkgRoot: '/home/u/.npm/_npx/abcd/node_modules/cezar-cli',
+        entryExists: false,
+      }),
+    ).toBe('/n/npx --yes cezar-cli');
   });
 
   it('falls back to a resolved global bin when the entry is missing', () => {
-    expect(serviceExecStart({ ...base, pkgRoot: '/pkg', entryExists: false, globalBin: '/usr/bin/cezar-cli' }))
-      .toBe('/n/node /usr/bin/cezar-cli');
+    expect(
+      serviceExecStart({ ...base, pkgRoot: '/pkg', entryExists: false, globalBin: '/usr/bin/cezar-cli' }),
+    ).toBe('/n/node /usr/bin/cezar-cli');
   });
 });
 
@@ -282,7 +320,8 @@ describe('ubuntu-vps review fixes (PR #423)', () => {
       runner: {
         capture: async (_p: string, args: string[], o?: { input?: string }) => {
           captured.push({ args, input: o?.input });
-          if (args.join(' ').includes('openssl') || args[0] === 'passwd') return { code: 0, stdout: '$apr1$abc$hash', stderr: '' };
+          if (args.join(' ').includes('openssl') || args[0] === 'passwd')
+            return { code: 0, stdout: '$apr1$abc$hash', stderr: '' };
           if (args.join(' ').includes('ufw.conf')) return { code: 0, stdout: '', stderr: '' }; // ufw not enabled
           return { code: 0, stdout: '', stderr: '' };
         },
@@ -372,7 +411,8 @@ describe('ubuntu-vps review fixes (PR #423)', () => {
   it('SSL re-run with TLS already configured updates server_name in place (no plain-HTTP rewrite)', async () => {
     const ui = {
       ...createAutoUi(),
-      text: async (o: { message: string }) => (o.message.includes('Domain') ? 'cezar.example.com' : 'you@example.com'),
+      text: async (o: { message: string }) =>
+        o.message.includes('Domain') ? 'cezar.example.com' : 'you@example.com',
     } as Ui;
     const commands: string[] = [];
     const ctx = {
@@ -408,7 +448,13 @@ describe('ubuntu-vps review fixes (PR #423)', () => {
     const ctx = { ...ctxWith({ runner }) } as InstallContext;
     await stepById('autostart').undo(ctx, {
       artifacts: [
-        { kind: 'owned', type: 'service', name: 'cezar.service', scope: 'user', path: '/tmp/does-not-exist.service' },
+        {
+          kind: 'owned',
+          type: 'service',
+          name: 'cezar.service',
+          scope: 'user',
+          path: '/tmp/does-not-exist.service',
+        },
         { kind: 'owned', type: 'linger', name: 'ops' },
       ],
     });
@@ -416,7 +462,15 @@ describe('ubuntu-vps review fixes (PR #423)', () => {
     // and without the linger artifact, it is left alone
     commands.length = 0;
     await stepById('autostart').undo(ctx, {
-      artifacts: [{ kind: 'owned', type: 'service', name: 'cezar.service', scope: 'user', path: '/tmp/does-not-exist.service' }],
+      artifacts: [
+        {
+          kind: 'owned',
+          type: 'service',
+          name: 'cezar.service',
+          scope: 'user',
+          path: '/tmp/does-not-exist.service',
+        },
+      ],
     });
     expect(commands.some((c) => c.includes('disable-linger'))).toBe(false);
   });

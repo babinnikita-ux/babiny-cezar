@@ -94,10 +94,7 @@ test('isPinnedSha recognises full sha-1 and sha-256 commit ids', () => {
 // ---- ensureBareClone refuses unsafe remotes before touching git (#428) -------
 
 test('ensureBareClone throws on an unsafe remote instead of shelling out', async () => {
-  await assert.rejects(
-    ensureBareClone("ext::sh -c 'touch /tmp/pwn'"),
-    /refusing unsafe skills repo remote/,
-  );
+  await assert.rejects(ensureBareClone("ext::sh -c 'touch /tmp/pwn'"), /refusing unsafe skills repo remote/);
 });
 
 // ---- integration: local clone still works, SHA pins, bad ref degrades --------
@@ -114,15 +111,11 @@ test('listRemoteSkills clones a local repo, pins the SHA, and refuses a bad ref'
     rmSync(srcDir, { recursive: true, force: true });
   });
 
-  const g = (args: string[]) =>
-    execFileSync('git', args, { cwd: srcDir, encoding: 'utf8' }).trim();
+  const g = (args: string[]) => execFileSync('git', args, { cwd: srcDir, encoding: 'utf8' }).trim();
   g(['-c', 'init.defaultBranch=main', 'init']);
   g(['config', 'user.email', 'test@example.com']);
   g(['config', 'user.name', 'Test']);
-  writeFileSync(
-    join(srcDir, 'SKILL.md'),
-    '---\nname: demo\ndescription: a demo skill\n---\nbody text\n',
-  );
+  writeFileSync(join(srcDir, 'SKILL.md'), '---\nname: demo\ndescription: a demo skill\n---\nbody text\n');
   // A directory skill needs SKILL.md under a directory to be named after it.
   execFileSync('mkdir', ['-p', join(srcDir, 'greeter')]);
   writeFileSync(join(srcDir, 'greeter', 'SKILL.md'), '---\ndescription: hi\n---\nsay hi\n');
@@ -153,7 +146,7 @@ test('listRemoteSkills clones a local repo, pins the SHA, and refuses a bad ref'
 
 // ---- per-project team-skills cache isolation (multi-project workspace, 2.6) --
 
-test('team-skills cache is keyed by repoRoot — projects never see each other\'s skills', async (t) => {
+test("team-skills cache is keyed by repoRoot — projects never see each other's skills", async (t) => {
   const home = mkdtempSync(join(tmpdir(), 'cez-home-'));
   const prevHome = process.env.HOME;
   process.env.HOME = home; // redirect the ~/.cache/cez skills cache into temp
@@ -196,11 +189,23 @@ test('team-skills cache is keyed by repoRoot — projects never see each other\'
 
   const loadedA = await refreshTeamSkills(rootA);
   const loadedB = await refreshTeamSkills(rootB);
-  assert.deepEqual(loadedA.map((s) => s.name), ['alpha-skill']);
-  assert.deepEqual(loadedB.map((s) => s.name), ['beta-skill']);
+  assert.deepEqual(
+    loadedA.map((s) => s.name),
+    ['alpha-skill'],
+  );
+  assert.deepEqual(
+    loadedB.map((s) => s.name),
+    ['beta-skill'],
+  );
 
   // The regression: the cache was one module-global list, so after B's load,
   // A's scope was served B's skills. Each root must keep its own entry.
-  assert.deepEqual(getTeamSkillsCached(rootA).map((s) => s.name), ['alpha-skill']);
-  assert.deepEqual(getTeamSkillsCached(rootB).map((s) => s.name), ['beta-skill']);
+  assert.deepEqual(
+    getTeamSkillsCached(rootA).map((s) => s.name),
+    ['alpha-skill'],
+  );
+  assert.deepEqual(
+    getTeamSkillsCached(rootB).map((s) => s.name),
+    ['beta-skill'],
+  );
 });

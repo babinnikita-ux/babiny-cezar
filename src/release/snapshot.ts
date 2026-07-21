@@ -46,9 +46,10 @@ export function computeSnapshot(ctx: SnapshotContext): SnapshotPlan | null {
   const channel = resolveChannel(ctx);
   if (!channel) return null;
   if (!ctx.baseVersion || !Number.isInteger(ctx.runNumber) || ctx.runNumber <= 0) return null;
-  const attempt = ctx.runAttempt !== undefined && Number.isInteger(ctx.runAttempt) && ctx.runAttempt > 1
-    ? `.${ctx.runAttempt}`
-    : '';
+  const attempt =
+    ctx.runAttempt !== undefined && Number.isInteger(ctx.runAttempt) && ctx.runAttempt > 1
+      ? `.${ctx.runAttempt}`
+      : '';
   return {
     channel: channel.channel,
     version: `${ctx.baseVersion}-${channel.channel}.${ctx.runNumber}${attempt}`,

@@ -1,8 +1,8 @@
-import type { ReactNode } from 'react'
+import type { ReactNode } from 'react';
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/utils';
 
-export type CenteredStateTone = 'neutral' | 'primary' | 'danger'
+export type CenteredStateTone = 'neutral' | 'primary' | 'danger';
 
 /** The tile carries a border + a solid-enough fill so it reads on the twinkle backdrop
  *  (a muted fill with a muted icon all but disappears there) — mercato's exact grammar. */
@@ -10,7 +10,7 @@ const tileTone: Record<CenteredStateTone, string> = {
   primary: 'border-primary/25 bg-primary/15 text-primary',
   neutral: 'border-border bg-card text-foreground shadow-xs',
   danger: 'border-danger/20 bg-danger/15 text-danger',
-}
+};
 
 /**
  * The one template for every loading/paused/error/empty state (spec, "Design system"):
@@ -31,17 +31,17 @@ export function CenteredState({
   heading: Heading = 'h1',
   className,
 }: {
-  icon: ReactNode
-  tone?: CenteredStateTone
-  title: string
-  subtitle?: string
+  icon: ReactNode;
+  tone?: CenteredStateTone;
+  title: string;
+  subtitle?: string;
   /** Free-form content below the subtitle (the `/new` param echo uses this). */
-  children?: ReactNode
-  actions?: ReactNode
-  backdrop?: boolean
+  children?: ReactNode;
+  actions?: ReactNode;
+  backdrop?: boolean;
   /** `h1` when the state IS the page; `h2` when it sits under an existing page heading. */
-  heading?: 'h1' | 'h2'
-  className?: string
+  heading?: 'h1' | 'h2';
+  className?: string;
 }) {
   return (
     <div
@@ -49,7 +49,7 @@ export function CenteredState({
       data-tone={tone}
       className={cn(
         'relative isolate flex min-h-full flex-1 flex-col items-center justify-center px-6 py-12 text-center',
-        className
+        className,
       )}
     >
       {backdrop ? <TwinkleBackdrop /> : null}
@@ -58,7 +58,7 @@ export function CenteredState({
           data-slot="centered-state-tile"
           className={cn(
             "flex size-[72px] items-center justify-center rounded-[18px] border [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-7",
-            tileTone[tone]
+            tileTone[tone],
           )}
         >
           {icon}
@@ -69,17 +69,17 @@ export function CenteredState({
         {actions ? <div className="flex items-center justify-center gap-3 pt-2">{actions}</div> : null}
       </div>
     </div>
-  )
+  );
 }
 
 /** One decorative square. Sizes are 2/3px; tones are the brand trio, violet-weighted. */
 type Twinkle = {
-  top: string
-  left: string
-  size: 2 | 3
-  tone: 'violet' | 'primary' | 'pending'
-  opacity: number
-}
+  top: string;
+  left: string;
+  size: 2 | 3;
+  tone: 'violet' | 'primary' | 'pending';
+  opacity: number;
+};
 
 /** The mockups' static scatter (new-task.html `.twinkles`), not a canvas: at 2–3px a dozen
  *  positioned squares are indistinguishable from a particle field and cost nothing. Densest at
@@ -100,13 +100,13 @@ const TWINKLES: Twinkle[] = [
   { top: '47%', left: '58%', size: 2, tone: 'primary', opacity: 0.28 },
   { top: '52%', left: '88%', size: 2, tone: 'violet', opacity: 0.25 },
   { top: '60%', left: '29%', size: 3, tone: 'violet', opacity: 0.22 },
-]
+];
 
 const twinkleTone: Record<Twinkle['tone'], string> = {
   violet: 'bg-violet',
   primary: 'bg-primary',
   pending: 'bg-pending',
-}
+};
 
 /**
  * The sparse brand-square scatter for hero/empty/lifecycle surfaces (spec, "Design system":
@@ -123,7 +123,7 @@ export function TwinkleBackdrop({ className }: { className?: string }) {
       aria-hidden="true"
       className={cn(
         'pointer-events-none absolute inset-0 -z-10 overflow-hidden [mask-image:linear-gradient(to_bottom,black_25%,transparent_88%)]',
-        className
+        className,
       )}
     >
       {TWINKLES.map((tw, index) => (
@@ -132,7 +132,7 @@ export function TwinkleBackdrop({ className }: { className?: string }) {
           className={cn(
             'absolute rounded-[1px] motion-safe:animate-pulse',
             tw.size === 3 ? 'size-[3px]' : 'size-0.5',
-            twinkleTone[tw.tone]
+            twinkleTone[tw.tone],
           )}
           style={{
             top: tw.top,
@@ -144,5 +144,5 @@ export function TwinkleBackdrop({ className }: { className?: string }) {
         />
       ))}
     </div>
-  )
+  );
 }

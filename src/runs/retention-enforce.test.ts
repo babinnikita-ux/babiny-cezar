@@ -81,9 +81,7 @@ describe('reclaimWorktrees (real git, #483)', () => {
     // Oldest: directory gone, branch preserved (recoverable), stamp written.
     expect(existsSync(oldWt.path)).toBe(false);
     expect(await branchExists(repo, oldId)).toBe(true);
-    expect(store.runs.find((r) => r.id === oldId)?.worktreeReclaimedAt).toBe(
-      '2026-07-18T00:00:00.000Z',
-    );
+    expect(store.runs.find((r) => r.id === oldId)?.worktreeReclaimedAt).toBe('2026-07-18T00:00:00.000Z');
     // Newest: untouched.
     expect(existsSync(newWt.path)).toBe(true);
     expect(store.runs.find((r) => r.id === newId)?.worktreeReclaimedAt).toBeUndefined();

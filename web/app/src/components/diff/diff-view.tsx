@@ -1,20 +1,22 @@
-import { ChevronRightIcon } from 'lucide-react'
-import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Virtualizer, type VirtualizerHandle } from 'virtua'
-
-import type { DiffStat } from '@/api/types'
-import { DiffStatLabel } from '@/components/diff-stat'
-import { highlight, highlightSync, langForPath, type SynToken } from '@/lib/highlighter'
-import { cn } from '@/lib/utils'
-
+import { ChevronRightIcon } from 'lucide-react';
 import {
-  diffRenderMode,
-  diffRowCount,
-  estimateFileHeight,
-  fileKey,
-  widestLineChars,
-} from './diff-scroll'
-import { ImagePreview, shouldPreviewImage } from './image-preview'
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { Virtualizer, type VirtualizerHandle } from 'virtua';
+
+import type { DiffStat } from '@/api/types';
+import { DiffStatLabel } from '@/components/diff-stat';
+import { highlight, highlightSync, langForPath, type SynToken } from '@/lib/highlighter';
+import { cn } from '@/lib/utils';
+
+import { diffRenderMode, diffRowCount, estimateFileHeight, fileKey, widestLineChars } from './diff-scroll';
+import { ImagePreview, shouldPreviewImage } from './image-preview';
 
 import {
   buildSplitRows,
@@ -29,9 +31,9 @@ import {
   type HunkLine,
   type SplitRow,
   type UnifiedRow,
-} from './parse-patch'
-import type { DiffFileChange, DiffProps } from './types'
-import { overlaySegments } from './word-diff'
+} from './parse-patch';
+import type { DiffFileChange, DiffProps } from './types';
+import { overlaySegments } from './word-diff';
 
 /**
  * The default `<Diff>` renderer (R5 Step 1.4) — our own implementation of the facade
@@ -45,10 +47,10 @@ import { overlaySegments } from './word-diff'
  */
 
 /** Past this many patch lines a file skips syntax highlighting — plaintext beats jank. */
-const HIGHLIGHT_MAX_LINES = 1500
+const HIGHLIGHT_MAX_LINES = 1500;
 
 /** Stable empty map, so a file with no expanded gaps keeps prop identity across renders. */
-const NO_GAPS: ExpandedGaps = new Map()
+const NO_GAPS: ExpandedGaps = new Map();
 
 /**
  * The card element for a path, matched on `dataset` rather than an attribute selector: a
@@ -57,11 +59,11 @@ const NO_GAPS: ExpandedGaps = new Map()
  * Comparing the property sidesteps both problems.
  */
 export function findFileElement(root: ParentNode | null, path: string): HTMLElement | undefined {
-  if (!root) return undefined
+  if (!root) return undefined;
   for (const element of root.querySelectorAll<HTMLElement>('[data-slot="diff-file"]')) {
-    if (element.dataset.path === path) return element
+    if (element.dataset.path === path) return element;
   }
-  return undefined
+  return undefined;
 }
 
 export function DiffView({
@@ -81,66 +83,66 @@ export function DiffView({
       files: files.length,
     }),
     [files],
-  )
+  );
 
   // PER-FILE STATE LIVES HERE, not in the card. Virtualization unmounts off-screen cards, and
   // a collapsed file or an expanded context gap must survive scrolling away and back — state
   // inside the card would silently reset. Keyed by `fileKey`, so a refetch that returns the
   // same files (the Changes tab polls every 4s while a run is active) keeps both.
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set())
-  const [expandedByFile, setExpandedByFile] = useState<ReadonlyMap<string, ExpandedGaps>>(() => new Map())
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set());
+  const [expandedByFile, setExpandedByFile] = useState<ReadonlyMap<string, ExpandedGaps>>(() => new Map());
 
   const toggleFile = useCallback((key: string) => {
     setCollapsed((previous) => {
-      const next = new Set(previous)
-      if (!next.delete(key)) next.add(key)
-      return next
-    })
-  }, [])
+      const next = new Set(previous);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
+  }, []);
 
   const expandGap = useCallback(
     async (file: DiffFileChange, gap: ContextGap) => {
-      if (!loadFileText) return
-      const text = await loadFileText(file.path)
-      if (text === null) return // unavailable (binary/too large/deleted) — the gap stays honest
-      const lines = contextLinesForGap(gap, text.split('\n'))
+      if (!loadFileText) return;
+      const text = await loadFileText(file.path);
+      if (text === null) return; // unavailable (binary/too large/deleted) — the gap stays honest
+      const lines = contextLinesForGap(gap, text.split('\n'));
       setExpandedByFile((previous) => {
-        const key = fileKey(file)
-        const next = new Map(previous)
-        return next.set(key, new Map(previous.get(key) ?? NO_GAPS).set(gap.beforeHunk, lines))
-      })
+        const key = fileKey(file);
+        const next = new Map(previous);
+        return next.set(key, new Map(previous.get(key) ?? NO_GAPS).set(gap.beforeHunk, lines));
+      });
     },
     [loadFileText],
-  )
+  );
 
-  const rowCount = useMemo(() => diffRowCount(files), [files])
+  const rowCount = useMemo(() => diffRowCount(files), [files]);
   // The `?diff=` override is a measurement/debugging seam, not reactive state — read once so
   // this module stays router-free (it renders in tests and in the repo view alike).
-  const [search] = useState(() => (typeof window === 'undefined' ? '' : window.location.search))
-  const renderMode = diffRenderMode(search, rowCount)
+  const [search] = useState(() => (typeof window === 'undefined' ? '' : window.location.search));
+  const renderMode = diffRenderMode(search, rowCount);
 
-  const scrollElRef = useRef<HTMLElement | null>(null)
-  const virtualizerRef = useRef<VirtualizerHandle | null>(null)
-  const rootRef = useRef<HTMLDivElement | null>(null)
+  const scrollElRef = useRef<HTMLElement | null>(null);
+  const virtualizerRef = useRef<VirtualizerHandle | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
 
   useImperativeHandle(
     viewRef,
     () => ({
       scrollToPath: (path: string) => {
-        const index = files.findIndex((file) => file.path === path)
-        if (index === -1) return
-        const handle = virtualizerRef.current
+        const index = files.findIndex((file) => file.path === path);
+        if (index === -1) return;
+        const handle = virtualizerRef.current;
         // Virtualized: the target may not be mounted, so the scroll goes through the index.
         // Flat: the element is always there, and scrollIntoView keeps the smooth behavior.
-        if (handle) handle.scrollToIndex(index, { align: 'start' })
-        else findFileElement(rootRef.current, path)?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+        if (handle) handle.scrollToIndex(index, { align: 'start' });
+        else findFileElement(rootRef.current, path)?.scrollIntoView({ block: 'start', behavior: 'smooth' });
       },
     }),
     [files],
-  )
+  );
 
   const card = (file: DiffFileChange) => {
-    const key = fileKey(file)
+    const key = fileKey(file);
     return (
       <DiffFileCard
         file={file}
@@ -154,14 +156,14 @@ export function DiffView({
         imageSrc={imageSrc}
         onOpenInApp={onOpenInApp}
       />
-    )
-  }
+    );
+  };
 
   return (
     <div
       ref={(el) => {
-        rootRef.current = el
-        if (el) scrollElRef.current = el.closest<HTMLElement>('[data-slot="main"]')
+        rootRef.current = el;
+        if (el) scrollElRef.current = el.closest<HTMLElement>('[data-slot="main"]');
       }}
       data-slot="diff"
       data-mode={mode}
@@ -194,7 +196,7 @@ export function DiffView({
         </div>
       )}
     </div>
-  )
+  );
 }
 
 /**
@@ -212,12 +214,12 @@ function VirtualFiles({
   scrollElRef,
   card,
 }: {
-  files: DiffFileChange[]
-  handleRef: React.RefObject<VirtualizerHandle | null>
-  scrollElRef: React.RefObject<HTMLElement | null>
-  card: (file: DiffFileChange) => React.ReactNode
+  files: DiffFileChange[];
+  handleRef: React.RefObject<VirtualizerHandle | null>;
+  scrollElRef: React.RefObject<HTMLElement | null>;
+  card: (file: DiffFileChange) => React.ReactNode;
 }) {
-  const containerRef = useRef<HTMLDivElement | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null);
 
   // virtua needs the distance between the scroller's content start and the virtualizer (the
   // run header, toolbar and totals line above it). Measured, not assumed — header height
@@ -228,12 +230,12 @@ function VirtualFiles({
   // parent's ref callback: React attaches refs child-first, so a parent element's callback
   // runs AFTER this layout effect: the ref would still be null here, `measure()` would bail,
   // and with stable deps it would never run again — pinning startMargin at 0 forever.
-  const [startMargin, setStartMargin] = useState(0)
+  const [startMargin, setStartMargin] = useState(0);
   useLayoutEffect(() => {
     const measure = () => {
-      const container = containerRef.current
-      const scroller = scrollElRef.current
-      if (!container || !scroller) return
+      const container = containerRef.current;
+      const scroller = scrollElRef.current;
+      if (!container || !scroller) return;
       setStartMargin(
         Math.max(
           0,
@@ -241,18 +243,18 @@ function VirtualFiles({
             container.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop,
           ),
         ),
-      )
-    }
-    measure()
-    window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
-  }, [scrollElRef])
+      );
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [scrollElRef]);
 
   return (
     <div
       ref={(el) => {
-        containerRef.current = el
-        if (el) scrollElRef.current = el.closest<HTMLElement>('[data-slot="main"]')
+        containerRef.current = el;
+        if (el) scrollElRef.current = el.closest<HTMLElement>('[data-slot="main"]');
       }}
       data-slot="diff-files"
       data-virtualized="true"
@@ -265,7 +267,7 @@ function VirtualFiles({
         ))}
       </Virtualizer>
     </div>
-  )
+  );
 }
 
 const STATUS_BADGE: Partial<Record<DiffFileChange['status'], string>> = {
@@ -273,7 +275,7 @@ const STATUS_BADGE: Partial<Record<DiffFileChange['status'], string>> = {
   deleted: 'deleted',
   renamed: 'renamed',
   copied: 'copied',
-}
+};
 
 /**
  * One file: sticky header (path, status, ±, collapse) over the row grid.
@@ -293,18 +295,18 @@ function DiffFileCard({
   imageSrc,
   onOpenInApp,
 }: {
-  file: DiffFileChange
-  open: boolean
-  onToggle: () => void
-  expanded: ExpandedGaps
-  onExpand: (gap: ContextGap) => void
-  mode: 'unified' | 'split'
-  wrap: boolean
-  canExpand: boolean
-  imageSrc?: (path: string) => string
-  onOpenInApp?: (path: string) => void
+  file: DiffFileChange;
+  open: boolean;
+  onToggle: () => void;
+  expanded: ExpandedGaps;
+  onExpand: (gap: ContextGap) => void;
+  mode: 'unified' | 'split';
+  wrap: boolean;
+  canExpand: boolean;
+  imageSrc?: (path: string) => string;
+  onOpenInApp?: (path: string) => void;
 }) {
-  const badge = STATUS_BADGE[file.status]
+  const badge = STATUS_BADGE[file.status];
   return (
     <section
       data-slot="diff-file"
@@ -369,7 +371,7 @@ function DiffFileCard({
         />
       ) : null}
     </section>
-  )
+  );
 }
 
 function DiffFileBody({
@@ -382,45 +384,45 @@ function DiffFileBody({
   imageSrc,
   onOpenInApp,
 }: {
-  file: DiffFileChange
-  expanded: ExpandedGaps
-  onExpand: (gap: ContextGap) => void
-  mode: 'unified' | 'split'
-  wrap: boolean
-  canExpand: boolean
-  imageSrc?: (path: string) => string
-  onOpenInApp?: (path: string) => void
+  file: DiffFileChange;
+  expanded: ExpandedGaps;
+  onExpand: (gap: ContextGap) => void;
+  mode: 'unified' | 'split';
+  wrap: boolean;
+  canExpand: boolean;
+  imageSrc?: (path: string) => string;
+  onOpenInApp?: (path: string) => void;
 }) {
-  const parsed = useMemo(() => parsePatch(file.patch), [file.patch])
+  const parsed = useMemo(() => parsePatch(file.patch), [file.patch]);
   // The trailing (after-last-hunk) region has an unknown length — only offer it when a
   // loader can actually materialize it, and never for fully-new or deleted files.
-  const expandable = canExpand && file.status !== 'added' && file.status !== 'deleted'
-  const gaps = useMemo(() => contextGaps(parsed.hunks, expandable), [parsed.hunks, expandable])
+  const expandable = canExpand && file.status !== 'added' && file.status !== 'deleted';
+  const gaps = useMemo(() => contextGaps(parsed.hunks, expandable), [parsed.hunks, expandable]);
 
   // One ordered list of every displayed line (hunks + expanded context) — the highlighting
   // unit. Both layouts reference the same HunkLine objects, so tokens map by identity.
   const lineList = useMemo(() => {
-    const out: HunkLine[] = []
+    const out: HunkLine[] = [];
     parsed.hunks.forEach((hunk, index) => {
-      const expansion = expanded.get(index)
-      if (expansion) out.push(...expansion)
-      out.push(...hunk.lines)
-    })
-    const trailing = expanded.get(parsed.hunks.length)
-    if (trailing) out.push(...trailing)
-    return out
-  }, [parsed.hunks, expanded])
-  const lineIndex = useMemo(() => new Map(lineList.map((line, index) => [line, index])), [lineList])
-  const tokens = useFileTokens(file.path, lineList)
+      const expansion = expanded.get(index);
+      if (expansion) out.push(...expansion);
+      out.push(...hunk.lines);
+    });
+    const trailing = expanded.get(parsed.hunks.length);
+    if (trailing) out.push(...trailing);
+    return out;
+  }, [parsed.hunks, expanded]);
+  const lineIndex = useMemo(() => new Map(lineList.map((line, index) => [line, index])), [lineList]);
+  const tokens = useFileTokens(file.path, lineList);
 
   const rows = useMemo(
     () => (mode === 'unified' ? buildUnifiedRows(parsed.hunks, gaps, expanded) : null),
     [mode, parsed.hunks, gaps, expanded],
-  )
+  );
   const splitRows = useMemo(
     () => (mode === 'split' ? buildSplitRows(parsed.hunks, gaps, expanded) : null),
     [mode, parsed.hunks, gaps, expanded],
-  )
+  );
 
   // The horizontal-scroll floor for `content-visibility` (see `widestLineChars`). Unified
   // no-wrap only: that is the one layout where the body scrolls horizontally on the widest
@@ -433,25 +435,29 @@ function DiffFileBody({
         ? { minInlineSize: `calc(${widestLineChars(file.patch)}ch + 7rem)` }
         : undefined,
     [mode, wrap, file.patch],
-  )
+  );
 
   // Only images with no text diff to lose take the preview branch — see `shouldPreviewImage`.
   // An SVG git reports as text keeps its rows below, exactly as `DiffFallback` renders it.
   if (shouldPreviewImage(file)) {
-    return <ImagePreview file={file} imageSrc={imageSrc} onOpenInApp={onOpenInApp} />
+    return <ImagePreview file={file} imageSrc={imageSrc} onOpenInApp={onOpenInApp} />;
   }
   if (file.binary) {
-    return <Note>Binary file — no text diff.</Note>
+    return <Note>Binary file — no text diff.</Note>;
   }
   if (parsed.hunks.length === 0) {
-    return <Note>{parsed.truncated ? 'Patch truncated by the server.' : 'No content changes (metadata only).'}</Note>
+    return (
+      <Note>
+        {parsed.truncated ? 'Patch truncated by the server.' : 'No content changes (metadata only).'}
+      </Note>
+    );
   }
 
   const tokensFor = (line: HunkLine): SynToken[] | null => {
-    if (!tokens) return null
-    const index = lineIndex.get(line)
-    return index === undefined ? null : (tokens[index] ?? null)
-  }
+    if (!tokens) return null;
+    const index = lineIndex.get(line);
+    return index === undefined ? null : (tokens[index] ?? null);
+  };
 
   return (
     <div
@@ -472,18 +478,30 @@ function DiffFileBody({
       >
         {rows
           ? rows.map((row, index) => (
-              <UnifiedRowView key={index} row={row} wrap={wrap} tokensFor={tokensFor} onExpand={expandable ? onExpand : undefined} />
+              <UnifiedRowView
+                key={index}
+                row={row}
+                wrap={wrap}
+                tokensFor={tokensFor}
+                onExpand={expandable ? onExpand : undefined}
+              />
             ))
           : null}
         {splitRows
           ? splitRows.map((row, index) => (
-              <SplitRowView key={index} row={row} wrap={wrap} tokensFor={tokensFor} onExpand={expandable ? onExpand : undefined} />
+              <SplitRowView
+                key={index}
+                row={row}
+                wrap={wrap}
+                tokensFor={tokensFor}
+                onExpand={expandable ? onExpand : undefined}
+              />
             ))
           : null}
       </div>
       {parsed.truncated ? <Note>Patch truncated by the server — counts above remain exact.</Note> : null}
     </div>
-  )
+  );
 }
 
 /** Load-and-cache this file's syntax tokens through the shared singleton (never rejects). */
@@ -491,26 +509,26 @@ function useFileTokens(path: string, lineList: HunkLine[]): SynToken[][] | null 
   const text = useMemo(
     () => (lineList.length > HIGHLIGHT_MAX_LINES ? null : lineList.map((line) => line.text).join('\n')),
     [lineList],
-  )
-  const lang = useMemo(() => langForPath(path), [path])
-  const [loaded, setLoaded] = useState<{ text: string; tokens: SynToken[][] } | null>(null)
+  );
+  const lang = useMemo(() => langForPath(path), [path]);
+  const [loaded, setLoaded] = useState<{ text: string; tokens: SynToken[][] } | null>(null);
   useEffect(() => {
-    if (text === null || lang === null) return
-    let cancelled = false
+    if (text === null || lang === null) return;
+    let cancelled = false;
     void highlight(text, lang).then((result) => {
-      if (!cancelled) setLoaded({ text, tokens: result.tokens })
-    })
+      if (!cancelled) setLoaded({ text, tokens: result.tokens });
+    });
     return () => {
-      cancelled = true
-    }
-  }, [text, lang])
-  if (text === null || lang === null) return null
-  if (loaded?.text === text) return loaded.tokens
-  return highlightSync(text, lang)?.tokens ?? null
+      cancelled = true;
+    };
+  }, [text, lang]);
+  if (text === null || lang === null) return null;
+  if (loaded?.text === text) return loaded.tokens;
+  return highlightSync(text, lang)?.tokens ?? null;
 }
 
 function Note({ children }: { children: React.ReactNode }) {
-  return <p className="px-4 py-2.5 text-xs text-soft-foreground">{children}</p>
+  return <p className="px-4 py-2.5 text-xs text-soft-foreground">{children}</p>;
 }
 
 // ---- rows ---------------------------------------------------------------------------------
@@ -519,26 +537,32 @@ const LINE_BG: Record<HunkLine['kind'], string | undefined> = {
   add: 'bg-diff-add',
   del: 'bg-diff-del',
   context: undefined,
-}
-const MARKER: Record<HunkLine['kind'], string> = { add: '+', del: '−', context: ' ' }
+};
+const MARKER: Record<HunkLine['kind'], string> = { add: '+', del: '−', context: ' ' };
 
 function HunkHeaderRow({ hunk }: { hunk: Hunk }) {
   return (
     <div data-slot="diff-hunk" className="bg-muted/40 px-4 py-0.5 whitespace-pre text-soft-foreground">
       {hunk.header}
     </div>
-  )
+  );
 }
 
 /** "⋯ N unchanged lines" — a button when expansion is wired, a separator otherwise. */
 function GapRow({ gap, onExpand }: { gap: ContextGap; onExpand?: (gap: ContextGap) => void }) {
-  const label = gap.count === undefined ? '⋯ unchanged lines to end of file' : `⋯ ${gap.count} unchanged ${gap.count === 1 ? 'line' : 'lines'}`
+  const label =
+    gap.count === undefined
+      ? '⋯ unchanged lines to end of file'
+      : `⋯ ${gap.count} unchanged ${gap.count === 1 ? 'line' : 'lines'}`;
   if (!onExpand) {
     return (
-      <div data-slot="diff-gap" className="border-y border-border/40 bg-muted/20 px-4 py-0.5 text-[11px] text-soft-foreground">
+      <div
+        data-slot="diff-gap"
+        className="border-y border-border/40 bg-muted/20 px-4 py-0.5 text-[11px] text-soft-foreground"
+      >
         {label}
       </div>
-    )
+    );
   }
   return (
     <button
@@ -549,13 +573,13 @@ function GapRow({ gap, onExpand }: { gap: ContextGap; onExpand?: (gap: ContextGa
     >
       {label} — expand
     </button>
-  )
+  );
 }
 
 /** A line's content: syntax tokens × word marks, empty lines kept one row tall. */
 function LineContent({ cell, tokens, wrap }: { cell: DiffCell; tokens: SynToken[] | null; wrap: boolean }) {
-  const segments = overlaySegments(tokens, cell.spans, cell.line.text)
-  const markClass = cell.line.kind === 'add' ? 'bg-diff-add-strong' : 'bg-diff-del-strong'
+  const segments = overlaySegments(tokens, cell.spans, cell.line.text);
+  const markClass = cell.line.kind === 'add' ? 'bg-diff-add-strong' : 'bg-diff-del-strong';
   return (
     <span className={cn('min-w-0 flex-1 pr-4', wrap ? 'break-words whitespace-pre-wrap' : 'whitespace-pre')}>
       {segments.map((segment, index) => (
@@ -570,7 +594,7 @@ function LineContent({ cell, tokens, wrap }: { cell: DiffCell; tokens: SynToken[
       ))}
       {cell.line.text === '' ? ' ' : ''}
     </span>
-  )
+  );
 }
 
 function Gutter({ value }: { value: number | undefined }) {
@@ -578,7 +602,7 @@ function Gutter({ value }: { value: number | undefined }) {
     <span className="w-10 shrink-0 pr-2 text-right text-soft-foreground/70 tabular-nums select-none">
       {value ?? ''}
     </span>
-  )
+  );
 }
 
 function UnifiedRowView({
@@ -587,14 +611,14 @@ function UnifiedRowView({
   tokensFor,
   onExpand,
 }: {
-  row: UnifiedRow
-  wrap: boolean
-  tokensFor: (line: HunkLine) => SynToken[] | null
-  onExpand?: (gap: ContextGap) => void
+  row: UnifiedRow;
+  wrap: boolean;
+  tokensFor: (line: HunkLine) => SynToken[] | null;
+  onExpand?: (gap: ContextGap) => void;
 }) {
-  if (row.type === 'hunk') return <HunkHeaderRow hunk={row.hunk} />
-  if (row.type === 'gap') return <GapRow gap={row.gap} onExpand={onExpand} />
-  const { line } = row.cell
+  if (row.type === 'hunk') return <HunkHeaderRow hunk={row.hunk} />;
+  if (row.type === 'gap') return <GapRow gap={row.gap} onExpand={onExpand} />;
+  const { line } = row.cell;
   return (
     <div data-slot="diff-line" data-line={line.kind} className={cn('flex', LINE_BG[line.kind])}>
       <Gutter value={line.oldLine} />
@@ -602,7 +626,7 @@ function UnifiedRowView({
       <span className="w-4 shrink-0 text-soft-foreground select-none">{MARKER[line.kind]}</span>
       <LineContent cell={row.cell} tokens={tokensFor(line)} wrap={wrap} />
     </div>
-  )
+  );
 }
 
 function SplitRowView({
@@ -611,19 +635,19 @@ function SplitRowView({
   tokensFor,
   onExpand,
 }: {
-  row: SplitRow
-  wrap: boolean
-  tokensFor: (line: HunkLine) => SynToken[] | null
-  onExpand?: (gap: ContextGap) => void
+  row: SplitRow;
+  wrap: boolean;
+  tokensFor: (line: HunkLine) => SynToken[] | null;
+  onExpand?: (gap: ContextGap) => void;
 }) {
-  if (row.type === 'hunk') return <HunkHeaderRow hunk={row.hunk} />
-  if (row.type === 'gap') return <GapRow gap={row.gap} onExpand={onExpand} />
+  if (row.type === 'hunk') return <HunkHeaderRow hunk={row.hunk} />;
+  if (row.type === 'gap') return <GapRow gap={row.gap} onExpand={onExpand} />;
   return (
     <div data-slot="diff-pair" className="grid grid-cols-2">
       <SplitCell cell={row.left} side="old" tokensFor={tokensFor} wrap={wrap} />
       <SplitCell cell={row.right} side="new" tokensFor={tokensFor} wrap={wrap} />
     </div>
-  )
+  );
 }
 
 function SplitCell({
@@ -632,16 +656,21 @@ function SplitCell({
   tokensFor,
   wrap,
 }: {
-  cell?: DiffCell
-  side: 'old' | 'new'
-  tokensFor: (line: HunkLine) => SynToken[] | null
-  wrap: boolean
+  cell?: DiffCell;
+  side: 'old' | 'new';
+  tokensFor: (line: HunkLine) => SynToken[] | null;
+  wrap: boolean;
 }) {
   if (!cell) {
     // The other side has no counterpart line — an honest hatch-free blank.
-    return <div data-slot="diff-cell-empty" className={cn('bg-muted/20', side === 'new' && 'border-l border-border/40')} />
+    return (
+      <div
+        data-slot="diff-cell-empty"
+        className={cn('bg-muted/20', side === 'new' && 'border-l border-border/40')}
+      />
+    );
   }
-  const { line } = cell
+  const { line } = cell;
   return (
     <div
       data-slot="diff-cell"
@@ -652,5 +681,5 @@ function SplitCell({
       <span className="w-4 shrink-0 text-soft-foreground select-none">{MARKER[line.kind]}</span>
       <LineContent cell={cell} tokens={tokensFor(line)} wrap={wrap} />
     </div>
-  )
+  );
 }

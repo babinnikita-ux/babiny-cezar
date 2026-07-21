@@ -1,10 +1,10 @@
-import { ChevronRightIcon, FileIcon, FolderIcon, ImageIcon } from 'lucide-react'
-import { useState } from 'react'
+import { ChevronRightIcon, FileIcon, FolderIcon, ImageIcon } from 'lucide-react';
+import { useState } from 'react';
 
-import { useRunFile } from '@/api/queries'
-import { cn } from '@/lib/utils'
+import { useRunFile } from '@/api/queries';
+import { cn } from '@/lib/utils';
 
-import { formatFileSize, isImagePath } from './worktree-files'
+import { formatFileSize, isImagePath } from './worktree-files';
 
 /**
  * The Files tab's worktree tree (R5 Step 1.6) — the lazy sibling of ChangesTree. The Changes
@@ -18,9 +18,9 @@ export function FilesTree({
   selected,
   onSelect,
 }: {
-  runId: string
-  selected: string | null
-  onSelect: (path: string) => void
+  runId: string;
+  selected: string | null;
+  onSelect: (path: string) => void;
 }) {
   return (
     <nav data-slot="files-tree" aria-label="Worktree files" className="min-w-0 text-[13px]">
@@ -28,7 +28,7 @@ export function FilesTree({
         <DirChildren runId={runId} path="" depth={0} selected={selected} onSelect={onSelect} />
       </ul>
     </nav>
-  )
+  );
 }
 
 /** One directory's rows — mounts (and thereby fetches) only while its parent is open. */
@@ -39,35 +39,47 @@ function DirChildren({
   selected,
   onSelect,
 }: {
-  runId: string
-  path: string
-  depth: number
-  selected: string | null
-  onSelect: (path: string) => void
+  runId: string;
+  path: string;
+  depth: number;
+  selected: string | null;
+  onSelect: (path: string) => void;
 }) {
-  const entry = useRunFile(runId, path)
+  const entry = useRunFile(runId, path);
 
   if (entry.isPending) {
     return (
-      <li data-slot="files-tree-loading" className="px-1.5 py-1 text-xs text-soft-foreground" style={{ paddingLeft: `${24 + depth * 14}px` }}>
+      <li
+        data-slot="files-tree-loading"
+        className="px-1.5 py-1 text-xs text-soft-foreground"
+        style={{ paddingLeft: `${24 + depth * 14}px` }}
+      >
         Loading…
       </li>
-    )
+    );
   }
   if (entry.isError) {
     return (
-      <li data-slot="files-tree-error" className="px-1.5 py-1 text-xs text-danger" style={{ paddingLeft: `${24 + depth * 14}px` }}>
+      <li
+        data-slot="files-tree-error"
+        className="px-1.5 py-1 text-xs text-danger"
+        style={{ paddingLeft: `${24 + depth * 14}px` }}
+      >
         {entry.error.message}
       </li>
-    )
+    );
   }
-  if (entry.data.type !== 'dir') return null
+  if (entry.data.type !== 'dir') return null;
   if (entry.data.entries.length === 0) {
     return (
-      <li data-slot="files-tree-empty" className="px-1.5 py-1 text-xs text-soft-foreground" style={{ paddingLeft: `${24 + depth * 14}px` }}>
+      <li
+        data-slot="files-tree-empty"
+        className="px-1.5 py-1 text-xs text-soft-foreground"
+        style={{ paddingLeft: `${24 + depth * 14}px` }}
+      >
         Empty directory
       </li>
-    )
+    );
   }
 
   // The server already sorts dirs-first, name-ascending — render verbatim.
@@ -97,7 +109,7 @@ function DirChildren({
         ),
       )}
     </>
-  )
+  );
 }
 
 function DirNode({
@@ -108,14 +120,14 @@ function DirNode({
   selected,
   onSelect,
 }: {
-  runId: string
-  name: string
-  path: string
-  depth: number
-  selected: string | null
-  onSelect: (path: string) => void
+  runId: string;
+  name: string;
+  path: string;
+  depth: number;
+  selected: string | null;
+  onSelect: (path: string) => void;
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(false);
   return (
     <li>
       <button
@@ -141,7 +153,7 @@ function DirNode({
         </ul>
       ) : null}
     </li>
-  )
+  );
 }
 
 function FileNode({
@@ -152,15 +164,15 @@ function FileNode({
   selected,
   onSelect,
 }: {
-  name: string
-  path: string
-  size: number | undefined
-  depth: number
-  selected: string | null
-  onSelect: (path: string) => void
+  name: string;
+  path: string;
+  size: number | undefined;
+  depth: number;
+  selected: string | null;
+  onSelect: (path: string) => void;
 }) {
-  const active = selected === path
-  const Icon = isImagePath(path) ? ImageIcon : FileIcon
+  const active = selected === path;
+  const Icon = isImagePath(path) ? ImageIcon : FileIcon;
   return (
     <li>
       <button
@@ -184,5 +196,5 @@ function FileNode({
         ) : null}
       </button>
     </li>
-  )
+  );
 }

@@ -128,10 +128,7 @@ export function createOpencodeUiState(): OpencodeUiMapperState {
  * the runner's `POST /session`, so the runner calls this once the response
  * carries the id (like codex's out-of-band thread/start result).
  */
-export function opencodeSessionStarted(
-  sessionId: string,
-  state: OpencodeUiMapperState,
-): OpencodeUiMapping {
+export function opencodeSessionStarted(sessionId: string, state: OpencodeUiMapperState): OpencodeUiMapping {
   if (state.sessionStarted || sessionId === '') return { events: [], state };
   return {
     events: [{ type: 'session.started', sessionId, backend: 'opencode' }],
@@ -184,7 +181,8 @@ function mapMessageInfo(props: Record<string, unknown>, state: OpencodeUiMapperS
   const role = str(info.role);
   let next = state;
   const messageSession = str(info.sessionID);
-  const foreign = messageSession !== undefined && state.sessionId !== null && messageSession !== state.sessionId;
+  const foreign =
+    messageSession !== undefined && state.sessionId !== null && messageSession !== state.sessionId;
   if (foreign && messageSession !== undefined) {
     next = resolveSubtask(messageSession, next).state;
   }
@@ -279,9 +277,7 @@ function mapTextLike(
 
   const makeItem = (text: string): UiMessageItem | UiReasoningItem => {
     const item: UiMessageItem | UiReasoningItem =
-      field === 'text'
-        ? { kind: 'message', id, role: 'assistant', text }
-        : { kind: 'reasoning', id, text };
+      field === 'text' ? { kind: 'message', id, role: 'assistant', text } : { kind: 'reasoning', id, text };
     if (parentItemId !== undefined) item.parentItemId = parentItemId;
     return item;
   };
@@ -444,7 +440,11 @@ function mapPatch(
   if (!artifacts) return { events: [], state };
   const { diffs, locations } = artifacts;
   const label =
-    locations.length === 1 ? locations[0]?.path : locations.length > 1 ? `${locations.length} files` : undefined;
+    locations.length === 1
+      ? locations[0]?.path
+      : locations.length > 1
+        ? `${locations.length} files`
+        : undefined;
   const item: UiToolItem = {
     kind: 'tool',
     id,
@@ -574,7 +574,9 @@ function mapIdle(props: Record<string, unknown>, state: OpencodeUiMapperState): 
   const openSubtasks = [...state.subtasks.values(), ...state.unboundSubtasks];
   return {
     events: [
-      ...openSubtasks.map((subtask): UiEvent => ({ type: 'item.completed', item: completedSubtask(subtask) })),
+      ...openSubtasks.map(
+        (subtask): UiEvent => ({ type: 'item.completed', item: completedSubtask(subtask) }),
+      ),
       {
         type: 'turn.completed',
         turnId: state.currentTurnId,
@@ -686,7 +688,8 @@ function emitUsage(state: OpencodeUiMapperState): OpencodeUiMapping {
   let usage: TokenUsage = { input: 0, output: 0, total: 0 };
   let cost: number | null = null;
   for (const mu of state.usageByMessage.values()) {
-    const effective = mu.info !== null && (mu.steps === null || mu.info.total >= mu.steps.total) ? mu.info : mu.steps;
+    const effective =
+      mu.info !== null && (mu.steps === null || mu.info.total >= mu.steps.total) ? mu.info : mu.steps;
     if (effective !== null) usage = addUsage(usage, effective);
     const effCost = maxCost(mu.infoCost, mu.stepsCost ?? undefined);
     if (effCost !== null) cost = (cost ?? 0) + effCost;

@@ -1,17 +1,17 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { BotIcon } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { BotIcon } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
 
-import { putConfig } from '@/api/client'
-import { queryKeys, useConfig, useRepo, useRunnerModels } from '@/api/queries'
-import type { ConfigResponse, Runner, SetConfigInput } from '@/api/types'
-import { CenteredState } from '@/components/centered-state'
-import { Button } from '@/components/ui/button'
-import { Switch } from '@/components/ui/switch'
-import { Textarea } from '@/components/ui/textarea'
-import { toast } from '@/components/ui/toaster'
-import { cn } from '@/lib/utils'
-import { modelCatalogStatus, modelsForRunner, RUNNERS } from '@/routes/new-task-form'
+import { putConfig } from '@/api/client';
+import { queryKeys, useConfig, useRepo, useRunnerModels } from '@/api/queries';
+import type { ConfigResponse, Runner, SetConfigInput } from '@/api/types';
+import { CenteredState } from '@/components/centered-state';
+import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from '@/components/ui/toaster';
+import { cn } from '@/lib/utils';
+import { modelCatalogStatus, modelsForRunner, RUNNERS } from '@/routes/new-task-form';
 
 /**
  * Settings → Agents (R6 Step 1.5, spec §"Settings"): today's scattered `PUT /api/config` knobs
@@ -29,18 +29,18 @@ import { modelCatalogStatus, modelsForRunner, RUNNERS } from '@/routes/new-task-
 
 /** The server's validation cap for the system prompt (src/config.ts) — enforced here too so an
  *  over-limit draft is a disabled Save with a reason, not a 400 round-trip. */
-const SYSTEM_PROMPT_MAX = 20_000
+const SYSTEM_PROMPT_MAX = 20_000;
 
 export function AgentsSection() {
-  const config = useConfig()
-  const catalog = useRunnerModels()
+  const config = useConfig();
+  const catalog = useRunnerModels();
 
   if (config.isPending) {
     return (
       <p data-slot="agents-loading" className="p-4 text-[13px] text-soft-foreground md:p-6">
         Loading agent settings…
       </p>
-    )
+    );
   }
   if (config.isError) {
     return (
@@ -51,14 +51,20 @@ export function AgentsSection() {
         subtitle={config.error.message}
         heading="h2"
       />
-    )
+    );
   }
-  return <AgentsForm config={config.data} catalog={catalog.data} />
+  return <AgentsForm config={config.data} catalog={catalog.data} />;
 }
 
-function AgentsForm({ config, catalog }: { config: ConfigResponse; catalog: ReturnType<typeof useRunnerModels>['data'] }) {
-  const repo = useRepo()
-  const queryClient = useQueryClient()
+function AgentsForm({
+  config,
+  catalog,
+}: {
+  config: ConfigResponse;
+  catalog: ReturnType<typeof useRunnerModels>['data'];
+}) {
+  const repo = useRepo();
+  const queryClient = useQueryClient();
 
   const save = useMutation({
     mutationFn: (patch: SetConfigInput) => putConfig(patch),
@@ -66,28 +72,27 @@ function AgentsForm({ config, catalog }: { config: ConfigResponse; catalog: Retu
       // The PUT already answers the merged knobs — no refetch needed for this section. The
       // same knobs surface elsewhere though: defaultRunner in /api/health, baseBranch in
       // /api/repo — refresh both so the composer and the Git view agree immediately.
-      queryClient.setQueryData(queryKeys.config, result)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.health })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.repo })
+      queryClient.setQueryData(queryKeys.config, result);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.health });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.repo });
     },
     // 400/409/500 alike: the server's own words, verbatim (the repo-wide error doctrine).
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
-  })
+  });
 
   // The system prompt edits locally and saves explicitly — a textarea that PUT-ed 20k
   // characters on every keystroke would be a worse control, not a simpler one.
-  const [prompt, setPrompt] = useState(config.systemPrompt ?? '')
-  const trimmedPrompt = prompt.trim()
-  const promptSaved = trimmedPrompt === (config.systemPrompt ?? '')
-  const promptOverLimit = trimmedPrompt.length > SYSTEM_PROMPT_MAX
+  const [prompt, setPrompt] = useState(config.systemPrompt ?? '');
+  const trimmedPrompt = prompt.trim();
+  const promptSaved = trimmedPrompt === (config.systemPrompt ?? '');
+  const promptOverLimit = trimmedPrompt.length > SYSTEM_PROMPT_MAX;
   const savePrompt = () =>
     save.mutate(
       { systemPrompt: trimmedPrompt === '' ? null : trimmedPrompt },
       {
-        onSuccess: () =>
-          toast(trimmedPrompt === '' ? 'System prompt cleared' : 'System prompt saved'),
+        onSuccess: () => toast(trimmedPrompt === '' ? 'System prompt cleared' : 'System prompt saved'),
       },
-    )
+    );
 
   return (
     <div
@@ -105,7 +110,7 @@ function AgentsForm({ config, catalog }: { config: ConfigResponse; catalog: Retu
           className="inline-flex w-fit gap-0.5 rounded-md border border-border bg-card p-0.5"
         >
           {RUNNERS.map((option) => {
-            const checked = option.id === config.defaultRunner
+            const checked = option.id === config.defaultRunner;
             return (
               <button
                 key={option.id}
@@ -123,7 +128,7 @@ function AgentsForm({ config, catalog }: { config: ConfigResponse; catalog: Retu
               >
                 {option.label}
               </button>
-            )
+            );
           })}
         </div>
       </Field>
@@ -271,12 +276,14 @@ function AgentsForm({ config, catalog }: { config: ConfigResponse; catalog: Retu
           </select>
         ) : (
           <p data-slot="agents-base-branch-unavailable" className="text-[13px] text-soft-foreground">
-            {repo.isPending ? 'Loading branches…' : 'Not a git repository — tasks run in place, no branching.'}
+            {repo.isPending
+              ? 'Loading branches…'
+              : 'Not a git repository — tasks run in place, no branching.'}
           </p>
         )}
       </Field>
     </div>
-  )
+  );
 }
 
 /** The Appearance section's field chassis — same rhythm, so Settings reads as one surface. */
@@ -289,5 +296,5 @@ function Field({ title, hint, children }: { title: string; hint: string; childre
       </div>
       {children}
     </section>
-  )
+  );
 }

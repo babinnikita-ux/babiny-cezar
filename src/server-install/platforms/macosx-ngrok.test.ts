@@ -9,7 +9,10 @@ import { loadServerState } from '../state.js';
 import { createAutoUi } from '../ui.js';
 import type { Runner } from '../types.js';
 
-const okRunner: Runner = { capture: async () => ({ code: 0, stdout: '', stderr: '' }), interactive: async () => 0 };
+const okRunner: Runner = {
+  capture: async () => ({ code: 0, stdout: '', stderr: '' }),
+  interactive: async () => 0,
+};
 
 describe('macosx-ngrok', () => {
   let home: string;
@@ -52,7 +55,11 @@ describe('macosx-ngrok', () => {
 
   it('dry-run install walks every step and server-uninstall reverses it', async () => {
     // Leave the reserved domain blank to exercise the ephemeral-URL path.
-    const ui = { ...createAutoUi(), text: async (o: { message: string; placeholder?: string }) => (o.message.includes('Reserved') ? '' : o.placeholder ?? 'ops') };
+    const ui = {
+      ...createAutoUi(),
+      text: async (o: { message: string; placeholder?: string }) =>
+        o.message.includes('Reserved') ? '' : (o.placeholder ?? 'ops'),
+    };
     const run = {
       dryRun: true,
       assumeYes: true,
@@ -105,7 +112,8 @@ describe('macosx-ngrok review fixes (PR #423)', () => {
       state: { schema: 1, installed: false, primaryPort: 4321, steps: {} },
       ui: {
         ...createAutoUi(),
-        password: async (o: { message: string }) => (o.message.includes('authtoken') ? 'SECRET-TOKEN' : 'longenough'),
+        password: async (o: { message: string }) =>
+          o.message.includes('authtoken') ? 'SECRET-TOKEN' : 'longenough',
         text: async (o: { message: string }) => (o.message.includes('domain') ? '' : 'ops'),
       },
       runner,
@@ -125,7 +133,8 @@ describe('macosx-ngrok review fixes (PR #423)', () => {
     const runner: Runner = {
       capture: async (_p, args) => {
         // launchctl print reports loaded; command -v finds ngrok
-        if (args[0] === 'print' || args.join(' ').includes('command -v')) return { code: 0, stdout: '/opt/homebrew/bin/ngrok', stderr: '' };
+        if (args[0] === 'print' || args.join(' ').includes('command -v'))
+          return { code: 0, stdout: '/opt/homebrew/bin/ngrok', stderr: '' };
         return { code: 0, stdout: '', stderr: '' };
       },
       interactive: async (_p, args, o) => {
@@ -144,7 +153,8 @@ describe('macosx-ngrok review fixes (PR #423)', () => {
   it('writes the credential-bearing plist 0600', async () => {
     const runner: Runner = {
       capture: async (_p, args) => {
-        if (args[0] === 'print' || args.join(' ').includes('command -v')) return { code: 0, stdout: '/usr/local/bin/ngrok', stderr: '' };
+        if (args[0] === 'print' || args.join(' ').includes('command -v'))
+          return { code: 0, stdout: '/usr/local/bin/ngrok', stderr: '' };
         return { code: 0, stdout: '', stderr: '' };
       },
       interactive: async () => 0,
@@ -168,7 +178,8 @@ describe('macosx-ngrok review fixes (PR #423)', () => {
   it('a failed launchctl bootstrap fails the step instead of recording done', async () => {
     const runner: Runner = {
       capture: async (_p, args) => {
-        if (args.join(' ').includes('command -v')) return { code: 0, stdout: '/usr/local/bin/ngrok', stderr: '' };
+        if (args.join(' ').includes('command -v'))
+          return { code: 0, stdout: '/usr/local/bin/ngrok', stderr: '' };
         if (args[0] === 'print') return { code: 113, stdout: '', stderr: '' }; // not loaded
         return { code: 0, stdout: '', stderr: '' };
       },
@@ -208,7 +219,8 @@ describe('macosx-ngrok review fixes (PR #423)', () => {
     let domainValidate: ((v: string) => string | undefined) | undefined;
     const runner: Runner = {
       capture: async (_p, args) => {
-        if (args[0] === 'print' || args.join(' ').includes('command -v')) return { code: 0, stdout: '/usr/local/bin/ngrok', stderr: '' };
+        if (args[0] === 'print' || args.join(' ').includes('command -v'))
+          return { code: 0, stdout: '/usr/local/bin/ngrok', stderr: '' };
         return { code: 0, stdout: '', stderr: '' };
       },
       interactive: async () => 0,

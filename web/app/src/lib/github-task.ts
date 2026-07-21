@@ -1,4 +1,4 @@
-import type { CreateRunInput, GithubItem, WorkflowStepDef } from '@/api/types'
+import type { CreateRunInput, GithubItem, WorkflowStepDef } from '@/api/types';
 
 /**
  * The GitHub tab's hand-to-agent contract, ported verbatim from the legacy tab
@@ -9,7 +9,7 @@ import type { CreateRunInput, GithubItem, WorkflowStepDef } from '@/api/types'
  */
 
 /** A skills-as-chain run carries at most 8 steps — the workflow builder's own limit. */
-export const MAX_CHAIN_STEPS = 8
+export const MAX_CHAIN_STEPS = 8;
 
 /**
  * The item's IDENTITY alone — verb, `#N`, title, URL — with no body quoted (#524). This is the
@@ -21,7 +21,7 @@ export const MAX_CHAIN_STEPS = 8
  * updating those regexes silently costs every run its PR/issue chip and its `#N` title prefix.
  */
 export function githubTaskRef(item: GithubItem): string {
-  return `${item.kind === 'pr' ? 'Address GitHub pull request' : 'Fix GitHub issue'} #${item.number}: ${item.title}\n\n${item.url}`
+  return `${item.kind === 'pr' ? 'Address GitHub pull request' : 'Fix GitHub issue'} #${item.number}: ${item.title}\n\n${item.url}`;
 }
 
 /**
@@ -35,14 +35,14 @@ export function githubTaskRef(item: GithubItem): string {
  * user is meant to edit, and the agent can read the item itself from the URL.
  */
 export function githubTaskPrompt(item: GithubItem, skillNames: readonly string[] = []): string {
-  let task = githubTaskRef(item)
-  if (item.body?.trim()) task += `\n\n---\n\n${item.body.trim()}`
-  if (skillNames.length) task += skillsHint(skillNames)
-  return task
+  let task = githubTaskRef(item);
+  if (item.body?.trim()) task += `\n\n---\n\n${item.body.trim()}`;
+  if (skillNames.length) task += skillsHint(skillNames);
+  return task;
 }
 
 function skillsHint(skillNames: readonly string[]): string {
-  return `\n\nUse these skills where relevant: ${skillNames.join(', ')}.`
+  return `\n\nUse these skills where relevant: ${skillNames.join(', ')}.`;
 }
 
 /**
@@ -59,7 +59,7 @@ export function applyItemTokens(text: string, item: GithubItem): string {
   return text
     .replace(/\{\{\s*number\s*\}\}/gi, () => `#${item.number}`)
     .replace(/\{\{\s*title\s*\}\}/gi, () => item.title)
-    .replace(/\{\{\s*url\s*\}\}/gi, () => item.url)
+    .replace(/\{\{\s*url\s*\}\}/gi, () => item.url);
 }
 
 /**
@@ -76,12 +76,9 @@ export function applyItemTokens(text: string, item: GithubItem): string {
  * so there is no boundary between "142" and "0").
  */
 export function mentionsItem(text: string, item: GithubItem): boolean {
-  if (text.includes(item.url)) return true
-  const worded =
-    item.kind === 'pr'
-      ? String.raw`(?:pull\s+request|pr)`
-      : String.raw`issue`
-  return new RegExp(String.raw`\b${worded}\s*#?\s*${item.number}\b`, 'i').test(text)
+  if (text.includes(item.url)) return true;
+  const worded = item.kind === 'pr' ? String.raw`(?:pull\s+request|pr)` : String.raw`issue`;
+  return new RegExp(String.raw`\b${worded}\s*#?\s*${item.number}\b`, 'i').test(text);
 }
 
 /**
@@ -101,17 +98,17 @@ export function composeGithubTask(
   skillNames: readonly string[],
   customPrompt?: string,
 ): string {
-  const raw = (customPrompt ?? '').trim()
-  if (!raw) return githubTaskPrompt(item, skillNames)
-  const ref = githubTaskRef(item)
+  const raw = (customPrompt ?? '').trim();
+  if (!raw) return githubTaskPrompt(item, skillNames);
+  const ref = githubTaskRef(item);
   // Substitute tokens only in what the USER contributed. The box is pre-filled with `ref`, which
   // embeds `item.title` — and a title may itself contain a token ("Support {{url}} in prompt
   // templates"), which would otherwise be rewritten inside our own reference block.
   const custom = raw.startsWith(ref)
     ? ref + applyItemTokens(raw.slice(ref.length), item)
-    : applyItemTokens(raw, item)
-  const task = mentionsItem(custom, item) ? custom : `${ref}\n\n${custom}`
-  return skillNames.length ? task + skillsHint(skillNames) : task
+    : applyItemTokens(raw, item);
+  const task = mentionsItem(custom, item) ? custom : `${ref}\n\n${custom}`;
+  return skillNames.length ? task + skillsHint(skillNames) : task;
 }
 
 /**
@@ -119,14 +116,14 @@ export function composeGithubTask(
  * the legacy builder deduped them (`om-fix`, `om-fix-2`, …), capped at `MAX_CHAIN_STEPS`.
  */
 export function skillChainSteps(names: readonly string[]): WorkflowStepDef[] {
-  const steps: WorkflowStepDef[] = []
+  const steps: WorkflowStepDef[] = [];
   for (const name of names.slice(0, MAX_CHAIN_STEPS)) {
-    const used = new Set(steps.map((step) => step.id))
-    let id = name
-    for (let n = 2; used.has(id); n++) id = `${name}-${n}`
-    steps.push({ id, name, skill: name, prompt: '{{task}}' })
+    const used = new Set(steps.map((step) => step.id));
+    let id = name;
+    for (let n = 2; used.has(id); n++) id = `${name}-${n}`;
+    steps.push({ id, name, skill: name, prompt: '{{task}}' });
   }
-  return steps
+  return steps;
 }
 
 /**
@@ -150,13 +147,13 @@ export function githubRunBody(
   // A custom prompt EXTENDS the item context rather than replacing it (#524) — see
   // `composeGithubTask`. The workflow/skill routing and the #401 `backend` spread are unchanged;
   // only the task text is.
-  if (workflow) return { ...backend, workflow, task: composeGithubTask(item, skills, customPrompt) }
+  if (workflow) return { ...backend, workflow, task: composeGithubTask(item, skills, customPrompt) };
   if (skills.length) {
     return {
       ...backend,
       steps: skillChainSteps(skills),
       task: composeGithubTask(item, [], customPrompt),
-    }
+    };
   }
-  return { ...backend, workflow: 'quick-task', task: composeGithubTask(item, [], customPrompt) }
+  return { ...backend, workflow: 'quick-task', task: composeGithubTask(item, [], customPrompt) };
 }

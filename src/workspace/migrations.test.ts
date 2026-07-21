@@ -1,4 +1,13 @@
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -81,16 +90,8 @@ describe('workspace migrations', () => {
   });
 
   it('never overwrites keys already set globally (crash-interrupted re-run safety)', async () => {
-    writeFileSync(
-      workspaceConfigPath(),
-      JSON.stringify({ resources: { maxParallel: 8 } }),
-      'utf8',
-    );
-    writeFileSync(
-      workspaceUiStatePath(),
-      JSON.stringify({ appearance: { accent: 'lime' } }),
-      'utf8',
-    );
+    writeFileSync(workspaceConfigPath(), JSON.stringify({ resources: { maxParallel: 8 } }), 'utf8');
+    writeFileSync(workspaceUiStatePath(), JSON.stringify({ appearance: { accent: 'lime' } }), 'utf8');
     writeRepoFile('config.json', { maxParallel: 5, memoryLimitMb: 1024 });
     writeRepoFile('ui-state.json', { appearance: { accent: 'violet' }, notifications: { enabled: true } });
 

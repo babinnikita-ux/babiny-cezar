@@ -1,15 +1,15 @@
-import { useState } from 'react'
+import { useState } from 'react';
 
-import { useSendMessage } from '@/api/queries'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { useSendMessage } from '@/api/queries';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
-import type { ThreadAsk } from './thread-state'
-import type { UiAskQuestion } from '@/protocol/ui-events'
+import type { ThreadAsk } from './thread-state';
+import type { UiAskQuestion } from '@/protocol/ui-events';
 
 /** Format one answered question the way the agent reads it back. */
 function formatAnswer(question: UiAskQuestion, labels: string[]): string {
-  return `${question.header}: ${labels.join(', ')}`
+  return `${question.header}: ${labels.join(', ')}`;
 }
 
 /**
@@ -24,12 +24,12 @@ function formatAnswer(question: UiAskQuestion, labels: string[]): string {
  * free-form "Other". Once resolved, the card collapses to a compact summary.
  */
 export function AskCard({ ask, runId }: { ask: ThreadAsk; runId: string }) {
-  const sendMessage = useSendMessage(runId)
-  const questions = ask.questions
+  const sendMessage = useSendMessage(runId);
+  const questions = ask.questions;
   // One-tap only when there is a single single-select question; every other
   // shape needs a combined Send so no question's answer is dropped.
-  const oneTap = questions.length === 1 && questions[0]?.multiSelect !== true
-  const [selections, setSelections] = useState<Record<number, string[]>>({})
+  const oneTap = questions.length === 1 && questions[0]?.multiSelect !== true;
+  const [selections, setSelections] = useState<Record<number, string[]>>({});
 
   if (ask.resolved) {
     return (
@@ -39,22 +39,20 @@ export function AskCard({ ask, runId }: { ask: ThreadAsk; runId: string }) {
         className="rounded-lg border border-border bg-card px-3.5 py-2.5 text-xs text-muted-foreground"
       >
         <span className="text-soft-foreground">Answered</span>
-        {ask.answer ? (
-          <span className="ml-1.5 whitespace-pre-line text-foreground">{ask.answer}</span>
-        ) : null}
+        {ask.answer ? <span className="ml-1.5 whitespace-pre-line text-foreground">{ask.answer}</span> : null}
       </div>
-    )
+    );
   }
 
   const setQuestion = (index: number, labels: string[]) =>
-    setSelections((prev) => ({ ...prev, [index]: labels }))
+    setSelections((prev) => ({ ...prev, [index]: labels }));
 
-  const allAnswered = questions.every((_, index) => (selections[index]?.length ?? 0) > 0)
+  const allAnswered = questions.every((_, index) => (selections[index]?.length ?? 0) > 0);
 
   const sendAll = () =>
     void sendMessage.mutateAsync({
       text: questions.map((q, index) => formatAnswer(q, selections[index] ?? [])).join('\n'),
-    })
+    });
 
   return (
     <div
@@ -73,8 +71,8 @@ export function AskCard({ ask, runId }: { ask: ThreadAsk; runId: string }) {
             disabled={sendMessage.isPending}
             selected={selections[index] ?? []}
             onSelect={(labels) => {
-              if (oneTap) void sendMessage.mutateAsync({ text: formatAnswer(question, labels) })
-              else setQuestion(index, labels)
+              if (oneTap) void sendMessage.mutateAsync({ text: formatAnswer(question, labels) });
+              else setQuestion(index, labels);
             }}
           />
         ))}
@@ -90,7 +88,7 @@ export function AskCard({ ask, runId }: { ask: ThreadAsk; runId: string }) {
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function AskQuestionBlock({
@@ -99,22 +97,20 @@ function AskQuestionBlock({
   selected,
   onSelect,
 }: {
-  question: UiAskQuestion
-  disabled: boolean
-  selected: string[]
-  onSelect: (labels: string[]) => void
+  question: UiAskQuestion;
+  disabled: boolean;
+  selected: string[];
+  onSelect: (labels: string[]) => void;
 }) {
-  const multiSelect = question.multiSelect === true
+  const multiSelect = question.multiSelect === true;
 
   const pick = (label: string) => {
     if (!multiSelect) {
-      onSelect([label])
-      return
+      onSelect([label]);
+      return;
     }
-    onSelect(
-      selected.includes(label) ? selected.filter((l) => l !== label) : [...selected, label],
-    )
-  }
+    onSelect(selected.includes(label) ? selected.filter((l) => l !== label) : [...selected, label]);
+  };
 
   return (
     <div role="group" aria-label={question.question}>
@@ -129,7 +125,7 @@ function AskQuestionBlock({
       <p className="mb-2.5 text-sm font-semibold text-foreground">{question.question}</p>
       <div className="flex flex-col gap-2">
         {question.options.map((option) => {
-          const isSelected = selected.includes(option.label)
+          const isSelected = selected.includes(option.label);
           return (
             <button
               key={option.label}
@@ -163,9 +159,9 @@ function AskQuestionBlock({
                 <span className="text-xs text-muted-foreground">{option.description}</span>
               ) : null}
             </button>
-          )
+          );
         })}
       </div>
     </div>
-  )
+  );
 }

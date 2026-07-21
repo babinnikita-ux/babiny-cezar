@@ -8,7 +8,10 @@ import { StepAborted } from './steps.js';
 import { createAutoUi } from './ui.js';
 import type { InstallStep, PlatformStrategy, Runner } from './types.js';
 
-const noRunner: Runner = { capture: async () => ({ code: 0, stdout: '', stderr: '' }), interactive: async () => 0 };
+const noRunner: Runner = {
+  capture: async () => ({ code: 0, stdout: '', stderr: '' }),
+  interactive: async () => 0,
+};
 
 function opts(over: Partial<RunOptions> = {}): RunOptions {
   return {
@@ -93,7 +96,11 @@ describe('engine', () => {
   });
 
   it('a failing (aborted) required step stops with state intact, installed stays false', async () => {
-    const a = fakeStep('a', { run: vi.fn(async () => { throw new StepAborted('nope'); }) });
+    const a = fakeStep('a', {
+      run: vi.fn(async () => {
+        throw new StepAborted('nope');
+      }),
+    });
     const b = fakeStep('b');
     const res = await runInstall(strategyOf([a, b]), opts());
     expect(res.status).toBe('failed');
@@ -125,7 +132,9 @@ describe('engine', () => {
 
   it('runDeploy reports failed when redeploy aborts (e.g. verify fails)', async () => {
     await runInstall(strategyOf([fakeStep('a')]), opts());
-    const redeploy = vi.fn(async () => { throw new StepAborted('cockpit down'); });
+    const redeploy = vi.fn(async () => {
+      throw new StepAborted('cockpit down');
+    });
     const res = await runDeploy(strategyOf([fakeStep('a')], redeploy), opts());
     expect(res.status).toBe('failed');
   });
@@ -139,7 +148,9 @@ describe('engine', () => {
     const res = await runUninstall(strategyOf([a2, b2]), opts());
     expect(res.status).toBe('complete');
     // reverse order: b undone before a
-    expect(b2.undo).toHaveBeenCalledWith(expect.anything(), { artifacts: [{ kind: 'owned', type: 'file', path: '/etc/b' }] });
+    expect(b2.undo).toHaveBeenCalledWith(expect.anything(), {
+      artifacts: [{ kind: 'owned', type: 'file', path: '/etc/b' }],
+    });
     expect(a2.undo).toHaveBeenCalledOnce();
     const after = loadServerState();
     expect(after.steps).toEqual({});
@@ -152,7 +163,12 @@ describe('engine', () => {
     await runInstall(strategyOf([fakeStep('a')]), opts()); // records platform ubuntu-vps
     await runUninstall(strategyOf([fakeStep('a')]), opts());
     // a strategy with a different id must not trip the "already has X install" guard
-    const other: PlatformStrategy = { id: 'macosx-ngrok', label: 'mac', preflight: async () => {}, steps: () => [fakeStep('m')] };
+    const other: PlatformStrategy = {
+      id: 'macosx-ngrok',
+      label: 'mac',
+      preflight: async () => {},
+      steps: () => [fakeStep('m')],
+    };
     const res = await runInstall(other, opts());
     expect(res.status).toBe('complete');
     expect(res.state.platform).toBe('macosx-ngrok');
@@ -190,7 +206,10 @@ describe('engine', () => {
   });
 
   it('a named instance uninstall removes its record; a default uninstall keeps the file', async () => {
-    await runInstall(strategyOf([fakeStep('a')]), opts({ instance: 'shop-example-com', domain: 'shop.example.com', port: 4322 }));
+    await runInstall(
+      strategyOf([fakeStep('a')]),
+      opts({ instance: 'shop-example-com', domain: 'shop.example.com', port: 4322 }),
+    );
     const res = await runUninstall(strategyOf([fakeStep('a')]), opts({ instance: 'shop-example-com' }));
     expect(res.status).toBe('complete');
     // the named record file is gone → it no longer reserves a port or lists
@@ -245,7 +264,11 @@ describe('engine — ledger preservation and uninstall safety (PR #423 review fi
   it('a failed re-run keeps the ledger and uninstall still reverses it', async () => {
     const a = fakeStep('a');
     await runInstall(strategyOf([a]), opts());
-    const aFail = fakeStep('a', { run: vi.fn(async () => { throw new StepAborted('boom'); }) });
+    const aFail = fakeStep('a', {
+      run: vi.fn(async () => {
+        throw new StepAborted('boom');
+      }),
+    });
     await runInstall(strategyOf([aFail]), opts({ reinstall: true }));
     expect(loadServerState().steps.a?.created?.artifacts).toHaveLength(1);
     const aUndo = fakeStep('a');

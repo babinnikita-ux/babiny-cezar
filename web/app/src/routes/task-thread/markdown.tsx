@@ -1,7 +1,7 @@
-import { memo } from 'react'
-import { Streamdown, defaultRemarkPlugins, type CodeHighlighterPlugin } from 'streamdown'
+import { memo } from 'react';
+import { Streamdown, defaultRemarkPlugins, type CodeHighlighterPlugin } from 'streamdown';
 
-import { SYN_THEME, highlight, highlightSync, supportedLanguages } from '@/lib/highlighter'
+import { SYN_THEME, highlight, highlightSync, supportedLanguages } from '@/lib/highlighter';
 
 /**
  * Assistant markdown for the thread — Streamdown (spec tech pick: stable-block memoization,
@@ -26,23 +26,23 @@ const shikiPlugin: CodeHighlighterPlugin = {
   getSupportedLanguages: () => supportedLanguages() as never[],
   supportsLanguage: (language) => supportedLanguages().includes(String(language).toLowerCase()),
   highlight: ({ code, language }, callback) => {
-    const resident = highlightSync(code, String(language))
-    if (resident) return resident
+    const resident = highlightSync(code, String(language));
+    if (resident) return resident;
     // Awaited in an IIFE rather than `.then(callback)`: invoking the plugin's callback from a
     // promise handler is the shape `promise/no-callback-in-promise` bans, and the await reads
     // the same.
     void (async () => {
-      const result = await highlight(code, String(language))
-      callback?.(result)
-    })()
-    return null
+      const result = await highlight(code, String(language));
+      callback?.(result);
+    })();
+    return null;
   },
-}
+};
 
 interface MdastNode {
-  type: string
-  value?: string
-  children?: MdastNode[]
+  type: string;
+  value?: string;
+  children?: MdastNode[];
 }
 
 /**
@@ -60,25 +60,25 @@ interface MdastNode {
  */
 function remarkHardBreaks() {
   const walk = (node: MdastNode): void => {
-    if (!node.children) return
-    const out: MdastNode[] = []
+    if (!node.children) return;
+    const out: MdastNode[] = [];
     for (const child of node.children) {
       if (child.type === 'text' && child.value?.includes('\n')) {
-        const parts = child.value.split(/\r?\n/)
+        const parts = child.value.split(/\r?\n/);
         parts.forEach((part, index) => {
           // A trailing newline would otherwise emit a dangling `break`, padding every message
           // that ends in Enter with a blank line.
-          if (index > 0 && !(part === '' && index === parts.length - 1)) out.push({ type: 'break' })
-          if (part) out.push({ type: 'text', value: part })
-        })
+          if (index > 0 && !(part === '' && index === parts.length - 1)) out.push({ type: 'break' });
+          if (part) out.push({ type: 'text', value: part });
+        });
       } else {
-        walk(child)
-        out.push(child)
+        walk(child);
+        out.push(child);
       }
     }
-    node.children = out
-  }
-  return walk
+    node.children = out;
+  };
+  return walk;
 }
 
 /**
@@ -87,7 +87,7 @@ function remarkHardBreaks() {
  * lists) and its code-meta plugin — user text would lose the very autolinking this whole change
  * exists to make consistent between the two sides. Compose onto the defaults instead.
  */
-const HARD_BREAKS = [...Object.values(defaultRemarkPlugins), remarkHardBreaks]
+const HARD_BREAKS = [...Object.values(defaultRemarkPlugins), remarkHardBreaks];
 
 /**
  * A compact preview still uses the real Markdown parser, but it cannot expose links or block
@@ -95,8 +95,8 @@ const HARD_BREAKS = [...Object.values(defaultRemarkPlugins), remarkHardBreaks]
  * focusable anchor would create a second control under the button. Disallowed block elements are
  * unwrapped to their text while the inline vocabulary (emphasis, strong, strike and code) stays.
  */
-const INLINE_ELEMENTS = ['p', 'strong', 'em', 'del', 'code', 'a'] as const
-const INLINE_COMPONENTS = { p: 'span', a: 'span' } as const
+const INLINE_ELEMENTS = ['p', 'strong', 'em', 'del', 'code', 'a'] as const;
+const INLINE_COMPONENTS = { p: 'span', a: 'span' } as const;
 
 /**
  * Memoized per message (Streamdown additionally memoizes per block): during streaming only the
@@ -111,9 +111,9 @@ export const Markdown = memo(function Markdown({
   breaks = false,
   inline = false,
 }: {
-  children: string
-  breaks?: boolean
-  inline?: boolean
+  children: string;
+  breaks?: boolean;
+  inline?: boolean;
 }) {
   return (
     <Streamdown
@@ -131,5 +131,5 @@ export const Markdown = memo(function Markdown({
     >
       {children}
     </Streamdown>
-  )
-})
+  );
+});

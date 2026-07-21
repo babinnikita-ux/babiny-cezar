@@ -66,7 +66,17 @@ describe('detectOpenTargets', () => {
     let stubDir: string;
     let originalPath: string | undefined;
 
-    const STUBS = ['idea', 'pycharm', 'webstorm', 'goland', 'rubymine', 'phpstorm', 'clion', 'rider', 'studio'];
+    const STUBS = [
+      'idea',
+      'pycharm',
+      'webstorm',
+      'goland',
+      'rubymine',
+      'phpstorm',
+      'clion',
+      'rider',
+      'studio',
+    ];
 
     let callLog: string;
 
@@ -77,7 +87,11 @@ describe('detectOpenTargets', () => {
         const p = join(stubDir, name);
         // Records its own name and argv so the "opens with the right dir" test can confirm the
         // resolved binary actually ran with the worktree path, not just that spawn didn't throw.
-        writeFileSync(p, `#!/usr/bin/env bash\necho "${name} $1" >> ${JSON.stringify(callLog)}\ntrue\n`, 'utf8');
+        writeFileSync(
+          p,
+          `#!/usr/bin/env bash\necho "${name} $1" >> ${JSON.stringify(callLog)}\ntrue\n`,
+          'utf8',
+        );
         chmodSync(p, 0o755);
       }
       originalPath = process.env.PATH;
@@ -238,7 +252,10 @@ describe('agentCliRunner', () => {
 
 describe('fileManagerLaunch (#361 WSL support)', () => {
   it('uses `open` on darwin and `explorer` on native win32, path unchanged', () => {
-    expect(fileManagerLaunch('/repo/worktree', 'darwin', false)).toEqual({ bin: 'open', args: ['/repo/worktree'] });
+    expect(fileManagerLaunch('/repo/worktree', 'darwin', false)).toEqual({
+      bin: 'open',
+      args: ['/repo/worktree'],
+    });
     expect(fileManagerLaunch('C:\\repo\\worktree', 'win32', false)).toEqual({
       bin: 'explorer',
       args: ['C:\\repo\\worktree'],

@@ -1,17 +1,17 @@
-import { FileCogIcon } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { FileCogIcon } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
-import { ApiError } from '@/api/client'
-import { useAgentConfig, useAgentConfigFile, useHealth, usePutAgentConfigFile } from '@/api/queries'
-import type { AgentConfigFile, AgentConfigListing, Runner } from '@/api/types'
-import { CenteredState } from '@/components/centered-state'
-import { CodeEditor } from '@/components/code-editor'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { toast } from '@/components/ui/toaster'
-import { availableRunners } from '@/routes/new-task-form'
-import { cn } from '@/lib/utils'
-import { AGENT_DESCRIPTORS, descriptorFor, type AgentDescriptor } from './agent-descriptors'
+import { ApiError } from '@/api/client';
+import { useAgentConfig, useAgentConfigFile, useHealth, usePutAgentConfigFile } from '@/api/queries';
+import type { AgentConfigFile, AgentConfigListing, Runner } from '@/api/types';
+import { CenteredState } from '@/components/centered-state';
+import { CodeEditor } from '@/components/code-editor';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/toaster';
+import { availableRunners } from '@/routes/new-task-form';
+import { cn } from '@/lib/utils';
+import { AGENT_DESCRIPTORS, descriptorFor, type AgentDescriptor } from './agent-descriptors';
 
 /**
  * Settings → Agent config (spec #404, regrouped per
@@ -27,26 +27,27 @@ import { AGENT_DESCRIPTORS, descriptorFor, type AgentDescriptor } from './agent-
 
 /** What this file actually governs for a run — the honest label the spec insists on. */
 function effectLabel(file: AgentConfigFile): string {
-  if (file.seeded) return 'Copied into each run’s worktree — takes effect on your next run.'
-  if (file.tracked === 'tracked') return 'Runs read the committed copy — this edit applies after you commit it.'
-  if (file.tracked === 'outside-repo') return 'Applies to every session on this machine.'
-  return 'Personal, git-ignored.'
+  if (file.seeded) return 'Copied into each run’s worktree — takes effect on your next run.';
+  if (file.tracked === 'tracked')
+    return 'Runs read the committed copy — this edit applies after you commit it.';
+  if (file.tracked === 'outside-repo') return 'Applies to every session on this machine.';
+  return 'Personal, git-ignored.';
 }
 
 export function AgentConfigSection() {
-  const listing = useAgentConfig()
-  const health = useHealth()
+  const listing = useAgentConfig();
+  const health = useHealth();
   const installed = useMemo<Runner[]>(
     () => (health.data ? availableRunners(health.data.checks) : AGENT_DESCRIPTORS.map((d) => d.id)),
     [health.data],
-  )
+  );
 
   if (listing.isPending) {
     return (
       <p data-slot="agent-config-loading" className="p-4 text-[13px] text-soft-foreground md:p-6">
         Loading agent config…
       </p>
-    )
+    );
   }
   if (listing.isError) {
     return (
@@ -57,21 +58,21 @@ export function AgentConfigSection() {
         subtitle={listing.error.message}
         heading="h2"
       />
-    )
+    );
   }
-  return <AgentConfigView listing={listing.data} installed={installed} />
+  return <AgentConfigView listing={listing.data} installed={installed} />;
 }
 
 function AgentConfigView({ listing, installed }: { listing: AgentConfigListing; installed: Runner[] }) {
-  const [agentId, setAgentId] = useState<Runner>('claude')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const agent = descriptorFor(agentId)
-  const selected = listing.files.find((f) => f.id === selectedId) ?? null
+  const [agentId, setAgentId] = useState<Runner>('claude');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const agent = descriptorFor(agentId);
+  const selected = listing.files.find((f) => f.id === selectedId) ?? null;
 
   const pickAgent = (id: Runner) => {
-    setAgentId(id)
-    setSelectedId(null) // a file selection never survives an agent switch
-  }
+    setAgentId(id);
+    setSelectedId(null); // a file selection never survives an agent switch
+  };
 
   return (
     <div data-slot="agent-config" className="flex flex-col gap-4 p-4 md:p-6">
@@ -80,12 +81,16 @@ function AgentConfigView({ listing, installed }: { listing: AgentConfigListing; 
           data-slot="agent-config-readonly"
           className="rounded-md border border-border bg-muted/40 px-3 py-2 text-[13px] text-soft-foreground"
         >
-          Read-only: agent config is edited from the machine that owns the checkout (this cockpit runs in hosted
-          mode). You can still see every file and which one wins.
+          Read-only: agent config is edited from the machine that owns the checkout (this cockpit runs in
+          hosted mode). You can still see every file and which one wins.
         </div>
       )}
 
-      <div data-slot="agent-config-agents" role="tablist" className="flex flex-wrap gap-1 rounded-md bg-muted/40 p-1">
+      <div
+        data-slot="agent-config-agents"
+        role="tablist"
+        className="flex flex-wrap gap-1 rounded-md bg-muted/40 p-1"
+      >
         {AGENT_DESCRIPTORS.map((d) => (
           <button
             key={d.id}
@@ -119,12 +124,7 @@ function AgentConfigView({ listing, installed }: { listing: AgentConfigListing; 
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
         <nav data-slot="agent-config-nav" className="flex flex-col gap-5">
-          <AgentPane
-            agent={agent}
-            listing={listing}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-          />
+          <AgentPane agent={agent} listing={listing} selectedId={selectedId} onSelect={setSelectedId} />
         </nav>
 
         <div data-slot="agent-config-editor-pane">
@@ -138,7 +138,7 @@ function AgentConfigView({ listing, installed }: { listing: AgentConfigListing; 
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function AgentPane({
@@ -147,17 +147,17 @@ function AgentPane({
   selectedId,
   onSelect,
 }: {
-  agent: AgentDescriptor
-  listing: AgentConfigListing
-  selectedId: string | null
-  onSelect: (id: string) => void
+  agent: AgentDescriptor;
+  listing: AgentConfigListing;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
 }) {
   return (
     <>
       {agent.groups.map((g) => {
-        const files = listing.files.filter(g.files)
-        const isClaudeMcp = agent.id === 'claude' && g.id === 'mcp'
-        if (files.length === 0 && !(isClaudeMcp && listing.userMcp)) return null
+        const files = listing.files.filter(g.files);
+        const isClaudeMcp = agent.id === 'claude' && g.id === 'mcp';
+        if (files.length === 0 && !(isClaudeMcp && listing.userMcp)) return null;
         return (
           <section key={g.id} data-slot="agent-config-group" data-group={g.id} data-agent={agent.id}>
             <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-soft-foreground">
@@ -183,17 +183,19 @@ function AgentPane({
                         seeded
                       </Badge>
                     )}
-                    {!file.exists && <span className="shrink-0 text-[11px] text-soft-foreground">absent</span>}
+                    {!file.exists && (
+                      <span className="shrink-0 text-[11px] text-soft-foreground">absent</span>
+                    )}
                   </button>
                 </li>
               ))}
             </ul>
             {isClaudeMcp && listing.userMcp && <UserMcpBlock userMcp={listing.userMcp} />}
           </section>
-        )
+        );
       })}
     </>
-  )
+  );
 }
 
 /** Claude's user/local MCP scopes live in ~/.claude.json (Claude's own state
@@ -224,48 +226,48 @@ function UserMcpBlock({ userMcp }: { userMcp: NonNullable<AgentConfigListing['us
         <p className="text-[12px] text-soft-foreground">Could not read the file.</p>
       )}
     </div>
-  )
+  );
 }
 
 export function FileEditor({ file }: { file: AgentConfigFile }) {
-  const fileQuery = useAgentConfigFile(file.id)
-  const put = usePutAgentConfigFile(file.id)
-  const [draft, setDraft] = useState<string | null>(null)
-  const [conflict, setConflict] = useState(false)
-  const [formatError, setFormatError] = useState<string | null>(null)
+  const fileQuery = useAgentConfigFile(file.id);
+  const put = usePutAgentConfigFile(file.id);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [conflict, setConflict] = useState(false);
+  const [formatError, setFormatError] = useState<string | null>(null);
 
   // Seed the draft from the server contents; re-seed when the file's version changes underneath.
-  const loadedVersion = fileQuery.data?.version ?? null
+  const loadedVersion = fileQuery.data?.version ?? null;
   useEffect(() => {
     if (fileQuery.data) {
-      setDraft(fileQuery.data.content)
-      setConflict(false)
-      setFormatError(null)
+      setDraft(fileQuery.data.content);
+      setConflict(false);
+      setFormatError(null);
     }
-  }, [fileQuery.data?.version, fileQuery.data])
+  }, [fileQuery.data?.version, fileQuery.data]);
 
-  const content = draft ?? fileQuery.data?.content ?? ''
-  const dirty = fileQuery.data ? content !== fileQuery.data.content : false
-  const canWrite = file.writable
+  const content = draft ?? fileQuery.data?.content ?? '';
+  const dirty = fileQuery.data ? content !== fileQuery.data.content : false;
+  const canWrite = file.writable;
 
   const save = () => {
-    setFormatError(null)
-    setConflict(false)
+    setFormatError(null);
+    setConflict(false);
     put.mutate(
       { content, version: loadedVersion },
       {
         onSuccess: () => {
-          setDraft(null)
-          toast(`${file.exists ? 'Saved' : 'Created'} ${file.label}`)
+          setDraft(null);
+          toast(`${file.exists ? 'Saved' : 'Created'} ${file.label}`);
         },
         onError: (err) => {
-          if (err instanceof ApiError && err.status === 409) setConflict(true)
-          else if (err instanceof ApiError && err.status === 400) setFormatError(err.message)
-          else toast((err as Error).message, { tone: 'danger' })
+          if (err instanceof ApiError && err.status === 409) setConflict(true);
+          else if (err instanceof ApiError && err.status === 400) setFormatError(err.message);
+          else toast((err as Error).message, { tone: 'danger' });
         },
       },
-    )
-  }
+    );
+  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -329,17 +331,12 @@ export function FileEditor({ file }: { file: AgentConfigFile }) {
           <Button size="sm" onClick={save} disabled={!dirty || put.isPending}>
             {file.exists ? 'Save' : 'Create'}
           </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => setDraft(null)}
-            disabled={!dirty || put.isPending}
-          >
+          <Button size="sm" variant="ghost" onClick={() => setDraft(null)} disabled={!dirty || put.isPending}>
             Revert
           </Button>
           {dirty && <span className="text-[12px] text-soft-foreground">Unsaved changes</span>}
         </div>
       )}
     </div>
-  )
+  );
 }

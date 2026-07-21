@@ -1,5 +1,5 @@
-import { clsx, type ClassValue } from 'clsx'
-import { extendTailwindMerge } from 'tailwind-merge'
+import { clsx, type ClassValue } from 'clsx';
+import { extendTailwindMerge } from 'tailwind-merge';
 
 /* tailwind-merge ships Tailwind's stock scales, but our theme (styles/index.css) replaces the shadow
  * scale with xs/sm/md/modal. `shadow-modal` is not a name it knows, so it would classify it as a
@@ -9,11 +9,11 @@ import { extendTailwindMerge } from 'tailwind-merge'
  */
 const twMerge = extendTailwindMerge({
   extend: { classGroups: { shadow: ['shadow-modal'] } },
-})
+});
 
 /** Join conditional class names, letting later Tailwind utilities win over earlier conflicting ones. */
 export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
+  return twMerge(clsx(inputs));
 }
 
 /**
@@ -24,5 +24,5 @@ export function cn(...inputs: ClassValue[]) {
  * — so components render a link only when this passes, and inert text otherwise.
  */
 export function isHttpUrl(url: string | null | undefined): url is string {
-  return typeof url === 'string' && /^https?:\/\//i.test(url)
+  return typeof url === 'string' && /^https?:\/\//i.test(url);
 }

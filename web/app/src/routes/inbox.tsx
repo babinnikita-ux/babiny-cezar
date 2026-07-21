@@ -1,22 +1,22 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckIcon, InboxIcon, PlayIcon, TriangleAlertIcon } from 'lucide-react'
-import { useRef, useState } from 'react'
-import { Link, useNavigate } from '@/lib/project-router'
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { CheckIcon, InboxIcon, PlayIcon, TriangleAlertIcon } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Link, useNavigate } from '@/lib/project-router';
 
-import { removeTodo, startTodo } from '@/api/client'
-import { queryKeys, useHealth, useRuns, useTodos, useUiState } from '@/api/queries'
-import type { TodoItem } from '@/api/types'
-import { CenteredState } from '@/components/centered-state'
-import { EnginePills, engineBody, useResolvedEngine, type EnginePick } from '@/components/engine-pills'
-import { PromptTemplateMenu } from '@/components/prompt-template-menu'
-import { StatusDot } from '@/components/status-dot'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { toast } from '@/components/ui/toaster'
-import { deriveAttention } from '@/lib/attention'
-import { shortAge } from '@/lib/format'
-import { insertTemplate, normalizePromptTemplates } from '@/lib/prompt-templates'
-import { isHttpUrl } from '@/lib/utils'
+import { removeTodo, startTodo } from '@/api/client';
+import { queryKeys, useHealth, useRuns, useTodos, useUiState } from '@/api/queries';
+import type { TodoItem } from '@/api/types';
+import { CenteredState } from '@/components/centered-state';
+import { EnginePills, engineBody, useResolvedEngine, type EnginePick } from '@/components/engine-pills';
+import { PromptTemplateMenu } from '@/components/prompt-template-menu';
+import { StatusDot } from '@/components/status-dot';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from '@/components/ui/toaster';
+import { deriveAttention } from '@/lib/attention';
+import { shortAge } from '@/lib/format';
+import { insertTemplate, normalizePromptTemplates } from '@/lib/prompt-templates';
+import { isHttpUrl } from '@/lib/utils';
 
 /**
  * `/inbox` — the follow-up inbox rebuilt in React (R6 Step 1.2, spec §"Skills, Workflows,
@@ -48,16 +48,16 @@ import { isHttpUrl } from '@/lib/utils'
  */
 
 /** The one attention rung an inbox entry can be on — see the doc block above. */
-const CARD_ATTENTION = deriveAttention({ status: 'waiting' })
+const CARD_ATTENTION = deriveAttention({ status: 'waiting' });
 
 /** The legacy `visibleTodos()` rule: started entries are the audit trail, not the inbox. */
 export function visibleTodos(todos: readonly TodoItem[]): TodoItem[] {
-  return todos.filter((todo) => !todo.startedTaskId)
+  return todos.filter((todo) => !todo.startedTaskId);
 }
 
 /** Explicit intent wins; old todos infer actionability from an executable suggestion. */
 export function isTodoRunnable(todo: TodoItem): boolean {
-  return todo.runnable ?? Boolean(todo.suggestedSkill || todo.suggestedPrompt)
+  return todo.runnable ?? Boolean(todo.suggestedSkill || todo.suggestedPrompt);
 }
 
 export function InboxRoute() {
@@ -68,15 +68,15 @@ export function InboxRoute() {
   // Parked only once health has actually said the inbox is off (#471). Keying it on
   // `inboxAvailable` instead would park the query for as long as health is unknown, which on a
   // perfectly enabled server means the list waits on a second request it doesn't need.
-  const health = useHealth()
-  const inboxAvailable = health.data?.capabilities.followups === true
-  const inboxOff = health.data !== undefined && !inboxAvailable
-  const todosQuery = useTodos(!inboxOff)
+  const health = useHealth();
+  const inboxAvailable = health.data?.capabilities.followups === true;
+  const inboxOff = health.data !== undefined && !inboxAvailable;
+  const todosQuery = useTodos(!inboxOff);
   // Only to tell "source task" links from "source task deleted" — the legacy check against
   // its run map. The overview keeps this query warm, so revisits cost nothing.
-  const runs = useRuns()
+  const runs = useRuns();
 
-  const todos = todosQuery.data === undefined ? undefined : visibleTodos(todosQuery.data)
+  const todos = todosQuery.data === undefined ? undefined : visibleTodos(todosQuery.data);
 
   return (
     <div data-route="inbox" className="flex min-h-full flex-col">
@@ -141,7 +141,7 @@ export function InboxRoute() {
         )}
       </div>
     </div>
-  )
+  );
 }
 
 function TodoCard({
@@ -149,51 +149,50 @@ function TodoCard({
   /** null: no source task at all; false: it existed once but was deleted. */
   sourceTaskExists,
 }: {
-  todo: TodoItem
-  sourceTaskExists: boolean | null
+  todo: TodoItem;
+  sourceTaskExists: boolean | null;
 }) {
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
-  const uiState = useUiState()
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const uiState = useUiState();
 
   // Per card, not per route (#401): each card starts its OWN run, so "run this one on codex"
   // must not silently re-aim the card below it. Reset is free — a started card leaves the list.
-  const [engine, setEngine] = useState<EnginePick>({ runner: null, model: null })
-  const resolved = useResolvedEngine(engine)
+  const [engine, setEngine] = useState<EnginePick>({ runner: null, model: null });
+  const resolved = useResolvedEngine(engine);
 
   // "Add instructions" (#413): collapsed by default, local to the card (see the doc block
   // above for why nothing here needs to persist across a reload).
-  const [notesOpen, setNotesOpen] = useState(false)
-  const [notes, setNotes] = useState('')
-  const notesRef = useRef<HTMLTextAreaElement>(null)
-  const templates = normalizePromptTemplates(uiState.data?.promptTemplates)
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [notes, setNotes] = useState('');
+  const notesRef = useRef<HTMLTextAreaElement>(null);
+  const templates = normalizePromptTemplates(uiState.data?.promptTemplates);
   const insertNotesTemplate = (snippet: string) => {
-    const el = notesRef.current
-    const caret = el?.selectionStart ?? notes.length
-    const result = insertTemplate(notes, caret, snippet)
-    setNotes(result.text)
+    const el = notesRef.current;
+    const caret = el?.selectionStart ?? notes.length;
+    const result = insertTemplate(notes, caret, snippet);
+    setNotes(result.text);
     requestAnimationFrame(() => {
-      notesRef.current?.focus()
-      notesRef.current?.setSelectionRange(result.caret, result.caret)
-    })
-  }
+      notesRef.current?.focus();
+      notesRef.current?.setSelectionRange(result.caret, result.caret);
+    });
+  };
 
   const start = useMutation({
     // The engine pick (#401) and the "Add instructions" prompt (#413) ride the same Run: the
     // body rules live in engineBody so this surface and the GitHub tab cannot disagree, and the
     // trimmed note joins them as `prompt`. Both are optional — an untouched card on a
     // single-backend host with no note sends the bodyless POST this endpoint always has.
-    mutationFn: () =>
-      startTodo(todo.id, { ...engineBody(resolved), prompt: notes.trim() || undefined }),
+    mutationFn: () => startTodo(todo.id, { ...engineBody(resolved), prompt: notes.trim() || undefined }),
     onSuccess: ({ run }) => {
       // The server rewrote todos.json (SSE will confirm); the invalidations just refuse to
       // wait for the file watcher's debounce.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.todos })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
-      void navigate(`/tasks/${run.id}`)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.todos });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.runs.all });
+      void navigate(`/tasks/${run.id}`);
     },
     onError: (error) => toast(error.message, { tone: 'danger' }),
-  })
+  });
 
   const dismiss = useMutation({
     mutationFn: () => removeTodo(todo.id),
@@ -202,14 +201,14 @@ function TodoCard({
       // authoritative confirmation moments later.
       queryClient.setQueryData<TodoItem[]>(queryKeys.todos, (existing) =>
         existing?.filter((item) => item.id !== todo.id),
-      )
-      void queryClient.invalidateQueries({ queryKey: queryKeys.todos })
+      );
+      void queryClient.invalidateQueries({ queryKey: queryKeys.todos });
     },
     onError: (error) => toast(error.message, { tone: 'danger' }),
-  })
+  });
 
-  const busy = start.isPending || dismiss.isPending
-  const runnable = isTodoRunnable(todo)
+  const busy = start.isPending || dismiss.isPending;
+  const runnable = isTodoRunnable(todo);
 
   return (
     <li
@@ -364,5 +363,5 @@ function TodoCard({
         )
       ) : null}
     </li>
-  )
+  );
 }

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ApiError,
@@ -32,20 +32,20 @@ import {
   runFileRawUrl,
   sendMessage,
   startTodo,
-} from './client'
-import { setApiScope } from './project-scope'
+} from './client';
+import { setApiScope } from './project-scope';
 
 /** The one seam under test: every call must go through `fetch` and nothing else. */
-const fetchMock = vi.fn<typeof fetch>()
+const fetchMock = vi.fn<typeof fetch>();
 
 beforeEach(() => {
-  vi.stubGlobal('fetch', fetchMock)
-})
+  vi.stubGlobal('fetch', fetchMock);
+});
 
 afterEach(() => {
-  fetchMock.mockReset()
-  vi.unstubAllGlobals()
-})
+  fetchMock.mockReset();
+  vi.unstubAllGlobals();
+});
 
 function reply(body: unknown, init: ResponseInit = {}): void {
   fetchMock.mockResolvedValue(
@@ -54,36 +54,46 @@ function reply(body: unknown, init: ResponseInit = {}): void {
       headers: { 'content-type': 'application/json' },
       ...init,
     }),
-  )
+  );
 }
 
 /** The (path, init) the client actually asked for. */
 function lastCall(): { path: string; method: string; body: unknown; headers: Headers } {
-  const call = fetchMock.mock.calls.at(-1)
-  if (!call) throw new Error('fetch was never called')
-  const [path, init = {}] = call as [string, RequestInit]
+  const call = fetchMock.mock.calls.at(-1);
+  if (!call) throw new Error('fetch was never called');
+  const [path, init = {}] = call as [string, RequestInit];
   return {
     path,
     method: String(init.method),
     body: typeof init.body === 'string' ? JSON.parse(init.body) : undefined,
     headers: new Headers(init.headers),
-  }
+  };
 }
 
 describe('request shapes', () => {
   const cases: Array<{
-    name: string
-    call: () => Promise<unknown>
-    path: string
-    method: string
-    body?: unknown
+    name: string;
+    call: () => Promise<unknown>;
+    path: string;
+    method: string;
+    body?: unknown;
   }> = [
     { name: 'getHealth', call: () => getHealth(), path: '/api/health', method: 'GET' },
-    { name: 'getRunnerModels', call: () => getRunnerModels(), path: '/api/models?runner=codex', method: 'GET' },
+    {
+      name: 'getRunnerModels',
+      call: () => getRunnerModels(),
+      path: '/api/models?runner=codex',
+      method: 'GET',
+    },
     { name: 'getRuns', call: () => getRuns(), path: '/api/runs', method: 'GET' },
     { name: 'getRun', call: () => getRun('run-1'), path: '/api/runs/run-1', method: 'GET' },
     { name: 'getRunDiff', call: () => getRunDiff('run-1'), path: '/api/runs/run-1/diff', method: 'GET' },
-    { name: 'getRunHandoff', call: () => getRunHandoff('run-1'), path: '/api/runs/run-1/handoff', method: 'GET' },
+    {
+      name: 'getRunHandoff',
+      call: () => getRunHandoff('run-1'),
+      path: '/api/runs/run-1/handoff',
+      method: 'GET',
+    },
     { name: 'getUiState', call: () => getUiState(), path: '/api/ui-state', method: 'GET' },
     { name: 'getWorkflows', call: () => getWorkflows(), path: '/api/workflows', method: 'GET' },
     { name: 'getSkills', call: () => getSkills(), path: '/api/skills', method: 'GET' },
@@ -113,7 +123,12 @@ describe('request shapes', () => {
     },
     // `refresh: false` must not become `refresh=0` — the server tests `=== '1'`, but sending a
     // parameter we do not mean is how a "false" ends up read as truthy somewhere downstream.
-    { name: 'getGithub (refresh false)', call: () => getGithub({ refresh: false }), path: '/api/github', method: 'GET' },
+    {
+      name: 'getGithub (refresh false)',
+      call: () => getGithub({ refresh: false }),
+      path: '/api/github',
+      method: 'GET',
+    },
     {
       name: 'putUiState',
       call: () => putUiState({ runsView: 'table' }),
@@ -230,74 +245,76 @@ describe('request shapes', () => {
       method: 'POST',
       body: { text: '', images: [{ mediaType: 'image/png', data: 'AAA' }] },
     },
-  ]
+  ];
 
   it.each(cases)('$name hits $method $path', async ({ call, path, method, body }) => {
-    reply({ ok: true })
-    await call()
+    reply({ ok: true });
+    await call();
 
-    const sent = lastCall()
-    expect(sent.path).toBe(path)
-    expect(sent.method).toBe(method)
-    expect(sent.body).toEqual(body)
-    if (body !== undefined) expect(sent.headers.get('content-type')).toBe('application/json')
-  })
+    const sent = lastCall();
+    expect(sent.path).toBe(path);
+    expect(sent.method).toBe(method);
+    expect(sent.body).toEqual(body);
+    if (body !== undefined) expect(sent.headers.get('content-type')).toBe('application/json');
+  });
 
   it('escapes run ids into the path', async () => {
-    reply({ cancelled: true })
-    await cancelRun('a b/../c')
-    expect(lastCall().path).toBe('/api/runs/a%20b%2F..%2Fc/cancel')
-  })
+    reply({ cancelled: true });
+    await cancelRun('a b/../c');
+    expect(lastCall().path).toBe('/api/runs/a%20b%2F..%2Fc/cancel');
+  });
 
   it('hands out the byte-identical legacy raw-image URL when unscoped', () => {
     // The one URL this module builds without fetching it (an <img> loads it) — same invariant
     // as every case above: unscoped means exactly the pre-multi-project path.
-    expect(runFileRawUrl('run-1', 'shots/final.png')).toBe('/api/runs/run-1/files?path=shots%2Ffinal.png&raw=1')
-  })
+    expect(runFileRawUrl('run-1', 'shots/final.png')).toBe(
+      '/api/runs/run-1/files?path=shots%2Ffinal.png&raw=1',
+    );
+  });
 
   it('forwards an abort signal to fetch', async () => {
-    reply([])
-    const controller = new AbortController()
-    await getRuns({ signal: controller.signal })
-    expect((fetchMock.mock.calls.at(-1)?.[1] as RequestInit).signal).toBe(controller.signal)
-  })
-})
+    reply([]);
+    const controller = new AbortController();
+    await getRuns({ signal: controller.signal });
+    expect((fetchMock.mock.calls.at(-1)?.[1] as RequestInit).signal).toBe(controller.signal);
+  });
+});
 
 describe('project scope (multi-project spec, step 3.1)', () => {
   // NB the WHOLE unscoped table above is this feature's other half: the critical assertion is
   // that with no scope set, every path stays byte-identical — those cases prove it by never
   // touching the scope at all.
   afterEach(() => {
-    setApiScope(null)
-  })
+    setApiScope(null);
+  });
 
   it('prefixes every request path with /api/p/<id> once a scope is active', async () => {
-    setApiScope('proj-a')
+    setApiScope('proj-a');
 
-    reply({ ok: true })
-    await getRuns()
-    expect(lastCall().path).toBe('/api/p/proj-a/runs')
+    reply({ ok: true });
+    await getRuns();
+    expect(lastCall().path).toBe('/api/p/proj-a/runs');
 
-    reply({ ok: true })
-    await cancelRun('run-1')
-    expect(lastCall().path).toBe('/api/p/proj-a/runs/run-1/cancel')
+    reply({ ok: true });
+    await cancelRun('run-1');
+    expect(lastCall().path).toBe('/api/p/proj-a/runs/run-1/cancel');
 
-    reply({ ok: true })
-    await getGithub({ limit: 5 })
-    expect(lastCall().path).toBe('/api/p/proj-a/github?limit=5')
+    reply({ ok: true });
+    await getGithub({ limit: 5 });
+    expect(lastCall().path).toBe('/api/p/proj-a/github?limit=5');
 
     // The non-send() site scopes the same way — the <img> URL it hands out must hit the
     // scoped route or another project's cockpit would render this project's bytes as a 404.
-    expect(runFileRawUrl('run-1', 'x.png')).toBe('/api/p/proj-a/runs/run-1/files?path=x.png&raw=1')
-  })
+    expect(runFileRawUrl('run-1', 'x.png')).toBe('/api/p/proj-a/runs/run-1/files?path=x.png&raw=1');
+  });
 
   it('keeps workspace-level routes unprefixed under a scope — health is single-mount', async () => {
-    setApiScope('proj-a')
-    reply({ version: '0.0.0' })
-    await getHealth()
-    expect(lastCall().path).toBe('/api/health')
-  })
-})
+    setApiScope('proj-a');
+    reply({ version: '0.0.0' });
+    await getHealth();
+    expect(lastCall().path).toBe('/api/health');
+  });
+});
 
 describe('response parsing', () => {
   it('returns the health payload as-is', async () => {
@@ -308,135 +325,147 @@ describe('response parsing', () => {
       repo: { root: '/home/me/cezar', branch: 'main', remote: 'origin' },
       checks: [{ name: 'claude', available: true, version: '2.0.1' }],
       defaultRunner: 'claude',
-    }
-    reply(health)
-    await expect(getHealth()).resolves.toEqual(health)
-  })
+    };
+    reply(health);
+    await expect(getHealth()).resolves.toEqual(health);
+  });
 
   it('returns the run list', async () => {
-    reply([{ id: 'run-1', title: 'Fix it', status: 'running' }])
-    const runs = await getRuns()
-    expect(runs).toHaveLength(1)
-    expect(runs[0]?.id).toBe('run-1')
-  })
+    reply([{ id: 'run-1', title: 'Fix it', status: 'running' }]);
+    const runs = await getRuns();
+    expect(runs).toHaveLength(1);
+    expect(runs[0]?.id).toBe('run-1');
+  });
 
   it('reads a diff as text, not JSON', async () => {
-    const diff = 'diff --git a/x b/x\n+added\n'
+    const diff = 'diff --git a/x b/x\n+added\n';
     fetchMock.mockResolvedValue(
       new Response(diff, { status: 200, headers: { 'content-type': 'text/plain' } }),
-    )
-    await expect(getRunDiff('run-1')).resolves.toBe(diff)
-  })
+    );
+    await expect(getRunDiff('run-1')).resolves.toBe(diff);
+  });
 
   it('reads the handoff journal as markdown text — an empty file is an empty string, not an error', async () => {
     fetchMock.mockResolvedValue(
       new Response('', { status: 200, headers: { 'content-type': 'text/markdown; charset=utf-8' } }),
-    )
-    await expect(getRunHandoff('run-1')).resolves.toBe('')
-  })
+    );
+    await expect(getRunHandoff('run-1')).resolves.toBe('');
+  });
 
   it('passes an unavailable GitHub through as data — it is a hint, not a failure', async () => {
-    reply({ available: false, reason: 'gh is not installed', issues: [], prs: [] })
-    const data = await getGithub()
-    expect(data.available).toBe(false)
-    expect(data.reason).toBe('gh is not installed')
-  })
-})
+    reply({ available: false, reason: 'gh is not installed', issues: [], prs: [] });
+    const data = await getGithub();
+    expect(data.available).toBe(false);
+    expect(data.reason).toBe('gh is not installed');
+  });
+});
 
 describe('errors', () => {
   function fail(status: number, body: string, contentType = 'application/json'): void {
     fetchMock.mockResolvedValue(
-      new Response(body, { status, statusText: statusTextFor(status), headers: { 'content-type': contentType } }),
-    )
+      new Response(body, {
+        status,
+        statusText: statusTextFor(status),
+        headers: { 'content-type': contentType },
+      }),
+    );
   }
 
   function statusTextFor(status: number): string {
-    return { 404: 'Not Found', 409: 'Conflict', 500: 'Internal Server Error' }[status] ?? ''
+    return { 404: 'Not Found', 409: 'Conflict', 500: 'Internal Server Error' }[status] ?? '';
   }
 
   it('surfaces the server error message verbatim', async () => {
-    fail(409, JSON.stringify({ error: 'run is active — cancel it first' }))
-    const error = await deleteRun('run-1').catch((e: unknown) => e)
-    expect(error).toBeInstanceOf(ApiError)
-    expect((error as ApiError).status).toBe(409)
-    expect((error as ApiError).message).toBe('run is active — cancel it first')
-  })
+    fail(409, JSON.stringify({ error: 'run is active — cancel it first' }));
+    const error = await deleteRun('run-1').catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(409);
+    expect((error as ApiError).message).toBe('run is active — cancel it first');
+  });
 
   it('carries the 409 extras the server pairs with the reason', async () => {
-    fail(409, JSON.stringify({ error: 'push failed: no upstream', manual: 'git merge cez/abc' }))
-    const error = (await createRun({ task: 't', workflow: 'quick-task' }).catch((e: unknown) => e)) as ApiError
-    expect(error.status).toBe(409)
-    expect(error.message).toBe('push failed: no upstream')
+    fail(409, JSON.stringify({ error: 'push failed: no upstream', manual: 'git merge cez/abc' }));
+    const error = (await createRun({ task: 't', workflow: 'quick-task' }).catch(
+      (e: unknown) => e,
+    )) as ApiError;
+    expect(error.status).toBe(409);
+    expect(error.message).toBe('push failed: no upstream');
     // The manual way out has to reach the UI — a 409 the user cannot act on is a dead end.
-    expect(error.manual).toBe('git merge cez/abc')
-    expect(error.command).toBeUndefined()
-    expect(error.exists).toBeUndefined()
-  })
+    expect(error.manual).toBe('git merge cez/abc');
+    expect(error.command).toBeUndefined();
+    expect(error.exists).toBeUndefined();
+  });
 
   it.each([
-    { name: 'command (open-in-cli)', body: { error: 'no terminal emulator found', command: "cd '/r' && claude --resume x" } },
-    { name: 'exists (save workflow)', body: { error: 'workflow file already exists: /r/x.yaml', exists: true } },
+    {
+      name: 'command (open-in-cli)',
+      body: { error: 'no terminal emulator found', command: "cd '/r' && claude --resume x" },
+    },
+    {
+      name: 'exists (save workflow)',
+      body: { error: 'workflow file already exists: /r/x.yaml', exists: true },
+    },
   ])('carries $name', async ({ body }) => {
-    fail(409, JSON.stringify(body))
-    const error = (await cancelRun('run-1').catch((e: unknown) => e)) as ApiError
-    expect(error.message).toBe(body.error)
-    if ('command' in body) expect(error.command).toBe(body.command)
-    if ('exists' in body) expect(error.exists).toBe(true)
-  })
+    fail(409, JSON.stringify(body));
+    const error = (await cancelRun('run-1').catch((e: unknown) => e)) as ApiError;
+    expect(error.message).toBe(body.error);
+    if ('command' in body) expect(error.command).toBe(body.command);
+    if ('exists' in body) expect(error.exists).toBe(true);
+  });
 
   it('turns a non-JSON 500 into a sane ApiError rather than a parse error', async () => {
-    fail(500, '<html><body>502 Bad Gateway</body></html>', 'text/html')
-    const error = await getRuns().catch((e: unknown) => e)
-    expect(error).toBeInstanceOf(ApiError)
-    expect((error as ApiError).status).toBe(500)
+    fail(500, '<html><body>502 Bad Gateway</body></html>', 'text/html');
+    const error = await getRuns().catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ApiError);
+    expect((error as ApiError).status).toBe(500);
     // Says what we know; does not paste a page of HTML into a toast.
-    expect((error as ApiError).message).toBe('500 Internal Server Error')
-    expect((error as Error).name).toBe('ApiError')
-  })
+    expect((error as ApiError).message).toBe('500 Internal Server Error');
+    expect((error as Error).name).toBe('ApiError');
+  });
 
   it('survives an empty error body', async () => {
-    fail(404, '')
-    const error = (await getRun('nope').catch((e: unknown) => e)) as ApiError
-    expect(error.status).toBe(404)
-    expect(error.message).toBe('404 Not Found')
-  })
+    fail(404, '');
+    const error = (await getRun('nope').catch((e: unknown) => e)) as ApiError;
+    expect(error.status).toBe(404);
+    expect(error.message).toBe('404 Not Found');
+  });
 
   it('ignores a non-string error field instead of stringifying junk', async () => {
-    fail(400, JSON.stringify({ error: { issues: ['bad'] } }))
-    const error = (await getRuns().catch((e: unknown) => e)) as ApiError
+    fail(400, JSON.stringify({ error: { issues: ['bad'] } }));
+    const error = (await getRuns().catch((e: unknown) => e)) as ApiError;
     // No statusText either — the fallback still has to read as a sentence.
-    expect(error.message).toBe('400 request failed')
-  })
+    expect(error.message).toBe('400 request failed');
+  });
 
   it('reports an unreachable server as status 0, keeping the cause', async () => {
-    const cause = new TypeError('Failed to fetch')
-    fetchMock.mockRejectedValue(cause)
-    const error = (await getHealth().catch((e: unknown) => e)) as ApiError
-    expect(error).toBeInstanceOf(ApiError)
-    expect(error.status).toBe(0)
-    expect(error.message).toContain('/api/health')
-    expect(error.cause).toBe(cause)
-  })
+    const cause = new TypeError('Failed to fetch');
+    fetchMock.mockRejectedValue(cause);
+    const error = (await getHealth().catch((e: unknown) => e)) as ApiError;
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.status).toBe(0);
+    expect(error.message).toContain('/api/health');
+    expect(error.cause).toBe(cause);
+  });
 
   it('lets an abort through as an AbortError, not an ApiError', async () => {
-    fetchMock.mockRejectedValue(new DOMException('The operation was aborted.', 'AbortError'))
-    const error = await getRuns().catch((e: unknown) => e)
+    fetchMock.mockRejectedValue(new DOMException('The operation was aborted.', 'AbortError'));
+    const error = await getRuns().catch((e: unknown) => e);
     // Query cancellation is not a server failure and must not be reported as one.
-    expect(error).not.toBeInstanceOf(ApiError)
-    expect((error as DOMException).name).toBe('AbortError')
-  })
+    expect(error).not.toBeInstanceOf(ApiError);
+    expect((error as DOMException).name).toBe('AbortError');
+  });
 
   it('rejects a 200 that is not JSON on a JSON endpoint', async () => {
-    fetchMock.mockResolvedValue(new Response('not json', { status: 200 }))
-    const error = (await getRuns().catch((e: unknown) => e)) as ApiError
-    expect(error).toBeInstanceOf(ApiError)
-    expect(error.message).toContain('non-JSON')
-  })
+    fetchMock.mockResolvedValue(new Response('not json', { status: 200 }));
+    const error = (await getRuns().catch((e: unknown) => e)) as ApiError;
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error.message).toContain('non-JSON');
+  });
 
   it('reports a diff endpoint failure too', async () => {
-    fail(404, JSON.stringify({ error: 'not found' }))
-    const error = (await getRunDiff('nope').catch((e: unknown) => e)) as ApiError
-    expect(error.status).toBe(404)
-    expect(error.message).toBe('not found')
-  })
-})
+    fail(404, JSON.stringify({ error: 'not found' }));
+    const error = (await getRunDiff('nope').catch((e: unknown) => e)) as ApiError;
+    expect(error.status).toBe(404);
+    expect(error.message).toBe('not found');
+  });
+});

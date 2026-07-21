@@ -8,7 +8,7 @@ import type {
   Skill,
   UiState,
   WorkflowDef,
-} from '@/api/types'
+} from '@/api/types';
 
 /**
  * The new-task form's picker rules and its POST body, as pure functions — the exact semantics
@@ -19,7 +19,7 @@ import type {
 
 /** What the composer runs: a named workflow or a single skill. The same shape the server's
  *  `ui-state.json` stores as `lastTask`, so persistence needs no mapping. */
-export type TaskSource = NonNullable<UiState['lastTask']>
+export type TaskSource = NonNullable<UiState['lastTask']>;
 
 /** Prepend `source` to the recency list (newest first), dropping any earlier occurrence of the
  *  same source+ref, and cap the length. Pure so the picker's recency sort is table-testable. */
@@ -28,14 +28,14 @@ export function pushRecentSource(
   source: TaskSource,
   cap = 24,
 ): TaskSource[] {
-  const rest = (recent ?? []).filter((s) => !(s.source === source.source && s.ref === source.ref))
-  return [source, ...rest].slice(0, cap)
+  const rest = (recent ?? []).filter((s) => !(s.source === source.source && s.ref === source.ref));
+  return [source, ...rest].slice(0, cap);
 }
 
 export interface RunnerOption {
-  id: Runner
-  label: string
-  desc: string
+  id: Runner;
+  label: string;
+  desc: string;
 }
 
 /** The selectable agent backends (legacy `RUNNERS`). Only those detected on the host via
@@ -44,12 +44,12 @@ export const RUNNERS: readonly RunnerOption[] = [
   { id: 'claude', label: 'claude', desc: 'Claude Code CLI' },
   { id: 'codex', label: 'codex', desc: 'OpenAI Codex (app-server)' },
   { id: 'opencode', label: 'opencode', desc: 'OpenCode (serve)' },
-]
+];
 
 export interface ModelPreset {
-  id: string
-  label: string
-  desc: string
+  id: string;
+  label: string;
+  desc: string;
 }
 
 /** Static model presets per runner. `id: ''` is always "auto" —
@@ -66,9 +66,7 @@ export const MODELS_BY_RUNNER: Record<Runner, readonly ModelPreset[]> = {
     { id: 'claude-sonnet-5', label: 'Sonnet 5', desc: 'Pinned version' },
     { id: 'claude-haiku-4-5', label: 'Haiku 4.5', desc: 'Pinned version' },
   ],
-  codex: [
-    { id: '', label: 'auto', desc: 'Use your Codex default model' },
-  ],
+  codex: [{ id: '', label: 'auto', desc: 'Use your Codex default model' }],
   opencode: [
     { id: '', label: 'auto', desc: 'Use your OpenCode default model' },
     { id: 'anthropic/claude-opus-4-8', label: 'claude-opus-4.8', desc: 'via Anthropic' },
@@ -76,27 +74,27 @@ export const MODELS_BY_RUNNER: Record<Runner, readonly ModelPreset[]> = {
     { id: 'openai/gpt-5.1', label: 'gpt-5.1', desc: 'via OpenAI' },
     { id: 'openai/gpt-5.1-codex', label: 'gpt-5.1-codex', desc: 'via OpenAI' },
   ],
-}
+};
 
 export function modelsForRunner(
   runner: Runner,
   catalog?: RunnerModelCatalogResponse,
   customIds: readonly (string | null | undefined)[] = [],
 ): readonly ModelPreset[] {
-  const base = [...(MODELS_BY_RUNNER[runner] ?? MODELS_BY_RUNNER.claude)]
-  if (runner !== 'codex') return base
-  const seen = new Set(base.map((model) => model.id))
+  const base = [...(MODELS_BY_RUNNER[runner] ?? MODELS_BY_RUNNER.claude)];
+  if (runner !== 'codex') return base;
+  const seen = new Set(base.map((model) => model.id));
   for (const model of catalog?.models ?? []) {
-    if (!model.id || seen.has(model.id)) continue
-    seen.add(model.id)
-    base.push({ id: model.id, label: model.label || model.id, desc: model.description })
+    if (!model.id || seen.has(model.id)) continue;
+    seen.add(model.id);
+    base.push({ id: model.id, label: model.label || model.id, desc: model.description });
   }
   for (const id of customIds) {
-    if (!id || seen.has(id)) continue
-    seen.add(id)
-    base.push({ id, label: id, desc: 'Custom or legacy model' })
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    base.push({ id, label: id, desc: 'Custom or legacy model' });
   }
-  return base
+  return base;
 }
 
 export function modelCatalogStatus(
@@ -104,20 +102,18 @@ export function modelCatalogStatus(
   catalog: RunnerModelCatalogResponse | undefined,
   failed = false,
 ): string | undefined {
-  if (runner !== 'codex') return undefined
-  if (catalog?.stale) return 'Using cached Codex model list'
-  if (failed || catalog?.source === 'unavailable') return 'Latest Codex models unavailable'
-  return undefined
+  if (runner !== 'codex') return undefined;
+  if (catalog?.stale) return 'Using cached Codex model list';
+  if (failed || catalog?.source === 'unavailable') return 'Latest Codex models unavailable';
+  return undefined;
 }
 
 /** Which runners the pill offers, from the health checks (legacy `renderChrome`). The `claude`
  *  fallback when nothing is detected is deliberate legacy behavior: the form must always have
  *  a runner, and claude is the default engine. */
 export function availableRunners(checks: readonly BackendCheck[]): Runner[] {
-  const available = RUNNERS.map((r) => r.id).filter((id) =>
-    checks.some((c) => c.name === id && c.available),
-  )
-  return available.length > 0 ? available : ['claude']
+  const available = RUNNERS.map((r) => r.id).filter((id) => checks.some((c) => c.name === id && c.available));
+  return available.length > 0 ? available : ['claude'];
 }
 
 /** The effective runner: the user's pick when still installed, else the configured default
@@ -127,9 +123,9 @@ export function resolveRunner(
   available: readonly Runner[],
   preferred: Runner,
 ): Runner {
-  if (picked !== null && available.includes(picked)) return picked
-  if (available.includes(preferred)) return preferred
-  return available[0] ?? 'claude'
+  if (picked !== null && available.includes(picked)) return picked;
+  if (available.includes(preferred)) return preferred;
+  return available[0] ?? 'claude';
 }
 
 /** The effective model: the user's pick when it exists in the selected runner's presets, else
@@ -144,11 +140,11 @@ export function resolveModel(
   defaults?: Partial<Record<Runner, string>>,
   catalog?: RunnerModelCatalogResponse,
 ): string {
-  const models = modelsForRunner(runner, catalog, [picked, defaults?.[runner]])
-  if (picked !== null && models.some((m) => m.id === picked)) return picked
-  const preset = defaults?.[runner]
-  if (preset !== undefined && models.some((m) => m.id === preset)) return preset
-  return ''
+  const models = modelsForRunner(runner, catalog, [picked, defaults?.[runner]]);
+  if (picked !== null && models.some((m) => m.id === picked)) return picked;
+  const preset = defaults?.[runner];
+  if (preset !== undefined && models.some((m) => m.id === preset)) return preset;
+  return '';
 }
 
 export function sourceExists(
@@ -158,7 +154,7 @@ export function sourceExists(
 ): boolean {
   return source.source === 'skill'
     ? skills.some((s) => s.name === source.ref)
-    : workflows.some((w) => w.name === source.ref)
+    : workflows.some((w) => w.name === source.ref);
 }
 
 /**
@@ -172,11 +168,11 @@ export function resolveSource(
   workflows: readonly WorkflowDef[],
 ): TaskSource {
   for (const candidate of candidates) {
-    if (candidate && sourceExists(candidate, skills, workflows)) return candidate
+    if (candidate && sourceExists(candidate, skills, workflows)) return candidate;
   }
-  const firstSkill = skills[0]
-  if (firstSkill) return { source: 'skill', ref: firstSkill.name }
-  return { source: 'workflow', ref: workflows[0]?.name ?? 'quick-task' }
+  const firstSkill = skills[0];
+  if (firstSkill) return { source: 'skill', ref: firstSkill.name };
+  return { source: 'workflow', ref: workflows[0]?.name ?? 'quick-task' };
 }
 
 /**
@@ -188,25 +184,25 @@ export function resolveSource(
  *  - `model`/`variants`/`images` only when they say something (`''`/1/empty mean "default").
  */
 export function buildCreateRunBody(opts: {
-  task: string
-  source: TaskSource
-  model: string
-  runner: Runner
-  runnerCount: number
-  variants: number
-  images: readonly ImageInput[]
+  task: string;
+  source: TaskSource;
+  model: string;
+  runner: Runner;
+  runnerCount: number;
+  variants: number;
+  images: readonly ImageInput[];
   /** false → run in the repo working tree, no worktree (single runs only). Sent only when
    *  explicitly off; the default (isolated worktree) stays implicit. */
-  worktree?: boolean
+  worktree?: boolean;
   /** true → autonomous run (never pauses for the user). Sent only when on. */
-  autonomous?: boolean
+  autonomous?: boolean;
   /** false → do not ask the agent for follow-up todos. Sent only when off. */
-  generateFollowups?: boolean
+  generateFollowups?: boolean;
   /** The inbox entry this composer was prefilled from (`/new?…&todo=`, #374) — sent back so
    *  the server records the started run on it. Empty/absent for every other launch.
    *  Independent of `generateFollowups`: starting a task FROM a follow-up still marks that
    *  entry started, even when the new task itself won't generate follow-ups of its own. */
-  todoId?: string
+  todoId?: string;
 }): CreateRunInput {
   const {
     task,
@@ -220,7 +216,7 @@ export function buildCreateRunBody(opts: {
     autonomous,
     generateFollowups,
     todoId,
-  } = opts
+  } = opts;
   return {
     task,
     ...(source.source === 'skill'
@@ -235,12 +231,12 @@ export function buildCreateRunBody(opts: {
     autonomous: autonomous === true ? true : undefined,
     generateFollowups: generateFollowups === false ? false : undefined,
     todoId: todoId || undefined,
-  }
+  };
 }
 
 /** Where a successful POST navigates: the run's thread — for ×2/×3 the FIRST variant's thread,
  *  exactly what legacy `handleStarted` selects. */
 export function startedRunPath(response: CreateRunResponse): string {
-  const first = 'runs' in response ? response.runs[0] : response
-  return first ? `/tasks/${first.id}` : '/'
+  const first = 'runs' in response ? response.runs[0] : response;
+  return first ? `/tasks/${first.id}` : '/';
 }

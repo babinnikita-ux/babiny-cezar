@@ -1,6 +1,6 @@
-import { useRef, useState } from 'react'
+import { useRef, useState } from 'react';
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/utils';
 
 /**
  * The ONE inline-rename state machine (#389, spec step 15). Two surfaces flip a title into an
@@ -10,40 +10,40 @@ import { cn } from '@/lib/utils'
  * carries the machine and the input; each surface keeps its own resting presentation.
  */
 export interface TitleEditor {
-  editing: boolean
-  draft: string
-  setDraft: (value: string) => void
-  begin: () => void
-  commit: () => void
-  cancel: () => void
+  editing: boolean;
+  draft: string;
+  setDraft: (value: string) => void;
+  begin: () => void;
+  commit: () => void;
+  cancel: () => void;
 }
 
 export function useTitleEditor(title: string, onCommit: (next: string) => void): TitleEditor {
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState('')
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
   // Enter both commits AND blurs in sequence — the ref makes whichever fires second a no-op,
   // so one edit can never become two PATCHes.
-  const committed = useRef(false)
+  const committed = useRef(false);
 
   const begin = () => {
-    setDraft(title)
-    committed.current = false
-    setEditing(true)
-  }
+    setDraft(title);
+    committed.current = false;
+    setEditing(true);
+  };
   const commit = () => {
-    if (committed.current) return
-    committed.current = true
-    setEditing(false)
-    const next = draft.trim()
-    if (next.length === 0 || next === title) return // nothing to say to the server
-    onCommit(next)
-  }
+    if (committed.current) return;
+    committed.current = true;
+    setEditing(false);
+    const next = draft.trim();
+    if (next.length === 0 || next === title) return; // nothing to say to the server
+    onCommit(next);
+  };
   const cancel = () => {
-    committed.current = true
-    setEditing(false)
-  }
+    committed.current = true;
+    setEditing(false);
+  };
 
-  return { editing, draft, setDraft, begin, commit, cancel }
+  return { editing, draft, setDraft, begin, commit, cancel };
 }
 
 /** The in-place input, wired to the machine: Enter commits, Escape abandons, blur commits.
@@ -60,17 +60,17 @@ export function TitleEditInput({ editor, className }: { editor: TitleEditor; cla
       onBlur={editor.commit}
       onKeyDown={(event) => {
         if (event.key === 'Enter') {
-          event.preventDefault()
-          editor.commit()
+          event.preventDefault();
+          editor.commit();
         } else if (event.key === 'Escape') {
-          event.preventDefault()
-          editor.cancel()
+          event.preventDefault();
+          editor.cancel();
         }
       }}
       className={cn(
         'w-full min-w-0 rounded-sm border border-border bg-card px-1.5 py-0.5 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50',
-        className
+        className,
       )}
     />
-  )
+  );
 }

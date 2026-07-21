@@ -294,7 +294,9 @@ export async function runUninstall(strategy: PlatformStrategy, opts: RunOptions)
           ctx.ui.warn(`Cancelled during uninstall at "${step.title}". Re-run to continue.`);
           return { status: 'cancelled', state };
         }
-        ctx.ui.error(`Failed to reverse "${step.title}": ${err instanceof Error ? err.message : String(err)}`);
+        ctx.ui.error(
+          `Failed to reverse "${step.title}": ${err instanceof Error ? err.message : String(err)}`,
+        );
         return { status: 'failed', state };
       }
     }

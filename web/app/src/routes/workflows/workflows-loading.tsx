@@ -1,6 +1,6 @@
-import { LoaderCircleIcon } from 'lucide-react'
+import { LoaderCircleIcon } from 'lucide-react';
 
-import { CenteredState } from '@/components/centered-state'
+import { CenteredState } from '@/components/centered-state';
 
 /**
  * The Workflows builder's loading state, in its own module ON PURPOSE (same rule as
@@ -18,5 +18,5 @@ export function WorkflowsLoading() {
         subtitle="Fetching the saved chains and the skills palette."
       />
     </div>
-  )
+  );
 }

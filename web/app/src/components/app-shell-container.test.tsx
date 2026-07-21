@@ -1,29 +1,30 @@
-import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createQueryClient } from '@/api/query-client'
-import type { HealthResponse } from '@/api/types'
-import { AppShellContainer, repoChipOf } from '@/components/app-shell-container'
-import { ThemeProvider } from '@/components/theme-provider'
+import { createQueryClient } from '@/api/query-client';
+import type { HealthResponse } from '@/api/types';
+import { AppShellContainer, repoChipOf } from '@/components/app-shell-container';
+import { ThemeProvider } from '@/components/theme-provider';
 
-const fetchMock = vi.fn<typeof fetch>()
+const fetchMock = vi.fn<typeof fetch>();
 
 beforeEach(() => {
-  vi.stubGlobal('fetch', fetchMock)
+  vi.stubGlobal('fetch', fetchMock);
   // jsdom ships no matchMedia; the shell's breakpoint effect and the theme toggle need one.
-  vi.stubGlobal(
-    'matchMedia',
-    () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
-  )
-})
+  vi.stubGlobal('matchMedia', () => ({
+    matches: false,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
+});
 
 afterEach(() => {
-  cleanup()
-  fetchMock.mockReset()
-  vi.unstubAllGlobals()
-})
+  cleanup();
+  fetchMock.mockReset();
+  vi.unstubAllGlobals();
+});
 
 const HEALTH: HealthResponse = {
   version: '0.1.3',
@@ -33,7 +34,7 @@ const HEALTH: HealthResponse = {
   defaultRunner: 'claude',
   forge: null,
   capabilities: { localHandoff: true, followups: true },
-}
+};
 
 /** One registered project — the degenerate workspace every existing install upgrades into. */
 const PROJECT = {
@@ -45,24 +46,24 @@ const PROJECT = {
   source: 'local' as const,
   status: 'ok' as const,
   branch: 'main',
-}
+};
 
 const TODOS = [
   { id: 't1', summary: 'Review the PR' },
   { id: 't2', summary: 'Rebase the branch' },
-]
+];
 
 /** Answer each endpoint the shell reads; anything else 404s loudly rather than silently
  *  resolving to `{}` and making a broken wiring look fine. */
 function serve(routes: Record<string, unknown>): void {
   fetchMock.mockImplementation(async (input) => {
-    const path = String(input)
-    if (!(path in routes)) return new Response(JSON.stringify({ error: 'not found' }), { status: 404 })
+    const path = String(input);
+    if (!(path in routes)) return new Response(JSON.stringify({ error: 'not found' }), { status: 404 });
     return new Response(JSON.stringify(routes[path]), {
       status: 200,
       headers: { 'content-type': 'application/json' },
-    })
-  })
+    });
+  });
 }
 
 function renderShell() {
@@ -76,12 +77,12 @@ function renderShell() {
         </MemoryRouter>
       </ThemeProvider>
     </QueryClientProvider>,
-  )
+  );
 }
 
-const repoChip = () => document.querySelector('[data-slot="repo-chip"]')
-const versionChip = () => document.querySelector('[data-slot="version-chip"]')
-const navBadge = () => document.querySelector('[data-slot="nav-badge"]')
+const repoChip = () => document.querySelector('[data-slot="repo-chip"]');
+const versionChip = () => document.querySelector('[data-slot="version-chip"]');
+const navBadge = () => document.querySelector('[data-slot="nav-badge"]');
 
 describe('repoChipOf', () => {
   it.each([
@@ -90,100 +91,100 @@ describe('repoChipOf', () => {
     { name: 'a windows path', root: 'C:\\Users\\me\\cezar', expected: 'cezar' },
     { name: 'the filesystem root as a repo', root: '/', expected: null },
   ])('takes the basename of $name', ({ root, expected }) => {
-    const chip = repoChipOf({ ...HEALTH, repo: { root, branch: 'main' } })
-    expect(chip?.name ?? null).toBe(expected)
-  })
+    const chip = repoChipOf({ ...HEALTH, repo: { root, branch: 'main' } });
+    expect(chip?.name ?? null).toBe(expected);
+  });
 
   it('is null while health is unknown, and outside a git repo', () => {
-    expect(repoChipOf(undefined)).toBeNull()
-    expect(repoChipOf({ ...HEALTH, repo: null })).toBeNull()
-  })
-})
+    expect(repoChipOf(undefined)).toBeNull();
+    expect(repoChipOf({ ...HEALTH, repo: null })).toBeNull();
+  });
+});
 
 describe('sidebar wiring', () => {
   it('renders the repo and version chips from /api/health', async () => {
-    serve({ '/api/health': HEALTH, '/api/todos': [] })
-    renderShell()
+    serve({ '/api/health': HEALTH, '/api/todos': [] });
+    renderShell();
 
-    await waitFor(() => expect(repoChip()).not.toBeNull())
+    await waitFor(() => expect(repoChip()).not.toBeNull());
     // Basename of the root, then the branch — not the whole path.
-    expect(repoChip()?.textContent).toBe('cezar / feat/cockpit')
-    expect(versionChip()?.textContent).toBe('v0.1.3')
-  })
+    expect(repoChip()?.textContent).toBe('cezar / feat/cockpit');
+    expect(versionChip()?.textContent).toBe('v0.1.3');
+  });
 
   it('renders the inbox badge from /api/todos', async () => {
-    serve({ '/api/health': HEALTH, '/api/todos': TODOS })
-    renderShell()
+    serve({ '/api/health': HEALTH, '/api/todos': TODOS });
+    renderShell();
 
-    await waitFor(() => expect(navBadge()).not.toBeNull())
-    expect(navBadge()?.textContent).toBe('2')
-    expect(screen.getByRole('link', { name: /Inbox/ })).toBeTruthy()
-  })
+    await waitFor(() => expect(navBadge()).not.toBeNull());
+    expect(navBadge()?.textContent).toBe('2');
+    expect(screen.getByRole('link', { name: /Inbox/ })).toBeTruthy();
+  });
 
   // #471 — the global inbox is opt-in; the shell must not offer what the server cannot fill.
   it('drops the Inbox nav item and its badge when the server has follow-ups off', async () => {
     serve({
       '/api/health': { ...HEALTH, capabilities: { localHandoff: true, followups: false } },
       '/api/todos': TODOS,
-    })
-    renderShell()
+    });
+    renderShell();
 
-    await waitFor(() => expect(versionChip()).not.toBeNull())
-    expect(screen.queryByRole('link', { name: /Inbox/ })).toBeNull()
-    expect(navBadge()).toBeNull()
+    await waitFor(() => expect(versionChip()).not.toBeNull());
+    expect(screen.queryByRole('link', { name: /Inbox/ })).toBeNull();
+    expect(navBadge()).toBeNull();
     // Every other view is untouched — the gate owns exactly one item.
-    expect(screen.getByRole('link', { name: /Tasks/ })).toBeTruthy()
-    expect(screen.getByRole('link', { name: /Settings/ })).toBeTruthy()
-  })
+    expect(screen.getByRole('link', { name: /Tasks/ })).toBeTruthy();
+    expect(screen.getByRole('link', { name: /Settings/ })).toBeTruthy();
+  });
 
   it('never asks for todos on a server with the inbox off', async () => {
     serve({
       '/api/health': { ...HEALTH, capabilities: { localHandoff: true, followups: false } },
       '/api/todos': TODOS,
-    })
-    renderShell()
+    });
+    renderShell();
 
-    await waitFor(() => expect(versionChip()).not.toBeNull())
+    await waitFor(() => expect(versionChip()).not.toBeNull());
     // The badge query is keyed on the capability, so it never runs — unlike the /inbox route,
     // nothing here needs the list before health has spoken.
-    const asked = fetchMock.mock.calls.map((call) => String(call[0]))
-    expect(asked).not.toContain('/api/todos')
-  })
+    const asked = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(asked).not.toContain('/api/todos');
+  });
 
   it('renders no badge for an empty inbox', async () => {
-    serve({ '/api/health': HEALTH, '/api/todos': [] })
-    renderShell()
+    serve({ '/api/health': HEALTH, '/api/todos': [] });
+    renderShell();
 
-    await waitFor(() => expect(versionChip()).not.toBeNull())
+    await waitFor(() => expect(versionChip()).not.toBeNull());
     // Zero follow-ups is not "0 follow-ups" — a badge reading 0 is noise the spec's chrome
     // rules do not want.
-    expect(navBadge()).toBeNull()
-  })
+    expect(navBadge()).toBeNull();
+  });
 
   it('shows no chips at all while health has not answered', () => {
     // A never-resolving fetch: the pending state, held.
-    fetchMock.mockImplementation(() => new Promise<Response>(() => {}))
-    renderShell()
+    fetchMock.mockImplementation(() => new Promise<Response>(() => {}));
+    renderShell();
 
-    expect(repoChip()).toBeNull()
-    expect(versionChip()).toBeNull()
-    expect(navBadge()).toBeNull()
+    expect(repoChip()).toBeNull();
+    expect(versionChip()).toBeNull();
+    expect(navBadge()).toBeNull();
     // …and the app itself is up. The chips being empty is not a loading screen.
-    expect(screen.getByText('route content')).toBeTruthy()
-    expect(document.querySelector('[data-slot="sidebar"]')).not.toBeNull()
-  })
+    expect(screen.getByText('route content')).toBeTruthy();
+    expect(document.querySelector('[data-slot="sidebar"]')).not.toBeNull();
+  });
 
   it('shows no chips when the server is unreachable, and still renders the app', async () => {
-    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
-    renderShell()
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    renderShell();
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled())
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     // The honest empty state: cezar cannot answer what repo it is on, so it says nothing.
     // It does not invent one, and it does not take the whole cockpit down with it.
-    expect(repoChip()).toBeNull()
-    expect(versionChip()).toBeNull()
-    expect(screen.getByText('route content')).toBeTruthy()
-  })
+    expect(repoChip()).toBeNull();
+    expect(versionChip()).toBeNull();
+    expect(screen.getByText('route content')).toBeTruthy();
+  });
 
   // The upgrade path: one registered project must look exactly like the cockpit did before the
   // workspace existed — flat nav, one quick-list, repo chip, no group headers.
@@ -193,47 +194,48 @@ describe('sidebar wiring', () => {
       '/api/todos': [],
       '/api/projects': { projects: [PROJECT], bootProject: 'cezar', projectsDir: '/home/me/cezar/projects' },
       '/api/runs': [],
-    })
-    renderShell()
+    });
+    renderShell();
 
-    await waitFor(() => expect(repoChip()).not.toBeNull())
-    expect(document.querySelector('[data-slot="project-groups"]')).toBeNull()
-    expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy()
-    expect(document.querySelector('[data-slot="task-quick-list"]')).not.toBeNull()
-  })
+    await waitFor(() => expect(repoChip()).not.toBeNull());
+    expect(document.querySelector('[data-slot="project-groups"]')).toBeNull();
+    expect(screen.getByRole('navigation', { name: 'Main' })).toBeTruthy();
+    expect(document.querySelector('[data-slot="task-quick-list"]')).not.toBeNull();
+  });
 
   it('renders one collapsible group per project once the workspace has two', async () => {
     serve({
       '/api/health': HEALTH,
       '/api/todos': [],
       '/api/projects': {
-        projects: [PROJECT, { ...PROJECT, id: 'shop', name: 'shop', lastOpenedAt: '2026-07-19T00:00:00.000Z' }],
+        projects: [
+          PROJECT,
+          { ...PROJECT, id: 'shop', name: 'shop', lastOpenedAt: '2026-07-19T00:00:00.000Z' },
+        ],
         bootProject: 'cezar',
         projectsDir: '/home/me/cezar/projects',
       },
       '/api/workspace/ui-state': {},
       '/api/p/cezar/runs': [],
-    })
-    renderShell()
+    });
+    renderShell();
 
-    await waitFor(() =>
-      expect(document.querySelectorAll('[data-slot="project-group"]')).toHaveLength(2),
-    )
+    await waitFor(() => expect(document.querySelectorAll('[data-slot="project-group"]')).toHaveLength(2));
     // The flat nav and the shared quick-list step aside — each group brings its own.
-    expect(screen.queryByRole('navigation', { name: 'Main' })).toBeNull()
-    expect(document.querySelector('[data-slot="task-quick-list"]')).toBeNull()
+    expect(screen.queryByRole('navigation', { name: 'Main' })).toBeNull();
+    expect(document.querySelector('[data-slot="task-quick-list"]')).toBeNull();
     // …and so does the repo chip, which the boot project's own group header now carries.
-    expect(repoChip()).toBeNull()
-  })
+    expect(repoChip()).toBeNull();
+  });
 
   it('shows the version chip even outside a git repo', async () => {
-    serve({ '/api/health': { ...HEALTH, repo: null }, '/api/todos': [] })
-    renderShell()
+    serve({ '/api/health': { ...HEALTH, repo: null }, '/api/todos': [] });
+    renderShell();
 
     // Running cezar outside a repo is supported: no repo chip, but the rest of the chrome is
     // real and must not vanish with it.
-    await waitFor(() => expect(versionChip()).not.toBeNull())
-    expect(versionChip()?.textContent).toBe('v0.1.3')
-    expect(repoChip()).toBeNull()
-  })
-})
+    await waitFor(() => expect(versionChip()).not.toBeNull());
+    expect(versionChip()?.textContent).toBe('v0.1.3');
+    expect(repoChip()).toBeNull();
+  });
+});

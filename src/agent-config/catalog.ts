@@ -84,7 +84,8 @@ export const CONFIG_FILES: ConfigFileDef[] = [
     tracked: 'outside-repo',
     precedence:
       'Lowest priority. Project and local settings override it key by key — except permission rules, which merge across all scopes.',
-    hotReload: 'Edits to most keys — including permissions and hooks — apply to a running session without a restart.',
+    hotReload:
+      'Edits to most keys — including permissions and hooks — apply to a running session without a restart.',
     docsUrl: CLAUDE_SETTINGS_DOCS,
   },
   {
@@ -96,9 +97,9 @@ export const CONFIG_FILES: ConfigFileDef[] = [
     label: '.claude/settings.json',
     format: 'json',
     tracked: 'tracked',
-    precedence:
-      'Overrides user settings key by key (permission rules merge). Local settings override this.',
-    hotReload: 'Edits to most keys — including permissions and hooks — apply to a running session without a restart.',
+    precedence: 'Overrides user settings key by key (permission rules merge). Local settings override this.',
+    hotReload:
+      'Edits to most keys — including permissions and hooks — apply to a running session without a restart.',
     docsUrl: CLAUDE_SETTINGS_DOCS,
   },
   {
@@ -113,7 +114,8 @@ export const CONFIG_FILES: ConfigFileDef[] = [
     seeded: true,
     precedence:
       'Highest of the file scopes — overrides project and user (permission rules merge). Git-ignored; copied into each run’s worktree so it takes effect immediately.',
-    hotReload: 'Edits to most keys — including permissions and hooks — apply to a running session without a restart.',
+    hotReload:
+      'Edits to most keys — including permissions and hooks — apply to a running session without a restart.',
     docsUrl: CLAUDE_SETTINGS_DOCS,
   },
   {

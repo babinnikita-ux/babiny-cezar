@@ -1,8 +1,8 @@
-import { GitBranchIcon, WrapTextIcon } from 'lucide-react'
+import { GitBranchIcon, WrapTextIcon } from 'lucide-react';
 
-import type { DiffMode } from '@/components/diff'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import type { DiffMode } from '@/components/diff';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 /**
  * The diff view's local controls, extracted from the Changes toolbar (R5 1.7) so the repo
@@ -16,10 +16,10 @@ export function DiffViewToggles({
   onModeChange,
   onWrapChange,
 }: {
-  mode: DiffMode
-  wrap: boolean
-  onModeChange: (mode: DiffMode) => void
-  onWrapChange: (wrap: boolean) => void
+  mode: DiffMode;
+  wrap: boolean;
+  onModeChange: (mode: DiffMode) => void;
+  onWrapChange: (wrap: boolean) => void;
 }) {
   return (
     <>
@@ -45,7 +45,7 @@ export function DiffViewToggles({
         <WrapTextIcon aria-hidden="true" />
       </Button>
     </>
-  )
+  );
 }
 
 function ModeButton({
@@ -53,11 +53,11 @@ function ModeButton({
   value,
   onModeChange,
 }: {
-  current: DiffMode
-  value: DiffMode
-  onModeChange: (mode: DiffMode) => void
+  current: DiffMode;
+  value: DiffMode;
+  onModeChange: (mode: DiffMode) => void;
 }) {
-  const active = current === value
+  const active = current === value;
   return (
     <button
       type="button"
@@ -71,7 +71,7 @@ function ModeButton({
     >
       {value}
     </button>
-  )
+  );
 }
 
 /** The mono branch chip both git toolbars lead with. */
@@ -84,5 +84,5 @@ export function BranchChip({ branch }: { branch: string }) {
       <GitBranchIcon aria-hidden="true" className="size-3 shrink-0" />
       <span className="truncate">{branch}</span>
     </span>
-  )
+  );
 }

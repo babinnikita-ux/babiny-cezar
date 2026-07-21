@@ -1,7 +1,7 @@
-import type { ToolStatus, UiItem, UiToolItem } from '@/protocol/ui-events'
+import type { ToolStatus, UiItem, UiToolItem } from '@/protocol/ui-events';
 
-import { splitToolTitle } from './thread-groups'
-import type { ThreadEntry, ThreadTurn } from './thread-state'
+import { splitToolTitle } from './thread-groups';
+import type { ThreadEntry, ThreadTurn } from './thread-state';
 
 /**
  * The Agents dock's data (spec `.ai/specs/2026-07-20-grouped-subagent-display.md` §Collector,
@@ -19,20 +19,20 @@ import type { ThreadEntry, ThreadTurn } from './thread-state'
  */
 
 /** Longest activity line the dock will carry; the row truncates visually on top of this. */
-const ACTIVITY_MAX = 120
+const ACTIVITY_MAX = 120;
 
 export interface SubagentSummary {
   /** The task tool item's id — also the sheet's selection key. */
-  id: string
+  id: string;
   /** "Review the store layer" — the detail half of "Task: …", else the whole title. */
-  title: string
+  title: string;
   /** claude `subagent_type`/`subagentType`, opencode `agent`; absent for codex. */
-  agentType?: string
-  status: ToolStatus
+  agentType?: string;
+  status: ToolStatus;
   /** Children of kind `tool` — what the row's "N tools" count shows. */
-  toolCalls: number
+  toolCalls: number;
   /** One-line readout from the most recent child; `undefined` ⇒ the row renders "starting…". */
-  activity?: string
+  activity?: string;
   /**
    * The agent never finished and never will: it was still `running`/`pending` when the run
    * itself reached a terminal state (cancelled, failed, done).
@@ -43,18 +43,18 @@ export interface SubagentSummary {
    * status is NOT rewritten (that would fabricate an outcome the wire never reported); the row
    * is marked stalled and rendered as interrupted rather than live.
    */
-  stalled?: boolean
+  stalled?: boolean;
 }
 
 /** A settled agent is done moving: the dock stops treating the fan-out as live (spec Q6). */
-const isSettled = (status: ToolStatus): boolean => status !== 'pending' && status !== 'running'
+const isSettled = (status: ToolStatus): boolean => status !== 'pending' && status !== 'running';
 
 const isTaskItem = (entry: ThreadEntry): entry is UiToolItem =>
-  entry.kind === 'tool' && entry.toolKind === 'task'
+  entry.kind === 'tool' && entry.toolKind === 'task';
 
 /** Dock rows are the parent-less task items only — a nested spawn belongs to its parent's sheet. */
 const isRootTaskItem = (entry: ThreadEntry): entry is UiToolItem =>
-  isTaskItem(entry) && entry.parentItemId === undefined
+  isTaskItem(entry) && entry.parentItemId === undefined;
 
 /**
  * What can be an agent's child. Mirrors `groupThreadItems` Pass 0: plan-kind tools are the
@@ -64,14 +64,14 @@ const isRootTaskItem = (entry: ThreadEntry): entry is UiToolItem =>
  */
 const isChildCandidate = (entry: ThreadEntry): entry is UiItem =>
   (entry.kind === 'message' || entry.kind === 'reasoning' || entry.kind === 'tool') &&
-  !(entry.kind === 'tool' && entry.toolKind === 'plan')
+  !(entry.kind === 'tool' && entry.toolKind === 'plan');
 
 /** The first turn holding any of the given roots — where child scanning must begin. */
 function indexOfFirstRoot(turns: ThreadTurn[], rootIds: ReadonlySet<string>): number {
   for (let i = 0; i < turns.length; i += 1) {
-    if (turns[i]!.items.some((entry) => isRootTaskItem(entry) && rootIds.has(entry.id))) return i
+    if (turns[i]!.items.some((entry) => isRootTaskItem(entry) && rootIds.has(entry.id))) return i;
   }
-  return 0
+  return 0;
 }
 
 /**
@@ -80,33 +80,33 @@ function indexOfFirstRoot(turns: ThreadTurn[], rootIds: ReadonlySet<string>): nu
  * rather than rendered.
  */
 function agentTypeOf(item: UiToolItem): string | undefined {
-  const input = item.input
-  if (typeof input !== 'object' || input === null) return undefined
-  const record = input as Record<string, unknown>
+  const input = item.input;
+  if (typeof input !== 'object' || input === null) return undefined;
+  const record = input as Record<string, unknown>;
   for (const key of ['subagent_type', 'subagentType', 'agent']) {
-    const value = record[key]
-    if (typeof value === 'string' && value.trim() !== '') return value.trim()
+    const value = record[key];
+    if (typeof value === 'string' && value.trim() !== '') return value.trim();
   }
-  return undefined
+  return undefined;
 }
 
 /** Collapse a child entry to the single line the dock shows as "what this agent is doing now". */
 function activityOf(child: ThreadEntry): string | undefined {
-  if (child.kind === 'tool') return truncate(child.title)
+  if (child.kind === 'tool') return truncate(child.title);
   if (child.kind === 'message' || child.kind === 'reasoning') {
     // The LAST non-empty line: streamed text grows at the tail, so the newest line is the
     // honest "right now" — the first line froze several deltas ago.
-    const lines = child.text.split('\n')
+    const lines = child.text.split('\n');
     for (let i = lines.length - 1; i >= 0; i -= 1) {
-      const line = lines[i]!.trim()
-      if (line !== '') return truncate(line)
+      const line = lines[i]!.trim();
+      if (line !== '') return truncate(line);
     }
   }
-  return undefined
+  return undefined;
 }
 
 function truncate(text: string): string {
-  return text.length > ACTIVITY_MAX ? `${text.slice(0, ACTIVITY_MAX - 1).trimEnd()}…` : text
+  return text.length > ACTIVITY_MAX ? `${text.slice(0, ACTIVITY_MAX - 1).trimEnd()}…` : text;
 }
 
 /**
@@ -122,8 +122,8 @@ function truncate(text: string): string {
  * carried-over agent owns children recorded back in its original turn.
  */
 export function collectSubagents(turns: ThreadTurn[], runIsTerminal = false): SubagentSummary[] {
-  const anchorIndex = findLastIndex(turns, (turn) => turn.items.some(isRootTaskItem))
-  if (anchorIndex === -1) return []
+  const anchorIndex = findLastIndex(turns, (turn) => turn.items.some(isRootTaskItem));
+  if (anchorIndex === -1) return [];
 
   // The anchor turn's agents, plus earlier turns that are still working.
   //
@@ -147,37 +147,37 @@ export function collectSubagents(turns: ThreadTurn[], runIsTerminal = false): Su
   //    a known mapper limitation) inject itself into every later fan-out, pin the dock open
   //    for the rest of the run, and hijack the collapsed head with its stale activity. Stop at
   //    the first earlier turn whose fan-out is entirely settled: that turn is history.
-  const live = (item: UiToolItem): boolean => !runIsTerminal && !isSettled(item.status)
-  const carried: UiToolItem[] = []
+  const live = (item: UiToolItem): boolean => !runIsTerminal && !isSettled(item.status);
+  const carried: UiToolItem[] = [];
   for (let i = anchorIndex - 1; i >= 0; i -= 1) {
-    const turnRoots = turns[i]!.items.filter(isRootTaskItem)
-    if (turnRoots.length === 0) continue // a steering turn carries no agents — look past it
-    if (!turnRoots.some(live)) break // a finished fan-out bounds the lookback
-    carried.unshift(...turnRoots)
+    const turnRoots = turns[i]!.items.filter(isRootTaskItem);
+    if (turnRoots.length === 0) continue; // a steering turn carries no agents — look past it
+    if (!turnRoots.some(live)) break; // a finished fan-out bounds the lookback
+    carried.unshift(...turnRoots);
   }
-  const roots = [...carried, ...turns[anchorIndex]!.items.filter(isRootTaskItem)]
-  const isLatestTurn = anchorIndex === turns.length - 1
-  if (!isLatestTurn && !roots.some(live)) return []
+  const roots = [...carried, ...turns[anchorIndex]!.items.filter(isRootTaskItem)];
+  const isLatestTurn = anchorIndex === turns.length - 1;
+  if (!isLatestTurn && !roots.some(live)) return [];
 
   // Children by parent id. Scanned from the FIRST turn that contributes a row (not the
   // anchor): an agent carried over from an earlier turn owns children recorded back there
   // too. An id that names no root is ignored — exactly as `groupThreadItems` renders such an
   // orphan at top level.
-  const rootIds = new Set(roots.map((item) => item.id))
-  const firstIndex = carried.length > 0 ? indexOfFirstRoot(turns, rootIds) : anchorIndex
-  const childrenOf = new Map<string, ThreadEntry[]>()
+  const rootIds = new Set(roots.map((item) => item.id));
+  const firstIndex = carried.length > 0 ? indexOfFirstRoot(turns, rootIds) : anchorIndex;
+  const childrenOf = new Map<string, ThreadEntry[]>();
   for (let i = firstIndex; i < turns.length; i += 1) {
     for (const entry of turns[i]!.items) {
-      if (!isChildCandidate(entry)) continue
-      const parentId = entry.parentItemId
-      if (parentId === undefined || !rootIds.has(parentId)) continue
-      const siblings = childrenOf.get(parentId)
-      if (siblings) siblings.push(entry)
-      else childrenOf.set(parentId, [entry])
+      if (!isChildCandidate(entry)) continue;
+      const parentId = entry.parentItemId;
+      if (parentId === undefined || !rootIds.has(parentId)) continue;
+      const siblings = childrenOf.get(parentId);
+      if (siblings) siblings.push(entry);
+      else childrenOf.set(parentId, [entry]);
     }
   }
 
-  return roots.map((item) => summarize(item, childrenOf.get(item.id) ?? [], runIsTerminal))
+  return roots.map((item) => summarize(item, childrenOf.get(item.id) ?? [], runIsTerminal));
 }
 
 /** The one place a `SubagentSummary` is built — the dock and the sheet must never disagree. */
@@ -187,20 +187,20 @@ function summarize(item: UiToolItem, children: ThreadEntry[], runIsTerminal: boo
     title: splitToolTitle(item.title).detail ?? item.title,
     status: item.status,
     toolCalls: children.filter((child) => child.kind === 'tool').length,
-  }
-  const agentType = agentTypeOf(item)
-  if (agentType !== undefined) summary.agentType = agentType
-  if (runIsTerminal && !isSettled(item.status)) summary.stalled = true
+  };
+  const agentType = agentTypeOf(item);
+  if (agentType !== undefined) summary.agentType = agentType;
+  if (runIsTerminal && !isSettled(item.status)) summary.stalled = true;
   // Walk back from the newest child: a child that carries no line (an image, a blank
   // message) must not blank the row when an older child still has something to say.
   for (let i = children.length - 1; i >= 0; i -= 1) {
-    const activity = activityOf(children[i]!)
+    const activity = activityOf(children[i]!);
     if (activity !== undefined) {
-      summary.activity = activity
-      break
+      summary.activity = activity;
+      break;
     }
   }
-  return summary
+  return summary;
 }
 
 /**
@@ -212,7 +212,7 @@ export function subagentCounts(agents: SubagentSummary[]): { done: number; total
   return {
     done: agents.filter((agent) => agent.status === 'completed').length,
     total: agents.length,
-  }
+  };
 }
 
 /**
@@ -221,7 +221,7 @@ export function subagentCounts(agents: SubagentSummary[]): { done: number; total
  * starting — the run ended under it, and the transcript will never move again.
  */
 export function subagentActivityText(agent: SubagentSummary): string {
-  return agent.activity ?? (agent.stalled === true ? 'never finished' : 'starting…')
+  return agent.activity ?? (agent.stalled === true ? 'never finished' : 'starting…');
 }
 
 /**
@@ -233,15 +233,15 @@ export function subagentActivityText(agent: SubagentSummary): string {
  * `subagentActivityText`, not by picking a different agent.
  */
 export function activeSubagent(agents: SubagentSummary[]): SubagentSummary | undefined {
-  return agents.find((agent) => !isSettled(agent.status)) ?? agents[0]
+  return agents.find((agent) => !isSettled(agent.status)) ?? agents[0];
 }
 
 /** `Array.prototype.findLastIndex` needs a newer lib target than the cockpit's tsconfig sets. */
 function findLastIndex<T>(items: T[], predicate: (item: T) => boolean): number {
   for (let i = items.length - 1; i >= 0; i -= 1) {
-    if (predicate(items[i]!)) return i
+    if (predicate(items[i]!)) return i;
   }
-  return -1
+  return -1;
 }
 
 /**
@@ -258,13 +258,15 @@ export function findSubagent(
   runIsTerminal = false,
 ): SubagentSummary | undefined {
   for (let i = turns.length - 1; i >= 0; i -= 1) {
-    const item = turns[i]!.items.find((entry): entry is UiToolItem => entry.id === id && isRootTaskItem(entry))
-    if (item === undefined) continue
+    const item = turns[i]!.items.find(
+      (entry): entry is UiToolItem => entry.id === id && isRootTaskItem(entry),
+    );
+    if (item === undefined) continue;
     // The SAME summarizer the dock row uses — the sheet's header must not disagree with the
     // row the user clicked (and must carry `activity` rather than a structural blank).
-    return summarize(item, subagentChildren(turns, id), runIsTerminal)
+    return summarize(item, subagentChildren(turns, id), runIsTerminal);
   }
-  return undefined
+  return undefined;
 }
 
 /**
@@ -274,14 +276,14 @@ export function findSubagent(
 export function subagentChildren(turns: ThreadTurn[], parentId: string): ThreadEntry[] {
   const anchorIndex = turns.findIndex((turn) =>
     turn.items.some((entry) => entry.id === parentId && isRootTaskItem(entry)),
-  )
-  if (anchorIndex === -1) return []
-  const children: ThreadEntry[] = []
+  );
+  if (anchorIndex === -1) return [];
+  const children: ThreadEntry[] = [];
   for (let i = anchorIndex; i < turns.length; i += 1) {
     for (const entry of turns[i]!.items) {
-      if (!isChildCandidate(entry)) continue
-      if (entry.parentItemId === parentId && entry.id !== parentId) children.push(entry)
+      if (!isChildCandidate(entry)) continue;
+      if (entry.parentItemId === parentId && entry.id !== parentId) children.push(entry);
     }
   }
-  return children
+  return children;
 }

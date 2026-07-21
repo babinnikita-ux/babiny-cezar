@@ -1,6 +1,6 @@
-import { LoaderCircleIcon } from 'lucide-react'
+import { LoaderCircleIcon } from 'lucide-react';
 
-import { CenteredState } from '@/components/centered-state'
+import { CenteredState } from '@/components/centered-state';
 
 /** The repo view's loading surface — also the route's `Suspense` fallback (routes.tsx), so it
  *  lives outside the lazy chunk it stands in for, same reason as git-tab-loading.tsx. */
@@ -14,5 +14,5 @@ export function RepoGitLoading() {
         subtitle="Fetching the repo's git state."
       />
     </div>
-  )
+  );
 }

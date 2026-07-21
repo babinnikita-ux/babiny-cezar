@@ -1,4 +1,4 @@
-import type { CacheSnapshot } from 'virtua'
+import type { CacheSnapshot } from 'virtua';
 
 /**
  * The thread's scroll rules and per-run session caches — all pure data, no DOM (the DOM
@@ -15,10 +15,10 @@ import type { CacheSnapshot } from 'virtua'
  * (~309 elements) — 17× fewer live elements, which is what keeps per-frame style/layout
  * costs flat as transcripts grow.
  */
-export const VIRTUALIZE_THRESHOLD = 300
+export const VIRTUALIZE_THRESHOLD = 300;
 
 /** ~80px per the research: pin-to-bottom while streaming only when the reader is this close. */
-export const NEAR_BOTTOM_SLACK_PX = 80
+export const NEAR_BOTTOM_SLACK_PX = 80;
 
 /**
  * The stick rule shared by the thread scroller and the tool-output live tail: the viewport
@@ -29,7 +29,7 @@ export function isNearBottom(
   box: { scrollTop: number; scrollHeight: number; clientHeight: number },
   slack = 24,
 ): boolean {
-  return box.scrollHeight - box.scrollTop - box.clientHeight < slack
+  return box.scrollHeight - box.scrollTop - box.clientHeight < slack;
 }
 
 /**
@@ -39,28 +39,28 @@ export function isNearBottom(
  * threshold rule above.
  */
 export function threadRenderMode(search: string, rowCount: number): 'flat' | 'virtual' {
-  const forced = new URLSearchParams(search).get('thread')
-  if (forced === 'flat' || forced === 'virtual') return forced
-  return rowCount > VIRTUALIZE_THRESHOLD ? 'virtual' : 'flat'
+  const forced = new URLSearchParams(search).get('thread');
+  if (forced === 'flat' || forced === 'virtual') return forced;
+  return rowCount > VIRTUALIZE_THRESHOLD ? 'virtual' : 'flat';
 }
 
 /** Where a reader left a thread. `atBottom` wins over `top`: a thread left at its live tail
  *  re-opens at the (possibly grown) tail, not at a stale pixel offset. */
 export interface ScrollMemory {
-  top: number
-  atBottom: boolean
+  top: number;
+  atBottom: boolean;
 }
 
 /** Scroll positions per run id — module-level on purpose (the PlanDock collapse-memory
  *  pattern): survives route changes for the browser session, gone on reload, no server state. */
-const scrollByRun = new Map<string, ScrollMemory>()
+const scrollByRun = new Map<string, ScrollMemory>();
 
 export function saveThreadScroll(runId: string, memory: ScrollMemory): void {
-  scrollByRun.set(runId, memory)
+  scrollByRun.set(runId, memory);
 }
 
 export function readThreadScroll(runId: string): ScrollMemory | undefined {
-  return scrollByRun.get(runId)
+  return scrollByRun.get(runId);
 }
 
 /** virtua's per-session measurement cache (research §5: "per-session measurement cache"),
@@ -70,23 +70,23 @@ export function readThreadScroll(runId: string): ScrollMemory | undefined {
  *  a snapshot only fits the same item count, and a mid-replay remount must degrade to
  *  estimates, never mis-apply. */
 export interface ThreadMeasurements {
-  rows: number
-  cache: CacheSnapshot
+  rows: number;
+  cache: CacheSnapshot;
 }
 
-const measurementsByRun = new Map<string, ThreadMeasurements>()
+const measurementsByRun = new Map<string, ThreadMeasurements>();
 
 export function saveThreadMeasurements(runId: string, measurements: ThreadMeasurements): void {
-  measurementsByRun.set(runId, measurements)
+  measurementsByRun.set(runId, measurements);
 }
 
 export function readThreadMeasurements(runId: string, rows: number): CacheSnapshot | undefined {
-  const found = measurementsByRun.get(runId)
-  return found !== undefined && found.rows === rows ? found.cache : undefined
+  const found = measurementsByRun.get(runId);
+  return found !== undefined && found.rows === rows ? found.cache : undefined;
 }
 
 /** Test seam: caches are module state, and tests must not leak runs into each other. */
 export function clearThreadScrollCaches(): void {
-  scrollByRun.clear()
-  measurementsByRun.clear()
+  scrollByRun.clear();
+  measurementsByRun.clear();
 }

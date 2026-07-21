@@ -1,8 +1,8 @@
-import * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
-import { Slot } from "radix-ui"
+import * as React from 'react';
+import { cva, type VariantProps } from 'class-variance-authority';
+import { Slot } from 'radix-ui';
 
-import { cn } from "@/lib/utils"
+import { cn } from '@/lib/utils';
 
 /* Variant vocabulary comes from the mockups' `.btn-*` classes, not stock shadcn:
  * `primary` (lime) and `contrast` (inverse surface) are the two CTAs, `danger-ghost` is the
@@ -13,37 +13,37 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: "bg-primary text-primary-foreground hover:brightness-[0.96]",
-        contrast: "bg-contrast text-contrast-foreground hover:brightness-[0.96]",
-        outline: "border border-border bg-card hover:bg-muted",
-        ghost: "text-muted-foreground hover:bg-muted hover:text-foreground",
-        "danger-ghost": "text-danger hover:bg-danger/10",
+        primary: 'bg-primary text-primary-foreground hover:brightness-[0.96]',
+        contrast: 'bg-contrast text-contrast-foreground hover:brightness-[0.96]',
+        outline: 'border border-border bg-card hover:bg-muted',
+        ghost: 'text-muted-foreground hover:bg-muted hover:text-foreground',
+        'danger-ghost': 'text-danger hover:bg-danger/10',
       },
       size: {
-        default: "h-9 px-3.5 text-[13.5px]",
-        sm: "h-[30px] rounded-sm px-2.5 text-[12.5px]",
-        icon: "size-9",
-        "icon-sm": "size-[30px] rounded-sm",
+        default: 'h-9 px-3.5 text-[13.5px]',
+        sm: 'h-[30px] rounded-sm px-2.5 text-[12.5px]',
+        icon: 'size-9',
+        'icon-sm': 'size-[30px] rounded-sm',
       },
     },
     defaultVariants: {
-      variant: "primary",
-      size: "default",
+      variant: 'primary',
+      size: 'default',
     },
-  }
-)
+  },
+);
 
 function Button({
   className,
-  variant = "primary",
-  size = "default",
+  variant = 'primary',
+  size = 'default',
   asChild = false,
   ...props
-}: React.ComponentProps<"button"> &
+}: React.ComponentProps<'button'> &
   VariantProps<typeof buttonVariants> & {
-    asChild?: boolean
+    asChild?: boolean;
   }) {
-  const Comp = asChild ? Slot.Root : "button"
+  const Comp = asChild ? Slot.Root : 'button';
 
   return (
     <Comp
@@ -53,7 +53,7 @@ function Button({
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />
-  )
+  );
 }
 
-export { Button, buttonVariants }
+export { Button, buttonVariants };

@@ -30,11 +30,24 @@ test('the release tarball installs and runs the dry-run CLI workflow', { timeout
     assert.ok(record, 'npm pack should describe the generated tarball');
 
     const packagedPaths = new Set(record.files.map((file) => file.path));
-    for (const requiredPath of ['dist/index.js', 'web/dist/index.html', 'scripts/mock-claude.mjs', 'README.md']) {
+    for (const requiredPath of [
+      'dist/index.js',
+      'web/dist/index.html',
+      'scripts/mock-claude.mjs',
+      'README.md',
+    ]) {
       assert.ok(packagedPaths.has(requiredPath), `release tarball should contain ${requiredPath}`);
     }
-    assert.equal(packagedPaths.has('src/index.ts'), false, 'release tarball should not contain TypeScript sources');
-    assert.equal(packagedPaths.has('test/e2e/package-cli.test.ts'), false, 'release tarball should not contain tests');
+    assert.equal(
+      packagedPaths.has('src/index.ts'),
+      false,
+      'release tarball should not contain TypeScript sources',
+    );
+    assert.equal(
+      packagedPaths.has('test/e2e/package-cli.test.ts'),
+      false,
+      'release tarball should not contain tests',
+    );
 
     const consumerDir = join(root, 'consumer');
     await mkdir(consumerDir);
@@ -89,7 +102,10 @@ test('the release tarball installs and runs the dry-run CLI workflow', { timeout
       status: string;
     }>;
     assert.equal(runs.length, 1);
-    assert.ok(['done', 'review'].includes(runs[0]?.status ?? ''), 'the dry-run workflow should finish successfully');
+    assert.ok(
+      ['done', 'review'].includes(runs[0]?.status ?? ''),
+      'the dry-run workflow should finish successfully',
+    );
 
     // Boot wiring (spec 2026-07-20-multi-project-workspace, step 1.5): the
     // headless run migrated ~/.cezar and registered the boot repo.
@@ -118,7 +134,12 @@ test('the release tarball installs and runs the dry-run CLI workflow', { timeout
     // ~/.cezar/server.json to a temp dir; CEZ_DRY_RUN performs no real sudo.
     assert.match(help.stdout, /cezar server-install/);
     const serverEnv = { ...process.env, CEZ_DRY_RUN: '1', CEZ_HOME: cezHome };
-    const serverExec = { cwd: consumerDir, env: serverEnv, timeout: 60_000, maxBuffer: 10 * 1024 * 1024 } as const;
+    const serverExec = {
+      cwd: consumerDir,
+      env: serverEnv,
+      timeout: 60_000,
+      maxBuffer: 10 * 1024 * 1024,
+    } as const;
 
     await execFile(
       process.execPath,
@@ -131,7 +152,11 @@ test('the release tarball installs and runs the dry-run CLI workflow', { timeout
       steps: Record<string, unknown>;
     };
     assert.equal(state.platform, 'ubuntu-vps', 'server-install records the platform');
-    assert.equal(state.installed, true, 'server-install flips installed=true when all required steps are done');
+    assert.equal(
+      state.installed,
+      true,
+      'server-install flips installed=true when all required steps are done',
+    );
     assert.ok(state.steps['nginx-proxy'], 'server-install ran the nginx-proxy step');
 
     await execFile(

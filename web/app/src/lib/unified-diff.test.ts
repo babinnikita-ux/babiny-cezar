@@ -1,6 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest';
 
-import { diffTotals, parseUnifiedDiff } from './unified-diff'
+import { diffTotals, parseUnifiedDiff } from './unified-diff';
 
 const MULTI_FILE = [
   'diff --git a/src/app.ts b/src/app.ts',
@@ -22,12 +22,12 @@ const MULTI_FILE = [
   '+Now with a port.',
   ' Done.',
   '',
-].join('\n')
+].join('\n');
 
 describe('parseUnifiedDiff', () => {
   it('splits a multi-file diff into per-file sections with counts and hunk lines', () => {
-    const files = parseUnifiedDiff(MULTI_FILE)
-    expect(files).toHaveLength(2)
+    const files = parseUnifiedDiff(MULTI_FILE);
+    expect(files).toHaveLength(2);
 
     expect(files[0]).toMatchObject({
       path: 'src/app.ts',
@@ -35,15 +35,15 @@ describe('parseUnifiedDiff', () => {
       binary: false,
       additions: 2,
       deletions: 1,
-    })
-    expect(files[0]!.lines[0]).toBe('@@ -1,4 +1,5 @@')
-    expect(files[0]!.lines).toContain('+boot(port)')
+    });
+    expect(files[0]!.lines[0]).toBe('@@ -1,4 +1,5 @@');
+    expect(files[0]!.lines).toContain('+boot(port)');
     // Metadata (index/---/+++) never leaks into the renderable body.
-    expect(files[0]!.lines.some((l) => l.startsWith('+++'))).toBe(false)
+    expect(files[0]!.lines.some((l) => l.startsWith('+++'))).toBe(false);
 
-    expect(files[1]).toMatchObject({ path: 'README.md', additions: 1, deletions: 0 })
-    expect(diffTotals(files)).toEqual({ files: 2, additions: 3, deletions: 1 })
-  })
+    expect(files[1]).toMatchObject({ path: 'README.md', additions: 1, deletions: 0 });
+    expect(diffTotals(files)).toEqual({ files: 2, additions: 3, deletions: 1 });
+  });
 
   it('reads renames: status, oldPath → path, including rename-only entries with no hunks', () => {
     const files = parseUnifiedDiff(
@@ -54,7 +54,7 @@ describe('parseUnifiedDiff', () => {
         'rename to new/name.ts',
         '',
       ].join('\n'),
-    )
+    );
     expect(files).toEqual([
       {
         path: 'new/name.ts',
@@ -65,8 +65,8 @@ describe('parseUnifiedDiff', () => {
         deletions: 0,
         lines: [],
       },
-    ])
-  })
+    ]);
+  });
 
   it('marks binary files and gives them no lines', () => {
     const files = parseUnifiedDiff(
@@ -76,11 +76,11 @@ describe('parseUnifiedDiff', () => {
         'Binary files a/logo.png and b/logo.png differ',
         '',
       ].join('\n'),
-    )
+    );
     expect(files).toEqual([
       { path: 'logo.png', status: 'modified', binary: true, additions: 0, deletions: 0, lines: [] },
-    ])
-  })
+    ]);
+  });
 
   it('new and deleted files: status from the mode lines, deletions keep the a/ path', () => {
     const files = parseUnifiedDiff(
@@ -99,10 +99,10 @@ describe('parseUnifiedDiff', () => {
         '-bye',
         '',
       ].join('\n'),
-    )
-    expect(files[0]).toMatchObject({ path: 'added.txt', status: 'added', additions: 1, deletions: 0 })
-    expect(files[1]).toMatchObject({ path: 'gone.txt', status: 'deleted', additions: 0, deletions: 1 })
-  })
+    );
+    expect(files[0]).toMatchObject({ path: 'added.txt', status: 'added', additions: 1, deletions: 0 });
+    expect(files[1]).toMatchObject({ path: 'gone.txt', status: 'deleted', additions: 0, deletions: 1 });
+  });
 
   it('does not count the no-newline marker but keeps it renderable', () => {
     const files = parseUnifiedDiff(
@@ -116,20 +116,20 @@ describe('parseUnifiedDiff', () => {
         '\\ No newline at end of file',
         '',
       ].join('\n'),
-    )
-    expect(files[0]).toMatchObject({ additions: 1, deletions: 1 })
-    expect(files[0]!.lines).toContain('\\ No newline at end of file')
-  })
+    );
+    expect(files[0]).toMatchObject({ additions: 1, deletions: 1 });
+    expect(files[0]!.lines).toContain('\\ No newline at end of file');
+  });
 
   it('empty input parses to zero files', () => {
-    expect(parseUnifiedDiff('')).toEqual([])
-  })
+    expect(parseUnifiedDiff('')).toEqual([]);
+  });
 
   it('non-diff text (the server sentences, garbage) parses to zero files', () => {
-    expect(parseUnifiedDiff('(no worktree — this task ran directly in the repo working tree)')).toEqual([])
-    expect(parseUnifiedDiff('(diff failed: not a git repository)\nsome\nnoise')).toEqual([])
-    expect(parseUnifiedDiff('+++ looks diffish but has no file header\n@@ nope @@')).toEqual([])
-  })
+    expect(parseUnifiedDiff('(no worktree — this task ran directly in the repo working tree)')).toEqual([]);
+    expect(parseUnifiedDiff('(diff failed: not a git repository)\nsome\nnoise')).toEqual([]);
+    expect(parseUnifiedDiff('+++ looks diffish but has no file header\n@@ nope @@')).toEqual([]);
+  });
 
   it('unquotes git-escaped paths', () => {
     const files = parseUnifiedDiff(
@@ -142,7 +142,7 @@ describe('parseUnifiedDiff', () => {
         '+y',
         '',
       ].join('\n'),
-    )
-    expect(files[0]!.path).toBe('with "quote".txt')
-  })
-})
+    );
+    expect(files[0]!.path).toBe('with "quote".txt');
+  });
+});

@@ -1,20 +1,20 @@
-import { TriangleAlertIcon, ZapIcon } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { TriangleAlertIcon, ZapIcon } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
-import { useHealth, useLaunchKey, useProjects, useSkills } from '@/api/queries'
-import type { Skill } from '@/api/types'
-import { repoChipOf } from '@/components/app-shell-container'
-import { CenteredState } from '@/components/centered-state'
-import { Input } from '@/components/ui/input'
-import { toast } from '@/components/ui/toaster'
-import { bookmarkletUrl } from '@/lib/bookmarklet'
-import { useActiveProjectId } from '@/lib/project-router'
-import { orderSkills } from '@/lib/skills'
+import { useHealth, useLaunchKey, useProjects, useSkills } from '@/api/queries';
+import type { Skill } from '@/api/types';
+import { repoChipOf } from '@/components/app-shell-container';
+import { CenteredState } from '@/components/centered-state';
+import { Input } from '@/components/ui/input';
+import { toast } from '@/components/ui/toaster';
+import { bookmarkletUrl } from '@/lib/bookmarklet';
+import { useActiveProjectId } from '@/lib/project-router';
+import { orderSkills } from '@/lib/skills';
 
 /** Settings → Bookmarklets (spec 011): the legacy generic and per-skill launchers promoted
  *  to a first-class, discoverable Settings subpage. */
 export function BookmarkletsSection() {
-  const skillsQuery = useSkills()
+  const skillsQuery = useSkills();
 
   // Without this the in-flight catalog renders as the panel's empty state, which tells the
   // user "(no skills yet)" — a claim that is simply false while the fetch is still running.
@@ -23,7 +23,7 @@ export function BookmarkletsSection() {
       <p data-slot="bookmarklets-loading" className="p-4 text-[13px] text-soft-foreground md:p-6">
         Loading bookmarklets…
       </p>
-    )
+    );
   }
   if (skillsQuery.isError) {
     return (
@@ -34,14 +34,14 @@ export function BookmarkletsSection() {
         title="Could not load bookmarklets"
         subtitle={skillsQuery.error.message}
       />
-    )
+    );
   }
 
   return (
     <div className="flex min-h-full flex-1 overflow-y-auto px-4 py-5 md:px-7">
       <BookmarkletPanel skills={orderSkills(skillsQuery.data ?? [])} />
     </div>
-  )
+  );
 }
 
 /**
@@ -58,24 +58,24 @@ export function BookmarkletsSection() {
  * generator also has its own Settings subpage.
  */
 export function BookmarkletPanel({ skills }: { skills: readonly Skill[] }) {
-  const launchKey = useLaunchKey()
-  const health = useHealth()
-  const projects = useProjects()
-  const [auto, setAuto] = useState(false)
-  const [filter, setFilter] = useState('')
+  const launchKey = useLaunchKey();
+  const health = useHealth();
+  const projects = useProjects();
+  const [auto, setAuto] = useState(false);
+  const [filter, setFilter] = useState('');
   // THIS project's own launch key: `useLaunchKey` goes through the scoped API client, so under
   // `/p/<id>/settings` it reads `/api/p/<id>/launch-key` — that repo's `.ai/cezar/launch-key`,
   // which is the only secret the target cockpit scope will accept (multi-project spec, 3.6).
-  const key = launchKey.data?.key ?? ''
+  const key = launchKey.data?.key ?? '';
   // Bake THIS cockpit's origin into the bookmarklets so a click opens the very instance that
   // generated them — no localhost port-scan (GitHub's CSP blocks that fetch). See bookmarklet.ts.
-  const origin = window.location.origin
+  const origin = window.location.origin;
   // …and the project the URL should land in. The boot project mounts UNSCOPED, so the context
   // says null and the URL's own `/p/<id>` prefix is what answers (see `useActiveProjectId`);
   // `bootProject` covers the sliver of time a legacy flat URL is still mid-redirect. Null all
   // the way down degrades to the legacy flat `/new`, which redirects to the boot project — so
   // the generator never emits a URL that fails to land.
-  const projectId = useActiveProjectId() ?? health.data?.bootProject ?? null
+  const projectId = useActiveProjectId() ?? health.data?.bootProject ?? null;
   // The project name stamped into the bookmark's visible label, so a person with several
   // projects (or several cockpits) open can tell their bookmarks apart in the bar (#422). The
   // REGISTRY answers per project: `/api/health` is workspace-level (never scoped) and always
@@ -86,16 +86,16 @@ export function BookmarkletPanel({ skills }: { skills: readonly Skill[] }) {
   const repoName =
     projects.data?.projects.find((project) => project.id === projectId)?.name ??
     repoChipOf(health.data)?.name ??
-    null
-  const needle = filter.trim().toLowerCase()
-  const shown = skills.filter((skill) => skill.name.toLowerCase().includes(needle))
+    null;
+  const needle = filter.trim().toLowerCase();
+  const shown = skills.filter((skill) => skill.name.toLowerCase().includes(needle));
 
   return (
     <div data-slot="bookmarklet-panel" className="mx-auto w-full max-w-2xl">
       <h2 className="text-base font-semibold">Run from GitHub</h2>
       <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">
-        Drag a button below to your browser&apos;s bookmarks bar. On any GitHub PR or issue, click it
-        to open this cockpit directly. The cockpit must be running: <span className="font-mono">npx cezar</span>.
+        Drag a button below to your browser&apos;s bookmarks bar. On any GitHub PR or issue, click it to open
+        this cockpit directly. The cockpit must be running: <span className="font-mono">npx cezar</span>.
       </p>
 
       <label className="mt-4 flex items-center gap-2 text-[13px] font-medium">
@@ -146,7 +146,7 @@ export function BookmarkletPanel({ skills }: { skills: readonly Skill[] }) {
         )}
       </div>
     </div>
-  )
+  );
 }
 
 function BookmarkletRow({ label, url, hint }: { label: string; url: string; hint?: string }) {
@@ -154,18 +154,18 @@ function BookmarkletRow({ label, url, hint }: { label: string; url: string; hint
   // definition, and dragging to the bookmarks bar needs the real href on the DOM node. The
   // link is a drag source only (the click handler below never lets it execute), so setting
   // the attribute imperatively is the honest escape hatch.
-  const anchor = useRef<HTMLAnchorElement>(null)
+  const anchor = useRef<HTMLAnchorElement>(null);
   useEffect(() => {
-    anchor.current?.setAttribute('href', url)
-  }, [url])
+    anchor.current?.setAttribute('href', url);
+  }, [url]);
   const copy = async () => {
     try {
-      await navigator.clipboard.writeText(url)
-      toast('Bookmarklet URL copied.')
+      await navigator.clipboard.writeText(url);
+      toast('Bookmarklet URL copied.');
     } catch {
-      toast('Copy failed — drag the button instead.', { tone: 'danger' })
+      toast('Copy failed — drag the button instead.', { tone: 'danger' });
     }
-  }
+  };
   return (
     <div data-slot="bm-row" className="flex min-w-0 items-center gap-2.5">
       {/* A drag SOURCE only — the cockpit page never executes the javascript: URL itself
@@ -190,13 +190,13 @@ function BookmarkletRow({ label, url, hint }: { label: string; url: string; hint
         data-slot="bm-link"
         title="Drag me to your bookmarks bar"
         onClick={(event) => {
-          event.preventDefault()
-          toast('Drag me to your bookmarks bar')
+          event.preventDefault();
+          toast('Drag me to your bookmarks bar');
         }}
         onKeyDown={(event) => {
-          if (event.key !== 'Enter' && event.key !== ' ') return
-          event.preventDefault()
-          toast('Drag me to your bookmarks bar')
+          if (event.key !== 'Enter' && event.key !== ' ') return;
+          event.preventDefault();
+          toast('Drag me to your bookmarks bar');
         }}
         className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1 font-mono text-xs font-medium text-foreground shadow-xs transition-colors hover:bg-muted"
       >
@@ -214,5 +214,5 @@ function BookmarkletRow({ label, url, hint }: { label: string; url: string; hint
       </button>
       {hint ? <span className="min-w-0 truncate text-[11px] text-soft-foreground">{hint}</span> : null}
     </div>
-  )
+  );
 }

@@ -114,7 +114,9 @@ describe('GET /api/workspace/events', () => {
 
   /** All payloads of one SSE event name delivered so far, in arrival order. */
   const payloadsOf = <T>(body: string, event: string): T[] =>
-    [...body.matchAll(new RegExp(`event: ${event}\\ndata: (.*)\\n`, 'g'))].map((m) => JSON.parse(m[1] as string) as T);
+    [...body.matchAll(new RegExp(`event: ${event}\\ndata: (.*)\\n`, 'g'))].map(
+      (m) => JSON.parse(m[1] as string) as T,
+    );
 
   it("carries BOTH projects' store events, each stamped with its project id", async () => {
     const other = await buildOtherContext();

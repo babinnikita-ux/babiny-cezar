@@ -43,11 +43,7 @@ describe('resumeCommand — session id validation', () => {
   });
 
   it('accepts the shapes the backends actually mint', () => {
-    for (const id of [
-      '9f8e7d6c-1234-4abc-9def-0123456789ab',
-      'ses_01JABCDEF',
-      'session.2026-07-17',
-    ]) {
+    for (const id of ['9f8e7d6c-1234-4abc-9def-0123456789ab', 'ses_01JABCDEF', 'session.2026-07-17']) {
       expect(isSafeSessionId(id)).toBe(true);
     }
   });

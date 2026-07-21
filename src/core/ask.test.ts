@@ -74,9 +74,7 @@ describe('parseAskRequest', () => {
   it('rejects a header longer than 12 chars', () => {
     expect(
       parseAskRequest({
-        questions: [
-          { header: 'thirteen char', question: 'Q?', options: [{ label: 'a' }, { label: 'b' }] },
-        ],
+        questions: [{ header: 'thirteen char', question: 'Q?', options: [{ label: 'a' }, { label: 'b' }] }],
       }),
     ).toBeNull();
   });
@@ -84,9 +82,7 @@ describe('parseAskRequest', () => {
   it('rejects non-unique option labels within a question', () => {
     expect(
       parseAskRequest({
-        questions: [
-          { header: 'H', question: 'Q?', options: [{ label: 'same' }, { label: 'same' }] },
-        ],
+        questions: [{ header: 'H', question: 'Q?', options: [{ label: 'same' }, { label: 'same' }] }],
       }),
     ).toBeNull();
   });
@@ -104,10 +100,7 @@ describe('parseAskRequest', () => {
           {
             header: 'H',
             question: 'Q?',
-            options: [
-              { label: 'a', color: 'red' },
-              { label: 'b' },
-            ],
+            options: [{ label: 'a', color: 'red' }, { label: 'b' }],
           },
         ],
       }),

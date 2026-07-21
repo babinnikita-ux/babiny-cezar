@@ -1,6 +1,6 @@
-import type { UiToolItem } from '@/protocol/ui-events'
+import type { UiToolItem } from '@/protocol/ui-events';
 
-import type { ThreadEntry } from './thread-state'
+import type { ThreadEntry } from './thread-state';
 
 /**
  * Pure display grouping over one turn's reduced entries (spec §"Task thread"; the opencode
@@ -21,60 +21,60 @@ import type { ThreadEntry } from './thread-state'
  */
 
 export interface EntryBlock {
-  kind: 'entry'
-  id: string
-  entry: ThreadEntry
+  kind: 'entry';
+  id: string;
+  entry: ThreadEntry;
 }
 
 export interface ToolCardBlock {
-  kind: 'tool-card'
-  id: string
-  item: UiToolItem
+  kind: 'tool-card';
+  id: string;
+  item: UiToolItem;
   /** Sub-agent items (`parentItemId` → this tool), in stream order. One level deep. */
-  children: ThreadEntry[]
+  children: ThreadEntry[];
 }
 
 export interface ContextGroupBlock {
-  kind: 'context-group'
-  id: string
-  tools: UiToolItem[]
-  files: number
-  searches: number
-  label: string
+  kind: 'context-group';
+  id: string;
+  tools: UiToolItem[];
+  files: number;
+  searches: number;
+  label: string;
 }
 
 export interface StreakBlock {
-  kind: 'streak'
-  id: string
+  kind: 'streak';
+  id: string;
   /** Individual tool calls folded away (context groups count their members). */
-  count: number
-  blocks: Array<ToolCardBlock | ContextGroupBlock>
+  count: number;
+  blocks: Array<ToolCardBlock | ContextGroupBlock>;
 }
 
-export type ThreadBlock = EntryBlock | ToolCardBlock | ContextGroupBlock | StreakBlock
+export type ThreadBlock = EntryBlock | ToolCardBlock | ContextGroupBlock | StreakBlock;
 
 /** How many trailing tool blocks stay visible before older ones fold (legacy STREAK_TAIL). */
-export const STREAK_TAIL = 3
+export const STREAK_TAIL = 3;
 
-const isTool = (entry: ThreadEntry): entry is UiToolItem => entry.kind === 'tool'
+const isTool = (entry: ThreadEntry): entry is UiToolItem => entry.kind === 'tool';
 
 /** Context-group membership: exploration tools only, and only once they finished. */
 const isGroupable = (item: UiToolItem): boolean =>
-  (item.toolKind === 'read' || item.toolKind === 'search') && item.status === 'completed'
+  (item.toolKind === 'read' || item.toolKind === 'search') && item.status === 'completed';
 
-const plural = (n: number, noun: string, nouns: string): string => `${n} ${n === 1 ? noun : nouns}`
+const plural = (n: number, noun: string, nouns: string): string => `${n} ${n === 1 ? noun : nouns}`;
 
 /** "Explored 2 files · 1 search" — the mockup's ctx-group line. */
 export function contextGroupLabel(files: number, searches: number): string {
-  const parts: string[] = []
-  if (files > 0) parts.push(plural(files, 'file', 'files'))
-  if (searches > 0) parts.push(plural(searches, 'search', 'searches'))
-  return `Explored ${parts.join(' · ')}`
+  const parts: string[] = [];
+  if (files > 0) parts.push(plural(files, 'file', 'files'));
+  if (searches > 0) parts.push(plural(searches, 'search', 'searches'));
+  return `Explored ${parts.join(' · ')}`;
 }
 
 /** "3 earlier tool calls" — the legacy streak toggle line (chevron is the component's). */
 export function streakLabel(count: number): string {
-  return `${count} earlier tool call${count === 1 ? '' : 's'}`
+  return `${count} earlier tool call${count === 1 ? '' : 's'}`;
 }
 
 /**
@@ -82,15 +82,15 @@ export function streakLabel(count: number): string {
  * detail for the card trigger. The verb set is exactly what `toolDisplay()` emits; anything
  * else (MCP "server.tool", unknown-tool names) renders whole, as the verb.
  */
-const TITLE_VERBS = ['Web search', 'Ran', 'Edit', 'Write', 'Read', 'Search', 'Fetch', 'Task:'] as const
+const TITLE_VERBS = ['Web search', 'Ran', 'Edit', 'Write', 'Read', 'Search', 'Fetch', 'Task:'] as const;
 
 export function splitToolTitle(title: string): { verb: string; detail?: string } {
   for (const verb of TITLE_VERBS) {
     if (title.startsWith(`${verb} `) && title.length > verb.length + 1) {
-      return { verb: verb === 'Task:' ? 'Task' : verb, detail: title.slice(verb.length + 1) }
+      return { verb: verb === 'Task:' ? 'Task' : verb, detail: title.slice(verb.length + 1) };
     }
   }
-  return { verb: title }
+  return { verb: title };
 }
 
 export function groupThreadItems(allEntries: ThreadEntry[]): ThreadBlock[] {
@@ -105,12 +105,12 @@ export function groupThreadItems(allEntries: ThreadEntry[]): ThreadBlock[] {
     (entry) =>
       !(entry.kind === 'tool' && entry.toolKind === 'plan') &&
       !(entry.kind === 'reasoning' && entry.text.trim() === ''),
-  )
+  );
 
   // Pass 1 — nesting. Children keep stream order; only tool items can be parents.
-  const toolIds = new Set(entries.filter(isTool).map((item) => item.id))
-  const childrenOf = new Map<string, ThreadEntry[]>()
-  const top: ThreadEntry[] = []
+  const toolIds = new Set(entries.filter(isTool).map((item) => item.id));
+  const childrenOf = new Map<string, ThreadEntry[]>();
+  const top: ThreadEntry[] = [];
   for (const entry of entries) {
     const parentId =
       (entry.kind === 'message' || entry.kind === 'reasoning' || entry.kind === 'tool') &&
@@ -118,22 +118,22 @@ export function groupThreadItems(allEntries: ThreadEntry[]): ThreadBlock[] {
       entry.parentItemId !== entry.id &&
       toolIds.has(entry.parentItemId)
         ? entry.parentItemId
-        : undefined
+        : undefined;
     if (parentId === undefined) {
-      top.push(entry)
+      top.push(entry);
     } else {
-      const siblings = childrenOf.get(parentId)
-      if (siblings) siblings.push(entry)
-      else childrenOf.set(parentId, [entry])
+      const siblings = childrenOf.get(parentId);
+      if (siblings) siblings.push(entry);
+      else childrenOf.set(parentId, [entry]);
     }
   }
 
   // Pass 2 — context groups over the top level.
-  const blocks: ThreadBlock[] = []
-  let run: UiToolItem[] = []
+  const blocks: ThreadBlock[] = [];
+  let run: UiToolItem[] = [];
   const flushRun = () => {
     if (run.length >= 2) {
-      const files = run.filter((item) => item.toolKind === 'read').length
+      const files = run.filter((item) => item.toolKind === 'read').length;
       blocks.push({
         kind: 'context-group',
         id: `group:${run[0]!.id}`,
@@ -141,61 +141,66 @@ export function groupThreadItems(allEntries: ThreadEntry[]): ThreadBlock[] {
         files,
         searches: run.length - files,
         label: contextGroupLabel(files, run.length - files),
-      })
+      });
     } else {
       for (const item of run) {
-        blocks.push({ kind: 'tool-card', id: item.id, item, children: childrenOf.get(item.id) ?? [] })
+        blocks.push({ kind: 'tool-card', id: item.id, item, children: childrenOf.get(item.id) ?? [] });
       }
     }
-    run = []
-  }
+    run = [];
+  };
   for (const entry of top) {
     // A tool that adopted children is a container (a Task card) — never groupable away.
     if (isTool(entry) && isGroupable(entry) && !childrenOf.has(entry.id)) {
-      run.push(entry)
+      run.push(entry);
     } else {
-      flushRun()
+      flushRun();
       if (isTool(entry)) {
-        blocks.push({ kind: 'tool-card', id: entry.id, item: entry, children: childrenOf.get(entry.id) ?? [] })
+        blocks.push({
+          kind: 'tool-card',
+          id: entry.id,
+          item: entry,
+          children: childrenOf.get(entry.id) ?? [],
+        });
       } else {
-        blocks.push({ kind: 'entry', id: entry.id, entry })
+        blocks.push({ kind: 'entry', id: entry.id, entry });
       }
     }
   }
-  flushRun()
+  flushRun();
 
   // Pass 3 — streak folding.
   const foldable = (block: ThreadBlock): block is ToolCardBlock | ContextGroupBlock =>
-    block.kind === 'context-group' || (block.kind === 'tool-card' && block.item.status === 'completed')
+    block.kind === 'context-group' || (block.kind === 'tool-card' && block.item.status === 'completed');
   const calls = (block: ToolCardBlock | ContextGroupBlock): number =>
-    block.kind === 'context-group' ? block.tools.length : 1
+    block.kind === 'context-group' ? block.tools.length : 1;
 
-  const folded: ThreadBlock[] = []
-  let streak: Array<ToolCardBlock | ContextGroupBlock> = []
+  const folded: ThreadBlock[] = [];
+  let streak: Array<ToolCardBlock | ContextGroupBlock> = [];
   const flushStreak = () => {
     if (streak.length > STREAK_TAIL) {
-      const hidden = streak.slice(0, streak.length - STREAK_TAIL)
+      const hidden = streak.slice(0, streak.length - STREAK_TAIL);
       folded.push({
         kind: 'streak',
         id: `streak:${hidden[0]!.id}`,
         count: hidden.reduce((sum, block) => sum + calls(block), 0),
         blocks: hidden,
-      })
-      folded.push(...streak.slice(streak.length - STREAK_TAIL))
+      });
+      folded.push(...streak.slice(streak.length - STREAK_TAIL));
     } else {
-      folded.push(...streak)
+      folded.push(...streak);
     }
-    streak = []
-  }
+    streak = [];
+  };
   for (const block of blocks) {
     if (foldable(block)) {
-      streak.push(block)
+      streak.push(block);
     } else {
-      flushStreak()
-      folded.push(block)
+      flushStreak();
+      folded.push(block);
     }
   }
-  flushStreak()
+  flushStreak();
 
-  return folded
+  return folded;
 }

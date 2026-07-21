@@ -51,31 +51,35 @@ function runScript(fixtureRoot: string, args: string[], extraEnv: Record<string,
   return execFile(process.execPath, [script, ...args], { env, maxBuffer: 10 * 1024 * 1024 });
 }
 
-test('a patch bump stamps both manifests, keeps the alias caret range, and emits the version', { timeout: 120_000 }, async () => {
-  const root = await makeFixture('0.1.5');
-  try {
-    await writeFile(join(root, 'github-output.txt'), '');
-    const { stdout } = await runScript(root, ['patch', '--dry-run']);
-    assert.match(stdout, /dist-tag latest/);
+test(
+  'a patch bump stamps both manifests, keeps the alias caret range, and emits the version',
+  { timeout: 120_000 },
+  async () => {
+    const root = await makeFixture('0.1.5');
+    try {
+      await writeFile(join(root, 'github-output.txt'), '');
+      const { stdout } = await runScript(root, ['patch', '--dry-run']);
+      assert.match(stdout, /dist-tag latest/);
 
-    const rootPkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')) as { version: string };
-    const aliasPkg = JSON.parse(await readFile(join(root, 'alias-cezar', 'package.json'), 'utf8')) as {
-      version: string;
-      dependencies: Record<string, string>;
-    };
-    assert.equal(rootPkg.version, '0.1.6');
-    assert.equal(aliasPkg.version, '0.1.6');
-    // Caret, not an exact pin — the stable-release contract.
-    assert.deepEqual(aliasPkg.dependencies, { '@scope/fake-root': '^0.1.6' });
+      const rootPkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')) as { version: string };
+      const aliasPkg = JSON.parse(await readFile(join(root, 'alias-cezar', 'package.json'), 'utf8')) as {
+        version: string;
+        dependencies: Record<string, string>;
+      };
+      assert.equal(rootPkg.version, '0.1.6');
+      assert.equal(aliasPkg.version, '0.1.6');
+      // Caret, not an exact pin — the stable-release contract.
+      assert.deepEqual(aliasPkg.dependencies, { '@scope/fake-root': '^0.1.6' });
 
-    const output = await readFile(join(root, 'github-output.txt'), 'utf8');
-    assert.match(output, /^version=0\.1\.6$/m);
-    assert.match(output, /^published=false$/m);
-    assert.match(output, /^dryRun=true$/m);
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-});
+      const output = await readFile(join(root, 'github-output.txt'), 'utf8');
+      assert.match(output, /^version=0\.1\.6$/m);
+      assert.match(output, /^published=false$/m);
+      assert.match(output, /^dryRun=true$/m);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  },
+);
 
 test('the existing bump publishes the committed version verbatim', { timeout: 120_000 }, async () => {
   const root = await makeFixture('2.3.4');

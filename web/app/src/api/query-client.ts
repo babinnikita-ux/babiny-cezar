@@ -1,6 +1,6 @@
-import { QueryClient } from '@tanstack/react-query'
+import { QueryClient } from '@tanstack/react-query';
 
-import { ApiError } from './client'
+import { ApiError } from './client';
 
 /**
  * Defaults for a cockpit talking to a server on localhost.
@@ -29,8 +29,8 @@ export function createQueryClient(): QueryClient {
         // down, and three silent retries only delay saying so. A 4xx is never worth retrying —
         // it is the server's considered answer.
         retry: (failureCount, error) => {
-          if (error instanceof ApiError && error.status >= 400 && error.status < 500) return false
-          return failureCount < 1
+          if (error instanceof ApiError && error.status >= 400 && error.status < 500) return false;
+          return failureCount < 1;
         },
       },
       mutations: {
@@ -39,5 +39,5 @@ export function createQueryClient(): QueryClient {
         retry: false,
       },
     },
-  })
+  });
 }

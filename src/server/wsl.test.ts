@@ -48,12 +48,16 @@ describe('wslDistroName', () => {
 
 describe('toWindowsPath', () => {
   it('maps a /mnt/<drive> path to its native drive letter, not a UNC round-trip', () => {
-    expect(toWindowsPath('/mnt/c/Users/pat/projects/cezar', 'Ubuntu')).toBe('C:\\Users\\pat\\projects\\cezar');
+    expect(toWindowsPath('/mnt/c/Users/pat/projects/cezar', 'Ubuntu')).toBe(
+      'C:\\Users\\pat\\projects\\cezar',
+    );
     expect(toWindowsPath('/mnt/d', 'Ubuntu')).toBe('D:\\');
   });
 
   it('maps a distro-native path to \\\\wsl$\\<Distro>\\…', () => {
-    expect(toWindowsPath('/home/pat/projects/cezar', 'Ubuntu')).toBe('\\\\wsl$\\Ubuntu\\home\\pat\\projects\\cezar');
+    expect(toWindowsPath('/home/pat/projects/cezar', 'Ubuntu')).toBe(
+      '\\\\wsl$\\Ubuntu\\home\\pat\\projects\\cezar',
+    );
   });
 
   it('handles the distro root itself', () => {

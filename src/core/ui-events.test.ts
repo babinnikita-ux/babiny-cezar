@@ -21,9 +21,7 @@ import type {
 } from './ui-events.js';
 
 /** Exact structural equality of two types (the classic conditional trick). */
-type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends (<T>() => T extends Y ? 1 : 2)
-  ? true
-  : false;
+type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? true : false;
 function assertType<_T extends true>(): void {}
 
 describe('UiEvent vocabulary (compile-time contract)', () => {
@@ -74,7 +72,7 @@ describe('UiEvent vocabulary (compile-time contract)', () => {
       'permission.resolved': 'reserved',
       'ask.requested': 'thread',
       'usage.updated': 'gauge',
-      'image': 'thread',
+      image: 'thread',
     } as const satisfies Record<UiEventType, 'thread' | 'meta' | 'dock' | 'gauge' | 'reserved'>;
 
     // And the map has no extra keys either: its key set IS the event set.
@@ -117,17 +115,13 @@ describe('UiEvent vocabulary (compile-time contract)', () => {
     };
 
     expect(handle({ type: 'turn.started', turnId: 't1' })).toBe('turn.started');
-    expect(
-      handle({ type: 'session.started', sessionId: 's1', backend: 'codex' }),
-    ).toBe('codex:s1');
+    expect(handle({ type: 'session.started', sessionId: 's1', backend: 'codex' })).toBe('codex:s1');
     expect(handle({ type: 'item.delta', itemId: 'i1', field: 'output', delta: 'ok' })).toBe('ok');
     expect(
       handle({
         type: 'ask.requested',
         requestId: 'ask_1',
-        questions: [
-          { header: 'Lib', question: 'Which?', options: [{ label: 'a' }, { label: 'b' }] },
-        ],
+        questions: [{ header: 'Lib', question: 'Which?', options: [{ label: 'a' }, { label: 'b' }] }],
       }),
     ).toBe('ask.requested');
   });
@@ -175,13 +169,25 @@ describe('UiEvent vocabulary (compile-time contract)', () => {
       contextWindow: 200_000,
     };
     // No pre-weighted field exists on the type — weighting is presentation.
-    assertType<Equal<keyof TokenUsage, 'input' | 'output' | 'cacheRead' | 'cacheWrite' | 'reasoning' | 'total' | 'contextWindow'>>();
+    assertType<
+      Equal<
+        keyof TokenUsage,
+        'input' | 'output' | 'cacheRead' | 'cacheWrite' | 'reasoning' | 'total' | 'contextWindow'
+      >
+    >();
     expect(usage.total).toBe(9650);
   });
 
   it('events survive a JSON round-trip (wire-safe: plain data only)', () => {
     const events: UiEvent[] = [
-      { type: 'session.started', sessionId: 's1', backend: 'claude', model: 'claude-fable-5', cwd: '/repo', tools: ['Bash'] },
+      {
+        type: 'session.started',
+        sessionId: 's1',
+        backend: 'claude',
+        model: 'claude-fable-5',
+        cwd: '/repo',
+        tools: ['Bash'],
+      },
       { type: 'turn.started', turnId: 't1' },
       {
         type: 'item.started',
@@ -199,7 +205,13 @@ describe('UiEvent vocabulary (compile-time contract)', () => {
         },
       },
       { type: 'plan.updated', entries: [{ content: 'x', status: 'in_progress', activeForm: 'Doing x' }] },
-      { type: 'turn.completed', turnId: 't1', stopReason: 'end_turn', usage: { input: 1, output: 2, total: 3 }, costUsd: 0.01 },
+      {
+        type: 'turn.completed',
+        turnId: 't1',
+        stopReason: 'end_turn',
+        usage: { input: 1, output: 2, total: 3 },
+        costUsd: 0.01,
+      },
       { type: 'session.ended', reason: 'end_turn' },
     ];
 

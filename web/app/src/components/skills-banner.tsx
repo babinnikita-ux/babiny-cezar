@@ -1,14 +1,14 @@
-import { useQueryClient } from '@tanstack/react-query'
-import { useCallback } from 'react'
-import { Link } from '@/lib/project-router'
+import { useQueryClient } from '@tanstack/react-query';
+import { useCallback } from 'react';
+import { Link } from '@/lib/project-router';
 
-import { putUiState } from '@/api/client'
-import { queryKeys, useUiState } from '@/api/queries'
-import { Banner } from '@/components/ui/banner'
-import { toast } from '@/components/ui/toaster'
+import { putUiState } from '@/api/client';
+import { queryKeys, useUiState } from '@/api/queries';
+import { Banner } from '@/components/ui/banner';
+import { toast } from '@/components/ui/toaster';
 
-const SKILLS_REPO_URL = 'https://github.com/open-mercato/skills'
-const INSTALL_COMMAND = "npx skills add open-mercato/skills --skill '*'"
+const SKILLS_REPO_URL = 'https://github.com/open-mercato/skills';
+const INSTALL_COMMAND = "npx skills add open-mercato/skills --skill '*'";
 
 /**
  * Promotes `open-mercato/skills` once (#391) — cezar's built-in default skills source
@@ -32,25 +32,25 @@ const INSTALL_COMMAND = "npx skills add open-mercato/skills --skill '*'"
  * answer is Skills → Refresh, which this points at rather than duplicating.
  */
 export function SkillsBanner() {
-  const queryClient = useQueryClient()
-  const uiState = useUiState()
+  const queryClient = useQueryClient();
+  const uiState = useUiState();
 
   const dismiss = useCallback(() => {
     // Optimistic: hide immediately rather than waiting on the round trip, same as the
     // instant-feel of AppearanceProvider's local state update.
-    queryClient.setQueryData(queryKeys.uiState, { ...uiState.data, dismissedSkillsBanner: true })
+    queryClient.setQueryData(queryKeys.uiState, { ...uiState.data, dismissedSkillsBanner: true });
     putUiState({ dismissedSkillsBanner: true })
       .then((merged) => queryClient.setQueryData(queryKeys.uiState, merged))
       .catch((error: unknown) => {
-        toast(error instanceof Error ? error.message : String(error), { tone: 'danger' })
+        toast(error instanceof Error ? error.message : String(error), { tone: 'danger' });
         // The dismiss failed to persist — re-sync with the server's truth rather than leave the
         // cache claiming a dismissal that never saved (it would reappear on the next reload
         // anyway, so keeping it hidden this session would be a lie the next visit corrects).
-        void queryClient.invalidateQueries({ queryKey: queryKeys.uiState })
-      })
-  }, [queryClient, uiState.data])
+        void queryClient.invalidateQueries({ queryKey: queryKeys.uiState });
+      });
+  }, [queryClient, uiState.data]);
 
-  if (!uiState.isSuccess || uiState.data.dismissedSkillsBanner) return null
+  if (!uiState.isSuccess || uiState.data.dismissedSkillsBanner) return null;
 
   return (
     <Banner onDismiss={dismiss} dismissLabel="Dismiss the open-mercato/skills banner">
@@ -63,11 +63,13 @@ export function SkillsBanner() {
       >
         open-mercato/skills
       </a>{' '}
-      — reusable, technology-agnostic agent skills for PR creation, code review, CI
-      stabilisation, spec writing and more. cezar already loads them for you; refresh them any
-      time from <Link to="/skills" className="underline underline-offset-2 hover:text-muted-foreground">Skills</Link>.
-      To use them outside cezar:{' '}
+      — reusable, technology-agnostic agent skills for PR creation, code review, CI stabilisation, spec
+      writing and more. cezar already loads them for you; refresh them any time from{' '}
+      <Link to="/skills" className="underline underline-offset-2 hover:text-muted-foreground">
+        Skills
+      </Link>
+      . To use them outside cezar:{' '}
       <code className="rounded bg-card px-1 py-0.5 font-mono text-[12px]">{INSTALL_COMMAND}</code>
     </Banner>
-  )
+  );
 }

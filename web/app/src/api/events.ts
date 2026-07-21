@@ -1,4 +1,4 @@
-import type { ApiRun, ProcessUsage, RunRecord, TodoItem } from './types'
+import type { ApiRun, ProcessUsage, RunRecord, TodoItem } from './types';
 
 /**
  * The global stream's data layer: parse one SSE message, and fold it into cached state.
@@ -21,7 +21,7 @@ export type GlobalEvent =
   | { type: 'run-deleted'; id: string }
   | { type: 'todos'; items: TodoItem[] }
   | { type: 'usage'; usage: Record<string, ProcessUsage> }
-  | { type: 'ping' }
+  | { type: 'ping' };
 
 /**
  * Parse an SSE `event:`/`data:` pair, or null when it is not something we act on.
@@ -32,28 +32,28 @@ export type GlobalEvent =
  */
 export function parseGlobalEvent(name: string, data: string): GlobalEvent | null {
   // The keep-alive carries no payload at all, so it is answered before any parsing.
-  if (name === 'ping') return { type: 'ping' }
+  if (name === 'ping') return { type: 'ping' };
 
-  let payload: unknown
+  let payload: unknown;
   try {
-    payload = JSON.parse(data)
+    payload = JSON.parse(data);
   } catch {
-    return null
+    return null;
   }
 
   switch (name) {
     case 'run':
-      return isRunRecord(payload) ? { type: 'run', run: payload } : null
+      return isRunRecord(payload) ? { type: 'run', run: payload } : null;
     case 'run-deleted': {
-      const id = (payload as { id?: unknown } | null)?.id
-      return typeof id === 'string' && id ? { type: 'run-deleted', id } : null
+      const id = (payload as { id?: unknown } | null)?.id;
+      return typeof id === 'string' && id ? { type: 'run-deleted', id } : null;
     }
     case 'todos':
-      return Array.isArray(payload) ? { type: 'todos', items: payload as TodoItem[] } : null
+      return Array.isArray(payload) ? { type: 'todos', items: payload as TodoItem[] } : null;
     case 'usage':
-      return isRecord(payload) ? { type: 'usage', usage: payload as Record<string, ProcessUsage> } : null
+      return isRecord(payload) ? { type: 'usage', usage: payload as Record<string, ProcessUsage> } : null;
     default:
-      return null
+      return null;
   }
 }
 
@@ -74,49 +74,49 @@ export function parseWorkspaceEvent(
   name: string,
   data: string,
 ): { project: string | null; event: GlobalEvent } | null {
-  if (name === 'ping') return { project: null, event: { type: 'ping' } }
+  if (name === 'ping') return { project: null, event: { type: 'ping' } };
 
-  let payload: unknown
+  let payload: unknown;
   try {
-    payload = JSON.parse(data)
+    payload = JSON.parse(data);
   } catch {
-    return null
+    return null;
   }
-  if (!isRecord(payload)) return null
-  const project = payload.project
-  if (typeof project !== 'string' || project === '') return null
+  if (!isRecord(payload)) return null;
+  const project = payload.project;
+  if (typeof project !== 'string' || project === '') return null;
 
   switch (name) {
     case 'run': {
       // Strip the stamp: the reducers (and the cache) must see today's bare RunRecord.
-      const { project: _stamp, ...run } = payload
-      return isRunRecord(run) ? { project, event: { type: 'run', run } } : null
+      const { project: _stamp, ...run } = payload;
+      return isRunRecord(run) ? { project, event: { type: 'run', run } } : null;
     }
     case 'run-deleted': {
-      const id = payload.id
-      return typeof id === 'string' && id ? { project, event: { type: 'run-deleted', id } } : null
+      const id = payload.id;
+      return typeof id === 'string' && id ? { project, event: { type: 'run-deleted', id } } : null;
     }
     case 'todos':
       return Array.isArray(payload.items)
         ? { project, event: { type: 'todos', items: payload.items as TodoItem[] } }
-        : null
+        : null;
     case 'usage':
       return isRecord(payload.usage)
         ? { project, event: { type: 'usage', usage: payload.usage as Record<string, ProcessUsage> } }
-        : null
+        : null;
     default:
-      return null
+      return null;
   }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 /** The one field every reducer keys on. Deep-validating the record would only re-implement the
  *  server's own schema in a place that cannot enforce it. */
 function isRunRecord(value: unknown): value is RunRecord {
-  return isRecord(value) && typeof value.id === 'string' && value.id !== ''
+  return isRecord(value) && typeof value.id === 'string' && value.id !== '';
 }
 
 // ---- reducers ----------------------------------------------------------------------------
@@ -134,30 +134,30 @@ function isRunRecord(value: unknown): value is RunRecord {
  * appears mid-session lands where a refetch would have put it.
  */
 export function applyRunEvent(list: ApiRun[] | undefined, run: RunRecord): ApiRun[] | undefined {
-  if (!list) return undefined
+  if (!list) return undefined;
 
-  const index = list.findIndex((r) => r.id === run.id)
+  const index = list.findIndex((r) => r.id === run.id);
   if (index >= 0) {
-    const next = [...list]
-    next[index] = mergeRun(list[index], run)
-    return next
+    const next = [...list];
+    next[index] = mergeRun(list[index], run);
+    return next;
   }
 
   // `?? ''` because only `id` is validated on the way in: a record missing `createdAt` must sort
   // last, not throw and take the stream's message loop with it.
-  const createdAt = run.createdAt ?? ''
-  const at = list.findIndex((r) => (r.createdAt ?? '').localeCompare(createdAt) < 0)
-  const next = [...list]
-  next.splice(at < 0 ? list.length : at, 0, run)
-  return next
+  const createdAt = run.createdAt ?? '';
+  const at = list.findIndex((r) => (r.createdAt ?? '').localeCompare(createdAt) < 0);
+  const next = [...list];
+  next.splice(at < 0 ? list.length : at, 0, run);
+  return next;
 }
 
 /** Drop a deleted run. Same reference back when the id isn't there — an event about a run this
  *  cache never held must not re-render every list on screen. */
 export function applyRunDeleted(list: ApiRun[] | undefined, id: string): ApiRun[] | undefined {
-  if (!list) return undefined
-  const next = list.filter((r) => r.id !== id)
-  return next.length === list.length ? list : next
+  if (!list) return undefined;
+  const next = list.filter((r) => r.id !== id);
+  return next.length === list.length ? list : next;
 }
 
 /**
@@ -169,7 +169,7 @@ export function applyRunDeleted(list: ApiRun[] | undefined, id: string): ApiRun[
  * out on every status change. Freshness for it comes from the `usage` ticks either way.
  */
 export function mergeRun(previous: ApiRun | undefined, run: RunRecord): ApiRun {
-  return previous?.usage ? { ...run, usage: previous.usage } : run
+  return previous?.usage ? { ...run, usage: previous.usage } : run;
 }
 
 // ---- live usage --------------------------------------------------------------------------
@@ -187,27 +187,27 @@ export function mergeRun(previous: ApiRun | undefined, run: RunRecord): ApiRun {
  * and a per-run selector only re-renders when that run's own sample was replaced.
  */
 export interface UsageStore {
-  subscribe(listener: () => void): () => void
-  get(): Record<string, ProcessUsage>
+  subscribe(listener: () => void): () => void;
+  get(): Record<string, ProcessUsage>;
   /** Each tick is a complete snapshot of the runs that currently have samples, so it replaces
    *  rather than merges — a run that ended must stop reporting, not keep its last number. */
-  set(usage: Record<string, ProcessUsage>): void
+  set(usage: Record<string, ProcessUsage>): void;
 }
 
-export const EMPTY_USAGE: Record<string, ProcessUsage> = Object.freeze({})
+export const EMPTY_USAGE: Record<string, ProcessUsage> = Object.freeze({});
 
 export function createUsageStore(): UsageStore {
-  let snapshot: Record<string, ProcessUsage> = EMPTY_USAGE
-  const listeners = new Set<() => void>()
+  let snapshot: Record<string, ProcessUsage> = EMPTY_USAGE;
+  const listeners = new Set<() => void>();
   return {
     subscribe(listener) {
-      listeners.add(listener)
-      return () => listeners.delete(listener)
+      listeners.add(listener);
+      return () => listeners.delete(listener);
     },
     get: () => snapshot,
     set(usage) {
-      snapshot = usage
-      for (const listener of listeners) listener()
+      snapshot = usage;
+      for (const listener of listeners) listener();
     },
-  }
+  };
 }

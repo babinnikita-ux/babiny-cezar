@@ -145,10 +145,7 @@ const guards = {
   workflowDef: true satisfies Exact<WorkflowDef, WebWorkflowDef>,
   workflowLoadIssue: true satisfies Exact<WorkflowLoadIssue, WebWorkflowLoadIssue>,
   // `GET /api/workflows` returns loadWorkflows()'s resolved value verbatim.
-  workflowsResponse: true satisfies Exact<
-    Awaited<ReturnType<typeof loadWorkflows>>,
-    WebWorkflowsResponse
-  >,
+  workflowsResponse: true satisfies Exact<Awaited<ReturnType<typeof loadWorkflows>>, WebWorkflowsResponse>,
   skill: true satisfies Exact<Skill, WebSkill>,
   todoItem: true satisfies Exact<TodoItem, WebTodoItem>,
   githubItem: true satisfies Exact<GithubItem, WebGithubItem>,

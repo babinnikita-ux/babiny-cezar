@@ -15,14 +15,14 @@
  *  is optional because React's synthetic events surface it via `nativeEvent` — callers pass
  *  whichever object carries it. */
 export type SubmitShortcutEvent = {
-  key: string
-  shiftKey: boolean
-  metaKey: boolean
-  ctrlKey: boolean
-  altKey: boolean
-  repeat?: boolean
-  isComposing?: boolean
-}
+  key: string;
+  shiftKey: boolean;
+  metaKey: boolean;
+  ctrlKey: boolean;
+  altKey: boolean;
+  repeat?: boolean;
+  isComposing?: boolean;
+};
 
 /**
  * Does this keydown mean "send the message"?
@@ -35,11 +35,11 @@ export type SubmitShortcutEvent = {
  *  - Mid-IME-composition Enter commits the composition, not the message — never send.
  */
 export function isSubmitShortcut(event: SubmitShortcutEvent): boolean {
-  if (event.key !== 'Enter') return false
-  if (event.shiftKey || event.altKey) return false
-  if (event.repeat) return false
-  if (event.isComposing) return false
-  return true
+  if (event.key !== 'Enter') return false;
+  if (event.shiftKey || event.altKey) return false;
+  if (event.repeat) return false;
+  if (event.isComposing) return false;
+  return true;
 }
 
 /** The kbd hint next to a submit button, in the platform's own symbols (spec: "kbd hints
@@ -48,5 +48,5 @@ export function isSubmitShortcut(event: SubmitShortcutEvent): boolean {
 export function submitShortcutHint(
   platform: string = typeof navigator === 'undefined' ? '' : navigator.platform,
 ): string {
-  return /mac|iphone|ipad|ipod/i.test(platform) ? '⌘↵' : 'Ctrl+↵'
+  return /mac|iphone|ipad|ipod/i.test(platform) ? '⌘↵' : 'Ctrl+↵';
 }

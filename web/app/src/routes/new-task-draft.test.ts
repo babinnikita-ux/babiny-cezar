@@ -1,8 +1,8 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { clearDraftText, readDraft, resetDraft, writeDraft } from './new-task-draft'
+import { clearDraftText, readDraft, resetDraft, writeDraft } from './new-task-draft';
 
-afterEach(resetDraft)
+afterEach(resetDraft);
 
 describe('the new-task draft store', () => {
   it('starts empty with the never-chosen sentinels', () => {
@@ -16,8 +16,8 @@ describe('the new-task draft store', () => {
       worktree: null,
       autonomous: null,
       generateFollowups: null,
-    })
-  })
+    });
+  });
 
   it('round-trips a draft and hands out copies, not the stored object', () => {
     writeDraft({
@@ -30,14 +30,14 @@ describe('the new-task draft store', () => {
       worktree: false,
       autonomous: null,
       generateFollowups: false,
-    })
-    const first = readDraft()
-    expect(first.text).toBe('fix it')
-    expect(first.worktree).toBe(false)
-    expect(first.generateFollowups).toBe(false)
-    first.text = 'mutated'
-    expect(readDraft().text).toBe('fix it')
-  })
+    });
+    const first = readDraft();
+    expect(first.text).toBe('fix it');
+    expect(first.worktree).toBe(false);
+    expect(first.generateFollowups).toBe(false);
+    first.text = 'mutated';
+    expect(readDraft().text).toBe('fix it');
+  });
 
   it('clearDraftText spends the text but keeps the picker choices (legacy keeps its pills)', () => {
     writeDraft({
@@ -50,8 +50,8 @@ describe('the new-task draft store', () => {
       worktree: null,
       autonomous: null,
       generateFollowups: true,
-    })
-    clearDraftText()
+    });
+    clearDraftText();
     expect(readDraft()).toEqual({
       text: '',
       source: { source: 'workflow', ref: 'quick-task' },
@@ -62,8 +62,8 @@ describe('the new-task draft store', () => {
       worktree: null,
       autonomous: null,
       generateFollowups: true,
-    })
-  })
+    });
+  });
 
   it('survives a page reload — a cold read re-hydrates from localStorage', () => {
     writeDraft({
@@ -76,10 +76,10 @@ describe('the new-task draft store', () => {
       worktree: false,
       autonomous: null,
       generateFollowups: false,
-    })
+    });
     // A fresh page has no in-memory cache but keeps localStorage: resetDraft removes storage, so
     // instead drop only the cache by round-tripping through a raw storage read.
-    const raw = localStorage.getItem('cez-new-task-draft') as string
+    const raw = localStorage.getItem('cez-new-task-draft') as string;
     expect(JSON.parse(raw)).toMatchObject({
       text: 'do not lose me',
       variants: 2,
@@ -87,13 +87,13 @@ describe('the new-task draft store', () => {
       autonomous: null,
       generateFollowups: false,
       planFirst: true,
-    })
-  })
+    });
+  });
 
   it('normalizes a malformed/older stored value instead of throwing', () => {
     // A cold read (cache null after resetDraft) hitting bad JSON must degrade to EMPTY.
-    resetDraft()
-    localStorage.setItem('cez-new-task-draft', 'not json at all')
+    resetDraft();
+    localStorage.setItem('cez-new-task-draft', 'not json at all');
     expect(readDraft()).toEqual({
       text: '',
       source: null,
@@ -104,10 +104,10 @@ describe('the new-task draft store', () => {
       worktree: null,
       autonomous: null,
       generateFollowups: null,
-    })
+    });
 
-    resetDraft()
-    localStorage.setItem('cez-new-task-draft', '{"text":42,"variants":9,"source":"nope","worktree":"x"}')
+    resetDraft();
+    localStorage.setItem('cez-new-task-draft', '{"text":42,"variants":9,"source":"nope","worktree":"x"}');
     expect(readDraft()).toEqual({
       text: '',
       source: null,
@@ -118,6 +118,6 @@ describe('the new-task draft store', () => {
       worktree: null,
       autonomous: null,
       generateFollowups: null,
-    })
-  })
-})
+    });
+  });
+});

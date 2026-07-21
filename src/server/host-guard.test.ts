@@ -70,7 +70,8 @@ describe('host-header guard (DNS rebinding)', () => {
         const res = await request(host, path);
         expect(res.status).toBe(403);
         expect(await res.json()).toEqual({
-          error: 'forbidden: unexpected Host header — this request did not originate from this machine (see #426)',
+          error:
+            'forbidden: unexpected Host header — this request did not originate from this machine (see #426)',
         });
       }
     },

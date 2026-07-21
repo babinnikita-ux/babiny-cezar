@@ -198,7 +198,14 @@ describe('mapCodexNotification edge cases', () => {
     expect(output.events).toEqual([
       {
         type: 'item.started',
-        item: { kind: 'tool', id: 'item_c', name: 'commandExecution', toolKind: 'execute', title: 'Ran', status: 'running' },
+        item: {
+          kind: 'tool',
+          id: 'item_c',
+          name: 'commandExecution',
+          toolKind: 'execute',
+          title: 'Ran',
+          status: 'running',
+        },
       },
       { type: 'item.delta', itemId: 'item_c', field: 'output', delta: '$ ls\n' },
     ]);
@@ -213,7 +220,12 @@ describe('mapCodexNotification edge cases', () => {
       ).state;
     }
     const done = mapCodexNotification(
-      { method: 'item/completed', params: { item: { type: 'commandExecution', id: 'item_c1', command: 'ls', status: 'completed', exitCode: 0 } } },
+      {
+        method: 'item/completed',
+        params: {
+          item: { type: 'commandExecution', id: 'item_c1', command: 'ls', status: 'completed', exitCode: 0 },
+        },
+      },
       s,
     );
     expect(done.events[0]).toMatchObject({ item: { output: 'line 1\nline 2\n', exitCode: 0 } });
@@ -223,7 +235,18 @@ describe('mapCodexNotification edge cases', () => {
 
     // A wire-carried output always wins over the accumulator.
     const wireWins = mapCodexNotification(
-      { method: 'item/completed', params: { item: { type: 'commandExecution', id: 'item_c1', command: 'ls', status: 'completed', aggregatedOutput: 'authoritative' } } },
+      {
+        method: 'item/completed',
+        params: {
+          item: {
+            type: 'commandExecution',
+            id: 'item_c1',
+            command: 'ls',
+            status: 'completed',
+            aggregatedOutput: 'authoritative',
+          },
+        },
+      },
       s,
     );
     expect(wireWins.events[0]).toMatchObject({ item: { output: 'authoritative' } });
@@ -231,7 +254,18 @@ describe('mapCodexNotification edge cases', () => {
 
   it('item/completed for an item that never started still completes a full snapshot', () => {
     const mapped = mapCodexNotification(
-      { method: 'item/completed', params: { item: { type: 'commandExecution', id: 'item_ghost', command: 'pwd', status: 'completed', exitCode: 0 } } },
+      {
+        method: 'item/completed',
+        params: {
+          item: {
+            type: 'commandExecution',
+            id: 'item_ghost',
+            command: 'pwd',
+            status: 'completed',
+            exitCode: 0,
+          },
+        },
+      },
       state,
     );
     expect(mapped.events).toEqual([
@@ -255,8 +289,20 @@ describe('mapCodexNotification edge cases', () => {
     const cases: Array<[Record<string, unknown>, string]> = [
       [{ method: 'turn/completed', params: { turn: { id: 't1', status: 'completed' } } }, 'end_turn'],
       [{ method: 'turn/completed', params: { turn: { id: 't1', status: 'interrupted' } } }, 'cancelled'],
-      [{ method: 'turn/failed', params: { turn: { id: 't1', status: 'failed' }, error: { message: 'boom' } } }, 'error'],
-      [{ method: 'turn/failed', params: { turn: { id: 't1', status: 'failed' }, error: { message: 'Turn interrupted' } } }, 'cancelled'],
+      [
+        {
+          method: 'turn/failed',
+          params: { turn: { id: 't1', status: 'failed' }, error: { message: 'boom' } },
+        },
+        'error',
+      ],
+      [
+        {
+          method: 'turn/failed',
+          params: { turn: { id: 't1', status: 'failed' }, error: { message: 'Turn interrupted' } },
+        },
+        'cancelled',
+      ],
       [{ method: 'turn/failed', params: { turn: { id: 't1', status: 'interrupted' } } }, 'cancelled'],
       [{ method: 'turn/failed', params: { turn: { id: 't1' } } }, 'error'],
     ];
@@ -297,7 +343,10 @@ describe('mapCodexNotification edge cases', () => {
 
   it('sums the parts when the wire total is missing', () => {
     const [event] = mapCodexNotification(
-      { method: 'thread/tokenUsage/updated', params: { tokenUsage: { total: { inputTokens: 7, outputTokens: 2 } } } },
+      {
+        method: 'thread/tokenUsage/updated',
+        params: { tokenUsage: { total: { inputTokens: 7, outputTokens: 2 } } },
+      },
       state,
     ).events;
     expect(event).toEqual({ type: 'usage.updated', usage: { input: 7, output: 2, total: 9 } });
@@ -309,12 +358,16 @@ describe('mapCodexNotification edge cases', () => {
       { method: 'thread/started', params: { thread: { id: 'th_1' } } },
       s,
     );
-    expect(viaNotification.events).toEqual([{ type: 'session.started', sessionId: 'th_1', backend: 'codex' }]);
+    expect(viaNotification.events).toEqual([
+      { type: 'session.started', sessionId: 'th_1', backend: 'codex' },
+    ]);
     // The runner's result-path call afterwards is a no-op…
     expect(codexSessionStarted('th_1', viaNotification.state).events).toEqual([]);
     // …and so is a duplicate notification after the result path.
     s = codexSessionStarted('th_2', createCodexUiState()).state;
-    expect(mapCodexNotification({ method: 'thread/started', params: { thread: { id: 'th_2' } } }, s).events).toEqual([]);
+    expect(
+      mapCodexNotification({ method: 'thread/started', params: { thread: { id: 'th_2' } } }, s).events,
+    ).toEqual([]);
   });
 
   it('todoList entries with malformed rows are filtered; a text-only plan item becomes one in-progress entry', () => {
@@ -325,7 +378,12 @@ describe('mapCodexNotification edge cases', () => {
           item: {
             type: 'todoList',
             id: 'item_t',
-            items: [{ text: 'ok', completed: true }, { completed: false }, 'junk', { text: 'later', completed: false }],
+            items: [
+              { text: 'ok', completed: true },
+              { completed: false },
+              'junk',
+              { text: 'later', completed: false },
+            ],
           },
         },
       },
@@ -340,7 +398,10 @@ describe('mapCodexNotification edge cases', () => {
     });
 
     const [textPlan] = mapCodexNotification(
-      { method: 'item/completed', params: { item: { type: 'plan', id: 'item_p', text: 'Fix the redirect, then add tests' } } },
+      {
+        method: 'item/completed',
+        params: { item: { type: 'plan', id: 'item_p', text: 'Fix the redirect, then add tests' } },
+      },
       state,
     ).events;
     expect(textPlan).toEqual({
@@ -356,7 +417,14 @@ describe('mapCodexNotification edge cases', () => {
     ).events;
     expect(review).toEqual({
       type: 'item.started',
-      item: { kind: 'tool', id: 'item_rv', name: 'enteredReviewMode', toolKind: 'task', title: 'Review', status: 'running' },
+      item: {
+        kind: 'tool',
+        id: 'item_rv',
+        name: 'enteredReviewMode',
+        toolKind: 'task',
+        title: 'Review',
+        status: 'running',
+      },
     });
 
     const [unknown] = mapCodexNotification(
@@ -365,7 +433,13 @@ describe('mapCodexNotification edge cases', () => {
     ).events;
     expect(unknown).toMatchObject({
       type: 'item.completed',
-      item: { kind: 'tool', id: 'item_cc', name: 'contextCompaction', toolKind: 'other', status: 'completed' },
+      item: {
+        kind: 'tool',
+        id: 'item_cc',
+        name: 'contextCompaction',
+        toolKind: 'other',
+        status: 'completed',
+      },
     });
   });
 
@@ -378,13 +452,23 @@ describe('mapCodexNotification edge cases', () => {
         state,
       );
       const exited = mapCodexNotification(
-        { method: 'item/completed', params: { item: { type: 'exitedReviewMode', id: 'item_rv_2', status: 'completed' } } },
+        {
+          method: 'item/completed',
+          params: { item: { type: 'exitedReviewMode', id: 'item_rv_2', status: 'completed' } },
+        },
         entered.state,
       );
       expect(exited.events).toEqual([
         {
           type: 'item.completed',
-          item: { kind: 'tool', id: 'item_rv_1', name: 'enteredReviewMode', toolKind: 'task', title: 'Review', status: 'completed' },
+          item: {
+            kind: 'tool',
+            id: 'item_rv_1',
+            name: 'enteredReviewMode',
+            toolKind: 'task',
+            title: 'Review',
+            status: 'completed',
+          },
         },
       ]);
       expect(exited.state.reviewItemId).toBeNull();
@@ -392,23 +476,36 @@ describe('mapCodexNotification edge cases', () => {
 
     it('falls back to its own item for an unpaired exit (a stream that starts mid-review)', () => {
       const mapped = mapCodexNotification(
-        { method: 'item/completed', params: { item: { type: 'exitedReviewMode', id: 'item_rv_2', status: 'completed' } } },
+        {
+          method: 'item/completed',
+          params: { item: { type: 'exitedReviewMode', id: 'item_rv_2', status: 'completed' } },
+        },
         state,
       );
       expect(mapped.events).toEqual([
         {
           type: 'item.completed',
-          item: { kind: 'tool', id: 'item_rv_2', name: 'exitedReviewMode', toolKind: 'task', title: 'Review', status: 'completed' },
+          item: {
+            kind: 'tool',
+            id: 'item_rv_2',
+            name: 'exitedReviewMode',
+            toolKind: 'task',
+            title: 'Review',
+            status: 'completed',
+          },
         },
       ]);
     });
 
     it('closes the span when the entered frame itself arrives already completed', () => {
       const mapped = mapCodexNotification(
-        { method: 'item/completed', params: { item: { type: 'enteredReviewMode', id: 'item_rv_1', status: 'completed' } } },
+        {
+          method: 'item/completed',
+          params: { item: { type: 'enteredReviewMode', id: 'item_rv_1', status: 'completed' } },
+        },
         state,
       );
-      expect(mapped.state.reviewItemId).toBeNull()
+      expect(mapped.state.reviewItemId).toBeNull();
       // The next exit has nothing to pair with, so it maps under its own id.
       const exited = mapCodexNotification(
         { method: 'item/completed', params: { item: { type: 'exitedReviewMode', id: 'item_rv_2' } } },
@@ -430,7 +527,14 @@ describe('mapCodexNotification edge cases', () => {
       );
       expect(ended.events[0]).toEqual({
         type: 'item.completed',
-        item: { kind: 'tool', id: 'item_rv_1', name: 'enteredReviewMode', toolKind: 'task', title: 'Review', status: 'completed' },
+        item: {
+          kind: 'tool',
+          id: 'item_rv_1',
+          name: 'enteredReviewMode',
+          toolKind: 'task',
+          title: 'Review',
+          status: 'completed',
+        },
       });
       expect(ended.events[1]).toMatchObject({ type: 'turn.completed' });
       expect(ended.state.reviewItemId).toBeNull();
@@ -445,7 +549,10 @@ describe('mapCodexNotification edge cases', () => {
         { method: 'turn/failed', params: { turn: { id: 'turn_1' }, error: { message: 'boom' } } },
         entered.state,
       );
-      expect(ended.events[0]).toMatchObject({ type: 'item.completed', item: { id: 'item_rv_1', status: 'failed' } });
+      expect(ended.events[0]).toMatchObject({
+        type: 'item.completed',
+        item: { id: 'item_rv_1', status: 'failed' },
+      });
     });
 
     it('emits no review completion for a turn that had no open span', () => {
@@ -469,11 +576,25 @@ describe('mapCodexNotification edge cases', () => {
       expect(second.events).toEqual([
         {
           type: 'item.completed',
-          item: { kind: 'tool', id: 'rv_1', name: 'enteredReviewMode', toolKind: 'task', title: 'Review', status: 'completed' },
+          item: {
+            kind: 'tool',
+            id: 'rv_1',
+            name: 'enteredReviewMode',
+            toolKind: 'task',
+            title: 'Review',
+            status: 'completed',
+          },
         },
         {
           type: 'item.started',
-          item: { kind: 'tool', id: 'rv_2', name: 'enteredReviewMode', toolKind: 'task', title: 'Review', status: 'running' },
+          item: {
+            kind: 'tool',
+            id: 'rv_2',
+            name: 'enteredReviewMode',
+            toolKind: 'task',
+            title: 'Review',
+            status: 'running',
+          },
         },
       ]);
       expect(second.state.reviewItemId).toBe('rv_2');
@@ -482,7 +603,10 @@ describe('mapCodexNotification edge cases', () => {
     // The latch must follow the RESOLVED status, not the lifecycle phase the frame arrived in.
     it('keeps the span open for an item/completed frame that is still in progress', () => {
       const mapped = mapCodexNotification(
-        { method: 'item/completed', params: { item: { type: 'enteredReviewMode', id: 'rv_1', status: 'inProgress' } } },
+        {
+          method: 'item/completed',
+          params: { item: { type: 'enteredReviewMode', id: 'rv_1', status: 'inProgress' } },
+        },
         state,
       );
       expect(mapped.events[0]).toMatchObject({ item: { status: 'running' } });
@@ -491,7 +615,10 @@ describe('mapCodexNotification edge cases', () => {
 
     it('closes the span for an item/started frame that already carries a terminal status', () => {
       const mapped = mapCodexNotification(
-        { method: 'item/started', params: { item: { type: 'enteredReviewMode', id: 'rv_1', status: 'completed' } } },
+        {
+          method: 'item/started',
+          params: { item: { type: 'enteredReviewMode', id: 'rv_1', status: 'completed' } },
+        },
         state,
       );
       expect(mapped.events[0]).toMatchObject({ item: { status: 'completed' } });
@@ -523,7 +650,10 @@ describe('mapCodexNotification edge cases', () => {
 
   it("the user's own echoed message maps to zero events", () => {
     const mapped = mapCodexNotification(
-      { method: 'item/started', params: { item: { type: 'userMessage', id: 'item_u', content: [{ type: 'text', text: 'hi' }] } } },
+      {
+        method: 'item/started',
+        params: { item: { type: 'userMessage', id: 'item_u', content: [{ type: 'text', text: 'hi' }] } },
+      },
       state,
     );
     expect(mapped.events).toEqual([]);
@@ -569,20 +699,35 @@ describe('mapCodexNotification edge cases', () => {
         state,
       ).events;
       expect(events).toEqual([
-        { type: 'plan.updated', entries: [{ content: 'a', status: 'pending' }, { content: 'b', status: 'pending' }] },
+        {
+          type: 'plan.updated',
+          entries: [
+            { content: 'a', status: 'pending' },
+            { content: 'b', status: 'pending' },
+          ],
+        },
       ]);
     });
 
     it('filters malformed steps but keeps the good ones', () => {
       const events = mapCodexNotification(
-        planFrame(['oops', null, 42, { status: 'pending' }, { step: 5 }, { step: 'real', status: 'pending' }]),
+        planFrame([
+          'oops',
+          null,
+          42,
+          { status: 'pending' },
+          { step: 5 },
+          { step: 'real', status: 'pending' },
+        ]),
         state,
       ).events;
       expect(events).toEqual([{ type: 'plan.updated', entries: [{ content: 'real', status: 'pending' }] }]);
     });
 
     it('emits an empty plan for an empty list — a cleared plan is a real snapshot', () => {
-      expect(mapCodexNotification(planFrame([]), state).events).toEqual([{ type: 'plan.updated', entries: [] }]);
+      expect(mapCodexNotification(planFrame([]), state).events).toEqual([
+        { type: 'plan.updated', entries: [] },
+      ]);
     });
 
     // "the agent cleared its plan" and "we could not parse the steps" both end up
@@ -599,7 +744,9 @@ describe('mapCodexNotification edge cases', () => {
       // survive into the second. The only state kept is the precedence latch.
       const first = mapCodexNotification(planFrame([{ step: 'a', status: 'completed' }]), state);
       const second = mapCodexNotification(planFrame([{ step: 'b', status: 'pending' }]), first.state);
-      expect(second.events).toEqual([{ type: 'plan.updated', entries: [{ content: 'b', status: 'pending' }] }]);
+      expect(second.events).toEqual([
+        { type: 'plan.updated', entries: [{ content: 'b', status: 'pending' }] },
+      ]);
       expect({ ...second.state, planFromNotification: false }).toEqual(state);
 
       // The latch settles after the first frame rather than churning state.
@@ -612,20 +759,29 @@ describe('mapCodexNotification edge cases', () => {
     // single prose entry the plan-MODE item carries.
     it('outranks the prose plan item: once it has spoken, the item arm stands down', () => {
       const afterPlan = mapCodexNotification(
-        planFrame([{ step: 'one', status: 'completed' }, { step: 'two', status: 'inProgress' }]),
+        planFrame([
+          { step: 'one', status: 'completed' },
+          { step: 'two', status: 'inProgress' },
+        ]),
         state,
       );
       expect(afterPlan.state.planFromNotification).toBe(true);
 
       const prose = mapCodexNotification(
-        { method: 'item/completed', params: { item: { type: 'plan', id: 'item_p', text: 'Here is my prose plan…' } } },
+        {
+          method: 'item/completed',
+          params: { item: { type: 'plan', id: 'item_p', text: 'Here is my prose plan…' } },
+        },
         afterPlan.state,
       );
       expect(prose.events).toEqual([]);
 
       // …and a stray todoList snapshot is ignored for the same reason.
       const stray = mapCodexNotification(
-        { method: 'item/started', params: { item: { type: 'todoList', id: 'item_t', items: [{ text: 'x', completed: false }] } } },
+        {
+          method: 'item/started',
+          params: { item: { type: 'todoList', id: 'item_t', items: [{ text: 'x', completed: false }] } },
+        },
         afterPlan.state,
       );
       expect(stray.events).toEqual([]);
@@ -658,12 +814,22 @@ describe('mapCodexNotification edge cases', () => {
         { method: 'item/completed', params: { item: { type: 'plan', id: 'item_p', text: 'Prose plan' } } },
         state,
       );
-      expect(prose.events).toEqual([{ type: 'plan.updated', entries: [{ content: 'Prose plan', status: 'in_progress' }] }]);
+      expect(prose.events).toEqual([
+        { type: 'plan.updated', entries: [{ content: 'Prose plan', status: 'in_progress' }] },
+      ]);
     });
 
     it('ignores the explanation prose (the dock renders entries only)', () => {
       const events = mapCodexNotification(
-        { method: 'turn/plan/updated', params: { threadId: 'th_1', turnId: 'turn_1', explanation: 'why', plan: [{ step: 'a', status: 'pending' }] } },
+        {
+          method: 'turn/plan/updated',
+          params: {
+            threadId: 'th_1',
+            turnId: 'turn_1',
+            explanation: 'why',
+            plan: [{ step: 'a', status: 'pending' }],
+          },
+        },
         state,
       ).events;
       expect(events).toEqual([{ type: 'plan.updated', entries: [{ content: 'a', status: 'pending' }] }]);
@@ -700,7 +866,12 @@ describe('CodexAppServerRunner v2 wiring (against the bundled mock app-server)',
     expect(v2[0]).toEqual({ type: 'session.started', sessionId: 'th_mock_1', backend: 'codex' });
     expect(v2.filter((e) => e.type === 'session.started')).toHaveLength(1);
     expect(v2.some((e) => e.type === 'turn.started' && e.turnId === 'turn_mock_1')).toBe(true);
-    expect(v2).toContainEqual({ type: 'item.delta', itemId: 'item_c1', field: 'output', delta: ' M src/example.ts\n' });
+    expect(v2).toContainEqual({
+      type: 'item.delta',
+      itemId: 'item_c1',
+      field: 'output',
+      delta: ' M src/example.ts\n',
+    });
     const cmdDone = v2.find(
       (e): e is Extract<UiEvent, { type: 'item.completed' }> =>
         e.type === 'item.completed' && e.item.kind === 'tool' && e.item.id === 'item_c1',
@@ -747,22 +918,36 @@ describe('CodexAppServerRunner v2 wiring (against the bundled mock app-server)',
     const runner = new CodexAppServerRunner({ bin: mockBin, timeoutMs: 60_000 });
     const v2: UiEvent[] = [];
     let resolveAsk!: () => void;
-    const asked = new Promise<void>((resolve) => { resolveAsk = resolve; });
+    const asked = new Promise<void>((resolve) => {
+      resolveAsk = resolve;
+    });
     const session = runner.startSession(
       { userPrompt: 'ask me', cwd: process.cwd(), env: { MOCK_CODEX_ASK: '1' } },
       undefined,
-      { autoEndAfterFirstTurn: true, onUiEvent: (event) => {
-        v2.push(event);
-        if (event.type === 'ask.requested') resolveAsk();
-      } },
+      {
+        autoEndAfterFirstTurn: true,
+        onUiEvent: (event) => {
+          v2.push(event);
+          if (event.type === 'ask.requested') resolveAsk();
+        },
+      },
     );
     await asked;
     expect(v2).toContainEqual({
-      type: 'ask.requested', requestId: 'codex-ask-1', questions: [{
-        id: 'library', header: 'Library', question: 'Which test library?', multiSelect: false,
-        options: [{ label: 'Vitest', description: 'Use the existing test runner.' },
-          { label: 'Node test', description: 'Use node:test.' }],
-      }],
+      type: 'ask.requested',
+      requestId: 'codex-ask-1',
+      questions: [
+        {
+          id: 'library',
+          header: 'Library',
+          question: 'Which test library?',
+          multiSelect: false,
+          options: [
+            { label: 'Vitest', description: 'Use the existing test runner.' },
+            { label: 'Node test', description: 'Use node:test.' },
+          ],
+        },
+      ],
     });
     expect(session.sendMessage([{ type: 'text', text: 'Library: Vitest' }])).toBe(true);
     await expect(session.result).resolves.toMatchObject({ sessionId: 'th_mock_1' });
@@ -771,13 +956,18 @@ describe('CodexAppServerRunner v2 wiring (against the bundled mock app-server)',
   it('routes an unstructured multi-question free-text reply to the first native question', async () => {
     const runner = new CodexAppServerRunner({ bin: mockBin, timeoutMs: 60_000 });
     let resolveAsk!: () => void;
-    const asked = new Promise<void>((resolve) => { resolveAsk = resolve; });
+    const asked = new Promise<void>((resolve) => {
+      resolveAsk = resolve;
+    });
     const session = runner.startSession(
       { userPrompt: 'mock:native-codex-ask multi free text', cwd: process.cwd() },
       undefined,
-      { autoEndAfterFirstTurn: true, onUiEvent: (event) => {
-        if (event.type === 'ask.requested') resolveAsk();
-      } },
+      {
+        autoEndAfterFirstTurn: true,
+        onUiEvent: (event) => {
+          if (event.type === 'ask.requested') resolveAsk();
+        },
+      },
     );
     await asked;
     expect(session.sendMessage([{ type: 'text', text: 'Use sensible defaults' }])).toBe(true);
@@ -828,7 +1018,11 @@ describe('codex reasoning text survives replay (#528)', () => {
     return events;
   }
 
-  function reasoningAt(events: UiEvent[], type: 'item.started' | 'item.completed', id = ID): UiItem | undefined {
+  function reasoningAt(
+    events: UiEvent[],
+    type: 'item.started' | 'item.completed',
+    id = ID,
+  ): UiItem | undefined {
     return events.find(
       (e): e is Extract<UiEvent, { type: 'item.started' | 'item.completed' }> =>
         e.type === type && 'item' in e && e.item.kind === 'reasoning' && e.item.id === id,
@@ -839,15 +1033,21 @@ describe('codex reasoning text survives replay (#528)', () => {
   function replayedText(events: UiEvent[], id = ID): string | undefined {
     let text: string | undefined;
     for (const e of events) {
-      if ((e.type === 'item.started' || e.type === 'item.updated' || e.type === 'item.completed') &&
-          e.item.kind === 'reasoning' && e.item.id === id) {
+      if (
+        (e.type === 'item.started' || e.type === 'item.updated' || e.type === 'item.completed') &&
+        e.item.kind === 'reasoning' &&
+        e.item.id === id
+      ) {
         text = e.item.text;
       }
     }
     return text;
   }
 
-  const turnStarted = { method: 'turn/started', params: { turn: { id: TURN, status: 'inProgress', items: [] } } };
+  const turnStarted = {
+    method: 'turn/started',
+    params: { turn: { id: TURN, status: 'inProgress', items: [] } },
+  };
   const started = (item: Record<string, unknown> = { summary: 'Tracing it' }) => ({
     method: 'item/started',
     params: { threadId: THREAD, turnId: TURN, item: { type: 'reasoning', id: ID, ...item } },
@@ -885,7 +1085,10 @@ describe('codex reasoning text survives replay (#528)', () => {
   it('persists snapshot-only array summaries for replay', () => {
     const events = fold([
       started({ summary: [], content: [] }),
-      completed({ summary: ['Inspecting the conflict.', 'Choosing the compatible resolution.'], content: [] }),
+      completed({
+        summary: ['Inspecting the conflict.', 'Choosing the compatible resolution.'],
+        content: [],
+      }),
     ]);
     expect(replayedText(events)).toBe('Inspecting the conflict.\nChoosing the compatible resolution.');
   });
@@ -971,10 +1174,12 @@ describe('codex reasoning text survives replay (#528)', () => {
       started({}),
       completed(),
     ]);
-    const second = [...events].reverse().find(
-      (e): e is Extract<UiEvent, { type: 'item.completed' }> =>
-        e.type === 'item.completed' && e.item.kind === 'reasoning',
-    );
+    const second = [...events]
+      .reverse()
+      .find(
+        (e): e is Extract<UiEvent, { type: 'item.completed' }> =>
+          e.type === 'item.completed' && e.item.kind === 'reasoning',
+      );
     expect(second?.item.kind === 'reasoning' && second.item.text).toBe('');
   });
 
@@ -985,11 +1190,19 @@ describe('codex reasoning text survives replay (#528)', () => {
       completed(),
       {
         method: 'item/started',
-        params: { threadId: THREAD, turnId: TURN, item: { type: 'reasoning', id: 'item_rsn_2', summary: 'Next' } },
+        params: {
+          threadId: THREAD,
+          turnId: TURN,
+          item: { type: 'reasoning', id: 'item_rsn_2', summary: 'Next' },
+        },
       },
       {
         method: 'item/completed',
-        params: { threadId: THREAD, turnId: TURN, item: { type: 'reasoning', id: 'item_rsn_2', summary: 'Next' } },
+        params: {
+          threadId: THREAD,
+          turnId: TURN,
+          item: { type: 'reasoning', id: 'item_rsn_2', summary: 'Next' },
+        },
       },
     ]);
     expect(reasoningAt(events, 'item.completed', 'item_rsn_2')).toMatchObject({ text: 'Next' });

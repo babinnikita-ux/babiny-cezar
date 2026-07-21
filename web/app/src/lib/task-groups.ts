@@ -1,4 +1,4 @@
-import type { RunRecord } from '@/api/types'
+import type { RunRecord } from '@/api/types';
 
 /**
  * How the task list is bucketed, sorted and collapsed — the pure half of the sidebar quick-list
@@ -15,12 +15,12 @@ import type { RunRecord } from '@/api/types'
 /** Active/Archived. One value shared by the quick-list and the table (spec, "Task list & table":
  *  the filter tabs "share state with the sidebar quick-list tabs"), as the legacy UI's single
  *  `state.listView` did. */
-export type ListView = 'active' | 'archived'
+export type ListView = 'active' | 'archived';
 
-export type BucketLabel = 'Needs you' | 'Working' | 'Recent' | 'Archived'
+export type BucketLabel = 'Needs you' | 'Working' | 'Recent' | 'Archived';
 
 /** Rendering order. Also the exhaustive set — `groupRuns` emits a subset of these, in this order. */
-export const BUCKET_ORDER: readonly BucketLabel[] = ['Needs you', 'Working', 'Recent', 'Archived']
+export const BUCKET_ORDER: readonly BucketLabel[] = ['Needs you', 'Working', 'Recent', 'Archived'];
 
 /**
  * Sort weight per status: needs-you first, then in-flight, then everything terminal. Ties break
@@ -32,30 +32,30 @@ const STATUS_ORDER: Partial<Record<RunRecord['status'], number>> = {
   review: 1,
   running: 2,
   queued: 3,
-}
+};
 
-const statusWeight = (run: RunRecord): number => STATUS_ORDER[run.status] ?? 9
+const statusWeight = (run: RunRecord): number => STATUS_ORDER[run.status] ?? 9;
 
 /** One row of the quick-list: either a single run, or a collapsed variant group (spec 010). */
 export type QuickListRow =
   | {
-      kind: 'run'
-      run: RunRecord
+      kind: 'run';
+      run: RunRecord;
       /** 1-based position among queued runs, `null` unless the run is queued. */
-      queuePosition: number | null
+      queuePosition: number | null;
     }
   | {
-      kind: 'group'
-      groupId: string
+      kind: 'group';
+      groupId: string;
       /** The shared task title, without the per-variant suffix. */
-      title: string
+      title: string;
       /** Every member, ordered by variant letter (A, B, C). Always ≥ 2 — see `groupRuns`. */
-      members: RunRecord[]
-    }
+      members: RunRecord[];
+    };
 
 export interface QuickListBucket {
-  label: BucketLabel
-  rows: QuickListRow[]
+  label: BucketLabel;
+  rows: QuickListRow[];
 }
 
 /**
@@ -65,10 +65,10 @@ export interface QuickListBucket {
  * outcome is history, and "Needs you" over a run nobody will touch again would be a lie.
  */
 export function bucketOf(run: RunRecord, view: ListView): BucketLabel {
-  if (view === 'archived') return 'Archived'
-  if (run.status === 'waiting' || run.status === 'review') return 'Needs you'
-  if (run.status === 'running' || run.status === 'queued') return 'Working'
-  return 'Recent'
+  if (view === 'archived') return 'Archived';
+  if (run.status === 'waiting' || run.status === 'review') return 'Needs you';
+  if (run.status === 'running' || run.status === 'queued') return 'Working';
+  return 'Recent';
 }
 
 /**
@@ -83,7 +83,7 @@ export function bucketOf(run: RunRecord, view: ListView): BucketLabel {
  * absence falls back — a falsy-but-present value would be a server bug worth seeing.
  */
 export function runTitle(run: RunRecord): string {
-  return run.titleSummary ?? run.title
+  return run.titleSummary ?? run.title;
 }
 
 /**
@@ -93,7 +93,7 @@ export function runTitle(run: RunRecord): string {
  * strips exactly that shape — a title that merely ends in "(D)" or "(draft)" is left alone.
  */
 export function groupTitle(run: Pick<RunRecord, 'title'>): string {
-  return run.title.replace(/ \([A-C]\)$/, '')
+  return run.title.replace(/ \([A-C]\)$/, '');
 }
 
 /**
@@ -107,8 +107,8 @@ export function groupTitle(run: Pick<RunRecord, 'title'>): string {
 export function queuePositions(runs: readonly RunRecord[]): Map<string, number> {
   const queued = runs
     .filter((run) => !run.archived && run.status === 'queued')
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-  return new Map(queued.map((run, index) => [run.id, index + 1]))
+    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  return new Map(queued.map((run, index) => [run.id, index + 1]));
 }
 
 /** Runs in the view, ordered: status weight first, then newest first. */
@@ -116,10 +116,10 @@ export function sortRuns(runs: readonly RunRecord[], view: ListView): RunRecord[
   return runs
     .filter((run) => (view === 'archived' ? run.archived : !run.archived))
     .sort((a, b) => {
-      const weight = statusWeight(a) - statusWeight(b)
-      if (weight !== 0) return weight
-      return b.createdAt.localeCompare(a.createdAt)
-    })
+      const weight = statusWeight(a) - statusWeight(b);
+      if (weight !== 0) return weight;
+      return b.createdAt.localeCompare(a.createdAt);
+    });
 }
 
 /**
@@ -135,37 +135,37 @@ export function sortRuns(runs: readonly RunRecord[], view: ListView): RunRecord[
  * component's cue for the empty state.
  */
 export function groupRuns(runs: readonly RunRecord[], view: ListView): QuickListBucket[] {
-  const positions = queuePositions(runs)
-  const sorted = sortRuns(runs, view)
-  const byBucket = new Map<BucketLabel, QuickListRow[]>()
+  const positions = queuePositions(runs);
+  const sorted = sortRuns(runs, view);
+  const byBucket = new Map<BucketLabel, QuickListRow[]>();
   const push = (label: BucketLabel, row: QuickListRow) => {
-    const rows = byBucket.get(label)
-    if (rows) rows.push(row)
-    else byBucket.set(label, [row])
-  }
+    const rows = byBucket.get(label);
+    if (rows) rows.push(row);
+    else byBucket.set(label, [row]);
+  };
 
-  const seenGroups = new Set<string>()
+  const seenGroups = new Set<string>();
   for (const run of sorted) {
     if (run.groupId) {
-      if (seenGroups.has(run.groupId)) continue
-      seenGroups.add(run.groupId)
+      if (seenGroups.has(run.groupId)) continue;
+      seenGroups.add(run.groupId);
       // From `sorted`, not from `runs`: a group's members must obey the same view filter as
       // everything else, or an archived variant would reappear inside an active group's tile.
       const members = sorted
         .filter((member) => member.groupId === run.groupId)
-        .sort((a, b) => (a.variant ?? '').localeCompare(b.variant ?? ''))
+        .sort((a, b) => (a.variant ?? '').localeCompare(b.variant ?? ''));
       if (members.length > 1) {
-        push(bucketOf(run, view), { kind: 'group', groupId: run.groupId, title: groupTitle(run), members })
-        continue
+        push(bucketOf(run, view), { kind: 'group', groupId: run.groupId, title: groupTitle(run), members });
+        continue;
       }
     }
-    push(bucketOf(run, view), { kind: 'run', run, queuePosition: positions.get(run.id) ?? null })
+    push(bucketOf(run, view), { kind: 'run', run, queuePosition: positions.get(run.id) ?? null });
   }
 
   return BUCKET_ORDER.filter((label) => byBucket.has(label)).map((label) => ({
     label,
     rows: byBucket.get(label) as QuickListRow[],
-  }))
+  }));
 }
 
 /**
@@ -175,34 +175,34 @@ export function groupRuns(runs: readonly RunRecord[], view: ListView): QuickList
  * emptied by the cap are dropped, like `groupRuns` drops empty ones.
  */
 export function capBuckets(buckets: readonly QuickListBucket[], limit: number): QuickListBucket[] {
-  const capped: QuickListBucket[] = []
-  let remaining = limit
+  const capped: QuickListBucket[] = [];
+  let remaining = limit;
   for (const bucket of buckets) {
-    if (remaining <= 0) break
-    const rows = bucket.rows.slice(0, remaining)
-    remaining -= rows.length
-    capped.push({ label: bucket.label, rows })
+    if (remaining <= 0) break;
+    const rows = bucket.rows.slice(0, remaining);
+    remaining -= rows.length;
+    capped.push({ label: bucket.label, rows });
   }
-  return capped
+  return capped;
 }
 
 /** The tab counts. `waiting` drives the Active tab's attention dot — the one thing that makes an
  *  un-selected tab worth looking at. */
 export function listCounts(runs: readonly RunRecord[]): {
-  active: number
-  archived: number
-  waiting: number
+  active: number;
+  archived: number;
+  waiting: number;
 } {
-  let active = 0
-  let archived = 0
-  let waiting = 0
+  let active = 0;
+  let archived = 0;
+  let waiting = 0;
   for (const run of runs) {
     if (run.archived) {
-      archived += 1
-      continue
+      archived += 1;
+      continue;
     }
-    active += 1
-    if (run.status === 'waiting' || run.status === 'review') waiting += 1
+    active += 1;
+    if (run.status === 'waiting' || run.status === 'review') waiting += 1;
   }
-  return { active, archived, waiting }
+  return { active, archived, waiting };
 }

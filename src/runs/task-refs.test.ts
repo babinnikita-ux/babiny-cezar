@@ -4,16 +4,26 @@ import { extractTaskRefs, refineTaskRefs, titleRefNumber } from './task-refs.js'
 /** Spec 2026-07-17-task-auto-naming step 0 — the regex layer the namer is cross-checked against. */
 describe('extractTaskRefs', () => {
   it('reads the GitHub-tab templates verbatim', () => {
-    expect(extractTaskRefs('Address GitHub pull request #454: show CI status\n\nhttps://github.com/open-mercato/cezar/pull/454')).toEqual({
+    expect(
+      extractTaskRefs(
+        'Address GitHub pull request #454: show CI status\n\nhttps://github.com/open-mercato/cezar/pull/454',
+      ),
+    ).toEqual({
       prNumber: 454,
     });
-    expect(extractTaskRefs('Fix GitHub issue #432: bad titles\n\nhttps://github.com/open-mercato/cezar/issues/432')).toEqual({
+    expect(
+      extractTaskRefs(
+        'Fix GitHub issue #432: bad titles\n\nhttps://github.com/open-mercato/cezar/issues/432',
+      ),
+    ).toEqual({
       issueNumber: 432,
     });
   });
 
   it('URLs are the strongest signal and set the kind', () => {
-    expect(extractTaskRefs('see https://github.com/open-mercato/cezar/pull/441 please')).toEqual({ prNumber: 441 });
+    expect(extractTaskRefs('see https://github.com/open-mercato/cezar/pull/441 please')).toEqual({
+      prNumber: 441,
+    });
     expect(extractTaskRefs('see https://github.com/o-m/repo.name/issues/12')).toEqual({ issueNumber: 12 });
   });
 
@@ -40,7 +50,10 @@ describe('extractTaskRefs', () => {
   });
 
   it('a task naming both a PR and an issue keeps both', () => {
-    expect(extractTaskRefs('port the fix from pr 441 onto issue #438')).toEqual({ prNumber: 441, issueNumber: 438 });
+    expect(extractTaskRefs('port the fix from pr 441 onto issue #438')).toEqual({
+      prNumber: 441,
+      issueNumber: 438,
+    });
   });
 });
 

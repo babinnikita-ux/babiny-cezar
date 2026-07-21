@@ -1,11 +1,11 @@
-import { useEffect, useImperativeHandle, useRef, useState, type ComponentType } from 'react'
+import { useEffect, useImperativeHandle, useRef, useState, type ComponentType } from 'react';
 
-import type { DiffStat } from '@/api/types'
-import { DiffStatLabel } from '@/components/diff-stat'
-import { cn } from '@/lib/utils'
+import type { DiffStat } from '@/api/types';
+import { DiffStatLabel } from '@/components/diff-stat';
+import { cn } from '@/lib/utils';
 
-import { ImagePreview, shouldPreviewImage } from './image-preview'
-import type { DiffFileChange, DiffProps } from './types'
+import { ImagePreview, shouldPreviewImage } from './image-preview';
+import type { DiffFileChange, DiffProps } from './types';
 
 /**
  * `<Diff>` — the ONE diff surface of the cockpit (spec §"Session git view" #390; R5 1.4).
@@ -27,21 +27,21 @@ import type { DiffFileChange, DiffProps } from './types'
  * degraded, never blank.
  */
 export function Diff(props: DiffProps) {
-  const [engine, setEngine] = useState<{ View: ComponentType<DiffProps> } | 'failed' | null>(null)
+  const [engine, setEngine] = useState<{ View: ComponentType<DiffProps> } | 'failed' | null>(null);
   useEffect(() => {
-    let cancelled = false
+    let cancelled = false;
     import('./diff-view').then(
       (module) => {
-        if (!cancelled) setEngine({ View: module.DiffView })
+        if (!cancelled) setEngine({ View: module.DiffView });
       },
       () => {
-        if (!cancelled) setEngine('failed')
+        if (!cancelled) setEngine('failed');
       },
-    )
+    );
     return () => {
-      cancelled = true
-    }
-  }, [])
+      cancelled = true;
+    };
+  }, []);
 
   // The empty state needs no engine — render it synchronously, chunk or no chunk.
   if (props.files.length === 0) {
@@ -49,17 +49,17 @@ export function Diff(props: DiffProps) {
       <p data-slot="diff-empty" className={cn('px-1 text-xs text-soft-foreground', props.className)}>
         No changes.
       </p>
-    )
+    );
   }
-  if (engine === 'failed') return <DiffFallback {...props} />
+  if (engine === 'failed') return <DiffFallback {...props} />;
   if (engine === null) {
     return (
       <p data-slot="diff-loading" className={cn('px-1 text-xs text-soft-foreground', props.className)}>
         Loading diff…
       </p>
-    )
+    );
   }
-  return <engine.View {...props} />
+  return <engine.View {...props} />;
 }
 
 /**
@@ -73,26 +73,31 @@ export function DiffFallback({ files, wrap = false, imageSrc, onOpenInApp, viewR
     adds: files.reduce((sum, file) => sum + file.adds, 0),
     dels: files.reduce((sum, file) => sum + file.dels, 0),
     files: files.length,
-  }
+  };
   // The fallback never virtualizes, so every file IS in the DOM — the handle a consumer's
   // file tree calls resolves straight to the element. Without this the tree would silently
   // stop scrolling whenever the engine chunk failed to load. Matched on `dataset` rather than
   // an attribute selector, for the reasons `diff-view.tsx`'s `findFileElement` spells out
   // (this stays inline rather than importing that helper: it lives in the lazy engine chunk,
   // and the fallback exists precisely for when that chunk is unreachable).
-  const root = useRef<HTMLDivElement | null>(null)
+  const root = useRef<HTMLDivElement | null>(null);
   useImperativeHandle(viewRef, () => ({
     scrollToPath: (path: string) => {
       for (const element of root.current?.querySelectorAll<HTMLElement>('[data-slot="diff-file"]') ?? []) {
         if (element.dataset.path === path) {
-          element.scrollIntoView({ block: 'start', behavior: 'smooth' })
-          return
+          element.scrollIntoView({ block: 'start', behavior: 'smooth' });
+          return;
         }
       }
     },
-  }))
+  }));
   return (
-    <div ref={root} data-slot="diff" data-fallback="true" className={cn('flex min-w-0 flex-col gap-3', className)}>
+    <div
+      ref={root}
+      data-slot="diff"
+      data-fallback="true"
+      className={cn('flex min-w-0 flex-col gap-3', className)}
+    >
       <p data-slot="diff-totals" className="flex items-center gap-2 px-1 text-xs text-muted-foreground">
         <span>
           {stat.files} {stat.files === 1 ? 'file' : 'files'} changed
@@ -109,7 +114,7 @@ export function DiffFallback({ files, wrap = false, imageSrc, onOpenInApp, viewR
         />
       ))}
     </div>
-  )
+  );
 }
 
 function FallbackFile({
@@ -118,13 +123,17 @@ function FallbackFile({
   imageSrc,
   onOpenInApp,
 }: {
-  file: DiffFileChange
-  wrap: boolean
-  imageSrc?: (path: string) => string
-  onOpenInApp?: (path: string) => void
+  file: DiffFileChange;
+  wrap: boolean;
+  imageSrc?: (path: string) => string;
+  onOpenInApp?: (path: string) => void;
 }) {
   return (
-    <section data-slot="diff-file" data-path={file.path} className="min-w-0 overflow-clip rounded-md border border-border bg-card">
+    <section
+      data-slot="diff-file"
+      data-path={file.path}
+      className="min-w-0 overflow-clip rounded-md border border-border bg-card"
+    >
       <header className="flex items-center gap-2 border-b border-border/50 px-3 py-2">
         <span data-slot="diff-file-path" className="min-w-0 truncate font-mono text-xs font-medium">
           {file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
@@ -163,5 +172,5 @@ function FallbackFile({
         </pre>
       )}
     </section>
-  )
+  );
 }

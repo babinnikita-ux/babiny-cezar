@@ -1,8 +1,8 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { finishRun } from '@/api/client'
-import { queryKeys } from '@/api/queries'
-import { toast } from '@/components/ui/toaster'
+import { finishRun } from '@/api/client';
+import { queryKeys } from '@/api/queries';
+import { toast } from '@/components/ui/toaster';
 
 /**
  * THE finish action (`POST /api/runs/:id/finish`) — one implementation for its two meanings
@@ -11,10 +11,10 @@ import { toast } from '@/components/ui/toaster'
  * hook so the review-gate semantics can never fork between the two surfaces.
  */
 export function useFinishRun(runId: string) {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: () => finishRun(runId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all }),
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
-  })
+  });
 }

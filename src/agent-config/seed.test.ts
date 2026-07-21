@@ -42,7 +42,10 @@ describe('seedAgentConfigLocalLayer', () => {
       expect(readFileSync(join(wt, '.claude', 'settings.local.json'), 'utf8')).toBe('{"env":{"X":"1"}}');
       // info/exclude is on the common dir (shared) — the seeded file is ignored in the worktree
       expect(
-        execFileSync('git', ['check-ignore', '.claude/settings.local.json'], { cwd: wt, encoding: 'utf8' }).trim(),
+        execFileSync('git', ['check-ignore', '.claude/settings.local.json'], {
+          cwd: wt,
+          encoding: 'utf8',
+        }).trim(),
       ).toBe('.claude/settings.local.json');
     } finally {
       git(repo, 'worktree', 'remove', '--force', wt);

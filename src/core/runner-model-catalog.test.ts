@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { RunnerModelCatalog, type ModelOption } from './runner-model-catalog.js';
 
-const models: ModelOption[] = [
-  { id: 'gpt-latest', label: 'GPT Latest', description: 'Latest model' },
-];
+const models: ModelOption[] = [{ id: 'gpt-latest', label: 'GPT Latest', description: 'Latest model' }];
 
 describe('RunnerModelCatalog', () => {
   it('returns a live discovery, then a cached value for five minutes', async () => {
@@ -12,11 +10,17 @@ describe('RunnerModelCatalog', () => {
     const catalog = new RunnerModelCatalog({ adapters: { codex: { discover } }, now: () => now });
 
     await expect(catalog.get('codex')).resolves.toEqual({
-      runner: 'codex', models, source: 'live', stale: false,
+      runner: 'codex',
+      models,
+      source: 'live',
+      stale: false,
     });
     now += 299_999;
     await expect(catalog.get('codex')).resolves.toEqual({
-      runner: 'codex', models, source: 'cache', stale: false,
+      runner: 'codex',
+      models,
+      source: 'cache',
+      stale: false,
     });
     expect(discover).toHaveBeenCalledTimes(1);
 
@@ -27,7 +31,12 @@ describe('RunnerModelCatalog', () => {
 
   it('coalesces concurrent refreshes into the same discovery', async () => {
     let resolveDiscovery!: (value: ModelOption[]) => void;
-    const discover = vi.fn(() => new Promise<ModelOption[]>((resolve) => { resolveDiscovery = resolve; }));
+    const discover = vi.fn(
+      () =>
+        new Promise<ModelOption[]>((resolve) => {
+          resolveDiscovery = resolve;
+        }),
+    );
     const catalog = new RunnerModelCatalog({ adapters: { codex: { discover } } });
 
     const first = catalog.get('codex');
@@ -42,7 +51,8 @@ describe('RunnerModelCatalog', () => {
 
   it('returns stale last-known-good data when a refresh fails', async () => {
     let now = 0;
-    const discover = vi.fn()
+    const discover = vi
+      .fn()
       .mockResolvedValueOnce(models)
       .mockRejectedValueOnce(new Error('token=/secret/path account@example.test'));
     const catalog = new RunnerModelCatalog({
@@ -85,7 +95,9 @@ describe('RunnerModelCatalog', () => {
   it('does not let one runner cache or in-flight request affect another', async () => {
     const codex = vi.fn(async () => models);
     const claude = vi.fn(async () => [{ id: 'opus', label: 'Opus', description: '' }]);
-    const catalog = new RunnerModelCatalog({ adapters: { codex: { discover: codex }, claude: { discover: claude } } });
+    const catalog = new RunnerModelCatalog({
+      adapters: { codex: { discover: codex }, claude: { discover: claude } },
+    });
 
     await Promise.all([catalog.get('codex'), catalog.get('claude')]);
     expect(codex).toHaveBeenCalledOnce();

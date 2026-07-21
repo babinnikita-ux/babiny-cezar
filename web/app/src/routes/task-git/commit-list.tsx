@@ -1,8 +1,8 @@
-import { useLayoutEffect, useRef, useState } from 'react'
-import { Link } from 'react-router'
-import { Virtualizer } from 'virtua'
+import { useLayoutEffect, useRef, useState } from 'react';
+import { Link } from 'react-router';
+import { Virtualizer } from 'virtua';
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/utils';
 
 /**
  * The commit log list, shared by the task Commits tab and the repo Commits segment — one
@@ -27,36 +27,44 @@ import { cn } from '@/lib/utils'
  */
 
 /** Commit rows past which the list goes through virtua. */
-export const COMMIT_VIRTUALIZE_THRESHOLD = 150
+export const COMMIT_VIRTUALIZE_THRESHOLD = 150;
 
 /** One row: `py-2.5` (20px) + a `text-[13px]`/`leading-normal` line ≈ 40px, plus the divider. */
-const ROW_HEIGHT_PX = 41
+const ROW_HEIGHT_PX = 41;
 
 export interface CommitListItem {
-  sha: string
-  subject: string
-  author: string
-  when: string
+  sha: string;
+  subject: string;
+  author: string;
+  when: string;
   /** Where the row links to — the two consumers have different route prefixes. */
-  href: string
+  href: string;
   /** The sha as displayed; the task list abbreviates, the repo log is already short. */
-  shaLabel: string
+  shaLabel: string;
 }
 
-export function CommitList({ slot, commits, className }: { slot: string; commits: CommitListItem[]; className?: string }) {
-  const virtual = commits.length > COMMIT_VIRTUALIZE_THRESHOLD
-  const containerRef = useRef<HTMLDivElement | null>(null)
-  const scrollElRef = useRef<HTMLElement | null>(null)
+export function CommitList({
+  slot,
+  commits,
+  className,
+}: {
+  slot: string;
+  commits: CommitListItem[];
+  className?: string;
+}) {
+  const virtual = commits.length > COMMIT_VIRTUALIZE_THRESHOLD;
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const scrollElRef = useRef<HTMLElement | null>(null);
 
   // Same measured `startMargin` as the thread and the diff: the distance from the shell
   // scroller's content start down to this list (headers, toolbars). See diff-view.tsx.
-  const [startMargin, setStartMargin] = useState(0)
+  const [startMargin, setStartMargin] = useState(0);
   useLayoutEffect(() => {
-    if (!virtual) return
+    if (!virtual) return;
     const measure = () => {
-      const container = containerRef.current
-      const scroller = scrollElRef.current
-      if (!container || !scroller) return
+      const container = containerRef.current;
+      const scroller = scrollElRef.current;
+      if (!container || !scroller) return;
       setStartMargin(
         Math.max(
           0,
@@ -64,20 +72,20 @@ export function CommitList({ slot, commits, className }: { slot: string; commits
             container.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop,
           ),
         ),
-      )
-    }
-    measure()
-    window.addEventListener('resize', measure)
-    return () => window.removeEventListener('resize', measure)
-  }, [virtual])
+      );
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [virtual]);
 
-  const rows = commits.map((commit) => <CommitRow key={commit.sha} commit={commit} />)
+  const rows = commits.map((commit) => <CommitRow key={commit.sha} commit={commit} />);
 
   return (
     <div
       ref={(el) => {
-        containerRef.current = el
-        if (el) scrollElRef.current = el.closest<HTMLElement>('[data-slot="main"]')
+        containerRef.current = el;
+        if (el) scrollElRef.current = el.closest<HTMLElement>('[data-slot="main"]');
       }}
       data-slot={slot}
       data-virtualized={virtual}
@@ -93,7 +101,7 @@ export function CommitList({ slot, commits, className }: { slot: string; commits
         rows
       )}
     </div>
-  )
+  );
 }
 
 function CommitRow({ commit }: { commit: CommitListItem }) {
@@ -115,5 +123,5 @@ function CommitRow({ commit }: { commit: CommitListItem }) {
         </span>
       </Link>
     </div>
-  )
+  );
 }

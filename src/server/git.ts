@@ -39,7 +39,10 @@ export async function getRepoInfo(dir: string): Promise<RepoInfo | null> {
       // so repos whose only remote is named e.g. `github` or `upstream` still
       // get forge detection. Truly remote-less repos land in the inner catch.
       try {
-        const names = (await git(root, ['remote'])).split('\n').map((n) => n.trim()).filter(Boolean);
+        const names = (await git(root, ['remote']))
+          .split('\n')
+          .map((n) => n.trim())
+          .filter(Boolean);
         if (names[0]) {
           remote = (await git(root, ['remote', 'get-url', names[0]])).trim() || undefined;
         }
@@ -103,11 +106,7 @@ export async function getCommit(root: string, sha: string, cap = 200_000): Promi
 }
 
 export async function getLog(root: string, count = 20): Promise<LogEntry[]> {
-  const out = await git(root, [
-    'log',
-    `-${count}`,
-    '--pretty=format:%h%x1f%s%x1f%an%x1f%cr',
-  ]);
+  const out = await git(root, ['log', `-${count}`, '--pretty=format:%h%x1f%s%x1f%an%x1f%cr']);
   return out
     .split('\n')
     .filter(Boolean)

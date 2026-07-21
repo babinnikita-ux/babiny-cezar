@@ -1,8 +1,8 @@
-import { MonitorIcon, MoonIcon, SunIcon } from 'lucide-react'
+import { MonitorIcon, MoonIcon, SunIcon } from 'lucide-react';
 
-import { useTheme } from '@/components/theme-provider'
-import { Button } from '@/components/ui/button'
-import type { Theme } from '@/lib/theme'
+import { useTheme } from '@/components/theme-provider';
+import { Button } from '@/components/ui/button';
+import type { Theme } from '@/lib/theme';
 
 /* A proper icon button (fixes #378 — the legacy text toggle clipped in the sidebar footer).
  * It cycles rather than opening a menu: three states, one target, no popover to hit on mobile.
@@ -10,14 +10,14 @@ import type { Theme } from '@/lib/theme'
 
 /** Exported because the ⌘K palette's "Toggle theme" action must cycle exactly like this button —
  *  one order, defined once. */
-export const NEXT_THEME: Record<Theme, Theme> = { light: 'dark', dark: 'system', system: 'light' }
-const ICON = { light: SunIcon, dark: MoonIcon, system: MonitorIcon } as const
-const LABEL: Record<Theme, string> = { light: 'light', dark: 'dark', system: 'system' }
+export const NEXT_THEME: Record<Theme, Theme> = { light: 'dark', dark: 'system', system: 'light' };
+const ICON = { light: SunIcon, dark: MoonIcon, system: MonitorIcon } as const;
+const LABEL: Record<Theme, string> = { light: 'light', dark: 'dark', system: 'system' };
 
 export function ThemeToggle({ className }: { className?: string }) {
-  const { theme, setTheme } = useTheme()
-  const next = NEXT_THEME[theme]
-  const Icon = ICON[theme]
+  const { theme, setTheme } = useTheme();
+  const next = NEXT_THEME[theme];
+  const Icon = ICON[theme];
 
   return (
     <Button
@@ -33,5 +33,5 @@ export function ThemeToggle({ className }: { className?: string }) {
     >
       <Icon aria-hidden="true" />
     </Button>
-  )
+  );
 }

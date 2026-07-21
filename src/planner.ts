@@ -21,7 +21,7 @@ const PLANNER_SYSTEM_PROMPT =
   '{"title":string,"steps":[{"skill"?:string,"name":string,"prompt"?:string,"command"?:string}],"rationale":string}. ' +
   'Rules: pick skills ONLY from the provided catalog; a step has either "prompt" (an agent step) or ' +
   '"command" (a shell verification check); include the {{task}} placeholder in agent prompts where ' +
-  "the user's task text belongs; 1-5 steps; prefer fewer; \"title\" is a short kebab-case name for " +
+  'the user\'s task text belongs; 1-5 steps; prefer fewer; "title" is a short kebab-case name for ' +
   'the whole workflow (2-4 words, e.g. "fix-and-review").';
 
 const plannerResponseSchema = z.object({
@@ -101,9 +101,7 @@ function buildPlannerPrompt(task: string, skills: Skill[], verifyCommands: strin
   const catalog = skills.length
     ? skills.map((s) => `- ${s.name} — ${s.description ?? ''}`).join('\n')
     : '(no skills available)';
-  const verify = verifyCommands.length
-    ? verifyCommands.map((c) => `- ${c}`).join('\n')
-    : '(none detected)';
+  const verify = verifyCommands.length ? verifyCommands.map((c) => `- ${c}`).join('\n') : '(none detected)';
   return [
     '[cez-planner] Plan a chain of steps for this task.',
     '',

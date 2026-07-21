@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArchiveIcon,
   ArchiveRestoreIcon,
@@ -32,17 +32,25 @@ import {
   Trash2Icon,
   WavesIcon,
   ZapIcon,
-} from 'lucide-react'
-import { Fragment, useState, type ReactNode } from 'react'
-import { useNavigate } from '@/lib/project-router'
+} from 'lucide-react';
+import { Fragment, useState, type ReactNode } from 'react';
+import { useNavigate } from '@/lib/project-router';
 
-import { ApiError, archiveRun, cancelRun, continueRun, deleteRun, openRunIn, openRunInCli } from '@/api/client'
-import { queryKeys, useHealth, useOpenTargets, usePatchRun, useRunHandoff, useRuns } from '@/api/queries'
-import type { ApiRun, OpenTarget } from '@/api/types'
-import { DiffStatLabel } from '@/components/diff-stat'
-import { TitleEditInput, useTitleEditor } from '@/components/editable-title'
-import { Pill } from '@/components/pill'
-import { TabLink } from '@/components/tab-link'
+import {
+  ApiError,
+  archiveRun,
+  cancelRun,
+  continueRun,
+  deleteRun,
+  openRunIn,
+  openRunInCli,
+} from '@/api/client';
+import { queryKeys, useHealth, useOpenTargets, usePatchRun, useRunHandoff, useRuns } from '@/api/queries';
+import type { ApiRun, OpenTarget } from '@/api/types';
+import { DiffStatLabel } from '@/components/diff-stat';
+import { TitleEditInput, useTitleEditor } from '@/components/editable-title';
+import { Pill } from '@/components/pill';
+import { TabLink } from '@/components/tab-link';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -52,8 +60,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { Button } from '@/components/ui/button'
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -61,17 +69,17 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { toast } from '@/components/ui/toaster'
-import { deriveAttention } from '@/lib/attention'
-import { compactTokens } from '@/lib/format'
-import { queuePositions, runTitle } from '@/lib/task-groups'
-import { formatCost, workflowLabel } from '@/lib/tasks-table'
+} from '@/components/ui/dropdown-menu';
+import { toast } from '@/components/ui/toaster';
+import { deriveAttention } from '@/lib/attention';
+import { compactTokens } from '@/lib/format';
+import { queuePositions, runTitle } from '@/lib/task-groups';
+import { formatCost, workflowLabel } from '@/lib/tasks-table';
 
-import { Markdown } from './markdown'
-import { cliTargetResumes, finishTitle, resumeHint, runActionFlags } from './run-actions'
-import { StepRail } from './step-rail'
-import { useFinishRun } from './use-finish-run'
+import { Markdown } from './markdown';
+import { cliTargetResumes, finishTitle, resumeHint, runActionFlags } from './run-actions';
+import { StepRail } from './step-rail';
+import { useFinishRun } from './use-finish-run';
 
 /**
  * The run header (spec §"Task thread" → Header): editable title + status pill, the meta line,
@@ -88,29 +96,28 @@ import { useFinishRun } from './use-finish-run'
  */
 /** Which run-detail tab this header instance sits above — drives the active underline.
  *  A prop rather than a route match so the header stays testable with a bare render. */
-export type RunTab = 'session' | 'changes' | 'commits' | 'files'
+export type RunTab = 'session' | 'changes' | 'commits' | 'files';
 
 export function RunHeader({
   run,
   planTally,
   tab = 'session',
 }: {
-  run: ApiRun
-  planTally?: { done: number; total: number }
-  tab?: RunTab
+  run: ApiRun;
+  planTally?: { done: number; total: number };
+  tab?: RunTab;
 }) {
-  const attention = deriveAttention(run)
-  const flags = runActionFlags(run)
-  const hint = resumeHint(run)
-  const [notesOpen, setNotesOpen] = useState(false)
-  const actions = useRunActions(run)
+  const attention = deriveAttention(run);
+  const flags = runActionFlags(run);
+  const hint = resumeHint(run);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const actions = useRunActions(run);
 
   // The queue position a parked run shows in its pill ("queued #2"). Reads the shared runs-list
   // query — already warm from the sidebar quick-list — because position is a property of the
   // whole queue, not of this record.
-  const runs = useRuns()
-  const queuePosition =
-    run.status === 'queued' ? queuePositions(runs.data ?? []).get(run.id) : undefined
+  const runs = useRuns();
+  const queuePosition = run.status === 'queued' ? queuePositions(runs.data ?? []).get(run.id) : undefined;
 
   return (
     <header
@@ -154,13 +161,23 @@ export function RunHeader({
 
           <div data-slot="run-actions" className="ml-auto hidden items-center gap-1 pb-1 md:flex">
             {flags.finish ? (
-              <Button variant="outline" size="sm" title={finishTitle(run.status)} onClick={() => actions.finish.mutate()}>
+              <Button
+                variant="outline"
+                size="sm"
+                title={finishTitle(run.status)}
+                onClick={() => actions.finish.mutate()}
+              >
                 <CheckIcon aria-hidden="true" />
                 Finish
               </Button>
             ) : null}
             {flags.continueRun ? (
-              <Button variant="outline" size="sm" title="Reopen the session" onClick={() => actions.continueRun.mutate()}>
+              <Button
+                variant="outline"
+                size="sm"
+                title="Reopen the session"
+                onClick={() => actions.continueRun.mutate()}
+              >
                 <PlayIcon aria-hidden="true" />
                 Continue
               </Button>
@@ -179,7 +196,11 @@ export function RunHeader({
             </Button>
             {flags.archive ? (
               <Button variant="ghost" size="sm" onClick={() => actions.archive.mutate()}>
-                {run.archived ? <ArchiveRestoreIcon aria-hidden="true" /> : <ArchiveIcon aria-hidden="true" />}
+                {run.archived ? (
+                  <ArchiveRestoreIcon aria-hidden="true" />
+                ) : (
+                  <ArchiveIcon aria-hidden="true" />
+                )}
                 {run.archived ? 'Unarchive' : 'Archive'}
               </Button>
             ) : null}
@@ -210,7 +231,7 @@ export function RunHeader({
 
       <ConfirmDialog run={run} actions={actions} />
     </header>
-  )
+  );
 }
 
 /** Icon key (`OpenTarget.icon`, #361) → the Lucide icon that renders it in the menu. Distinct per
@@ -240,12 +261,12 @@ const OPEN_IN_ICONS: Record<string, LucideIcon> = {
   claude: BotIcon,
   codex: SparklesIcon,
   opencode: BotIcon,
-}
+};
 
 /** The icon component for a target — `target.icon` when it's one the UI knows, else the
  *  same generic glyph the trigger button itself uses. */
 function openInIcon(target: OpenTarget): LucideIcon {
-  return (target.icon && OPEN_IN_ICONS[target.icon]) || ExternalLinkIcon
+  return (target.icon && OPEN_IN_ICONS[target.icon]) || ExternalLinkIcon;
 }
 
 /**
@@ -254,31 +275,23 @@ function openInIcon(target: OpenTarget): LucideIcon {
  * Terminal button folds in here as the first item. Renders when the session can be resumed OR the
  * machine offers worktree targets (both empty in hosted mode → nothing to show).
  */
-function OpenInMenu({
-  run,
-  canResume,
-  onResume,
-}: {
-  run: ApiRun
-  canResume: boolean
-  onResume: () => void
-}) {
-  const targets = useOpenTargets()
+function OpenInMenu({ run, canResume, onResume }: { run: ApiRun; canResume: boolean; onResume: () => void }) {
+  const targets = useOpenTargets();
   const open = useMutation({
     mutationFn: (target: string) => openRunIn(run.id, target),
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
-  })
-  const worktreeTargets = run.worktreePath ? (targets.data?.targets ?? []) : []
-  if (!canResume && worktreeTargets.length === 0) return null
+  });
+  const worktreeTargets = run.worktreePath ? (targets.data?.targets ?? []) : [];
+  if (!canResume && worktreeTargets.length === 0) return null;
 
   const copyPath = () => {
-    const path = run.worktreePath
-    if (!path) return
+    const path = run.worktreePath;
+    if (!path) return;
     void navigator.clipboard
       .writeText(path)
       .then(() => toast('Worktree path copied'))
-      .catch(() => toast(`Path: ${path}`))
-  }
+      .catch(() => toast(`Path: ${path}`));
+  };
 
   return (
     <DropdownMenu>
@@ -301,8 +314,8 @@ function OpenInMenu({
           // session when one exists — label that explicitly so it reads as different from just
           // opening the editor/file-manager entries above. Every other CLI (wrong backend, or no
           // session yet) still opens, just starts clean — no silent cross-backend resume attempt.
-          const resumes = cliTargetResumes(run, target.id)
-          const Icon = openInIcon(target)
+          const resumes = cliTargetResumes(run, target.id);
+          const Icon = openInIcon(target);
           return (
             <DropdownMenuItem
               key={target.id}
@@ -314,7 +327,7 @@ function OpenInMenu({
               {target.label}
               {resumes ? ' (resume)' : ''}
             </DropdownMenuItem>
-          )
+          );
         })}
         {run.worktreePath ? (
           <>
@@ -327,54 +340,54 @@ function OpenInMenu({
         ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }
 
 /** The mutations + confirm state, bundled so the desktop bar and the mobile kebab drive the
  *  exact same behavior. Every failure surfaces the server's own words as a danger toast. */
 function useRunActions(run: ApiRun) {
-  const queryClient = useQueryClient()
-  const navigate = useNavigate()
-  const [confirming, setConfirming] = useState<'cancel' | 'delete' | null>(null)
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const [confirming, setConfirming] = useState<'cancel' | 'delete' | null>(null);
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
-  const onError = (error: Error) => toast(error.message, { tone: 'danger' })
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all });
+  const onError = (error: Error) => toast(error.message, { tone: 'danger' });
 
   // Shared with the review panel's ✓ Accept (use-finish-run.ts) — the review-accept semantics
   // must be ONE implementation, not two buttons that happen to agree today.
-  const finish = useFinishRun(run.id)
+  const finish = useFinishRun(run.id);
   const continueMutation = useMutation({
     mutationFn: () => continueRun(run.id),
     onSuccess: invalidate,
     onError,
-  })
+  });
   const archive = useMutation({
     mutationFn: () => archiveRun(run.id, !run.archived),
     onSuccess: invalidate,
     onError,
-  })
-  const cancel = useMutation({ mutationFn: () => cancelRun(run.id), onSuccess: invalidate, onError })
+  });
+  const cancel = useMutation({ mutationFn: () => cancelRun(run.id), onSuccess: invalidate, onError });
   const deleteMutation = useMutation({
     mutationFn: () => deleteRun(run.id),
     onSuccess: () => {
-      invalidate()
+      invalidate();
       // The run is gone — so is this page. Home is the only honest destination.
-      void navigate('/')
+      void navigate('/');
     },
     onError,
-  })
+  });
   const terminal = useMutation({
     mutationFn: () => openRunInCli(run.id),
     onError: (error: Error) => {
       // The legacy 409 fallback: no terminal emulator → the server sends the manual command;
       // put it on the clipboard so "no terminal" still ends with the user one paste away.
       if (error instanceof ApiError && error.command) {
-        void copyToClipboard(error.command, 'No terminal found — command copied to clipboard.')
-        return
+        void copyToClipboard(error.command, 'No terminal found — command copied to clipboard.');
+        return;
       }
-      onError(error)
+      onError(error);
     },
-  })
+  });
 
   return {
     finish,
@@ -385,18 +398,18 @@ function useRunActions(run: ApiRun) {
     terminal,
     confirming,
     setConfirming,
-  }
+  };
 }
 
-type RunActions = ReturnType<typeof useRunActions>
+type RunActions = ReturnType<typeof useRunActions>;
 
 async function copyToClipboard(text: string, doneMessage: string): Promise<void> {
   try {
-    await navigator.clipboard.writeText(text)
-    toast(doneMessage)
+    await navigator.clipboard.writeText(text);
+    toast(doneMessage);
   } catch {
     // No clipboard access (permissions, http) — show the command itself; it is the payload.
-    toast(`Run manually: ${text}`)
+    toast(`Run manually: ${text}`);
   }
 }
 
@@ -407,14 +420,14 @@ async function copyToClipboard(text: string, doneMessage: string): Promise<void>
  * The rename machine itself is shared with the Tasks table (`components/editable-title.tsx`).
  */
 function EditableTitle({ run }: { run: ApiRun }) {
-  const patch = usePatchRun(run.id)
-  const title = runTitle(run)
+  const patch = usePatchRun(run.id);
+  const title = runTitle(run);
   const editor = useTitleEditor(title, (next) =>
     patch.mutate({ title: next }, { onError: (error) => toast(error.message, { tone: 'danger' }) }),
-  )
+  );
 
   if (editor.editing) {
-    return <TitleEditInput editor={editor} className="flex-1 text-[15px] font-semibold" />
+    return <TitleEditInput editor={editor} className="flex-1 text-[15px] font-semibold" />;
   }
 
   return (
@@ -431,7 +444,7 @@ function EditableTitle({ run }: { run: ApiRun }) {
         <PencilIcon className="size-3.5" aria-hidden="true" />
       </button>
     </span>
-  )
+  );
 }
 
 /** workflow · branch chip · ± on the left; tokens · cost · agent icon on the right (mockup
@@ -442,7 +455,7 @@ function EditableTitle({ run }: { run: ApiRun }) {
 function MetaRow({ run }: { run: ApiRun }) {
   // `workflowLabel` so an inline chain shows its first step's name, not the bare "(planned)"
   // placeholder — which reads like a status next to the live status pill.
-  const parts: ReactNode[] = [<span key="workflow">{workflowLabel(run)}</span>]
+  const parts: ReactNode[] = [<span key="workflow">{workflowLabel(run)}</span>];
   if (run.branch) {
     parts.push(
       <span
@@ -452,11 +465,11 @@ function MetaRow({ run }: { run: ApiRun }) {
       >
         {run.branch}
       </span>,
-    )
+    );
   }
-  if (run.diffStat) parts.push(<DiffStatLabel key="diff" stat={run.diffStat} />)
+  if (run.diffStat) parts.push(<DiffStatLabel key="diff" stat={run.diffStat} />);
 
-  const usage: ReactNode[] = []
+  const usage: ReactNode[] = [];
   if (run.tokensUsed > 0) {
     // Tokens WITHOUT the mockup's context gauge, on purpose: the gauge needs "used / window",
     // and RunRecord carries only the lifetime `tokensUsed` — no context-window size, no
@@ -465,14 +478,14 @@ function MetaRow({ run }: { run: ApiRun }) {
       <span key="tokens" className="tabular-nums">
         {compactTokens(run.tokensUsed)} tokens
       </span>,
-    )
+    );
   }
   if (run.costUsd) {
     usage.push(
       <span key="cost" className="tabular-nums">
         {formatCost(run.costUsd)}
       </span>,
-    )
+    );
   }
 
   return (
@@ -504,7 +517,7 @@ function MetaRow({ run }: { run: ApiRun }) {
         <AgentBadge run={run} />
       </span>
     </div>
-  )
+  );
 }
 
 /** The agent icon by the token counter (#416): hover/focus reveals the runner and model — the
@@ -520,9 +533,9 @@ function AgentBadge({ run }: { run: ApiRun }) {
   // codex/opencode, and "which agent produced this?" is the one question #416 exists to answer.
   // 'claude' stays the last resort only while health is in flight (it is `config.defaultRunner`'s
   // own default).
-  const health = useHealth()
-  const runner = run.runner ?? health.data?.defaultRunner ?? 'claude'
-  const model = run.model ?? 'auto'
+  const health = useHealth();
+  const runner = run.runner ?? health.data?.defaultRunner ?? 'claude';
+  const model = run.model ?? 'auto';
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -545,7 +558,7 @@ function AgentBadge({ run }: { run: ApiRun }) {
         </DropdownMenuLabel>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }
 
 /** The <md action surface: everything the desktop bar offers, folded into a kebab menu next to
@@ -555,11 +568,11 @@ function ActionsKebab({
   actions,
   onToggleNotes,
 }: {
-  run: ApiRun
-  actions: RunActions
-  onToggleNotes: () => void
+  run: ApiRun;
+  actions: RunActions;
+  onToggleNotes: () => void;
 }) {
-  const flags = runActionFlags(run)
+  const flags = runActionFlags(run);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -605,22 +618,23 @@ function ActionsKebab({
         ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }
 
 /** The destructive confirms — one dialog, two scripts. Never a native confirm(). */
 function ConfirmDialog({ run, actions }: { run: ApiRun; actions: RunActions }) {
-  const confirming = actions.confirming
+  const confirming = actions.confirming;
   return (
     <AlertDialog open={confirming !== null} onOpenChange={(open) => !open && actions.setConfirming(null)}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{confirming === 'delete' ? 'Delete this task?' : 'Cancel this task?'}</AlertDialogTitle>
+          <AlertDialogTitle>
+            {confirming === 'delete' ? 'Delete this task?' : 'Cancel this task?'}
+          </AlertDialogTitle>
           <AlertDialogDescription>
             {confirming === 'delete' ? (
               <>
-                This removes the run, its transcript, its worktree and its branch. There is no
-                undo.
+                This removes the run, its transcript, its worktree and its branch. There is no undo.
                 <span className="mt-1 block truncate font-medium text-foreground" title={runTitle(run)}>
                   {runTitle(run)}
                 </span>
@@ -635,9 +649,9 @@ function ConfirmDialog({ run, actions }: { run: ApiRun; actions: RunActions }) {
           <AlertDialogAction
             className="bg-danger text-danger-foreground hover:brightness-[0.96]"
             onClick={() => {
-              if (confirming === 'delete') actions.delete.mutate()
-              else actions.cancel.mutate()
-              actions.setConfirming(null)
+              if (confirming === 'delete') actions.delete.mutate();
+              else actions.cancel.mutate();
+              actions.setConfirming(null);
             }}
           >
             {confirming === 'delete' ? 'Delete' : 'Cancel the run'}
@@ -645,7 +659,7 @@ function ConfirmDialog({ run, actions }: { run: ApiRun; actions: RunActions }) {
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
-  )
+  );
 }
 
 /** "take over interactively: cd … && claude --resume …" — the legacy `#d-resume` line, now
@@ -663,12 +677,12 @@ function ResumeHintLine({ hint }: { hint: string }) {
       <CopyIcon className="size-3 shrink-0" aria-hidden="true" />
       <span className="truncate">take over interactively: {hint}</span>
     </button>
-  )
+  );
 }
 
 /** The handoff journal (spec 007) as rendered markdown — fetched only while open. */
 function NotesPanel({ runId }: { runId: string }) {
-  const handoff = useRunHandoff(runId)
+  const handoff = useRunHandoff(runId);
   return (
     <div
       data-slot="notes-panel"
@@ -686,5 +700,5 @@ function NotesPanel({ runId }: { runId: string }) {
         </p>
       )}
     </div>
-  )
+  );
 }

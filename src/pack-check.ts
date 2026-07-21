@@ -18,7 +18,9 @@
 export function findPackGaps(packedFiles: readonly string[]): string[] {
   const gaps: string[] = [];
   if (!packedFiles.includes('web/dist/index.html')) {
-    gaps.push('web/dist/index.html is missing — the tarball would ship no UI shell (run `npm run build:web`)');
+    gaps.push(
+      'web/dist/index.html is missing — the tarball would ship no UI shell (run `npm run build:web`)',
+    );
   }
   if (!packedFiles.some((f) => f.startsWith('web/dist/assets/') && f.length > 'web/dist/assets/'.length)) {
     gaps.push('no web/dist/assets/* bundle in the tarball — the shell would load with no JS/CSS');

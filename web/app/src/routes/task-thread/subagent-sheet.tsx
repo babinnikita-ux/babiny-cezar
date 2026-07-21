@@ -1,11 +1,11 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef } from 'react';
 
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { cn } from '@/lib/utils'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { cn } from '@/lib/utils';
 
-import type { SubagentSummary } from './subagent-dock'
-import type { ThreadEntry } from './thread-state'
-import { NestedEntry } from './thread-items'
+import type { SubagentSummary } from './subagent-dock';
+import type { ThreadEntry } from './thread-state';
+import { NestedEntry } from './thread-items';
 
 /**
  * The sub-agent drill-down (spec `.ai/specs/2026-07-20-grouped-subagent-display.md`
@@ -23,13 +23,18 @@ export function SubagentSheet({
   onClose,
 }: {
   /** The selected agent, or `undefined` when the sheet is closed. */
-  agent: SubagentSummary | undefined
+  agent: SubagentSummary | undefined;
   /** That agent's child entries, in stream order (`subagentChildren`). */
-  entries: ThreadEntry[]
-  onClose: () => void
+  entries: ThreadEntry[];
+  onClose: () => void;
 }) {
   return (
-    <Sheet open={agent !== undefined} onOpenChange={(open) => { if (!open) onClose() }}>
+    <Sheet
+      open={agent !== undefined}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       <SheetContent
         data-slot="subagent-sheet"
         side="right"
@@ -40,7 +45,7 @@ export function SubagentSheet({
         {agent !== undefined ? <SheetBody agent={agent} entries={entries} /> : null}
       </SheetContent>
     </Sheet>
-  )
+  );
 }
 
 function SheetBody({ agent, entries }: { agent: SubagentSummary; entries: ThreadEntry[] }) {
@@ -67,7 +72,7 @@ function SheetBody({ agent, entries }: { agent: SubagentSummary; entries: Thread
       </SheetHeader>
       <SubagentStream entries={entries} scope={agent.id} />
     </>
-  )
+  );
 }
 
 /**
@@ -76,8 +81,8 @@ function SheetBody({ agent, entries }: { agent: SubagentSummary; entries: Thread
  * under someone reading an earlier tool call.
  */
 function SubagentStream({ entries, scope }: { entries: ThreadEntry[]; scope: string }) {
-  const ref = useRef<HTMLDivElement>(null)
-  const stuck = useRef(true)
+  const ref = useRef<HTMLDivElement>(null);
+  const stuck = useRef(true);
 
   // Keyed on CONTENT, not entry count: `item.delta` grows the existing last entry in place,
   // so a length-only dep would never fire during the streaming this affordance exists for.
@@ -94,19 +99,19 @@ function SubagentStream({ entries, scope }: { entries: ThreadEntry[]; scope: str
           ? (entry.output?.length ?? 0) + (entry.error?.length ?? 0)
           : 0),
     entries.length,
-  )
+  );
   useEffect(() => {
-    const node = ref.current
-    if (node === null || !stuck.current) return
-    node.scrollTop = node.scrollHeight
-  }, [signature])
+    const node = ref.current;
+    if (node === null || !stuck.current) return;
+    node.scrollTop = node.scrollHeight;
+  }, [signature]);
 
   if (entries.length === 0) {
     return (
       <div data-slot="subagent-empty" className="px-5 py-6 text-[13px] text-muted-foreground">
         No attributed output — see the thread card for this agent&apos;s result.
       </div>
-    )
+    );
   }
 
   return (
@@ -114,9 +119,9 @@ function SubagentStream({ entries, scope }: { entries: ThreadEntry[]; scope: str
       ref={ref}
       data-slot="subagent-stream"
       onScroll={(event) => {
-        const node = event.currentTarget
+        const node = event.currentTarget;
         // 24px of slack: "close enough to the bottom" survives sub-pixel scroll heights.
-        stuck.current = node.scrollHeight - node.scrollTop - node.clientHeight < 24
+        stuck.current = node.scrollHeight - node.scrollTop - node.clientHeight < 24;
       }}
       className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-5 py-4"
     >
@@ -124,7 +129,7 @@ function SubagentStream({ entries, scope }: { entries: ThreadEntry[]; scope: str
         <NestedEntry key={entry.id} entry={entry} scope={`subagent:${scope}`} />
       ))}
     </div>
-  )
+  );
 }
 
 /** Status as a word, not only a hue — the dock's glyphs do not survive being read aloud. */
@@ -138,7 +143,7 @@ function StatusPill({ status }: { status: SubagentSummary['status'] }) {
           ? 'Declined'
           : status === 'pending'
             ? 'Pending'
-            : 'Running'
+            : 'Running';
   return (
     <span
       data-slot="subagent-status"
@@ -152,5 +157,5 @@ function StatusPill({ status }: { status: SubagentSummary['status'] }) {
     >
       {label}
     </span>
-  )
+  );
 }

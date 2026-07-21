@@ -62,9 +62,7 @@ describe('the worktrees API', () => {
   }
 
   const getWorktrees = async () =>
-    (await (
-      await apiRequest(app, '/api/worktrees')
-    ).json()) as {
+    (await (await apiRequest(app, '/api/worktrees')).json()) as {
       worktrees: Array<{
         runId: string;
         title: string;

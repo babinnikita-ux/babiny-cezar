@@ -1,8 +1,8 @@
-import { readdirSync, readFileSync } from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest';
 
 /**
  * Design guardian — a static scan enforcing the spec's design-system rules over the cockpit
@@ -19,32 +19,32 @@ import { describe, expect, it } from 'vitest'
  *    grammar), with string awareness so a `//` inside a URL literal is not treated as one.
  */
 
-const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const SELF = path.basename(fileURLToPath(import.meta.url))
+const APP_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const SELF = path.basename(fileURLToPath(import.meta.url));
 
 interface SourceFile {
   /** Path relative to web/app, always with `/` separators (allowlists match on it). */
-  rel: string
-  ext: string
-  isTest: boolean
-  isE2e: boolean
+  rel: string;
+  ext: string;
+  isTest: boolean;
+  isE2e: boolean;
   /** Comment-stripped source; stripping preserves line numbers and column positions. */
-  lines: string[]
+  lines: string[];
 }
 
 interface Rule {
-  name: string
-  why: string
-  pattern: RegExp
-  applies: (file: SourceFile) => boolean
+  name: string;
+  why: string;
+  pattern: RegExp;
+  applies: (file: SourceFile) => boolean;
   /** Files where the token is legitimate (the token definition site, primitives). */
-  allowed?: (rel: string) => boolean
+  allowed?: (rel: string) => boolean;
 }
 
 /** Shipped UI code and stylesheets — where the design tokens are the only color vocabulary. */
-const styleSources = (f: SourceFile) => !f.isTest && !f.isE2e
+const styleSources = (f: SourceFile) => !f.isTest && !f.isE2e;
 /** Everything that executes in or against the app, tests and e2e drivers included. */
-const codeSources = (f: SourceFile) => f.ext !== '.css'
+const codeSources = (f: SourceFile) => f.ext !== '.css';
 
 const RULES: Rule[] = [
   {
@@ -69,8 +69,7 @@ const RULES: Rule[] = [
     applies: styleSources,
     // The shadcn overlay scrims (dialog, sheet) and the image lightbox scrim are deliberately
     // bg-black/xx in both themes — a dark backdrop is theme-agnostic by design.
-    allowed: (rel) =>
-      rel.startsWith('src/components/ui/') || rel === 'src/components/zoomable-image.tsx',
+    allowed: (rel) => rel.startsWith('src/components/ui/') || rel === 'src/components/zoomable-image.tsx',
   },
   {
     name: 'no-native-dialogs',
@@ -98,7 +97,7 @@ const RULES: Rule[] = [
     pattern: /\b(?:(?:h|min-h|max-h)-screen|100vh)\b/g,
     applies: styleSources,
   },
-]
+];
 
 /**
  * Blanks out comments while preserving the file's shape (every non-newline comment char
@@ -107,132 +106,132 @@ const RULES: Rule[] = [
  * of a line — acceptable for a guardian (it can only under-report on that one line).
  */
 function stripComments(source: string, lineComments: boolean): string {
-  let out = ''
-  let mode: 'code' | 'line' | 'block' | 'single' | 'double' | 'template' = 'code'
-  let i = 0
+  let out = '';
+  let mode: 'code' | 'line' | 'block' | 'single' | 'double' | 'template' = 'code';
+  let i = 0;
   while (i < source.length) {
-    const c = source[i]!
-    const n = source[i + 1]
+    const c = source[i]!;
+    const n = source[i + 1];
     if (mode === 'code') {
       if (lineComments && c === '/' && n === '/') {
-        mode = 'line'
-        out += '  '
-        i += 2
-        continue
+        mode = 'line';
+        out += '  ';
+        i += 2;
+        continue;
       }
       if (c === '/' && n === '*') {
-        mode = 'block'
-        out += '  '
-        i += 2
-        continue
+        mode = 'block';
+        out += '  ';
+        i += 2;
+        continue;
       }
-      if (c === "'") mode = 'single'
-      else if (c === '"') mode = 'double'
-      else if (c === '`') mode = 'template'
-      out += c
-      i += 1
-      continue
+      if (c === "'") mode = 'single';
+      else if (c === '"') mode = 'double';
+      else if (c === '`') mode = 'template';
+      out += c;
+      i += 1;
+      continue;
     }
     if (mode === 'line') {
       if (c === '\n') {
-        mode = 'code'
-        out += c
+        mode = 'code';
+        out += c;
       } else {
-        out += ' '
+        out += ' ';
       }
-      i += 1
-      continue
+      i += 1;
+      continue;
     }
     if (mode === 'block') {
       if (c === '*' && n === '/') {
-        mode = 'code'
-        out += '  '
-        i += 2
-        continue
+        mode = 'code';
+        out += '  ';
+        i += 2;
+        continue;
       }
-      out += c === '\n' ? c : ' '
-      i += 1
-      continue
+      out += c === '\n' ? c : ' ';
+      i += 1;
+      continue;
     }
     // String modes: honor escapes, close on the matching quote (or, for ' and ", a newline —
     // an unterminated string must not swallow the rest of the file).
     if (c === '\\') {
-      out += c + (n ?? '')
-      i += 2
-      continue
+      out += c + (n ?? '');
+      i += 2;
+      continue;
     }
     if (
       (mode === 'single' && (c === "'" || c === '\n')) ||
       (mode === 'double' && (c === '"' || c === '\n')) ||
       (mode === 'template' && c === '`')
     ) {
-      mode = 'code'
+      mode = 'code';
     }
-    out += c
-    i += 1
-    continue
+    out += c;
+    i += 1;
+    continue;
   }
-  return out
+  return out;
 }
 
-const SCANNED_EXTENSIONS = new Set(['.ts', '.tsx', '.css'])
+const SCANNED_EXTENSIONS = new Set(['.ts', '.tsx', '.css']);
 
 function walk(dir: string): string[] {
-  const out: string[] = []
+  const out: string[] = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules') continue
-    const full = path.join(dir, entry.name)
-    if (entry.isDirectory()) out.push(...walk(full))
-    else if (SCANNED_EXTENSIONS.has(path.extname(entry.name))) out.push(full)
+    if (entry.name === 'node_modules') continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...walk(full));
+    else if (SCANNED_EXTENSIONS.has(path.extname(entry.name))) out.push(full);
   }
-  return out
+  return out;
 }
 
 function loadSources(): SourceFile[] {
-  const files: SourceFile[] = []
+  const files: SourceFile[] = [];
   for (const root of ['src', 'e2e']) {
     for (const abs of walk(path.join(APP_ROOT, root))) {
-      const rel = path.relative(APP_ROOT, abs).split(path.sep).join('/')
+      const rel = path.relative(APP_ROOT, abs).split(path.sep).join('/');
       // This file defines the forbidden patterns as literals; scanning it would be circular.
-      if (path.basename(rel) === SELF) continue
-      const ext = path.extname(rel)
-      const stripped = stripComments(readFileSync(abs, 'utf8'), ext !== '.css')
+      if (path.basename(rel) === SELF) continue;
+      const ext = path.extname(rel);
+      const stripped = stripComments(readFileSync(abs, 'utf8'), ext !== '.css');
       files.push({
         rel,
         ext,
         isTest: /\.test\.(?:ts|tsx)$/.test(rel),
         isE2e: rel.startsWith('e2e/'),
         lines: stripped.split('\n'),
-      })
+      });
     }
   }
-  return files
+  return files;
 }
 
-const sources = loadSources()
+const sources = loadSources();
 
 describe('design guardian', () => {
   it('actually scans the codebase (guards against a broken walker)', () => {
-    const rels = new Set(sources.map((f) => f.rel))
-    expect(rels.has('src/app.tsx')).toBe(true)
-    expect(rels.has('src/styles/index.css')).toBe(true)
-    expect(rels.has('e2e/smoke.e2e.ts')).toBe(true)
-    expect(sources.length).toBeGreaterThan(40)
-  })
+    const rels = new Set(sources.map((f) => f.rel));
+    expect(rels.has('src/app.tsx')).toBe(true);
+    expect(rels.has('src/styles/index.css')).toBe(true);
+    expect(rels.has('e2e/smoke.e2e.ts')).toBe(true);
+    expect(sources.length).toBeGreaterThan(40);
+  });
 
   for (const rule of RULES) {
     it(`${rule.name}: ${rule.why}`, () => {
-      const violations: string[] = []
+      const violations: string[] = [];
       for (const file of sources) {
-        if (!rule.applies(file)) continue
-        if (rule.allowed?.(file.rel)) continue
+        if (!rule.applies(file)) continue;
+        if (rule.allowed?.(file.rel)) continue;
         file.lines.forEach((line, index) => {
           for (const match of line.matchAll(rule.pattern)) {
-            violations.push(`web/app/${file.rel}:${index + 1}  ${match[0].trim()}`)
+            violations.push(`web/app/${file.rel}:${index + 1}  ${match[0].trim()}`);
           }
-        })
+        });
       }
-      expect(violations, `${rule.name} — ${rule.why}`).toEqual([])
-    })
+      expect(violations, `${rule.name} — ${rule.why}`).toEqual([]);
+    });
   }
-})
+});

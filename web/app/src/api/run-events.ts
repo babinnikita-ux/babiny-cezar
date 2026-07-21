@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react';
 
-import { scopeApiPath } from './project-scope'
-import type { RunEvent } from './types'
+import { scopeApiPath } from './project-scope';
+import type { RunEvent } from './types';
 
 /**
  * The per-run event stream (`GET /api/runs/:id/events`), as a raw ordered list — R2 Step 2.4's
@@ -23,7 +23,7 @@ import type { RunEvent } from './types'
  */
 
 /** Both wire names. Exported so tests and future consumers subscribe to exactly this set. */
-export const RUN_EVENT_NAMES = ['run-event', 'ui-event'] as const
+export const RUN_EVENT_NAMES = ['run-event', 'ui-event'] as const;
 
 /**
  * Parse one SSE frame into a `RunEvent`, or null for anything malformed. Null rather than a
@@ -31,16 +31,16 @@ export const RUN_EVENT_NAMES = ['run-event', 'ui-event'] as const
  * `seq` must be a number — it is the dedup axis, and a line without one cannot be ordered.
  */
 export function parseRunEvent(data: string): RunEvent | null {
-  let payload: unknown
+  let payload: unknown;
   try {
-    payload = JSON.parse(data)
+    payload = JSON.parse(data);
   } catch {
-    return null
+    return null;
   }
-  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return null
-  const { seq, type } = payload as { seq?: unknown; type?: unknown }
-  if (typeof seq !== 'number' || typeof type !== 'string' || type === '') return null
-  return payload as RunEvent
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return null;
+  const { seq, type } = payload as { seq?: unknown; type?: unknown };
+  if (typeof seq !== 'number' || typeof type !== 'string' || type === '') return null;
+  return payload as RunEvent;
 }
 
 /**
@@ -52,25 +52,25 @@ export function parseRunEvent(data: string): RunEvent | null {
  * to exactly the component that asked for it.
  */
 export function useRunEvents(runId: string | undefined): RunEvent[] {
-  const [events, setEvents] = useState<RunEvent[]>([])
+  const [events, setEvents] = useState<RunEvent[]>([]);
 
   useEffect(() => {
     // The reset also covers the runId-changed case: whatever accumulated belongs to the old id.
-    setEvents([])
-    if (!runId) return
+    setEvents([]);
+    if (!runId) return;
 
     // Off `globalThis`, like global-events.tsx: jsdom has no EventSource, and the tests stub it.
-    const Source = globalThis.EventSource
-    if (typeof Source !== 'function') return
+    const Source = globalThis.EventSource;
+    if (typeof Source !== 'function') return;
 
     // The high-water mark lives with the socket's effect, not in state: a reconnect replay
     // arrives between renders, and dedup must not race React's batching.
-    let maxSeq = 0
-    let source: EventSource | null = null
-    let reopenTimer: ReturnType<typeof setTimeout> | undefined
-    let disposed = false
-    const CLOSED = 2 // EventSource.CLOSED, spelled literally like global-events.tsx
-    const REOPEN_DELAY_MS = 1_500
+    let maxSeq = 0;
+    let source: EventSource | null = null;
+    let reopenTimer: ReturnType<typeof setTimeout> | undefined;
+    let disposed = false;
+    const CLOSED = 2; // EventSource.CLOSED, spelled literally like global-events.tsx
+    const REOPEN_DELAY_MS = 1_500;
 
     // Liveness watchdog (#424): a backgrounded tab or the app's iframe can leave the socket
     // half-open — TCP dead, but `readyState` stuck at OPEN/CONNECTING so no `error` ever fires and
@@ -78,108 +78,108 @@ export function useRunEvents(runId: string | undefined): RunEvent[] {
     // "no further SSE updates coming through" (exactly the reported symptom). The server pings every
     // 15 s (server.ts); we treat a long silence across BOTH data and pings as a dead socket and
     // force a reopen. `maxSeq` swallows the replay, same as every other reconnect here.
-    const STALE_MS = 40_000 // ~2.5× the 15 s server ping — one dropped ping must not trip it
-    const LIVENESS_CHECK_MS = 10_000
-    let lastFrameAt = Date.now()
-    let livenessTimer: ReturnType<typeof setInterval> | undefined
+    const STALE_MS = 40_000; // ~2.5× the 15 s server ping — one dropped ping must not trip it
+    const LIVENESS_CHECK_MS = 10_000;
+    let lastFrameAt = Date.now();
+    let livenessTimer: ReturnType<typeof setInterval> | undefined;
 
     const onFrame = (event: Event) => {
       // Any frame proves the socket is alive — bump the watchdog before the dedup drop, so a
       // replayed prefix (which is dropped below) still counts as liveness.
-      lastFrameAt = Date.now()
-      const parsed = parseRunEvent((event as MessageEvent<string>).data)
-      if (!parsed || !(parsed.seq > maxSeq)) return
-      maxSeq = parsed.seq
-      setEvents((current) => [...current, parsed])
-    }
+      lastFrameAt = Date.now();
+      const parsed = parseRunEvent((event as MessageEvent<string>).data);
+      if (!parsed || !(parsed.seq > maxSeq)) return;
+      maxSeq = parsed.seq;
+      setEvents((current) => [...current, parsed]);
+    };
 
     // The keepalive carries no payload we accumulate — it exists only to prove the socket is
     // alive during quiet stretches (a run that is thinking emits nothing for seconds), so it
     // feeds the watchdog and nothing else.
     const onPing = (): void => {
-      lastFrameAt = Date.now()
-    }
+      lastFrameAt = Date.now();
+    };
 
     const reopenLater = (): void => {
-      if (disposed || reopenTimer !== undefined) return
+      if (disposed || reopenTimer !== undefined) return;
       reopenTimer = setTimeout(() => {
-        reopenTimer = undefined
-        if (!disposed) open()
-      }, REOPEN_DELAY_MS)
-    }
+        reopenTimer = undefined;
+        if (!disposed) open();
+      }, REOPEN_DELAY_MS);
+    };
 
     const open = (): void => {
-      source?.close()
+      source?.close();
       // A fresh socket resets the clock: replay is about to arrive, so it must not be judged
       // stale before its first frame lands.
-      lastFrameAt = Date.now()
+      lastFrameAt = Date.now();
       // Scoped per project like every client.ts path (spec 3.1) — unscoped this is the
       // byte-identical legacy URL. Read per (re)open, but the scope only changes with the
       // route, which unmounts this hook first.
-      source = new Source(scopeApiPath(`/api/runs/${encodeURIComponent(runId)}/events`))
-      for (const name of RUN_EVENT_NAMES) source.addEventListener(name, onFrame)
-      source.addEventListener('ping', onPing)
+      source = new Source(scopeApiPath(`/api/runs/${encodeURIComponent(runId)}/events`));
+      for (const name of RUN_EVENT_NAMES) source.addEventListener(name, onFrame);
+      source.addEventListener('ping', onPing);
       source.addEventListener('error', () => {
         // Ordinary drops leave the socket CONNECTING and the browser retries on its own; CLOSED
         // means it gave up for good (what a restarting server produces), so nothing would reopen
         // it — the transcript would silently freeze while the header (global stream) keeps
         // updating, looking live over stale content. Reopen; `maxSeq` swallows the replay.
-        if (source?.readyState === CLOSED) reopenLater()
-      })
-    }
+        if (source?.readyState === CLOSED) reopenLater();
+      });
+    };
 
     // The phone-in-a-pocket case: a frozen background tab can leave the stream dead for an hour
     // with no error handler ever firing. On return, reopen if it's closed — whatever is on screen
     // is about to be trusted (the thread is the app's primary view, same threat model as the
     // global stream). #minor-run-sse-recovery.
     const onVisibilityChange = (): void => {
-      if (document.visibilityState !== 'visible') return
+      if (document.visibilityState !== 'visible') return;
       if (!source || source.readyState === CLOSED) {
-        clearTimeout(reopenTimer)
-        reopenTimer = undefined
-        open()
+        clearTimeout(reopenTimer);
+        reopenTimer = undefined;
+        open();
       }
-    }
+    };
 
     // Same bfcache discipline as the global stream: a full navigation parks this document with
     // its socket open and starves the per-origin pool. Close on pagehide; a bfcache restore
     // reopens, and `maxSeq` swallows the replayed prefix.
     const onPageHide = (): void => {
-      clearTimeout(reopenTimer)
-      reopenTimer = undefined
-      source?.close()
-    }
+      clearTimeout(reopenTimer);
+      reopenTimer = undefined;
+      source?.close();
+    };
     const onPageShow = (event: PageTransitionEvent): void => {
-      if (event.persisted) open()
-    }
+      if (event.persisted) open();
+    };
 
     // The watchdog only acts while the tab is visible: a hidden tab legitimately receives
     // nothing (the browser throttles it), and `onVisibilityChange` already reopens a CLOSED
     // socket on return. This catches the case that one cannot — a socket still reported OPEN
     // that has silently stopped delivering.
     livenessTimer = setInterval(() => {
-      if (disposed || document.visibilityState !== 'visible') return
-      if (Date.now() - lastFrameAt <= STALE_MS) return
-      clearTimeout(reopenTimer)
-      reopenTimer = undefined
-      open()
-    }, LIVENESS_CHECK_MS)
+      if (disposed || document.visibilityState !== 'visible') return;
+      if (Date.now() - lastFrameAt <= STALE_MS) return;
+      clearTimeout(reopenTimer);
+      reopenTimer = undefined;
+      open();
+    }, LIVENESS_CHECK_MS);
 
-    document.addEventListener('visibilitychange', onVisibilityChange)
-    window.addEventListener('pagehide', onPageHide)
-    window.addEventListener('pageshow', onPageShow)
-    open()
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('pagehide', onPageHide);
+    window.addEventListener('pageshow', onPageShow);
+    open();
 
     return () => {
-      disposed = true
-      clearTimeout(reopenTimer)
-      clearInterval(livenessTimer)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
-      window.removeEventListener('pagehide', onPageHide)
-      window.removeEventListener('pageshow', onPageShow)
-      source?.close()
-    }
-  }, [runId])
+      disposed = true;
+      clearTimeout(reopenTimer);
+      clearInterval(livenessTimer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('pagehide', onPageHide);
+      window.removeEventListener('pageshow', onPageShow);
+      source?.close();
+    };
+  }, [runId]);
 
-  return events
+  return events;
 }

@@ -27,7 +27,11 @@ describe('buildNamerPrompt', () => {
   it('includes turn context and diff stat only when given (live refresh)', () => {
     const base = buildNamerPrompt({ task: 't' });
     expect(base).not.toContain('Latest progress');
-    const live = buildNamerPrompt({ task: 't', turnText: 'implemented the parser', diffStat: '3 files, +40 -2' });
+    const live = buildNamerPrompt({
+      task: 't',
+      turnText: 'implemented the parser',
+      diffStat: '3 files, +40 -2',
+    });
     expect(live).toContain('implemented the parser');
     expect(live).toContain('3 files, +40 -2');
   });
@@ -52,7 +56,9 @@ describe('crossCheckRefs', () => {
   });
 
   it('accepts a number that occurs in the task even without a regex kind', () => {
-    expect(crossCheckRefs({ issue: 12 }, 'the regression from 12 broke prod', {})).toEqual({ issueNumber: 12 });
+    expect(crossCheckRefs({ issue: 12 }, 'the regression from 12 broke prod', {})).toEqual({
+      issueNumber: 12,
+    });
     // Substring matches do not count — 12 inside 512 is not a reference.
     expect(crossCheckRefs({ issue: 12 }, 'bump to node 512', {})).toEqual({});
   });
@@ -82,7 +88,10 @@ describe('composeNameResult', () => {
 
   it('parses a fenced JSON answer and applies the whole pipeline', () => {
     const raw = '```json\n{"title": "Implementing CR fixes", "pr": 437}\n```';
-    expect(composeNameResult(raw, ctx)).toEqual({ titleSummary: '437: implementing CR fixes', prNumber: 437 });
+    expect(composeNameResult(raw, ctx)).toEqual({
+      titleSummary: '437: implementing CR fixes',
+      prNumber: 437,
+    });
   });
 
   it('survives prose around the JSON object', () => {

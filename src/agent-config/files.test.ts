@@ -1,4 +1,12 @@
-import { mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync, readFileSync, mkdirSync } from 'node:fs';
+import {
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+  readFileSync,
+  mkdirSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -31,7 +39,10 @@ describe('readConfigFile', () => {
   it('reads an existing file and hashes it', async () => {
     mkdirSync(join(repo, '.claude'), { recursive: true });
     writeFileSync(join(repo, '.claude', 'settings.json'), '{"a":1}');
-    const r = (await readConfigFile('claude.project.settings', repo, env)) as { content: string; version: string };
+    const r = (await readConfigFile('claude.project.settings', repo, env)) as {
+      content: string;
+      version: string;
+    };
     expect(r.content).toBe('{"a":1}');
     expect(r.version).toMatch(/^[a-f0-9]{64}$/);
   });

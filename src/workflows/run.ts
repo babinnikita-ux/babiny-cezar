@@ -4,15 +4,16 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { join } from 'node:path';
 import { parseAskMarker, stripAskMarker, type AskRequest } from '../core/ask.js';
 import { type AgentSession } from '../core/claude-cli-runner.js';
-import { onUsage, registerRunProcess, unregisterRunProcess, type ProcessUsage } from '../core/process-usage.js';
+import {
+  onUsage,
+  registerRunProcess,
+  unregisterRunProcess,
+  type ProcessUsage,
+} from '../core/process-usage.js';
 import { createRunner } from '../core/runner-factory.js';
 import type { RunnerId } from '../core/agent-runner.js';
 import { modelConflictsWithRunner } from '../core/model-presets.js';
-import {
-  ModelIdentityError,
-  formatModelIdentity,
-  normalizeModelForBackend,
-} from '../core/model-identity.js';
+import { ModelIdentityError, formatModelIdentity, normalizeModelForBackend } from '../core/model-identity.js';
 import {
   HANDOFF_ONLY_INSTRUCTIONS,
   HANDOFF_INSTRUCTIONS,
@@ -27,19 +28,36 @@ import { discoverSkills, type Skill } from '../skills.js';
 import { materializeSkillDir } from '../skills-remote.js';
 import { seedAgentConfigLocalLayer } from '../agent-config/seed.js';
 import { loadConfig, resolveWorktreeRetention } from '../config.js';
-import { autosaveCommit, createWorktree, resolveBaseRef, worktreeDiff, worktreeShortstat } from '../git-worktree.js';
+import {
+  autosaveCommit,
+  createWorktree,
+  resolveBaseRef,
+  worktreeDiff,
+  worktreeShortstat,
+} from '../git-worktree.js';
 import { getRepoInfo } from '../server/git.js';
 import { loadWorkflows } from './load.js';
 import type { QueuedMessage, RunRecord, RunStore } from '../runs/store.js';
 import { reclaimWorktrees, rematerializeReclaimedWorktree } from '../runs/retention.js';
 import { extractTaskRefs, refineTaskRefs, titleRefNumber } from '../runs/task-refs.js';
 import { parseTaskMarkers, stripTaskMarkers } from '../runs/task-markers.js';
-import { autoNamingActive, generateRunName, liveTitleUpdatesEnabled, postValidateTitle } from '../runs/auto-name.js';
+import {
+  autoNamingActive,
+  generateRunName,
+  liveTitleUpdatesEnabled,
+  postValidateTitle,
+} from '../runs/auto-name.js';
 import { reviewGateEnabled } from '../runs/review-gate.js';
 import { WorkspaceSemaphore } from '../workspace/semaphore.js';
 import { UiEventSink } from '../runs/ui-event-sink.js';
 import type { UiEvent } from '../core/ui-events.js';
-import { chainStepNote, DEFAULT_ALLOWED_TOOLS, stepKind, type WorkflowDef, type WorkflowStepDef } from './types.js';
+import {
+  chainStepNote,
+  DEFAULT_ALLOWED_TOOLS,
+  stepKind,
+  type WorkflowDef,
+  type WorkflowStepDef,
+} from './types.js';
 
 const CHECK_OUTPUT_CAP = 20_000;
 /** An interactive session that hears nothing from the user closes itself. */
@@ -196,10 +214,13 @@ export function composeSystemPrompt(...parts: Array<string | undefined>): string
  *  is re-encoded from disk at dequeue and needs its media type back. */
 export function mediaTypeFor(name: string): string {
   const ext = name.split('.').pop()?.toLowerCase();
-  return ext === 'jpg' ? 'image/jpeg'
-    : ext === 'webp' ? 'image/webp'
-    : ext === 'gif' ? 'image/gif'
-    : 'image/png';
+  return ext === 'jpg'
+    ? 'image/jpeg'
+    : ext === 'webp'
+      ? 'image/webp'
+      : ext === 'gif'
+        ? 'image/gif'
+        : 'image/png';
 }
 
 /** Highest `<prefix>-<n>.<ext>` suffix already present in a run's image dir (#472).
@@ -479,13 +500,11 @@ export class RunManager {
    */
   startVariants(workflow: WorkflowDef, input: StartRunInput, count: number): RunRecord[] {
     const groupId = randomUUID();
-    return VARIANT_LETTERS.slice(0, Math.min(Math.max(count, 1), VARIANT_LETTERS.length)).map(
-      (variant) => {
-        const hint = VARIANT_HINTS[variant];
-        const task = hint ? `${input.task}\n\n${hint}` : input.task;
-        return this.startRun(workflow, { ...input, task }, { groupId, variant });
-      },
-    );
+    return VARIANT_LETTERS.slice(0, Math.min(Math.max(count, 1), VARIANT_LETTERS.length)).map((variant) => {
+      const hint = VARIANT_HINTS[variant];
+      const task = hint ? `${input.task}\n\n${hint}` : input.task;
+      return this.startRun(workflow, { ...input, task }, { groupId, variant });
+    });
   }
 
   /**
@@ -516,8 +535,7 @@ export class RunManager {
       const maxParallel = this.semaphore.maxParallel();
       // `waiting` runs don't hold a slot (#347) — see busySlots(). The check
       // below is the only slot gate: resumes never pass through it.
-      const capacity = () =>
-        this.semaphore.busy() < maxParallel && (repo !== null || this.busySlots() < 1);
+      const capacity = () => this.semaphore.busy() < maxParallel && (repo !== null || this.busySlots() < 1);
       while (this.queue.length > 0 && capacity()) {
         const runId = this.queue.shift();
         if (!runId) break;
@@ -880,9 +898,8 @@ export class RunManager {
     const at = stack.findIndex((m) => m.id === msgId);
     if (at < 0) return null;
     const current = stack[at]!;
-    const replacementImages = edit.images === undefined
-      ? current.images
-      : this.toQueuedMessage(runId, edit.images).images;
+    const replacementImages =
+      edit.images === undefined ? current.images : this.toQueuedMessage(runId, edit.images).images;
     const replacement: QueuedMessage = {
       id: msgId,
       text: edit.text ?? current.text,
@@ -919,10 +936,7 @@ export class RunManager {
   private dropOrphanImages(runId: string, candidates: string[], stack: QueuedMessage[]): void {
     if (!candidates.length) return;
     const run = this.store.getRun(runId);
-    const referenced = new Set([
-      ...(run?.taskImages ?? []),
-      ...stack.flatMap((m) => m.images ?? []),
-    ]);
+    const referenced = new Set([...(run?.taskImages ?? []), ...stack.flatMap((m) => m.images ?? [])]);
     for (const url of candidates) {
       if (referenced.has(url)) continue;
       const name = url.split('/').pop();
@@ -979,7 +993,8 @@ export class RunManager {
     // the state — seconds before the session opens — so checking `starting`
     // alone would reopen exactly the drop this rung exists to close.
     const state = this.active.get(runId);
-    const startingUp = this.starting.has(runId) || (state !== undefined && !state.sessionEverOpened && !state.cancelled);
+    const startingUp =
+      this.starting.has(runId) || (state !== undefined && !state.sessionEverOpened && !state.cancelled);
     if (!startingUp) return false;
     const pending = this.deferredMessages.get(runId) ?? [];
     pending.push(content);
@@ -1064,7 +1079,10 @@ export class RunManager {
     const run = this.store.getRun(runId);
     if (run?.status === 'review' && !this.isActive(runId)) {
       this.store.updateRun(runId, { status: 'done' });
-      this.store.appendEvent(runId, { type: 'lifecycle', message: 'review accepted — finished without a PR' });
+      this.store.appendEvent(runId, {
+        type: 'lifecycle',
+        message: 'review accepted — finished without a PR',
+      });
       return true;
     }
     return false;
@@ -1139,18 +1157,16 @@ export class RunManager {
       resume ? sessionStep.sessionId : undefined,
       targetRunner,
       opts.text?.trim() || 'Continue.',
-    ).catch(
-      (err: unknown) => {
-        const message = err instanceof Error ? err.message : String(err);
-        this.store.updateRun(runId, {
-          status: 'failed',
-          error: `continue crashed: ${message}`,
-          finishedAt: new Date().toISOString(),
-        });
-        this.dropActive(runId);
-        void this.pump();
-      },
-    );
+    ).catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      this.store.updateRun(runId, {
+        status: 'failed',
+        error: `continue crashed: ${message}`,
+        finishedAt: new Date().toISOString(),
+      });
+      this.dropActive(runId);
+      void this.pump();
+    });
     return { ok: true };
   }
 
@@ -1173,10 +1189,7 @@ export class RunManager {
     // The env is a live ceiling: a run created while the inbox was on must not keep writing
     // follow-ups after it is switched off.
     const generateFollowups = followupsEnabled() && record?.generateFollowups !== false;
-    const cwd =
-      record?.worktreePath && existsSync(record.worktreePath)
-        ? record.worktreePath
-        : this.repoRoot;
+    const cwd = record?.worktreePath && existsSync(record.worktreePath) ? record.worktreePath : this.repoRoot;
     const state: ActiveRun = { cancelled: false, interrupt: () => undefined, cwd };
     this.active.set(runId, state);
     if (state.cwd === this.repoRoot) {
@@ -1213,7 +1226,13 @@ export class RunManager {
       sessionId,
       backend,
     });
-    this.store.appendEvent(runId, { type: 'step-start', stepId, name: 'Continue', kind: 'agent', iteration: 1 });
+    this.store.appendEvent(runId, {
+      type: 'step-start',
+      stepId,
+      name: 'Continue',
+      kind: 'agent',
+      iteration: 1,
+    });
     this.store.appendEvent(runId, { type: 'user-message', stepId, text: prompt, imageCount: 0 });
 
     let stepCost = 0;
@@ -1253,8 +1272,7 @@ export class RunManager {
         // `CEZ:ASK` → the user is genuinely blocked; wins over `CEZ:MONITORING`
         // (a pending question is always attention), loses to `CEZ:DONE` (#473).
         const ask = sessionOpen && !done ? parseAskMarker(turnText) : null;
-        const monitoring =
-          sessionOpen && !done && !ask && MONITORING_MARKER_RE.test(turnText.trimEnd());
+        const monitoring = sessionOpen && !done && !ask && MONITORING_MARKER_RE.test(turnText.trimEnd());
         turnText = '';
         if (done) {
           // Goal achieved (agent contract, #347) — same as in runAgentStep.
@@ -1382,7 +1400,11 @@ export class RunManager {
       sink.sessionEnded(state.cancelled ? 'cancelled' : 'end_turn');
       if (state.cancelled) {
         this.store.updateStep(runId, stepId, { status: 'cancelled', finishedAt: finishedAt() });
-        this.store.updateRun(runId, { status: 'cancelled', finishedAt: finishedAt(), currentStepId: undefined });
+        this.store.updateRun(runId, {
+          status: 'cancelled',
+          finishedAt: finishedAt(),
+          currentStepId: undefined,
+        });
         this.store.appendEvent(runId, { type: 'lifecycle', message: 'run cancelled' });
         appendHandoffHeartbeat(this.dataDir, runId, `step "${stepId}" complete — status=cancelled`);
       } else {
@@ -1454,7 +1476,10 @@ export class RunManager {
       systemPrompt: extraSystemPrompt,
       modelIdentity,
     });
-    emit({ type: 'lifecycle', message: `run started — workflow "${workflow.name}" (runner: ${taskBackend})` });
+    emit({
+      type: 'lifecycle',
+      message: `run started — workflow "${workflow.name}" (runner: ${taskBackend})`,
+    });
 
     // Worktree per task (spec 006): the agent works on its own branch in
     // `.ai/cezar/worktrees/<id>`, never in the user's working tree. A Git task
@@ -1563,8 +1588,9 @@ export class RunManager {
     // attachments (#472) ride along too, but are NOT re-persisted above: they
     // already live on disk, and adding them to `taskImages` would both duplicate
     // the files and make the task bubble claim the stack's images as its own.
-    let startImages =
-      input.stackedImages?.length ? [...(input.images ?? []), ...input.stackedImages] : input.images;
+    let startImages = input.stackedImages?.length
+      ? [...(input.images ?? []), ...input.stackedImages]
+      : input.images;
 
     const lastAgentIdx = findLastAgentStepIndex(workflow);
 
@@ -1666,7 +1692,12 @@ export class RunManager {
       this.store.updateRun(runId, { status: 'cancelled', finishedAt, currentStepId: undefined });
       emit({ type: 'lifecycle', message: 'run cancelled' });
     } else if (runError) {
-      this.store.updateRun(runId, { status: 'failed', error: runError, finishedAt, currentStepId: undefined });
+      this.store.updateRun(runId, {
+        status: 'failed',
+        error: runError,
+        finishedAt,
+        currentStepId: undefined,
+      });
       emit({ type: 'lifecycle', message: `run failed — ${runError}` });
     } else {
       await this.settleSuccess(runId);
@@ -1790,11 +1821,7 @@ export class RunManager {
         // `CEZ:DONE` (#473).
         const ask = interactive && sessionOpen && !done ? parseAskMarker(turnText) : null;
         const monitoring =
-          interactive &&
-          sessionOpen &&
-          !done &&
-          !ask &&
-          MONITORING_MARKER_RE.test(turnText.trimEnd());
+          interactive && sessionOpen && !done && !ask && MONITORING_MARKER_RE.test(turnText.trimEnd());
         turnText = '';
         if (done) {
           // Goal achieved (agent contract, #347): close the session instead
@@ -2015,7 +2042,11 @@ export class RunManager {
       if (run.worktreePath && existsSync(run.worktreePath)) {
         const stat = await worktreeShortstat(run.worktreePath, run.baseBranch ?? 'HEAD');
         if (stat) this.store.updateRun(runId, { diffStat: stat });
-        else this.store.appendEvent(runId, { type: 'note', message: 'diff stat unavailable — git diff --shortstat failed in the worktree' });
+        else
+          this.store.appendEvent(runId, {
+            type: 'note',
+            message: 'diff stat unavailable — git diff --shortstat failed in the worktree',
+          });
       }
       await this.maybeRefreshTitle(runId, turnText);
     } catch {
@@ -2063,7 +2094,9 @@ export class RunManager {
     if (!liveTitleUpdatesEnabled(config)) return;
     const run = this.store.getRun(runId);
     if (!run || run.titleOrigin === 'user' || run.titleOrigin === 'marker') return;
-    const statText = run.diffStat ? `${run.diffStat.files} files, +${run.diffStat.adds} -${run.diffStat.dels}` : undefined;
+    const statText = run.diffStat
+      ? `${run.diffStat.files} files, +${run.diffStat.adds} -${run.diffStat.dels}`
+      : undefined;
     const key = `${turnText.slice(0, 200)}|${statText ?? ''}`;
     if (this.lastNamerKey.get(runId) === key) return;
     this.lastNamerKey.set(runId, key);
@@ -2140,12 +2173,15 @@ export class RunManager {
     namePrefix: string = 'screenshot',
   ): { name: string; url: string; path: string } | null {
     try {
-      const ext =
-        /png/.test(mediaType) ? 'png'
-        : /jpe?g/.test(mediaType) ? 'jpg'
-        : /webp/.test(mediaType) ? 'webp'
-        : /gif/.test(mediaType) ? 'gif'
-        : 'img';
+      const ext = /png/.test(mediaType)
+        ? 'png'
+        : /jpe?g/.test(mediaType)
+          ? 'jpg'
+          : /webp/.test(mediaType)
+            ? 'webp'
+            : /gif/.test(mediaType)
+              ? 'gif'
+              : 'img';
       const dir = join(this.dataDir, 'runs', `${runId}-images`);
       mkdirSync(dir, { recursive: true });
       // Seed from the highest numeric suffix already on disk, NOT the file count:
@@ -2290,16 +2326,17 @@ function applyTemplate(template: string, task: string): string {
 export function makeRunTitle(task: string, workflow: WorkflowDef): string {
   const firstLine = task.trim().split('\n')[0] ?? '';
   const skill = workflow.steps.find((step) => stepKind(step) === 'agent' && step.skill)?.skill?.trim();
-  const contextual = skill && !firstLine.startsWith(`/${skill}`)
-    ? `/${skill}${firstLine ? ` ${firstLine}` : ''}`
-    : firstLine;
+  const contextual =
+    skill && !firstLine.startsWith(`/${skill}`) ? `/${skill}${firstLine ? ` ${firstLine}` : ''}` : firstLine;
   const refNumber = titleRefNumber(refineTaskRefs(extractTaskRefs(task), skill));
   // `469` or `/om-auto-review-pr 469` reads as `469: /om-auto-review-pr` — the
   // number leads so it survives the tasks table's narrow truncation.
-  const skillArg = skill && contextual.startsWith(`/${skill}`) ? contextual.slice(skill.length + 1).trim() : null;
-  const body = refNumber !== undefined && skill && (skillArg === '' || /^#?\d+$/.test(skillArg ?? ''))
-    ? `/${skill}`
-    : contextual;
+  const skillArg =
+    skill && contextual.startsWith(`/${skill}`) ? contextual.slice(skill.length + 1).trim() : null;
+  const body =
+    refNumber !== undefined && skill && (skillArg === '' || /^#?\d+$/.test(skillArg ?? ''))
+      ? `/${skill}`
+      : contextual;
   const prefixed =
     refNumber !== undefined && !body.trimStart().replace(/^#/, '').startsWith(String(refNumber))
       ? `${refNumber}: ${body}`

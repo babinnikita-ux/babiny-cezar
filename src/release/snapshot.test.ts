@@ -93,7 +93,11 @@ describe('stampManifests', () => {
 
   it('pins against whatever the root package is currently named (rename-proof)', () => {
     const oldRoot = { name: '@pat-lewczuk/cezar', version: '0.1.5' };
-    const oldAlias = { name: 'cezar-cli', version: '0.1.5', dependencies: { '@pat-lewczuk/cezar': '^0.1.5' } };
+    const oldAlias = {
+      name: 'cezar-cli',
+      version: '0.1.5',
+      dependencies: { '@pat-lewczuk/cezar': '^0.1.5' },
+    };
     const stamped = stampManifests(oldRoot, oldAlias, '0.1.5-develop.7');
     expect(stamped.alias.dependencies).toEqual({ '@pat-lewczuk/cezar': '0.1.5-develop.7' });
   });
@@ -107,7 +111,12 @@ describe('stampManifests', () => {
 
   it('lets the alias inherit repository/homepage/bugs from root so provenance validates', () => {
     const repository = { type: 'git', url: 'https://github.com/open-mercato/cezar' };
-    const rootWithRepo = { ...root, repository, homepage: 'https://example.test', bugs: { url: 'https://example.test/issues' } };
+    const rootWithRepo = {
+      ...root,
+      repository,
+      homepage: 'https://example.test',
+      bugs: { url: 'https://example.test/issues' },
+    };
     const stamped = stampManifests(rootWithRepo, alias, '0.1.5-pr482.123');
     expect(stamped.alias.repository).toEqual(repository);
     expect(stamped.alias.homepage).toBe('https://example.test');

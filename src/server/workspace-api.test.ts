@@ -1,4 +1,12 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Hono } from 'hono';
@@ -240,7 +248,8 @@ describe('the workspace settings API (step 2.7)', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
     });
-  const rawUiState = () => JSON.parse(readFileSync(workspaceUiStatePath(), 'utf8')) as Record<string, unknown>;
+  const rawUiState = () =>
+    JSON.parse(readFileSync(workspaceUiStatePath(), 'utf8')) as Record<string, unknown>;
 
   it('GET answers {} when no file exists yet', async () => {
     const res = await getUiState();
@@ -281,7 +290,8 @@ describe('the workspace settings API (step 2.7)', () => {
   });
 
   it('caps the top-level key count at 200, same as the per-repo route', async () => {
-    const keysOf = (n: number) => Object.fromEntries(Array.from({ length: n }, (_, i) => [`pref-${i}`, true]));
+    const keysOf = (n: number) =>
+      Object.fromEntries(Array.from({ length: n }, (_, i) => [`pref-${i}`, true]));
     expect((await putUiState(keysOf(200))).status).toBe(200);
     const over = await putUiState(keysOf(201));
     expect(over.status).toBe(400);

@@ -30,7 +30,6 @@ let turn = 0;
 const MOCK_SCREENSHOT_B64 =
   'iVBORw0KGgoAAAANSUhEUgAAAUAAAADICAIAAAAWZq/8AAACMklEQVR42u3csQnAIBRFUQdJY+b4tfvP4AhCLKyyghAMMRw4Ezz/bU0RBdhUMgEIGBAwIGAQMCBgQMCAgEHAgIABAYOAAQEDAgYEDAIGBAwsCLhfDdiUgEHAgIABAYOAAQEDAgYEDAIGBAwIGAT8vlEr/ImAQcACBgELGAQsYAQsYBCwgEHAAgYBe3IELGAQsIBBwAJGwAIGAQsYBCxgELCAEbCAQcACBgELGAQMAhYwCFjAIGABI2D/QgMCBgEDAgYEDAgYBAwIGBAwCBgQMCBgQMAgYEDAgIBBwCYAAQMCBgQMAgYEDAgYEDAIGBAwIGAQMCBgQMCAgEHAgIABAQMCBgEDAgYEDAIGBAwIGBAwCBgQMCBgQMAgYEDAgIBBwICAAQEDAgYBAwIGBAwCtgIIGBAwIGAQMCBgQMCAgEHAgIABAYOAeejMB/McjIAFLGABW0HAAhYwmhSwgAUsYAQsYAELGAELWMACRsACFrCAEbCABSxgBCxgAQtYwAhYwAIWMAIWsIAFjIAFLGABI2ABC1jACFjAAhYwAhawgAWMgAUsYAEjYAELWMACRsACFrCAEbCABSxgBCxgAQsYAQtYwAJGwAIWMCBgQMAgYEDAgIBBwICAAQEDAgYBAwIGBAwCBgQMCBgQMAgYEDAgYEDAIGBAwICAQcCAgAEBAwIGAQMCBgQMCBgEDAgYEDAIGBAwIGBAwCBgQMCAgAEBg4ABAQMCBgEDAgYEDAgYBAx8xQ1bxBr9kelHqgAAAABJRU5ErkJggg==';
 
-
 // Spec 007: behave like an agent that read the handoff/todos instructions —
 // append a progress line to CEZ_HANDOFF_FILE and a follow-up entry to
 // CEZ_TODOS_FILE, so the inbox loop is testable without tokens.
@@ -44,7 +43,10 @@ function writeHandoffAndTodo() {
       const idx = text.indexOf(marker);
       const next =
         idx >= 0
-          ? text.slice(0, idx + marker.length) + '\n' + line + text.slice(idx + marker.length).replace(/^\n+/, '')
+          ? text.slice(0, idx + marker.length) +
+            '\n' +
+            line +
+            text.slice(idx + marker.length).replace(/^\n+/, '')
           : text + line;
       writeFileSync(handoff, next, 'utf8');
     }
@@ -141,10 +143,20 @@ async function respond(userText, imageCount) {
     ].join('\n');
     emit({
       type: 'assistant',
-      message: { role: 'assistant', content: [{ type: 'text', text: md }], usage: { input_tokens: 100, output_tokens: 200 } },
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: md }],
+        usage: { input_tokens: 100, output_tokens: 200 },
+      },
     });
     await sleep(100);
-    emit({ type: 'result', subtype: 'success', result: md, usage: { input_tokens: 100, output_tokens: 200 }, total_cost_usd: 0.001 });
+    emit({
+      type: 'result',
+      subtype: 'success',
+      result: md,
+      usage: { input_tokens: 100, output_tokens: 200 },
+      total_cost_usd: 0.001,
+    });
     return;
   }
 
@@ -162,8 +174,18 @@ async function respond(userText, imageCount) {
         subagent_type: 'general-purpose',
         steps: [
           { text: 'Scanning the auth middleware.' },
-          { tool: 'Grep', id: `toolu_sub_a1_${turn}`, input: { pattern: 'session', path: 'src' }, result: 'src/middleware.ts:12:  clearSession()' },
-          { tool: 'Read', id: `toolu_sub_a2_${turn}`, input: { file_path: 'src/middleware.ts' }, result: 'export function middleware() { clearSession() }' },
+          {
+            tool: 'Grep',
+            id: `toolu_sub_a1_${turn}`,
+            input: { pattern: 'session', path: 'src' },
+            result: 'src/middleware.ts:12:  clearSession()',
+          },
+          {
+            tool: 'Read',
+            id: `toolu_sub_a2_${turn}`,
+            input: { file_path: 'src/middleware.ts' },
+            result: 'export function middleware() { clearSession() }',
+          },
         ],
         result: 'The session cookie is dropped in src/middleware.ts:12 (clearSession on every redirect).',
       },
@@ -173,7 +195,12 @@ async function respond(userText, imageCount) {
         subagent_type: 'code-reviewer',
         steps: [
           { text: 'Reading the runs store.' },
-          { tool: 'Bash', id: `toolu_sub_b1_${turn}`, input: { command: 'npm test -- runs/store' }, result: '12 passed' },
+          {
+            tool: 'Bash',
+            id: `toolu_sub_b1_${turn}`,
+            input: { command: 'npm test -- runs/store' },
+            result: '12 passed',
+          },
         ],
         result: 'Store layer looks correct; one debounce edge case worth a follow-up.',
       },
@@ -191,7 +218,11 @@ async function respond(userText, imageCount) {
               type: 'tool_use',
               id: agent.id,
               name: 'Task',
-              input: { description: agent.description, prompt: `${agent.description}.`, subagent_type: agent.subagent_type },
+              input: {
+                description: agent.description,
+                prompt: `${agent.description}.`,
+                subagent_type: agent.subagent_type,
+              },
             },
           ],
           usage: { input_tokens: 900, output_tokens: 95 },
@@ -210,7 +241,11 @@ async function respond(userText, imageCount) {
         if (step.text !== undefined) {
           emit({
             type: 'assistant',
-            message: { role: 'assistant', content: [{ type: 'text', text: step.text }], usage: { input_tokens: 300, output_tokens: 25 } },
+            message: {
+              role: 'assistant',
+              content: [{ type: 'text', text: step.text }],
+              usage: { input_tokens: 300, output_tokens: 25 },
+            },
             parent_tool_use_id: agent.id,
           });
         } else {
@@ -226,7 +261,10 @@ async function respond(userText, imageCount) {
           await sleep(250);
           emit({
             type: 'user',
-            message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: step.id, content: step.result }] },
+            message: {
+              role: 'user',
+              content: [{ type: 'tool_result', tool_use_id: step.id, content: step.result }],
+            },
             parent_tool_use_id: agent.id,
           });
         }
@@ -238,16 +276,24 @@ async function respond(userText, imageCount) {
     for (const agent of agents) {
       emit({
         type: 'user',
-        message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: agent.id, content: agent.result }] },
+        message: {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: agent.id, content: agent.result }],
+        },
         parent_tool_use_id: null,
       });
       await sleep(200);
     }
 
-    const summary = 'Both sub-agents reported back: the redirect drops the cookie in src/middleware.ts:12, and the store layer is clean. (dry-run mock)';
+    const summary =
+      'Both sub-agents reported back: the redirect drops the cookie in src/middleware.ts:12, and the store layer is clean. (dry-run mock)';
     emit({
       type: 'assistant',
-      message: { role: 'assistant', content: [{ type: 'text', text: summary }], usage: { input_tokens: 400, output_tokens: 60 } },
+      message: {
+        role: 'assistant',
+        content: [{ type: 'text', text: summary }],
+        usage: { input_tokens: 400, output_tokens: 60 },
+      },
       parent_tool_use_id: null,
     });
     await sleep(150);
@@ -347,7 +393,14 @@ async function respond(userText, imageCount) {
       type: 'assistant',
       message: {
         role: 'assistant',
-        content: [{ type: 'tool_use', id: `toolu_mock_${turn}`, name: 'Bash', input: { command: 'git status --short' } }],
+        content: [
+          {
+            type: 'tool_use',
+            id: `toolu_mock_${turn}`,
+            name: 'Bash',
+            input: { command: 'git status --short' },
+          },
+        ],
         usage: { input_tokens: 120, output_tokens: 55 },
       },
     });
@@ -367,7 +420,14 @@ async function respond(userText, imageCount) {
       type: 'assistant',
       message: {
         role: 'assistant',
-        content: [{ type: 'tool_use', id: `toolu_mock_shot_${turn}`, name: 'Screenshot', input: { name: 'repro-login-redirect.png' } }],
+        content: [
+          {
+            type: 'tool_use',
+            id: `toolu_mock_shot_${turn}`,
+            name: 'Screenshot',
+            input: { name: 'repro-login-redirect.png' },
+          },
+        ],
         usage: { input_tokens: 80, output_tokens: 30 },
       },
     });
@@ -381,8 +441,14 @@ async function respond(userText, imageCount) {
             type: 'tool_result',
             tool_use_id: `toolu_mock_shot_${turn}`,
             content: [
-              { type: 'text', text: 'Repro captured: after reload the session toast appears and you are back on /login.' },
-              { type: 'image', source: { type: 'base64', media_type: 'image/png', data: MOCK_SCREENSHOT_B64 } },
+              {
+                type: 'text',
+                text: 'Repro captured: after reload the session toast appears and you are back on /login.',
+              },
+              {
+                type: 'image',
+                source: { type: 'base64', media_type: 'image/png', data: MOCK_SCREENSHOT_B64 },
+              },
             ],
           },
         ],
@@ -393,7 +459,12 @@ async function respond(userText, imageCount) {
       type: 'assistant',
       message: {
         role: 'assistant',
-        content: [{ type: 'text', text: `Done with the first pass — opened a draft PR: https://github.com/open-mercato/demo/pull/123. Anything to adjust? (dry-run mock)${refsMarkers}${doneMarker}${monitoringMarker}${askMarker}` }],
+        content: [
+          {
+            type: 'text',
+            text: `Done with the first pass — opened a draft PR: https://github.com/open-mercato/demo/pull/123. Anything to adjust? (dry-run mock)${refsMarkers}${doneMarker}${monitoringMarker}${askMarker}`,
+          },
+        ],
         usage: { input_tokens: 300, output_tokens: 90 },
       },
     });
@@ -413,7 +484,12 @@ async function respond(userText, imageCount) {
     type: 'assistant',
     message: {
       role: 'assistant',
-      content: [{ type: 'text', text: `Follow-up #${turn - 1} received: "${userText.slice(0, 100)}".${imgNote} Applied (dry run).${refsMarkers}${doneMarker}${monitoringMarker}${askMarker}` }],
+      content: [
+        {
+          type: 'text',
+          text: `Follow-up #${turn - 1} received: "${userText.slice(0, 100)}".${imgNote} Applied (dry run).${refsMarkers}${doneMarker}${monitoringMarker}${askMarker}`,
+        },
+      ],
       usage: { input_tokens: 200, output_tokens: 60 },
     },
   });
@@ -437,7 +513,11 @@ rl.on('line', (line) => {
   try {
     const msg = JSON.parse(trimmed);
     const blocks = msg?.message?.content ?? [];
-    userText = blocks.filter((b) => b.type === 'text').map((b) => b.text).join('\n') || '(no text)';
+    userText =
+      blocks
+        .filter((b) => b.type === 'text')
+        .map((b) => b.text)
+        .join('\n') || '(no text)';
     imageCount = blocks.filter((b) => b.type === 'image').length;
   } catch {
     // keep placeholders

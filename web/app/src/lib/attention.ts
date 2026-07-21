@@ -1,4 +1,4 @@
-import type { RunRecord } from '@/api/types'
+import type { RunRecord } from '@/api/types';
 
 /**
  * The one canonical attention function (spec, "Design system" → status grammar).
@@ -24,22 +24,22 @@ export const ATTENTION_RANK = {
   running: 3,
   unseen: 4,
   none: 5,
-} as const
+} as const;
 
-export type AttentionBucket = keyof typeof ATTENTION_RANK
+export type AttentionBucket = keyof typeof ATTENTION_RANK;
 
 /** The dot tones the design system defines (`--success`/`--pending`/`--danger`/`--violet`, plus
  *  the neutral `--soft-foreground`). Named here rather than imported from `StatusDot` to keep
  *  this module UI-free; `attention.test.ts` asserts the two sets stay identical. */
-export type AttentionTone = 'success' | 'pending' | 'danger' | 'violet' | 'neutral'
+export type AttentionTone = 'success' | 'pending' | 'danger' | 'violet' | 'neutral';
 
 export interface Attention {
-  bucket: AttentionBucket
-  tone: AttentionTone
+  bucket: AttentionBucket;
+  tone: AttentionTone;
   /** True while the run is *transitioning* — the spec's "pulsing while transitioning" rule. */
-  pulse: boolean
+  pulse: boolean;
   /** Lower-case human phrase for the dot's tooltip / accessible name. */
-  label: string
+  label: string;
 }
 
 /**
@@ -54,7 +54,7 @@ export interface Attention {
  * When R2 lands the events, this is the only function that changes.
  */
 function hasPendingPermission(_run: AttentionInput): boolean {
-  return false
+  return false;
 }
 
 /**
@@ -65,14 +65,14 @@ function hasPendingPermission(_run: AttentionInput): boolean {
  * in `none`, which is honest: the list shows its outcome, nothing is demanding attention.
  */
 function isUnseen(_run: AttentionInput): boolean {
-  return false
+  return false;
 }
 
 /** What attention derivation actually reads. `Pick`ed rather than the full `RunRecord` so
  *  surfaces that only have a status — the compare view's `GroupVariant` columns — can use the
  *  same canonical function instead of inventing a second status-to-tone mapping. `activity` is
  *  optional (#490), so status-only callers keep working unchanged. */
-export type AttentionInput = Pick<RunRecord, 'status' | 'activity'>
+export type AttentionInput = Pick<RunRecord, 'status' | 'activity'>;
 
 /**
  * `RunRecord` → attention.
@@ -89,36 +89,36 @@ export type AttentionInput = Pick<RunRecord, 'status' | 'activity'>
  */
 export function deriveAttention(run: AttentionInput): Attention {
   if (hasPendingPermission(run)) {
-    return { bucket: 'permission', tone: 'violet', pulse: true, label: 'needs permission' }
+    return { bucket: 'permission', tone: 'violet', pulse: true, label: 'needs permission' };
   }
   if (run.status === 'failed') {
-    return { bucket: 'error', tone: 'danger', pulse: false, label: 'failed' }
+    return { bucket: 'error', tone: 'danger', pulse: false, label: 'failed' };
   }
   if (run.status === 'waiting') {
-    return { bucket: 'waiting', tone: 'pending', pulse: true, label: 'needs you' }
+    return { bucket: 'waiting', tone: 'pending', pulse: true, label: 'needs you' };
   }
   if (run.status === 'review') {
-    return { bucket: 'waiting', tone: 'violet', pulse: true, label: 'needs review' }
+    return { bucket: 'waiting', tone: 'violet', pulse: true, label: 'needs review' };
   }
   if (run.status === 'running' && run.activity === 'monitoring') {
     // Still working, but on its OWN downstream work (a sub-agent / a monitored
     // command), not on you (#490). A sub-state of `running`, so it stays in the
     // `running` bucket — no notification, no "Needs you" — with its own label.
-    return { bucket: 'running', tone: 'violet', pulse: true, label: 'monitoring' }
+    return { bucket: 'running', tone: 'violet', pulse: true, label: 'monitoring' };
   }
   if (run.status === 'running') {
-    return { bucket: 'running', tone: 'violet', pulse: true, label: 'running' }
+    return { bucket: 'running', tone: 'violet', pulse: true, label: 'running' };
   }
   if (isUnseen(run)) {
-    return { bucket: 'unseen', tone: 'violet', pulse: false, label: 'unseen' }
+    return { bucket: 'unseen', tone: 'violet', pulse: false, label: 'unseen' };
   }
   if (run.status === 'queued') {
-    return { bucket: 'none', tone: 'neutral', pulse: false, label: 'queued' }
+    return { bucket: 'none', tone: 'neutral', pulse: false, label: 'queued' };
   }
   if (run.status === 'done') {
-    return { bucket: 'none', tone: 'success', pulse: false, label: 'done' }
+    return { bucket: 'none', tone: 'success', pulse: false, label: 'done' };
   }
-  return { bucket: 'none', tone: 'neutral', pulse: false, label: 'cancelled' }
+  return { bucket: 'none', tone: 'neutral', pulse: false, label: 'cancelled' };
 }
 
 /**
@@ -131,5 +131,5 @@ export function deriveAttention(run: AttentionInput): Attention {
  * outcome rather than in the pile of things you can act on. See `lib/task-groups.ts`.
  */
 export function wantsAttention(run: RunRecord): boolean {
-  return ATTENTION_RANK[deriveAttention(run).bucket] <= ATTENTION_RANK.waiting
+  return ATTENTION_RANK[deriveAttention(run).bucket] <= ATTENTION_RANK.waiting;
 }

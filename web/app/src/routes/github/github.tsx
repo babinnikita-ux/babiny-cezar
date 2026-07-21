@@ -1,4 +1,4 @@
-import { hashKey, useMutation, useQueryClient } from '@tanstack/react-query'
+import { hashKey, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeftIcon,
   CheckIcon,
@@ -10,40 +10,40 @@ import {
   SearchIcon,
   TagIcon,
   TriangleAlertIcon,
-} from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
-import { useParams } from 'react-router'
+} from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { useParams } from 'react-router';
 
-import { Link, Navigate } from '@/lib/project-router'
+import { Link, Navigate } from '@/lib/project-router';
 
-import { getGithub, getGithubComments, putUiState } from '@/api/client'
-import { queryKeys, useGithub, useGithubComments, useSkills, useUiState, useWorkflows } from '@/api/queries'
+import { getGithub, getGithubComments, putUiState } from '@/api/client';
+import { queryKeys, useGithub, useGithubComments, useSkills, useUiState, useWorkflows } from '@/api/queries';
 import type {
   GithubComment,
   GithubItem,
   GithubTimelineEvent,
   GithubTimelineEventKind,
   UiState,
-} from '@/api/types'
-import { CenteredState } from '@/components/centered-state'
-import type { EnginePick } from '@/components/engine-pills'
-import { GithubIcon } from '@/components/icons'
-import { TabLink } from '@/components/tab-link'
-import { Button } from '@/components/ui/button'
-import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Skeleton } from '@/components/ui/skeleton'
-import { toast } from '@/components/ui/toaster'
-import { shortAge } from '@/lib/format'
-import { githubTaskPrompt } from '@/lib/github-task'
-import { orderSkillsByUsage } from '@/lib/skills'
-import { cn, isHttpUrl } from '@/lib/utils'
+} from '@/api/types';
+import { CenteredState } from '@/components/centered-state';
+import type { EnginePick } from '@/components/engine-pills';
+import { GithubIcon } from '@/components/icons';
+import { TabLink } from '@/components/tab-link';
+import { Button } from '@/components/ui/button';
+import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from '@/components/ui/toaster';
+import { shortAge } from '@/lib/format';
+import { githubTaskPrompt } from '@/lib/github-task';
+import { orderSkillsByUsage } from '@/lib/skills';
+import { cn, isHttpUrl } from '@/lib/utils';
 
-import { Markdown } from '../task-thread/markdown'
-import { allLabels, filterGithubItems, labelChipStyle } from './github-filter'
-import { GithubLoading } from './github-loading'
-import { HandToAgent } from './hand-to-agent'
-import { readFollowupSelection, writeFollowupSelection } from './hand-to-agent-draft'
+import { Markdown } from '../task-thread/markdown';
+import { allLabels, filterGithubItems, labelChipStyle } from './github-filter';
+import { GithubLoading } from './github-loading';
+import { HandToAgent } from './hand-to-agent';
+import { readFollowupSelection, writeFollowupSelection } from './hand-to-agent-draft';
 
 /**
  * `/github` — the forge tab rebuilt in React (R6 Step 1.1, spec §"GitHub tab (forge tab)"):
@@ -65,12 +65,12 @@ import { readFollowupSelection, writeFollowupSelection } from './hand-to-agent-d
 
 /** The server's default batch (`/api/github` limit). A count AT this cap is "cap of who
  *  knows" until the full fetch lands — the tabs say `30+`. */
-const FAST_BATCH = 30
+const FAST_BATCH = 30;
 
 /** The background "everything open" fetch — same number the legacy tab used. */
-const FULL_LIMIT = 1000
+const FULL_LIMIT = 1000;
 
-export type GithubView = 'issues' | 'prs'
+export type GithubView = 'issues' | 'prs';
 
 /**
  * `/github`'s index (#417): restores the last-selected sub-tab instead of always defaulting
@@ -82,24 +82,24 @@ export type GithubView = 'issues' | 'prs'
  * that URL is authoritative on its own.
  */
 export function GithubIndexRoute() {
-  const uiState = useUiState()
+  const uiState = useUiState();
   if (uiState.data?.githubView === 'prs') {
-    return <Navigate to="/github/prs" replace />
+    return <Navigate to="/github/prs" replace />;
   }
-  return <GithubRoute view="issues" />
+  return <GithubRoute view="issues" />;
 }
 
 export function GithubRoute({ view }: { view: GithubView }) {
-  const { n } = useParams()
-  const fast = useGithub()
+  const { n } = useParams();
+  const fast = useGithub();
   // Two-shot: the full fetch waits for the fast one to prove the forge reachable.
-  const full = useGithub({ limit: FULL_LIMIT }, fast.data?.available === true)
+  const full = useGithub({ limit: FULL_LIMIT }, fast.data?.available === true);
   // The full batch replaces the fast one only when it is a real answer (legacy rule — a
   // failed background fetch leaves the fast batch standing, counts just keep their "+").
-  const gh = full.data?.available ? full.data : fast.data
-  const isFull = full.data?.available === true
+  const gh = full.data?.available ? full.data : fast.data;
+  const isFull = full.data?.available === true;
 
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
 
   // Persist the tab choice (#417), mirroring the appearance provider's read-then-write
   // pattern. The cache is patched BEFORE the PUT resolves — not just for optimism, but so
@@ -107,16 +107,16 @@ export function GithubRoute({ view }: { view: GithubView }) {
   // if the click just navigated `/github/prs` → `/github`: without the eager patch it would
   // still read the stale "prs" and bounce the Issues tab straight back.
   const saveGithubView = (next: GithubView) => {
-    queryClient.setQueryData<UiState>(queryKeys.uiState, (prev) => ({ ...prev, githubView: next }))
+    queryClient.setQueryData<UiState>(queryKeys.uiState, (prev) => ({ ...prev, githubView: next }));
     putUiState({ githubView: next })
       .then((merged) => queryClient.setQueryData(queryKeys.uiState, merged))
       .catch((error: unknown) => {
-        toast(error instanceof Error ? error.message : String(error), { tone: 'danger' })
+        toast(error instanceof Error ? error.message : String(error), { tone: 'danger' });
         // The write failed — fall back to the server's truth rather than keep the tab
         // claiming a persistence it never got.
-        void queryClient.invalidateQueries({ queryKey: queryKeys.uiState })
-      })
-  }
+        void queryClient.invalidateQueries({ queryKey: queryKeys.uiState });
+      });
+  };
 
   // The thread actually ON SCREEN, so a manual refresh can bust its SERVER cache.
   //
@@ -125,62 +125,62 @@ export function GithubRoute({ view }: { view: GithubView }) {
   // legacy behavior) — so keying off the URL would leave the bare `/github` and `/github/prs`
   // routes, i.e. the default landing pages, refreshing nothing. A ref because this mutation is
   // defined before `selected` exists and reads it at click time, not render time.
-  const openThreadRef = useRef<{ kind: 'issue' | 'pr'; number: number } | null>(null)
+  const openThreadRef = useRef<{ kind: 'issue' | 'pr'; number: number } | null>(null);
 
   const refresh = useMutation({
     mutationFn: () => getGithub({ refresh: true }),
     onSuccess: (data) => {
-      queryClient.setQueryData(queryKeys.github({}), data)
+      queryClient.setQueryData(queryKeys.github({}), data);
       // The refresh busted the server cache; the full batch must re-run against it.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.github({ limit: FULL_LIMIT }) })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.github({ limit: FULL_LIMIT }) });
 
       // The open thread must be re-fetched with `refresh: true` (#525). Invalidating its key is
       // NOT enough, and was the bug in the first attempt: an invalidate re-requests
       // `/api/github/comments/…` WITHOUT `refresh=1`, and the route only busts `commentsCache`
       // when that param is present — so the client dutifully refetched and was handed the same
       // ≤60 s-old object. Pressing refresh has to reach `gh`, or it is theatre.
-      const open = openThreadRef.current
+      const open = openThreadRef.current;
       if (!open) {
         // No thread on screen (the unavailable branch) — nothing mounted, so clearing is free.
-        void queryClient.removeQueries({ queryKey: ['github', 'comments'] })
-        return
+        void queryClient.removeQueries({ queryKey: ['github', 'comments'] });
+        return;
       }
-      const openKey = queryKeys.githubComments(open.kind, open.number)
+      const openKey = queryKeys.githubComments(open.kind, open.number);
       // Fire-and-forget rather than awaited in `mutationFn`: a thread fetch that fails must not
       // discard an already-successful list refresh.
       void getGithubComments(open.kind, open.number, { refresh: true })
         .then((thread) => queryClient.setQueryData(openKey, thread))
         .catch(() => {
           /* the list refresh still landed; leave the thread showing what it has */
-        })
+        });
       // Every OTHER cached thread is now suspect but not on screen — drop it so it refetches when
       // next opened. The open one MUST be excluded: removing a mounted query resets it to pending
       // and flashes the loading skeleton under the user.
       void queryClient.removeQueries({
         queryKey: ['github', 'comments'],
         predicate: (q) => q.queryHash !== hashKey(openKey),
-      })
+      });
     },
     onError: (error) => toast(error.message, { tone: 'danger' }),
-  })
+  });
 
   // Pickers + queued-run bookkeeping live at the route so they survive switching items
   // (legacy parity) — see HandToAgent's doc block. Initial value comes from the localStorage
   // "remembered last selection" (#408): a repeat hand-off is one action, and it now survives a
   // page reload too — previously this was plain route state, gone on refresh.
-  const workflows = useWorkflows()
-  const skills = useSkills()
-  const uiState = useUiState()
-  const [workflow, setWorkflow] = useState<string | null>(() => readFollowupSelection().workflow)
+  const workflows = useWorkflows();
+  const skills = useSkills();
+  const uiState = useUiState();
+  const [workflow, setWorkflow] = useState<string | null>(() => readFollowupSelection().workflow);
   const [selectedSkills, setSelectedSkills] = useState<readonly string[]>(
     () => readFollowupSelection().skills,
-  )
+  );
   // The backend choice (#401) is a way of working too, so it lives here beside the pickers —
   // and it must, because HandToAgent is keyed by item and would otherwise reset on every hop.
-  const [engine, setEngine] = useState<EnginePick>({ runner: null, model: null })
+  const [engine, setEngine] = useState<EnginePick>({ runner: null, model: null });
   useEffect(() => {
-    writeFollowupSelection({ workflow, skills: [...selectedSkills] })
-  }, [workflow, selectedSkills])
+    writeFollowupSelection({ workflow, skills: [...selectedSkills] });
+  }, [workflow, selectedSkills]);
   // A workflow that no longer exists must not reach the server — the same legacy rule
   // `validSkills` applies to skills (hand-to-agent.tsx). Remembering the pick (#408) gave this
   // state a lifetime beyond the `.ai/workflows/` file that justified it: rename the workflow and
@@ -188,24 +188,21 @@ export function GithubRoute({ view }: { view: GithubView }) {
   // for different repos also share one `localhost:<port>` origin (`pickPort`, src/index.ts) and
   // therefore this localStorage key, so the name can arrive from a repo where it does exist.
   // Drop it only once the list has LOADED — an in-flight fetch is not evidence of absence.
-  const workflowDefs = workflows.data?.workflows
+  const workflowDefs = workflows.data?.workflows;
   useEffect(() => {
-    if (!workflowDefs) return
-    if (workflow !== null && !workflowDefs.some((def) => def.name === workflow)) setWorkflow(null)
-  }, [workflowDefs, workflow])
+    if (!workflowDefs) return;
+    if (workflow !== null && !workflowDefs.some((def) => def.name === workflow)) setWorkflow(null);
+  }, [workflowDefs, workflow]);
   // Frequency sort (#408, shared with /new's SourcePill): project-first, then most-selected.
   // Memoized so the picker gets a STABLE array identity across renders that don't actually
   // change the catalog or the usage stats (e.g. toggling a skill re-renders this route).
-  const skillsData = skills.data
-  const skillUsage = uiState.data?.skillUsage
-  const skillList = useMemo(
-    () => orderSkillsByUsage(skillsData ?? [], skillUsage),
-    [skillsData, skillUsage],
-  )
-  const [queued, setQueued] = useState<ReadonlyMap<string, string>>(new Map())
+  const skillsData = skills.data;
+  const skillUsage = uiState.data?.skillUsage;
+  const skillList = useMemo(() => orderSkillsByUsage(skillsData ?? [], skillUsage), [skillsData, skillUsage]);
+  const [queued, setQueued] = useState<ReadonlyMap<string, string>>(new Map());
   // List filtering (#gh-filter): free-text search (by #id or any text) + a label narrow.
-  const [query, setQuery] = useState('')
-  const [labelFilter, setLabelFilter] = useState<readonly string[]>([])
+  const [query, setQuery] = useState('');
+  const [labelFilter, setLabelFilter] = useState<readonly string[]>([]);
 
   if (!gh) {
     if (fast.isError) {
@@ -218,13 +215,13 @@ export function GithubRoute({ view }: { view: GithubView }) {
             subtitle={fast.error.message}
           />
         </div>
-      )
+      );
     }
-    return <GithubLoading />
+    return <GithubLoading />;
   }
 
   // No thread is mounted on the unavailable path — keep the ref honest rather than stale.
-  openThreadRef.current = null
+  openThreadRef.current = null;
 
   if (!gh.available) {
     return (
@@ -247,30 +244,30 @@ export function GithubRoute({ view }: { view: GithubView }) {
         >
           <p className="text-xs leading-relaxed text-soft-foreground">
             The tab needs the <span className="font-mono">gh</span> CLI, logged in (
-            <span className="font-mono">gh auth login</span>), and a repo with a GitHub remote.
-            Everything else in cezar works without it.
+            <span className="font-mono">gh auth login</span>), and a repo with a GitHub remote. Everything
+            else in cezar works without it.
           </p>
         </CenteredState>
       </div>
-    )
+    );
   }
 
-  const allItems = view === 'issues' ? gh.issues : gh.prs
-  const labelColors = gh.labelColors ?? {}
-  const labelOptions = allLabels(allItems)
-  const items = filterGithubItems(allItems, { query, labels: labelFilter })
-  const filtering = query.trim() !== '' || labelFilter.length > 0
-  const number = n === undefined ? null : Number.parseInt(n, 10)
+  const allItems = view === 'issues' ? gh.issues : gh.prs;
+  const labelColors = gh.labelColors ?? {};
+  const labelOptions = allLabels(allItems);
+  const items = filterGithubItems(allItems, { query, labels: labelFilter });
+  const filtering = query.trim() !== '' || labelFilter.length > 0;
+  const number = n === undefined ? null : Number.parseInt(n, 10);
   // No URL selection → the first item, like the legacy tab (rendered, not navigated-to). The
   // selection may point at an item outside the current filter — keep resolving it from the full
   // list so a deep link to #N still opens even while a filter is active.
   const selected =
-    number === null ? (items[0] ?? null) : (allItems.find((item) => item.number === number) ?? null)
+    number === null ? (items[0] ?? null) : (allItems.find((item) => item.number === number) ?? null);
   // Feed the refresh mutation the thread that is genuinely rendered — including the no-`:n`
   // fallback to items[0], which is what the bare /github and /github/prs routes show.
-  openThreadRef.current = selected ? { kind: selected.kind, number: selected.number } : null
+  openThreadRef.current = selected ? { kind: selected.kind, number: selected.number } : null;
 
-  const listPath = view === 'issues' ? '/github' : '/github/prs'
+  const listPath = view === 'issues' ? '/github' : '/github/prs';
 
   return (
     // Bounded to the viewport (`h-full min-h-0`) so the PAGE never scrolls — each pane owns its
@@ -287,11 +284,17 @@ export function GithubRoute({ view }: { view: GithubView }) {
           n === undefined ? 'flex' : 'hidden',
         )}
       >
-        <header data-slot="gh-header" className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 pt-3 backdrop-blur">
+        <header
+          data-slot="gh-header"
+          className="sticky top-0 z-10 border-b border-border bg-background/95 px-4 pt-3 backdrop-blur"
+        >
           <div className="flex min-w-0 items-center gap-2.5">
             <h1 className="text-lg font-semibold">GitHub</h1>
             {gh.repo ? (
-              <span data-slot="gh-repo" className="min-w-0 truncate font-mono text-[11px] text-soft-foreground">
+              <span
+                data-slot="gh-repo"
+                className="min-w-0 truncate font-mono text-[11px] text-soft-foreground"
+              >
                 {gh.repo}
               </span>
             ) : null}
@@ -405,12 +408,12 @@ export function GithubRoute({ view }: { view: GithubView }) {
         )}
       </section>
     </div>
-  )
+  );
 }
 
 /** `30+` while the fast batch might be truncated; the plain number once the full fetch landed. */
 function countLabel(count: number, isFull: boolean): string {
-  return `${count}${!isFull && count >= FAST_BATCH ? '+' : ''}`
+  return `${count}${!isFull && count >= FAST_BATCH ? '+' : ''}`;
 }
 
 function GithubRow({
@@ -420,24 +423,24 @@ function GithubRow({
   active,
   queued,
 }: {
-  item: GithubItem
-  view: GithubView
-  colors: Record<string, string>
-  active: boolean
-  queued: boolean
+  item: GithubItem;
+  view: GithubView;
+  colors: Record<string, string>;
+  active: boolean;
+  queued: boolean;
 }) {
-  const Icon = item.kind === 'issue' ? CircleDotIcon : GitPullRequestIcon
+  const Icon = item.kind === 'issue' ? CircleDotIcon : GitPullRequestIcon;
 
   // Drag an issue/PR row into the composer — it prefills the same prompt "Run agent on this
   // issue" uses (legacy parity); a textarea accepts the text/plain payload natively.
   const onDragStart = (event: DragEvent) => {
     try {
-      event.dataTransfer.setData('text/plain', githubTaskPrompt(item))
-      event.dataTransfer.effectAllowed = 'copy'
+      event.dataTransfer.setData('text/plain', githubTaskPrompt(item));
+      event.dataTransfer.effectAllowed = 'copy';
     } catch {
       // older engines — the drag just won't carry the prompt
     }
-  }
+  };
 
   return (
     <li>
@@ -484,7 +487,7 @@ function GithubRow({
         ) : null}
       </Link>
     </li>
-  )
+  );
 }
 
 /** The label narrow: a searchable multi-select of the labels present in the current list. Selected
@@ -495,14 +498,14 @@ function LabelFilter({
   selected,
   onChange,
 }: {
-  options: readonly string[]
-  colors: Record<string, string>
-  selected: readonly string[]
-  onChange: (labels: string[]) => void
+  options: readonly string[];
+  colors: Record<string, string>;
+  selected: readonly string[];
+  onChange: (labels: string[]) => void;
 }) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(false);
   const toggle = (label: string) =>
-    onChange(selected.includes(label) ? selected.filter((l) => l !== label) : [...selected, label])
+    onChange(selected.includes(label) ? selected.filter((l) => l !== label) : [...selected, label]);
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -530,7 +533,7 @@ function LabelFilter({
               </CommandItem>
             ) : null}
             {options.map((label) => {
-              const on = selected.includes(label)
+              const on = selected.includes(label);
               return (
                 <CommandItem key={label} value={label} onSelect={() => toggle(label)}>
                   <span
@@ -541,13 +544,13 @@ function LabelFilter({
                   <span className="min-w-0 flex-1 truncate">{label}</span>
                   {on ? <CheckIcon aria-hidden="true" className="size-3.5 shrink-0 text-primary" /> : null}
                 </CommandItem>
-              )
+              );
             })}
           </CommandList>
         </Command>
       </PopoverContent>
     </Popover>
-  )
+  );
 }
 
 /** A single label pill, tinted with its GitHub color (or neutral when unknown). */
@@ -561,7 +564,7 @@ function LabelChip({ label, color }: { label: string; color: string | undefined 
     >
       {label}
     </span>
-  )
+  );
 }
 
 function GithubDetail({
@@ -570,13 +573,13 @@ function GithubDetail({
   colors,
   children,
 }: {
-  item: GithubItem
-  listPath: string
-  colors: Record<string, string>
-  children: ReactNode
+  item: GithubItem;
+  listPath: string;
+  colors: Record<string, string>;
+  children: ReactNode;
 }) {
-  const kindWord = item.kind === 'pr' ? 'pull request' : 'issue'
-  const hasDiffStat = item.kind === 'pr' && Boolean(item.additions || item.deletions)
+  const kindWord = item.kind === 'pr' ? 'pull request' : 'issue';
+  const hasDiffStat = item.kind === 'pr' && Boolean(item.additions || item.deletions);
   return (
     <article data-slot="gh-detail-inner" className="min-w-0 px-4 py-4 md:px-7 md:py-5">
       <Link
@@ -588,7 +591,10 @@ function GithubDetail({
         Back to the list
       </Link>
 
-      <p data-slot="gh-meta" className="flex flex-wrap items-center gap-x-1.5 font-mono text-[10.5px] text-soft-foreground">
+      <p
+        data-slot="gh-meta"
+        className="flex flex-wrap items-center gap-x-1.5 font-mono text-[10.5px] text-soft-foreground"
+      >
         <span>#{item.number}</span>·<span>{kindWord}</span>·<span>opened by {item.author}</span>·
         <span>{shortAge(item.createdAt)} ago</span>
         {item.comments ? (
@@ -605,8 +611,7 @@ function GithubDetail({
             </span>
           </>
         ) : null}
-        ·
-        {/* href protocol guard (#431): link only for http(s) URLs. */}
+        ·{/* href protocol guard (#431): link only for http(s) URLs. */}
         {isHttpUrl(item.url) ? (
           <a
             href={item.url}
@@ -648,7 +653,7 @@ function GithubDetail({
 
       {children}
     </article>
-  )
+  );
 }
 
 /** The conversation thread (#499): comments (+ PR review summaries) rendered under the body, each
@@ -657,8 +662,8 @@ function GithubDetail({
  *  loading → skeleton, unreachable → one-line reason + "open on GitHub", empty → nothing (the
  *  count badge already said there were none). */
 function GithubThread({ item, colors }: { item: GithubItem; colors: Record<string, string> }) {
-  const thread = useGithubComments(item.kind, item.number)
-  const data = thread.data
+  const thread = useGithubComments(item.kind, item.number);
+  const data = thread.data;
 
   // Interleave client-side (#525): the server returns comments and events as two independently
   // capped arrays and deliberately does NOT merge them — ordering is presentation, and a
@@ -667,7 +672,7 @@ function GithubThread({ item, colors }: { item: GithubItem; colors: Record<strin
     const merged: ThreadRow[] = [
       ...(data?.comments ?? []).map((comment) => ({ row: 'comment' as const, comment })),
       ...(data?.events ?? []).map((event) => ({ row: 'event' as const, event })),
-    ]
+    ];
     // Compare parsed instants, not the raw strings. Both streams are UTC, but at DIFFERENT
     // precisions: events go through `toISOString()` (always milliseconds, `…00.000Z`) while
     // comments keep GitHub's second-precision `…00Z`. A string compare puts `.` (46) before `Z`
@@ -680,11 +685,11 @@ function GithubThread({ item, colors }: { item: GithubItem; colors: Record<strin
     // sort inconsistent rather than crashing — so those rows are pinned to the top explicitly
     // instead of landing wherever the engine happens to leave them.
     const key = (entry: ThreadRow): number => {
-      const parsed = Date.parse(at(entry))
-      return Number.isNaN(parsed) ? -Infinity : parsed
-    }
-    return merged.sort((a, b) => key(a) - key(b))
-  }, [data?.comments, data?.events])
+      const parsed = Date.parse(at(entry));
+      return Number.isNaN(parsed) ? -Infinity : parsed;
+    };
+    return merged.sort((a, b) => key(a) - key(b));
+  }, [data?.comments, data?.events]);
 
   if (thread.isPending) {
     return (
@@ -695,13 +700,17 @@ function GithubThread({ item, colors }: { item: GithubItem; colors: Record<strin
           <Skeleton className="h-14 w-full" />
         </div>
       </section>
-    )
+    );
   }
 
   if (!data || !data.available) {
-    const reason = data?.reason ?? (thread.error instanceof Error ? thread.error.message : 'could not load comments')
+    const reason =
+      data?.reason ?? (thread.error instanceof Error ? thread.error.message : 'could not load comments');
     return (
-      <section data-slot="gh-thread-error" className="mt-6 border-t border-border pt-5 text-xs text-soft-foreground">
+      <section
+        data-slot="gh-thread-error"
+        className="mt-6 border-t border-border pt-5 text-xs text-soft-foreground"
+      >
         <span>Couldn’t load comments — {reason}. </span>
         <a
           href={item.url}
@@ -713,14 +722,14 @@ function GithubThread({ item, colors }: { item: GithubItem; colors: Record<strin
           <ExternalLinkIcon aria-hidden="true" className="size-2.5" />
         </a>
       </section>
-    )
+    );
   }
 
   // An empty thread renders nothing: the count badge already communicated "no discussion", and an
   // empty "Activity" section would be noise on the many quiet issues/PRs. Counts BOTH streams
   // (#525) — keyed on comments alone this would hide the whole feature on its motivating case, a
   // merged PR with commits, labels and a merge event but no conversation.
-  if (entries.length === 0) return null
+  if (entries.length === 0) return null;
 
   return (
     <section data-slot="gh-thread" className="mt-6 border-t border-border pt-5">
@@ -760,7 +769,7 @@ function GithubThread({ item, colors }: { item: GithubItem; colors: Record<strin
         </a>
       ) : null}
     </section>
-  )
+  );
 }
 
 /** One row in the interleaved thread (#525) — a conversation comment/review, or a timeline event.
@@ -768,17 +777,17 @@ function GithubThread({ item, colors }: { item: GithubItem; colors: Record<strin
  *  own narrowing. */
 export type ThreadRow =
   | { row: 'comment'; comment: GithubComment }
-  | { row: 'event'; event: GithubTimelineEvent }
+  | { row: 'event'; event: GithubTimelineEvent };
 
 /** Sort key for either row shape. */
 const at = (entry: ThreadRow): string =>
-  entry.row === 'comment' ? entry.comment.createdAt : entry.event.createdAt
+  entry.row === 'comment' ? entry.comment.createdAt : entry.event.createdAt;
 
 /** A rendered row after commit-run grouping: either a single row, or a run of consecutive commits
  *  by one author that collapses behind an expander. */
 export type GroupedRow =
   | { group: 'single'; entry: ThreadRow }
-  | { group: 'commits'; commits: GithubTimelineEvent[] }
+  | { group: 'commits'; commits: GithubTimelineEvent[] };
 
 /**
  * Collapse runs of consecutive `committed` events by the same author (#525), the way github.com
@@ -792,37 +801,43 @@ export type GroupedRow =
  * commit should render as a plain row, not a "1 commit" expander. Exported for unit tests.
  */
 export function groupCommitRuns(entries: ThreadRow[]): GroupedRow[] {
-  const out: GroupedRow[] = []
-  let run: GithubTimelineEvent[] = []
+  const out: GroupedRow[] = [];
+  let run: GithubTimelineEvent[] = [];
 
   const flush = () => {
-    if (run.length === 0) return
+    if (run.length === 0) return;
     // A single commit is not a group.
-    if (run.length === 1) out.push({ group: 'single', entry: { row: 'event', event: run[0]! } })
-    else out.push({ group: 'commits', commits: run })
-    run = []
-  }
+    if (run.length === 1) out.push({ group: 'single', entry: { row: 'event', event: run[0]! } });
+    else out.push({ group: 'commits', commits: run });
+    run = [];
+  };
 
   for (const entry of entries) {
-    const isCommit = entry.row === 'event' && entry.event.kind === 'committed'
+    const isCommit = entry.row === 'event' && entry.event.kind === 'committed';
     if (isCommit && entry.row === 'event') {
-      const prev = run[run.length - 1]
-      if (prev && prev.actor !== entry.event.actor) flush() // author change ends the run
-      run.push(entry.event)
-      continue
+      const prev = run[run.length - 1];
+      if (prev && prev.actor !== entry.event.actor) flush(); // author change ends the run
+      run.push(entry.event);
+      continue;
     }
-    flush() // any non-commit row interrupts the run
-    out.push({ group: 'single', entry })
+    flush(); // any non-commit row interrupts the run
+    out.push({ group: 'single', entry });
   }
-  flush()
-  return out
+  flush();
+  return out;
 }
 
 /** A collapsed run of consecutive commits — `{actor} added {n} commits`, expanding to the
  *  individual rows, each of which keeps its own message and CI glyph. */
-function CommitGroup({ commits, colors }: { commits: GithubTimelineEvent[]; colors: Record<string, string> }) {
-  const [open, setOpen] = useState(false)
-  const actor = commits[0]?.actor ?? '?'
+function CommitGroup({
+  commits,
+  colors,
+}: {
+  commits: GithubTimelineEvent[];
+  colors: Record<string, string>;
+}) {
+  const [open, setOpen] = useState(false);
+  const actor = commits[0]?.actor ?? '?';
 
   if (open) {
     return (
@@ -843,7 +858,7 @@ function CommitGroup({ commits, colors }: { commits: GithubTimelineEvent[]; colo
           <EventRow key={commit.id} event={commit} colors={colors} />
         ))}
       </>
-    )
+    );
   }
 
   return (
@@ -860,7 +875,7 @@ function CommitGroup({ commits, colors }: { commits: GithubTimelineEvent[]; colo
         <span className="shrink-0">{shortAge(commits[commits.length - 1]!.createdAt)}</span>
       </button>
     </li>
-  )
+  );
 }
 
 /** Per-kind glyph. Deliberately text glyphs rather than icon components: `EventRow` is a single
@@ -878,7 +893,7 @@ const EVENT_GLYPH: Record<GithubTimelineEventKind, string> = {
   head_ref_force_pushed: '↻',
   'cross-referenced': '↗',
   renamed: '✎',
-}
+};
 
 /**
  * One timeline event — deliberately NOT a `ThreadEntry`: single line, muted, no card, no avatar
@@ -913,7 +928,7 @@ function EventRow({ event, colors }: { event: GithubTimelineEvent; colors: Recor
         </a>
       ) : null}
     </li>
-  )
+  );
 }
 
 /** The kind-specific middle of an event row. Split out so `EventRow` stays a layout shell and
@@ -925,12 +940,10 @@ function EventPhrase({ event, colors }: { event: GithubTimelineEvent; colors: Re
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="shrink-0">committed</span>
           {event.sha ? <span className="shrink-0 text-muted-foreground">{event.sha.slice(0, 7)}</span> : null}
-          {event.message ? (
-            <span className="truncate font-sans text-foreground">{event.message}</span>
-          ) : null}
+          {event.message ? <span className="truncate font-sans text-foreground">{event.message}</span> : null}
           <CommitChecks checks={event.checks} />
         </span>
-      )
+      );
     case 'labeled':
     case 'unlabeled':
       return (
@@ -947,31 +960,31 @@ function EventPhrase({ event, colors }: { event: GithubTimelineEvent; colors: Re
           ) : null}
           <span className="shrink-0">label</span>
         </span>
-      )
+      );
     case 'assigned':
     case 'unassigned':
       return (
         <span className="truncate">
           {event.kind === 'assigned' ? 'assigned' : 'unassigned'} {event.subject ?? 'someone'}
         </span>
-      )
+      );
     case 'merged':
-      return <span>merged this</span>
+      return <span>merged this</span>;
     case 'closed':
-      return <span>closed this</span>
+      return <span>closed this</span>;
     case 'reopened':
-      return <span>reopened this</span>
+      return <span>reopened this</span>;
     case 'head_ref_force_pushed':
-      return <span>force-pushed</span>
+      return <span>force-pushed</span>;
     case 'renamed':
-      return <span className="truncate">renamed this to {event.subject ?? '—'}</span>
+      return <span className="truncate">renamed this to {event.subject ?? '—'}</span>;
     case 'cross-referenced':
       return (
         <span className="truncate">
           referenced this in {event.refNumber ? `#${event.refNumber}` : 'another thread'}
           {event.refTitle ? ` ${event.refTitle}` : ''}
         </span>
-      )
+      );
   }
 }
 
@@ -982,7 +995,7 @@ function EventPhrase({ event, colors }: { event: GithubTimelineEvent; colors: Re
  *  query failed or was skipped). The two are deliberately distinct values on the wire even though
  *  they look identical here — absence of a glyph should not have to mean "we know there is no CI". */
 function CommitChecks({ checks }: { checks: GithubTimelineEvent['checks'] }) {
-  if (!checks) return null
+  if (!checks) return null;
   return (
     <span
       data-slot="gh-commit-checks"
@@ -992,7 +1005,7 @@ function CommitChecks({ checks }: { checks: GithubTimelineEvent['checks'] }) {
     >
       {CHECKS_GLYPH[checks]}
     </span>
-  )
+  );
 }
 
 /** Review-state chip tones — the same success/danger/muted vocabulary the checks badge uses, so
@@ -1002,12 +1015,12 @@ const REVIEW_CHIP: Record<NonNullable<GithubComment['reviewState']>, { label: st
   changes_requested: { label: 'changes requested', tone: 'border-danger/40 text-danger' },
   commented: { label: 'commented', tone: 'border-border text-muted-foreground' },
   dismissed: { label: 'dismissed', tone: 'border-border text-muted-foreground' },
-}
+};
 
 /** One thread entry: avatar (letter fallback), author, age, an optional review-state chip, and the
  *  body via the shared `Markdown` component (images/code fences render as in the issue body). */
 function ThreadEntry({ comment }: { comment: GithubComment }) {
-  const chip = comment.reviewState ? REVIEW_CHIP[comment.reviewState] : null
+  const chip = comment.reviewState ? REVIEW_CHIP[comment.reviewState] : null;
   return (
     <li data-slot="gh-thread-entry" data-kind={comment.kind} className="min-w-0">
       <div className="mb-1.5 flex items-center gap-1.5 font-mono text-[11px] text-soft-foreground">
@@ -1034,16 +1047,20 @@ function ThreadEntry({ comment }: { comment: GithubComment }) {
         </a>
       </div>
       <div data-slot="gh-thread-body" className="text-sm">
-        {comment.body ? <Markdown>{comment.body}</Markdown> : <p className="text-soft-foreground">(no body)</p>}
+        {comment.body ? (
+          <Markdown>{comment.body}</Markdown>
+        ) : (
+          <p className="text-soft-foreground">(no body)</p>
+        )}
       </div>
     </li>
-  )
+  );
 }
 
 /** A 16 px comment avatar. Falls back to a letter block when no URL is known or the image fails to
  *  load (private-repo attachments, deleted avatars) — never a broken-image glyph. */
 function Avatar({ url, login }: { url?: string; login: string }) {
-  const [failed, setFailed] = useState(false)
+  const [failed, setFailed] = useState(false);
   if (url && !failed) {
     return (
       <img
@@ -1056,7 +1073,7 @@ function Avatar({ url, login }: { url?: string; login: string }) {
         data-slot="gh-avatar"
         className="size-4 shrink-0 rounded-full"
       />
-    )
+    );
   }
   return (
     <span
@@ -1066,24 +1083,24 @@ function Avatar({ url, login }: { url?: string; login: string }) {
     >
       {login.slice(0, 1) || '?'}
     </span>
-  )
+  );
 }
 
 /** Glyph + tone shared by the list row's compact indicator and the detail pane's full badge
  *  (#400) — one source of truth so the two surfaces can't drift out of sync. */
-type Checks = NonNullable<GithubItem['checks']>
-const CHECKS_GLYPH: Record<Checks, string> = { passing: '✓', failing: '✗', pending: '○' }
+type Checks = NonNullable<GithubItem['checks']>;
+const CHECKS_GLYPH: Record<Checks, string> = { passing: '✓', failing: '✗', pending: '○' };
 const CHECKS_TONE: Record<Checks, string> = {
   passing: 'text-success',
   failing: 'text-danger',
   pending: 'text-muted-foreground',
-}
+};
 
 /** The comment-count badge (#499): a muted speech-bubble glyph + count, shown on issue/PR rows
  *  and in the detail meta line. Renders nothing for a zero (or absent) count, so quiet items look
  *  exactly as they did before real counts arrived. Shared so the row and detail can't drift. */
 function CommentCount({ count }: { count: number }) {
-  if (!count) return null
+  if (!count) return null;
   return (
     <span
       data-slot="gh-comment-count"
@@ -1094,21 +1111,21 @@ function CommentCount({ count }: { count: number }) {
       <MessageSquareIcon aria-hidden="true" className="size-3" />
       {count}
     </span>
-  )
+  );
 }
 
 /** The checks badge — the legacy tab's three phrases, tinted by outcome. Links out
  *  to the PR's checks tab on GitHub (issue #415) when a URL is available. */
 function ChecksBadge({ checks, url }: { checks: Checks; url?: string }) {
-  const className = cn('text-[11px] font-medium', CHECKS_TONE[checks], url && 'hover:underline')
-  const label = `${CHECKS_GLYPH[checks]} checks ${checks}`
+  const className = cn('text-[11px] font-medium', CHECKS_TONE[checks], url && 'hover:underline');
+  const label = `${CHECKS_GLYPH[checks]} checks ${checks}`;
 
   if (!url) {
     return (
       <span data-slot="gh-checks" data-checks={checks} className={className}>
         {label}
       </span>
-    )
+    );
   }
 
   return (
@@ -1122,7 +1139,7 @@ function ChecksBadge({ checks, url }: { checks: Checks; url?: string }) {
     >
       {label}
     </a>
-  )
+  );
 }
 
 /** The PR row's compact checks indicator (#400) — same tones as `ChecksBadge`, just the glyph
@@ -1139,5 +1156,5 @@ function ChecksGlyph({ checks }: { checks: Checks }) {
     >
       {CHECKS_GLYPH[checks]}
     </span>
-  )
+  );
 }

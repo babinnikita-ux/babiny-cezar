@@ -1,14 +1,14 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { GaugeIcon } from 'lucide-react'
-import { useState } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { GaugeIcon } from 'lucide-react';
+import { useState } from 'react';
 
-import { putWorkspaceConfig } from '@/api/client'
-import { useWorkspaceConfig, workspaceQueryKeys } from '@/api/queries'
-import type { SetWorkspaceConfigInput, WorkspaceConfigResponse } from '@/api/types'
-import { CenteredState } from '@/components/centered-state'
-import { Button } from '@/components/ui/button'
-import { toast } from '@/components/ui/toaster'
-import { SettingsField } from './settings-field'
+import { putWorkspaceConfig } from '@/api/client';
+import { useWorkspaceConfig, workspaceQueryKeys } from '@/api/queries';
+import type { SetWorkspaceConfigInput, WorkspaceConfigResponse } from '@/api/types';
+import { CenteredState } from '@/components/centered-state';
+import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/toaster';
+import { SettingsField } from './settings-field';
 
 /**
  * Global settings → Resources: how hard the MACHINE works. `maxParallel` caps concurrent tasks
@@ -27,20 +27,20 @@ import { SettingsField } from './settings-field'
  * one repo's own worktree pool, which is a property of the repo.
  */
 
-const MAX_PARALLEL_MIN = 1
-const MAX_PARALLEL_MAX = 16
+const MAX_PARALLEL_MIN = 1;
+const MAX_PARALLEL_MAX = 16;
 /** Below this a limit would pause almost any real agent immediately — reject it as a footgun. */
-const MEMORY_MIN_MB = 256
+const MEMORY_MIN_MB = 256;
 
 export function ResourcesSection() {
-  const config = useWorkspaceConfig()
+  const config = useWorkspaceConfig();
 
   if (config.isPending) {
     return (
       <p data-slot="resources-loading" className="p-4 text-[13px] text-soft-foreground md:p-6">
         Loading resource settings…
       </p>
-    )
+    );
   }
   if (config.isError) {
     return (
@@ -51,28 +51,27 @@ export function ResourcesSection() {
         subtitle={config.error.message}
         heading="h2"
       />
-    )
+    );
   }
-  return <ResourcesForm config={config.data} />
+  return <ResourcesForm config={config.data} />;
 }
 
 function ResourcesForm({ config }: { config: WorkspaceConfigResponse }) {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
 
   const save = useMutation({
     mutationFn: (patch: SetWorkspaceConfigInput) => putWorkspaceConfig(patch),
     onSuccess: (result) => queryClient.setQueryData(workspaceQueryKeys.config, result),
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
-  })
+  });
 
   // Memory edits locally and saves explicitly — an empty field means "no limit".
   const [memory, setMemory] = useState(
     config.resources.memoryLimitMb ? String(config.resources.memoryLimitMb) : '',
-  )
-  const memoryNum = memory.trim() === '' ? 0 : Number(memory)
-  const memoryInvalid =
-    memory.trim() !== '' && (!Number.isInteger(memoryNum) || memoryNum < MEMORY_MIN_MB)
-  const memorySaved = (config.resources.memoryLimitMb ?? 0) === (memoryInvalid ? -1 : memoryNum)
+  );
+  const memoryNum = memory.trim() === '' ? 0 : Number(memory);
+  const memoryInvalid = memory.trim() !== '' && (!Number.isInteger(memoryNum) || memoryNum < MEMORY_MIN_MB);
+  const memorySaved = (config.resources.memoryLimitMb ?? 0) === (memoryInvalid ? -1 : memoryNum);
   const saveMemory = () =>
     save.mutate(
       // 0, not null: the workspace schema's "no limit" IS 0 (`memoryLimitMb: null` is also
@@ -83,7 +82,7 @@ function ResourcesForm({ config }: { config: WorkspaceConfigResponse }) {
         onSuccess: () =>
           toast(memoryNum === 0 ? 'Memory limit cleared' : `Memory limit set to ${memoryNum} MiB`),
       },
-    )
+    );
 
   return (
     <div
@@ -102,13 +101,14 @@ function ResourcesForm({ config }: { config: WorkspaceConfigResponse }) {
           onChange={(event) => save.mutate({ resources: { maxParallel: Number(event.target.value) } })}
           className="block w-28 rounded-md border border-input bg-card px-3 py-1.5 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50"
         >
-          {Array.from({ length: MAX_PARALLEL_MAX - MAX_PARALLEL_MIN + 1 }, (_, i) => i + MAX_PARALLEL_MIN).map(
-            (n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ),
-          )}
+          {Array.from(
+            { length: MAX_PARALLEL_MAX - MAX_PARALLEL_MIN + 1 },
+            (_, i) => i + MAX_PARALLEL_MIN,
+          ).map((n) => (
+            <option key={n} value={n}>
+              {n}
+            </option>
+          ))}
         </select>
       </SettingsField>
 
@@ -151,5 +151,5 @@ function ResourcesForm({ config }: { config: WorkspaceConfigResponse }) {
         )}
       </SettingsField>
     </div>
-  )
+  );
 }

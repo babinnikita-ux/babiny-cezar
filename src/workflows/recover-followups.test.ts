@@ -41,8 +41,7 @@ describe('recover() and the follow-up ceiling (#471)', () => {
   });
 
   // Capped at 0 — recover() re-queues, the queue never drains, no agent is spawned.
-  const frozen = () =>
-    new WorkspaceSemaphore({ initial: { maxParallel: 0 } });
+  const frozen = () => new WorkspaceSemaphore({ initial: { maxParallel: 0 } });
 
   afterEach(() => {
     store.flush();

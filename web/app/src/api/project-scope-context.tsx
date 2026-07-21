@@ -1,6 +1,6 @@
-import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, type ReactNode } from 'react';
 
-import { getApiScope, setApiScope } from './project-scope'
+import { getApiScope, setApiScope } from './project-scope';
 
 /**
  * The React face of the project scope (multi-project spec, step 3.1): components read
@@ -11,19 +11,19 @@ import { getApiScope, setApiScope } from './project-scope'
  */
 export interface ProjectScope {
   /** The registered project id from the URL, or null when unscoped (the boot project). */
-  projectId: string | null
+  projectId: string | null;
   /** `/api/p/<id>` when scoped, `/api` when not — for the rare caller that builds URLs itself. */
-  apiBase: string
+  apiBase: string;
 }
 
-const UNSCOPED: ProjectScope = { projectId: null, apiBase: '/api' }
+const UNSCOPED: ProjectScope = { projectId: null, apiBase: '/api' };
 
-export const ProjectScopeContext = createContext<ProjectScope>(UNSCOPED)
+export const ProjectScopeContext = createContext<ProjectScope>(UNSCOPED);
 
 /** The active scope. Outside a provider this is the unscoped default, not an error — that IS
  *  the boot project's normal state until 3.2 mounts the provider. */
 export function useProjectScope(): ProjectScope {
-  return useContext(ProjectScopeContext)
+  return useContext(ProjectScopeContext);
 }
 
 /**
@@ -48,23 +48,23 @@ export function ProjectScopeProvider({
   projectId,
   children,
 }: {
-  projectId: string | null
-  children: ReactNode
+  projectId: string | null;
+  children: ReactNode;
 }) {
-  if (getApiScope() !== projectId) setApiScope(projectId)
+  if (getApiScope() !== projectId) setApiScope(projectId);
 
   useEffect(() => {
-    setApiScope(projectId)
-  }, [projectId])
+    setApiScope(projectId);
+  }, [projectId]);
 
   // Unmount only — see the note above on why this cannot be the cleanup of the effect above.
   // Ordering still holds for StrictMode's simulated remount: destroys run before creates, so
   // the re-created `[projectId]` effect re-asserts the scope after this one nulled it.
-  useEffect(() => () => setApiScope(null), [])
+  useEffect(() => () => setApiScope(null), []);
 
   const value = useMemo<ProjectScope>(
     () => (projectId === null ? UNSCOPED : { projectId, apiBase: `/api/p/${encodeURIComponent(projectId)}` }),
     [projectId],
-  )
-  return <ProjectScopeContext.Provider value={value}>{children}</ProjectScopeContext.Provider>
+  );
+  return <ProjectScopeContext.Provider value={value}>{children}</ProjectScopeContext.Provider>;
 }

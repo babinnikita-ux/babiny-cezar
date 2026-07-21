@@ -206,8 +206,16 @@ describe('toolDisplay', () => {
 
   describe('unknown tools use the heuristic label as subtitle', () => {
     it.each<{ label: string; input: unknown; subtitle: string | undefined }>([
-      { label: 'description wins first', input: { description: 'do a thing', query: 'q' }, subtitle: 'do a thing' },
-      { label: 'query before url', input: { query: 'search terms', url: 'https://x' }, subtitle: 'search terms' },
+      {
+        label: 'description wins first',
+        input: { description: 'do a thing', query: 'q' },
+        subtitle: 'do a thing',
+      },
+      {
+        label: 'query before url',
+        input: { query: 'search terms', url: 'https://x' },
+        subtitle: 'search terms',
+      },
       { label: 'url before paths', input: { url: 'https://x', path: 'a.ts' }, subtitle: 'https://x' },
       { label: 'filePath before path', input: { filePath: 'a.ts', path: 'b.ts' }, subtitle: 'a.ts' },
       { label: 'file_path accepted', input: { file_path: 'c.ts' }, subtitle: 'c.ts' },
@@ -251,7 +259,18 @@ describe('toolDisplay', () => {
       Object.create(null),
     ];
 
-    const names = ['Bash', 'commandExecution', 'Edit', 'fileChange', 'Read', 'Grep', 'WebFetch', 'Task', 'mcpToolCall', 'TotallyUnknown'];
+    const names = [
+      'Bash',
+      'commandExecution',
+      'Edit',
+      'fileChange',
+      'Read',
+      'Grep',
+      'WebFetch',
+      'Task',
+      'mcpToolCall',
+      'TotallyUnknown',
+    ];
 
     it.each(names.map((name) => ({ name })))('$name survives every junk input', ({ name }) => {
       for (const input of junkInputs) {

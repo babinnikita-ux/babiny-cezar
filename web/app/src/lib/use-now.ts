@@ -1,4 +1,4 @@
-import * as React from 'react'
+import * as React from 'react';
 
 /**
  * Re-render on a slow tick so relative ages stay true between data updates.
@@ -8,10 +8,10 @@ import * as React from 'react'
  * quick-list and the Tasks table so the two never disagree about what time it is.
  */
 export function useNow(intervalMs: number): number {
-  const [now, setNow] = React.useState(() => Date.now())
+  const [now, setNow] = React.useState(() => Date.now());
   React.useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), intervalMs)
-    return () => clearInterval(timer)
-  }, [intervalMs])
-  return now
+    const timer = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(timer);
+  }, [intervalMs]);
+  return now;
 }

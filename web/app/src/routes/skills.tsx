@@ -1,21 +1,21 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeftIcon, RefreshCwIcon, SparklesIcon, TriangleAlertIcon, ZapIcon } from 'lucide-react'
-import { useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeftIcon, RefreshCwIcon, SparklesIcon, TriangleAlertIcon, ZapIcon } from 'lucide-react';
+import { useState } from 'react';
+import { useSearchParams } from 'react-router';
 
-import { Link } from '@/lib/project-router'
+import { Link } from '@/lib/project-router';
 
-import { refreshSkills } from '@/api/client'
-import { queryKeys, useSkills, useWorkflows } from '@/api/queries'
-import type { Skill } from '@/api/types'
-import { CenteredState } from '@/components/centered-state'
-import { SkillDetailBody, SkillSourceTag } from '@/components/skill-detail'
-import { SkillEmptyHint } from '@/components/skill-empty-hint'
-import { Input } from '@/components/ui/input'
-import { toast } from '@/components/ui/toaster'
-import { filterSkills, isProjectSkill, orderSkills, skillUsedBy } from '@/lib/skills'
-import { cn } from '@/lib/utils'
-import { BookmarkletPanel } from './settings/bookmarklets-section'
+import { refreshSkills } from '@/api/client';
+import { queryKeys, useSkills, useWorkflows } from '@/api/queries';
+import type { Skill } from '@/api/types';
+import { CenteredState } from '@/components/centered-state';
+import { SkillDetailBody, SkillSourceTag } from '@/components/skill-detail';
+import { SkillEmptyHint } from '@/components/skill-empty-hint';
+import { Input } from '@/components/ui/input';
+import { toast } from '@/components/ui/toaster';
+import { filterSkills, isProjectSkill, orderSkills, skillUsedBy } from '@/lib/skills';
+import { cn } from '@/lib/utils';
+import { BookmarkletPanel } from './settings/bookmarklets-section';
 
 /**
  * `/skills` — the skills catalog as its own top-level surface (was `/settings/skills`, moved
@@ -36,7 +36,7 @@ import { BookmarkletPanel } from './settings/bookmarklets-section'
  * opens the bookmarklet panel via the legacy `__bm` sentinel in the same query param.
  */
 
-const BOOKMARKLETS = '__bm'
+const BOOKMARKLETS = '__bm';
 
 export function SkillsRoute() {
   return (
@@ -48,25 +48,25 @@ export function SkillsRoute() {
       </header>
       <SkillsCatalog />
     </div>
-  )
+  );
 }
 
 function SkillsCatalog() {
-  const skillsQuery = useSkills()
-  const workflowsQuery = useWorkflows()
-  const [searchParams] = useSearchParams()
-  const [query, setQuery] = useState('')
-  const queryClient = useQueryClient()
+  const skillsQuery = useSkills();
+  const workflowsQuery = useWorkflows();
+  const [searchParams] = useSearchParams();
+  const [query, setQuery] = useState('');
+  const queryClient = useQueryClient();
 
   const refresh = useMutation({
     mutationFn: () => refreshSkills(),
     onSuccess: (catalog) => {
       // The POST answers the merged catalog — seed the shared query instead of refetching.
-      queryClient.setQueryData(queryKeys.skills, catalog)
-      toast('Team skills refreshed.')
+      queryClient.setQueryData(queryKeys.skills, catalog);
+      toast('Team skills refreshed.');
     },
     onError: (error) => toast(error.message, { tone: 'danger' }),
-  })
+  });
 
   if (skillsQuery.isError) {
     return (
@@ -77,11 +77,11 @@ function SkillsCatalog() {
         title="Could not load skills"
         subtitle={skillsQuery.error.message}
       />
-    )
+    );
   }
 
-  const skills = orderSkills(skillsQuery.data ?? [])
-  const param = searchParams.get('skill')
+  const skills = orderSkills(skillsQuery.data ?? []);
+  const param = searchParams.get('skill');
   // Explicit choice if it still exists, else the first skill, else the bookmarklet panel —
   // the legacy fallback rule. A vanished selection degrades, it never crashes.
   const selection =
@@ -89,9 +89,9 @@ function SkillsCatalog() {
       ? BOOKMARKLETS
       : param !== null && skills.some((skill) => skill.name === param)
         ? param
-        : (skills[0]?.name ?? BOOKMARKLETS)
-  const selected = skills.find((skill) => skill.name === selection) ?? null
-  const shown = filterSkills(skills, query)
+        : (skills[0]?.name ?? BOOKMARKLETS);
+  const selected = skills.find((skill) => skill.name === selection) ?? null;
+  const shown = filterSkills(skills, query);
 
   return (
     <div data-slot="skills-section" className="flex min-h-full flex-1 items-stretch">
@@ -136,7 +136,9 @@ function SkillsCatalog() {
           {skillsQuery.isPending ? (
             <li className="px-2.5 py-2 text-[13px] text-soft-foreground">Loading…</li>
           ) : shown.length > 0 ? (
-            shown.map((skill) => <SkillRow key={skill.path} skill={skill} active={selection === skill.name} />)
+            shown.map((skill) => (
+              <SkillRow key={skill.path} skill={skill} active={selection === skill.name} />
+            ))
           ) : (
             <li className="px-2.5 py-2 text-xs leading-relaxed text-soft-foreground">
               {skills.length > 0 ? '(no skills match)' : <SkillEmptyHint />}
@@ -203,11 +205,11 @@ function SkillsCatalog() {
         </div>
       </section>
     </div>
-  )
+  );
 }
 
 function SkillRow({ skill, active }: { skill: Skill; active: boolean }) {
-  const project = isProjectSkill(skill)
+  const project = isProjectSkill(skill);
   return (
     <li>
       <Link
@@ -242,5 +244,5 @@ function SkillRow({ skill, active }: { skill: Skill; active: boolean }) {
         ) : null}
       </Link>
     </li>
-  )
+  );
 }

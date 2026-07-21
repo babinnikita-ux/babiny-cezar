@@ -12,23 +12,23 @@ import {
   SquareTerminalIcon,
   Trash2Icon,
   WrenchIcon,
-} from 'lucide-react'
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+} from 'lucide-react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { ZoomableImage } from '@/components/zoomable-image'
-import type { FileDiff, ToolKind, UiToolItem } from '@/protocol/ui-events'
-import { cn } from '@/lib/utils'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ZoomableImage } from '@/components/zoomable-image';
+import type { FileDiff, ToolKind, UiToolItem } from '@/protocol/ui-events';
+import { cn } from '@/lib/utils';
 
-import { Markdown } from './markdown'
-import { splitToolTitle, streakLabel, type ContextGroupBlock } from './thread-groups'
-import { useThreadCardCache } from './thread-open-cards'
-import { isNearBottom } from './thread-scroll'
-import type { ThreadEntry, ThreadImage, ThreadNote } from './thread-state'
+import { Markdown } from './markdown';
+import { splitToolTitle, streakLabel, type ContextGroupBlock } from './thread-groups';
+import { useThreadCardCache } from './thread-open-cards';
+import { isNearBottom } from './thread-scroll';
+import type { ThreadEntry, ThreadImage, ThreadNote } from './thread-state';
 
 // The stick rule lives with the rest of the scroll math now; re-exported because this is
 // where the live tail below consumes it.
-export { isNearBottom }
+export { isNearBottom };
 
 /**
  * The thread's per-entry building blocks (mockup: docs/mockups/thread.html). Presentational
@@ -59,55 +59,55 @@ export function UserBubble({
   editLabel = 'Edit message',
   removeLabel = 'Remove message',
 }: {
-  text: string
-  imageCount?: number
-  images?: readonly string[]
-  onEdit?: (text: string) => Promise<void>
-  onRemove?: () => Promise<void>
-  editLabel?: string
-  removeLabel?: string
+  text: string;
+  imageCount?: number;
+  images?: readonly string[];
+  onEdit?: (text: string) => Promise<void>;
+  onRemove?: () => Promise<void>;
+  editLabel?: string;
+  removeLabel?: string;
 }) {
-  const missing = imageCount - images.length
-  const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(text)
-  const [busy, setBusy] = useState(false)
-  const [actionError, setActionError] = useState<string>()
+  const missing = imageCount - images.length;
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(text);
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string>();
 
   const startEditing = () => {
-    setDraft(text)
-    setActionError(undefined)
-    setEditing(true)
-  }
+    setDraft(text);
+    setActionError(undefined);
+    setEditing(true);
+  };
   const save = async () => {
-    const next = draft.trim()
+    const next = draft.trim();
     // An empty edit is a no-op rather than a delete: removing is its own, explicit action.
     if (!next || next === text) {
-      setEditing(false)
-      return
+      setEditing(false);
+      return;
     }
-    setBusy(true)
-    setActionError(undefined)
+    setBusy(true);
+    setActionError(undefined);
     try {
-      await onEdit?.(next)
-      setEditing(false)
+      await onEdit?.(next);
+      setEditing(false);
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Could not save the message')
+      setActionError(error instanceof Error ? error.message : 'Could not save the message');
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
 
   const remove = async () => {
-    setBusy(true)
-    setActionError(undefined)
+    setBusy(true);
+    setActionError(undefined);
     try {
-      await onRemove?.()
+      await onRemove?.();
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Could not remove the message')
+      setActionError(error instanceof Error ? error.message : 'Could not remove the message');
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
 
   if (editing) {
     return (
@@ -125,11 +125,11 @@ export function UserBubble({
             // Escape cancels; ⌘/Ctrl+Enter saves. Plain Enter stays a newline — these are
             // prompt paragraphs, not chat sends.
             if (e.key === 'Escape') {
-              e.stopPropagation()
-              setEditing(false)
+              e.stopPropagation();
+              setEditing(false);
             } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-              e.preventDefault()
-              void save()
+              e.preventDefault();
+              void save();
             }
           }}
           className="block max-h-[220px] min-h-[60px] w-full resize-none rounded-md bg-background px-2 py-1.5 text-[13.5px] outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
@@ -152,9 +152,13 @@ export function UserBubble({
             {busy ? <LoaderCircleIcon className="size-3.5 animate-spin" /> : 'Save'}
           </button>
         </span>
-        {actionError ? <p role="alert" className="mt-1.5 text-xs text-danger">{actionError}</p> : null}
+        {actionError ? (
+          <p role="alert" className="mt-1.5 text-xs text-danger">
+            {actionError}
+          </p>
+        ) : null}
       </div>
-    )
+    );
   }
 
   return (
@@ -191,7 +195,11 @@ export function UserBubble({
           ) : null}
         </span>
       ) : null}
-      {actionError ? <p role="alert" className="mb-1 text-xs text-danger">{actionError}</p> : null}
+      {actionError ? (
+        <p role="alert" className="mb-1 text-xs text-danger">
+          {actionError}
+        </p>
+      ) : null}
       <Markdown breaks>{text}</Markdown>
       {images.length > 0 ? (
         <span data-slot="user-images" className="mt-2 flex flex-wrap justify-end gap-1.5">
@@ -211,7 +219,7 @@ export function UserBubble({
         </span>
       ) : null}
     </div>
-  )
+  );
 }
 
 /** An assistant message item, as markdown. */
@@ -220,7 +228,7 @@ export function AssistantMessage({ text }: { text: string }) {
     <div data-slot="assistant-message" className="min-w-0 text-[15px] leading-[1.65]">
       <Markdown>{text}</Markdown>
     </div>
-  )
+  );
 }
 
 /** A dim (lifecycle/note) or danger (error) transcript line. */
@@ -234,7 +242,7 @@ export function NoteLine({ note }: { note: ThreadNote }) {
       {note.tone === 'danger' ? '✗ ' : '· '}
       {note.text}
     </div>
-  )
+  );
 }
 
 /**
@@ -242,12 +250,12 @@ export function NoteLine({ note }: { note: ThreadNote }) {
  * Streams live — the reducer grows `text` in place, so the summary line grows with it.
  */
 export function ReasoningItem({ text }: { text: string }) {
-  const previewId = useId()
+  const previewId = useId();
   // A mapper regression that mints an empty reasoning item should degrade
   // quietly rather than render a bare, un-expandable "Thinking —" row (#528).
-  if (text.trim() === '') return null
-  const firstLine = text.split('\n', 1)[0] ?? ''
-  const truncated = firstLine.length < text.length
+  if (text.trim() === '') return null;
+  const firstLine = text.split('\n', 1)[0] ?? '';
+  const truncated = firstLine.length < text.length;
   return (
     <Collapsible data-slot="reasoning" className="group/reasoning min-w-0">
       <div
@@ -276,7 +284,7 @@ export function ReasoningItem({ text }: { text: string }) {
         </div>
       </CollapsibleContent>
     </Collapsible>
-  )
+  );
 }
 
 /**
@@ -295,7 +303,7 @@ export function WorkingIndicator() {
       <LoaderCircleIcon role="status" aria-label="Working" className="size-3.5 shrink-0 animate-spin" />
       <span className="shimmer font-medium">Working…</span>
     </div>
-  )
+  );
 }
 
 const TOOL_ICONS: Record<ToolKind, typeof WrenchIcon> = {
@@ -310,12 +318,12 @@ const TOOL_ICONS: Record<ToolKind, typeof WrenchIcon> = {
   task: BotIcon,
   plan: ListTodoIcon,
   other: WrenchIcon,
-}
+};
 
 /** Beyond this many lines a finished output clamps behind the fade + "Show all" control. */
-export const OUTPUT_CLAMP_LINES = 12
+export const OUTPUT_CLAMP_LINES = 12;
 
-const countLines = (text: string): number => text.split('\n').length
+const countLines = (text: string): number => text.split('\n').length;
 
 /**
  * Mono tool output (mockup `.tool-body`). While streaming it is a live tail: bounded height,
@@ -323,17 +331,17 @@ const countLines = (text: string): number => text.split('\n').length
  * behind a bottom fade with an explicit "Show all N lines" expansion.
  */
 function ToolOutput({ text, streaming }: { text: string; streaming: boolean }) {
-  const [expanded, setExpanded] = useState(false)
-  const boxRef = useRef<HTMLDivElement | null>(null)
-  const stickRef = useRef(true)
+  const [expanded, setExpanded] = useState(false);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+  const stickRef = useRef(true);
 
   useEffect(() => {
-    const box = boxRef.current
-    if (streaming && box && stickRef.current) box.scrollTop = box.scrollHeight
-  }, [text, streaming])
+    const box = boxRef.current;
+    if (streaming && box && stickRef.current) box.scrollTop = box.scrollHeight;
+  }, [text, streaming]);
 
-  const lines = countLines(text)
-  const clamped = !streaming && !expanded && lines > OUTPUT_CLAMP_LINES
+  const lines = countLines(text);
+  const clamped = !streaming && !expanded && lines > OUTPUT_CLAMP_LINES;
   return (
     <div data-slot="tool-output" data-clamped={clamped ? 'true' : undefined}>
       <div className="relative">
@@ -342,7 +350,7 @@ function ToolOutput({ text, streaming }: { text: string; streaming: boolean }) {
           onScroll={
             streaming
               ? (event) => {
-                  stickRef.current = isNearBottom(event.currentTarget)
+                  stickRef.current = isNearBottom(event.currentTarget);
                 }
               : undefined
           }
@@ -352,7 +360,9 @@ function ToolOutput({ text, streaming }: { text: string; streaming: boolean }) {
             clamped && 'max-h-[216px] overflow-y-hidden',
           )}
         >
-          <pre className="px-4 py-3 font-mono text-xs leading-[1.7] whitespace-pre text-muted-foreground">{text}</pre>
+          <pre className="px-4 py-3 font-mono text-xs leading-[1.7] whitespace-pre text-muted-foreground">
+            {text}
+          </pre>
         </div>
         {clamped ? (
           <div
@@ -373,7 +383,7 @@ function ToolOutput({ text, streaming }: { text: string; streaming: boolean }) {
         </button>
       ) : null}
     </div>
-  )
+  );
 }
 
 /**
@@ -408,13 +418,13 @@ export function InlineDiffPreview({ diffs }: { diffs: FileDiff[] }) {
         </div>
       ))}
     </>
-  )
+  );
 }
 
 /** Old/new file text → displayable lines; `null`/absent sides (new files) contribute none. */
 function diffLines(text: string | null | undefined): string[] {
-  if (text === null || text === undefined || text === '') return []
-  return text.replace(/\n$/, '').split('\n')
+  if (text === null || text === undefined || text === '') return [];
+  return text.replace(/\n$/, '').split('\n');
 }
 
 function DiffLine({ text }: { text: string }) {
@@ -429,15 +439,15 @@ function DiffLine({ text }: { text: string }) {
     >
       {text}
     </span>
-  )
+  );
 }
 
 /** Default-open policy (opencode research §4): failed opens itself; a running command opens
  *  to show its live tail; everything else — including edits and finished commands — starts
  *  closed but prominent. The user's own toggle always wins once they touch the card. */
 function defaultOpen(item: UiToolItem): boolean {
-  if (item.status === 'failed') return true
-  return item.toolKind === 'execute' && item.status === 'running' && item.output !== undefined
+  if (item.status === 'failed') return true;
+  return item.toolKind === 'execute' && item.status === 'running' && item.output !== undefined;
 }
 
 /**
@@ -454,28 +464,28 @@ export function ToolCard({
   nested = [],
   cacheKey,
 }: {
-  item: UiToolItem
-  nested?: ThreadEntry[]
-  cacheKey?: string
+  item: UiToolItem;
+  nested?: ThreadEntry[];
+  cacheKey?: string;
 }) {
-  const cache = useThreadCardCache()
-  const [userOpen, setUserOpenState] = useState<boolean | null>(
-    () => (cacheKey !== undefined ? (cache?.get(cacheKey) ?? null) : null),
-  )
+  const cache = useThreadCardCache();
+  const [userOpen, setUserOpenState] = useState<boolean | null>(() =>
+    cacheKey !== undefined ? (cache?.get(cacheKey) ?? null) : null,
+  );
   const setUserOpen = (open: boolean) => {
-    if (cacheKey !== undefined) cache?.set(cacheKey, open)
-    setUserOpenState(open)
-  }
-  const busy = item.status === 'running' || item.status === 'pending'
+    if (cacheKey !== undefined) cache?.set(cacheKey, open);
+    setUserOpenState(open);
+  };
+  const busy = item.status === 'running' || item.status === 'pending';
   const hasDetail =
     (item.output !== undefined && item.output !== '') ||
     (item.error !== undefined && item.error !== '') ||
     (item.diffs !== undefined && item.diffs.length > 0) ||
-    nested.length > 0
-  const open = hasDetail && (userOpen ?? defaultOpen(item))
-  const { verb, detail } = splitToolTitle(item.title)
+    nested.length > 0;
+  const open = hasDetail && (userOpen ?? defaultOpen(item));
+  const { verb, detail } = splitToolTitle(item.title);
 
-  const Icon = TOOL_ICONS[item.toolKind] ?? WrenchIcon
+  const Icon = TOOL_ICONS[item.toolKind] ?? WrenchIcon;
   return (
     <Collapsible
       data-slot="tool-card"
@@ -499,7 +509,13 @@ export function ToolCard({
             !hasDetail && 'invisible',
           )}
         />
-        <Icon aria-hidden className={cn('size-3.5 shrink-0', item.status === 'failed' ? 'text-danger' : 'text-muted-foreground')} />
+        <Icon
+          aria-hidden
+          className={cn(
+            'size-3.5 shrink-0',
+            item.status === 'failed' ? 'text-danger' : 'text-muted-foreground',
+          )}
+        />
         <span
           className={cn(
             'shrink-0 font-semibold',
@@ -515,7 +531,11 @@ export function ToolCard({
         ) : null}
         <span className="ml-auto flex shrink-0 items-center gap-2 pl-2">
           {busy ? (
-            <LoaderCircleIcon role="status" aria-label="Running" className="size-3.5 animate-spin text-soft-foreground" />
+            <LoaderCircleIcon
+              role="status"
+              aria-label="Running"
+              className="size-3.5 animate-spin text-soft-foreground"
+            />
           ) : null}
           {item.status === 'failed' ? <span className="text-xs text-danger">failed</span> : null}
           {item.status === 'declined' ? <span className="text-xs text-soft-foreground">declined</span> : null}
@@ -535,16 +555,24 @@ export function ToolCard({
       <CollapsibleContent>
         <div className="border-t border-border bg-card-2">
           {item.error !== undefined && item.error !== '' ? (
-            <div data-slot="tool-error" className="px-4 py-3 font-mono text-xs leading-[1.7] whitespace-pre-wrap text-danger">
+            <div
+              data-slot="tool-error"
+              className="px-4 py-3 font-mono text-xs leading-[1.7] whitespace-pre-wrap text-danger"
+            >
               {item.error}
             </div>
           ) : null}
-          {item.diffs !== undefined && item.diffs.length > 0 ? <InlineDiffPreview diffs={item.diffs} /> : null}
+          {item.diffs !== undefined && item.diffs.length > 0 ? (
+            <InlineDiffPreview diffs={item.diffs} />
+          ) : null}
           {item.output !== undefined && item.output !== '' ? (
             <ToolOutput text={item.output} streaming={busy} />
           ) : null}
           {nested.length > 0 ? (
-            <div data-slot="tool-nested" className="flex flex-col gap-2 border-l-2 border-border py-2.5 pr-3 pl-3 ml-4 my-2">
+            <div
+              data-slot="tool-nested"
+              className="flex flex-col gap-2 border-l-2 border-border py-2.5 pr-3 pl-3 ml-4 my-2"
+            >
               {nested.map((entry) => (
                 <NestedEntry key={entry.id} entry={entry} scope={cacheKey} />
               ))}
@@ -553,7 +581,7 @@ export function ToolCard({
         </div>
       </CollapsibleContent>
     </Collapsible>
-  )
+  );
 }
 
 /** A sub-agent entry inside a Task card — one level deep by design, so nested tools render
@@ -565,19 +593,19 @@ export function ToolCard({
 export function NestedEntry({ entry, scope }: { entry: ThreadEntry; scope?: string }) {
   switch (entry.kind) {
     case 'message':
-      return <AssistantMessage text={entry.text} />
+      return <AssistantMessage text={entry.text} />;
     case 'reasoning':
-      return <ReasoningItem text={entry.text} />
+      return <ReasoningItem text={entry.text} />;
     case 'tool':
-      return <ToolCard item={entry} cacheKey={scope !== undefined ? `${scope}:${entry.id}` : undefined} />
+      return <ToolCard item={entry} cacheKey={scope !== undefined ? `${scope}:${entry.id}` : undefined} />;
     case 'note':
-      return <NoteLine note={entry} />
+      return <NoteLine note={entry} />;
     case 'image':
-      return <ImageItem image={entry} />
+      return <ImageItem image={entry} />;
     case 'ask':
       // AskUser cards are always top-level turn entries (#473) — they never nest
       // under a tool group, so there is nothing to render here.
-      return null
+      return null;
   }
 }
 
@@ -596,12 +624,16 @@ export function ContextGroup({ group, scope }: { group: ContextGroupBlock; scope
       <CollapsibleContent>
         <div className="flex flex-col gap-1.5 pt-1.5 pl-4">
           {group.tools.map((tool) => (
-            <ToolCard key={tool.id} item={tool} cacheKey={scope !== undefined ? `${scope}:${tool.id}` : undefined} />
+            <ToolCard
+              key={tool.id}
+              item={tool}
+              cacheKey={scope !== undefined ? `${scope}:${tool.id}` : undefined}
+            />
           ))}
         </div>
       </CollapsibleContent>
     </Collapsible>
-  )
+  );
 }
 
 /** The legacy tool-streak fold, kept: older finished tool cards collapse under
@@ -620,7 +652,7 @@ export function ToolStreak({ count, children }: { count: number; children: React
         <div className="flex flex-col gap-2 pt-2">{children}</div>
       </CollapsibleContent>
     </Collapsible>
-  )
+  );
 }
 
 /** A persisted run image (served by the cockpit itself — never an external origin). Click to zoom. */
@@ -632,5 +664,5 @@ export function ImageItem({ image }: { image: ThreadImage }) {
       alt={image.name ?? 'image from the agent session'}
       className="max-h-72 max-w-full self-start rounded-lg border border-border"
     />
-  )
+  );
 }

@@ -68,8 +68,7 @@ export class ClaudeCliRunner implements AgentRunner {
     // CEZ_DRY_RUN=1 swaps in the bundled mock so the cockpit / store /
     // GUI can be exercised without a logged-in claude or burning tokens.
     const defaultBin =
-      process.env.CEZ_CLAUDE_BIN ??
-      (process.env.CEZ_DRY_RUN === '1' ? mockClaudePath() : 'claude');
+      process.env.CEZ_CLAUDE_BIN ?? (process.env.CEZ_DRY_RUN === '1' ? mockClaudePath() : 'claude');
     this.bin = opts.bin ?? defaultBin;
     this.timeoutMs = opts.timeoutMs ?? DEFAULT_RUN_TIMEOUT_MS;
   }
@@ -213,7 +212,10 @@ export class ClaudeCliRunner implements AgentRunner {
           try {
             msg = JSON.parse(line) as ClaudeStreamMessage;
           } catch {
-            onEvent?.({ type: 'note', message: `claude: skipped unparseable stream line: ${truncate(line)}` });
+            onEvent?.({
+              type: 'note',
+              message: `claude: skipped unparseable stream line: ${truncate(line)}`,
+            });
             continue;
           }
 
@@ -224,7 +226,10 @@ export class ClaudeCliRunner implements AgentRunner {
             delta = handleClaudeMessage(msg, { toolCalls, textChunks, onEvent });
           } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
-            onEvent?.({ type: 'note', message: `claude: skipped malformed event (${msg.type ?? 'unknown'}): ${message}` });
+            onEvent?.({
+              type: 'note',
+              message: `claude: skipped malformed event (${msg.type ?? 'unknown'}): ${message}`,
+            });
             continue;
           }
           if (delta > 0) {
@@ -308,10 +313,7 @@ export class ClaudeCliRunner implements AgentRunner {
  * `--allowedTools` proceed and everything else is denied instead of prompting.
  * `CEZ_APPROVAL_GATE=1` opts back into Claude's approval UI (#435).
  */
-export function buildClaudeArgs(
-  spec: AgentRunSpec,
-  env: NodeJS.ProcessEnv = process.env,
-): string[] {
+export function buildClaudeArgs(spec: AgentRunSpec, env: NodeJS.ProcessEnv = process.env): string[] {
   const args: string[] = [
     '--input-format',
     'stream-json',

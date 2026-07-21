@@ -61,10 +61,7 @@ export async function loadWorkflows(
   }
 
   const fileNames = new Set(fromFiles.map((w) => w.name));
-  const workflows = [
-    ...fromFiles,
-    ...[QUICK_TASK_WORKFLOW].filter((w) => !fileNames.has(w.name)),
-  ];
+  const workflows = [...fromFiles, ...[QUICK_TASK_WORKFLOW].filter((w) => !fileNames.has(w.name))];
   workflows.sort((a, b) => a.name.localeCompare(b.name));
   return { workflows, issues };
 }

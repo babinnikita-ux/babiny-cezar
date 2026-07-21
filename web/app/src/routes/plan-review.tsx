@@ -1,16 +1,10 @@
-import { useQueryClient } from '@tanstack/react-query'
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  GripVerticalIcon,
-  PlayIcon,
-  XIcon,
-} from 'lucide-react'
-import { useState, type DragEvent } from 'react'
+import { useQueryClient } from '@tanstack/react-query';
+import { ArrowDownIcon, ArrowUpIcon, GripVerticalIcon, PlayIcon, XIcon } from 'lucide-react';
+import { useState, type DragEvent } from 'react';
 
-import { ApiError, createWorkflow } from '@/api/client'
-import { queryKeys } from '@/api/queries'
-import type { WorkflowStepDef } from '@/api/types'
+import { ApiError, createWorkflow } from '@/api/client';
+import { queryKeys } from '@/api/queries';
+import type { WorkflowStepDef } from '@/api/types';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,8 +14,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { Button } from '@/components/ui/button'
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogClose,
@@ -30,12 +24,12 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { toast } from '@/components/ui/toaster'
-import { cn } from '@/lib/utils'
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { toast } from '@/components/ui/toaster';
+import { cn } from '@/lib/utils';
 
-import { moveStep, planTaskLine, removeStep, stepHint, type PendingPlan } from './new-task-plan'
+import { moveStep, planTaskLine, removeStep, stepHint, type PendingPlan } from './new-task-plan';
 
 /**
  * The plan review overlay (spec 008 parity, Implementation Plan step 14): a FULL-SCREEN surface
@@ -50,30 +44,30 @@ import { moveStep, planTaskLine, removeStep, stepHint, type PendingPlan } from '
  * path, and the one the e2e drives.
  */
 export interface PlanReviewProps {
-  plan: PendingPlan
+  plan: PendingPlan;
   /** True while ▶ Start's POST is in flight. */
-  starting: boolean
-  onStepsChange: (steps: WorkflowStepDef[]) => void
-  onStart: () => void
+  starting: boolean;
+  onStepsChange: (steps: WorkflowStepDef[]) => void;
+  onStart: () => void;
   /** Also fired by Escape and the ×. The parent keeps the draft — discard loses nothing. */
-  onDiscard: () => void
+  onDiscard: () => void;
 }
 
 export function PlanReview({ plan, starting, onStepsChange, onStart, onDiscard }: PlanReviewProps) {
-  const [dragIndex, setDragIndex] = useState<number | null>(null)
-  const [overIndex, setOverIndex] = useState<number | null>(null)
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [overIndex, setOverIndex] = useState<number | null>(null);
 
   const endDrag = () => {
-    setDragIndex(null)
-    setOverIndex(null)
-  }
+    setDragIndex(null);
+    setOverIndex(null);
+  };
   const drop = (event: DragEvent, to: number) => {
-    event.preventDefault()
-    if (dragIndex !== null && dragIndex !== to) onStepsChange(moveStep(plan.steps, dragIndex, to))
-    endDrag()
-  }
+    event.preventDefault();
+    if (dragIndex !== null && dragIndex !== to) onStepsChange(moveStep(plan.steps, dragIndex, to));
+    endDrag();
+  };
 
-  const empty = plan.steps.length === 0
+  const empty = plan.steps.length === 0;
 
   return (
     <Dialog open onOpenChange={(open) => (open ? undefined : onDiscard())}>
@@ -134,8 +128,8 @@ export function PlanReview({ plan, starting, onStepsChange, onStart, onDiscard }
                   draggable
                   onDragStart={() => setDragIndex(index)}
                   onDragOver={(event) => {
-                    event.preventDefault()
-                    setOverIndex(index)
+                    event.preventDefault();
+                    setOverIndex(index);
                   }}
                   onDragLeave={() => setOverIndex((current) => (current === index ? null : current))}
                   onDrop={(event) => drop(event, index)}
@@ -155,9 +149,7 @@ export function PlanReview({ plan, starting, onStepsChange, onStart, onDiscard }
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <span className="truncate text-[13px] font-semibold">
-                        {step.name ?? step.id}
-                      </span>
+                      <span className="truncate text-[13px] font-semibold">{step.name ?? step.id}</span>
                       {step.skill ? (
                         <span
                           data-slot="plan-badge-skill"
@@ -176,9 +168,7 @@ export function PlanReview({ plan, starting, onStepsChange, onStart, onDiscard }
                         </span>
                       ) : null}
                     </div>
-                    <p className="truncate font-mono text-[11.5px] text-muted-foreground">
-                      {stepHint(step)}
-                    </p>
+                    <p className="truncate font-mono text-[11.5px] text-muted-foreground">{stepHint(step)}</p>
                   </div>
                   <span className="flex shrink-0 items-center">
                     <Button
@@ -224,12 +214,7 @@ export function PlanReview({ plan, starting, onStepsChange, onStart, onDiscard }
         </ol>
 
         <div className="flex items-center gap-2 border-t border-border px-5 py-3.5 pb-[max(14px,env(safe-area-inset-bottom))]">
-          <Button
-            type="button"
-            data-slot="plan-start"
-            disabled={empty || starting}
-            onClick={onStart}
-          >
+          <Button type="button" data-slot="plan-start" disabled={empty || starting} onClick={onStart}>
             <PlayIcon aria-hidden="true" className="size-3.5" />
             {starting ? 'Starting…' : 'Start'}
           </Button>
@@ -240,7 +225,7 @@ export function PlanReview({ plan, starting, onStepsChange, onStart, onDiscard }
         </div>
       </DialogContent>
     </Dialog>
-  )
+  );
 }
 
 /**
@@ -249,38 +234,38 @@ export function PlanReview({ plan, starting, onStepsChange, onStart, onDiscard }
  * The review stays open afterwards — saving and starting are independent decisions.
  */
 function SaveAsChain({ steps, disabled }: { steps: WorkflowStepDef[]; disabled: boolean }) {
-  const queryClient = useQueryClient()
-  const [open, setOpen] = useState(false)
-  const [name, setName] = useState('')
-  const [confirmOverwrite, setConfirmOverwrite] = useState(false)
-  const [saving, setSaving] = useState(false)
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [confirmOverwrite, setConfirmOverwrite] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const save = async (overwrite: boolean) => {
-    const trimmed = name.trim()
-    if (trimmed === '' || saving) return
-    setSaving(true)
+    const trimmed = name.trim();
+    if (trimmed === '' || saving) return;
+    setSaving(true);
     try {
       const saved = await createWorkflow({
         name: trimmed,
         steps,
         ...(overwrite ? { overwrite: true } : {}),
-      })
-      toast(`Saved — ${saved.path.split('/').pop() ?? saved.path}`)
+      });
+      toast(`Saved — ${saved.path.split('/').pop() ?? saved.path}`);
       // The picker on /new lists workflows from this cache — the new chain must appear.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.workflows })
-      setConfirmOverwrite(false)
-      setOpen(false)
-      setName('')
+      void queryClient.invalidateQueries({ queryKey: queryKeys.workflows });
+      setConfirmOverwrite(false);
+      setOpen(false);
+      setName('');
     } catch (error) {
       if (error instanceof ApiError && error.exists === true) {
-        setConfirmOverwrite(true)
+        setConfirmOverwrite(true);
       } else {
-        toast(error instanceof Error ? error.message : String(error), { tone: 'danger' })
+        toast(error instanceof Error ? error.message : String(error), { tone: 'danger' });
       }
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   return (
     <>
@@ -304,8 +289,8 @@ function SaveAsChain({ steps, disabled }: { steps: WorkflowStepDef[]; disabled: 
           </DialogHeader>
           <form
             onSubmit={(event) => {
-              event.preventDefault()
-              void save(false)
+              event.preventDefault();
+              void save(false);
             }}
           >
             <Input
@@ -336,8 +321,7 @@ function SaveAsChain({ steps, disabled }: { steps: WorkflowStepDef[]; disabled: 
           <AlertDialogHeader>
             <AlertDialogTitle>Overwrite “{name.trim()}”?</AlertDialogTitle>
             <AlertDialogDescription>
-              A chain with this name already exists. Overwriting replaces its steps with this
-              plan.
+              A chain with this name already exists. Overwriting replaces its steps with this plan.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -347,5 +331,5 @@ function SaveAsChain({ steps, disabled }: { steps: WorkflowStepDef[]; disabled: 
         </AlertDialogContent>
       </AlertDialog>
     </>
-  )
+  );
 }

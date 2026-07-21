@@ -398,9 +398,12 @@ function mapCollabToolCall(
       collabTasks = next;
     }
     const status = collabStatus(raw, receiverIds, eventType);
-    const mappedType: ItemEventType = eventType === 'item.started'
-      ? eventType
-      : status === 'running' || status === 'pending' ? 'item.updated' : 'item.completed';
+    const mappedType: ItemEventType =
+      eventType === 'item.started'
+        ? eventType
+        : status === 'running' || status === 'pending'
+          ? 'item.updated'
+          : 'item.completed';
     return {
       events: [{ type: mappedType, item: collabTaskItem(task, status) }],
       state: { ...state, collabTasks },
@@ -414,7 +417,8 @@ function mapCollabToolCall(
   }
   if (tasks.size === 0) return { events: [], state };
   const status = collabStatus(raw, receiverIds, eventType);
-  const mappedType: ItemEventType = status === 'running' || status === 'pending' ? 'item.updated' : 'item.completed';
+  const mappedType: ItemEventType =
+    status === 'running' || status === 'pending' ? 'item.updated' : 'item.completed';
   return {
     events: [...tasks.values()].map((task) => ({ type: mappedType, item: collabTaskItem(task, status) })),
     state,
@@ -427,21 +431,38 @@ function collabTaskItem(task: CodexCollabTask, status: ToolStatus): UiToolItem {
   if (task.prompt) input.prompt = task.prompt;
   if (task.model) input.model = task.model;
   return {
-    kind: 'tool', id: task.itemId, name: 'spawnAgent', toolKind: 'task', title: display.title, status,
+    kind: 'tool',
+    id: task.itemId,
+    name: 'spawnAgent',
+    toolKind: 'task',
+    title: display.title,
+    status,
     ...(Object.keys(input).length > 0 ? { input } : {}),
   };
 }
 
-function collabStatus(raw: Record<string, unknown>, receiverIds: string[], eventType: ItemEventType): ToolStatus {
-  const states = isRecord(raw.agentsStates) ? raw.agentsStates
-    : isRecord(raw.agents_states) ? raw.agents_states : undefined;
+function collabStatus(
+  raw: Record<string, unknown>,
+  receiverIds: string[],
+  eventType: ItemEventType,
+): ToolStatus {
+  const states = isRecord(raw.agentsStates)
+    ? raw.agentsStates
+    : isRecord(raw.agents_states)
+      ? raw.agents_states
+      : undefined;
   const statuses = receiverIds
     .map((threadId) => (states && isRecord(states[threadId]) ? states[threadId].status : undefined))
     .filter((status): status is string => typeof status === 'string');
-  if (statuses.some((status) => status === 'errored' || status === 'notFound' || status === 'not_found')) return 'failed';
+  if (statuses.some((status) => status === 'errored' || status === 'notFound' || status === 'not_found'))
+    return 'failed';
   if (statuses.some((status) => status === 'interrupted')) return 'declined';
-  if (statuses.length > 0 && statuses.every((status) => status === 'completed' || status === 'shutdown')) return 'completed';
-  if (statuses.some((status) => status === 'running' || status === 'pendingInit' || status === 'pending_init')) return 'running';
+  if (statuses.length > 0 && statuses.every((status) => status === 'completed' || status === 'shutdown'))
+    return 'completed';
+  if (
+    statuses.some((status) => status === 'running' || status === 'pendingInit' || status === 'pending_init')
+  )
+    return 'running';
   return toolStatus(raw, eventType);
 }
 
@@ -545,11 +566,7 @@ function messageItem(raw: Record<string, unknown>, id: string): UiMessageItem {
  *  Summary picks the LONGER of the two sources rather than preferring the
  *  stream: a mapper attached mid-turn, or any dropped frame, leaves a partial
  *  accumulator that must not overwrite a complete `summary` from the wire. */
-function reasoningItem(
-  raw: Record<string, unknown>,
-  id: string,
-  state: CodexUiMapperState,
-): UiReasoningItem {
+function reasoningItem(raw: Record<string, unknown>, id: string, state: CodexUiMapperState): UiReasoningItem {
   const streamed = state.reasonings.get(id);
   // app-server v2 snapshots use arrays for both fields. Deltas remain scalar
   // strings, and older recorded transcripts may still contain scalar snapshots,
@@ -656,7 +673,15 @@ function toolItem(
       // Unknown item types stay visible as generic tool cards (v1 parity —
       // a future codex tool must not silently vanish from the thread).
       const display = toolDisplay(type, raw);
-      item = { kind: 'tool', id, name: type, toolKind: display.toolKind, title: display.title, status, input: raw };
+      item = {
+        kind: 'tool',
+        id,
+        name: type,
+        toolKind: display.toolKind,
+        title: display.title,
+        status,
+        input: raw,
+      };
     }
   }
 
@@ -718,7 +743,14 @@ function synthesizedItem(itemId: string, field: 'text' | 'reasoning' | 'output')
   if (field === 'text') return { kind: 'message', id: itemId, role: 'assistant', text: '' };
   if (field === 'reasoning') return { kind: 'reasoning', id: itemId, text: '' };
   const display = toolDisplay('commandExecution');
-  return { kind: 'tool', id: itemId, name: 'commandExecution', toolKind: display.toolKind, title: display.title, status: 'running' };
+  return {
+    kind: 'tool',
+    id: itemId,
+    name: 'commandExecution',
+    toolKind: display.toolKind,
+    title: display.title,
+    status: 'running',
+  };
 }
 
 function mapDelta(
@@ -804,7 +836,9 @@ function num(value: unknown): number | undefined {
 }
 
 function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string' && entry !== '') : [];
+  return Array.isArray(value)
+    ? value.filter((entry): entry is string => typeof entry === 'string' && entry !== '')
+    : [];
 }
 
 function turnIdOf(params: Record<string, unknown>): string | undefined {

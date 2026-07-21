@@ -71,7 +71,10 @@ const CAPABILITIES: ReadonlyArray<[name: string, produced: (events: UiEvent[]) =
     'usage.updated with raw token counts',
     (events) => events.some((e) => e.type === 'usage.updated' && e.usage.total > 0),
   ],
-  ['turn.completed with a stopReason', (events) => events.some((e) => e.type === 'turn.completed' && e.stopReason !== undefined)],
+  [
+    'turn.completed with a stopReason',
+    (events) => events.some((e) => e.type === 'turn.completed' && e.stopReason !== undefined),
+  ],
 ] as const;
 
 describe('protocol v2 backend parity (all three mappers emit every matrix capability)', () => {

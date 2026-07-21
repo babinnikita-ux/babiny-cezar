@@ -67,7 +67,9 @@ const plan = computeSnapshot({
   repo: process.env.GITHUB_REPOSITORY || undefined,
   baseVersion: rootPkg.version,
   runNumber: Number(process.env.GITHUB_RUN_NUMBER ?? '0'),
-  runAttempt: /^\d+$/.test(process.env.GITHUB_RUN_ATTEMPT ?? '') ? Number(process.env.GITHUB_RUN_ATTEMPT) : undefined,
+  runAttempt: /^\d+$/.test(process.env.GITHUB_RUN_ATTEMPT ?? '')
+    ? Number(process.env.GITHUB_RUN_ATTEMPT)
+    : undefined,
 });
 
 if (!plan) {
@@ -87,7 +89,9 @@ if (!dryRun && !token) {
 const stamped = stampManifests(rootPkg, aliasPkg, plan.version);
 writeManifest(repoRoot, stamped.root);
 writeManifest(aliasDir, stamped.alias);
-console.log(`release-snapshot: stamped ${stamped.root.name} + ${stamped.alias.name} to ${plan.version} (dist-tag ${plan.distTag}${dryRun ? ', dry run' : ''})`);
+console.log(
+  `release-snapshot: stamped ${stamped.root.name} + ${stamped.alias.name} to ${plan.version} (dist-tag ${plan.distTag}${dryRun ? ', dry run' : ''})`,
+);
 
 // Provenance needs the job's OIDC token (permissions: id-token: write); only
 // meaningful for a real publish from Actions.
@@ -106,8 +110,10 @@ const runNpm = (args, cwd) => {
 const publish = (dir, label) => {
   const args = [
     'publish',
-    '--tag', plan.distTag,
-    '--access', 'public',
+    '--tag',
+    plan.distTag,
+    '--access',
+    'public',
     '--ignore-scripts',
     ...provenance,
     ...(dryRun ? ['--dry-run'] : []),

@@ -1,12 +1,12 @@
-import { ArrowRightIcon } from 'lucide-react'
-import { Link } from '@/lib/project-router'
+import { ArrowRightIcon } from 'lucide-react';
+import { Link } from '@/lib/project-router';
 
-import type { Skill } from '@/api/types'
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
-import { isProjectSkill } from '@/lib/skills'
-import { cn } from '@/lib/utils'
+import type { Skill } from '@/api/types';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { isProjectSkill } from '@/lib/skills';
+import { cn } from '@/lib/utils';
 
-import { Markdown } from '@/routes/task-thread/markdown'
+import { Markdown } from '@/routes/task-thread/markdown';
 
 /**
  * The ONE skill detail rendering (R6 Step 1.4, spec §"Skills, Workflows, Inbox"): the
@@ -19,7 +19,7 @@ import { Markdown } from '@/routes/task-thread/markdown'
 
 /** The source tag every skill listing shows — project sources read emphasized (#377). */
 export function SkillSourceTag({ source, className }: { source: Skill['source']; className?: string }) {
-  const project = isProjectSkill({ source })
+  const project = isProjectSkill({ source });
   return (
     <span
       data-slot="skill-source"
@@ -32,7 +32,7 @@ export function SkillSourceTag({ source, className }: { source: Skill['source'];
     >
       {source}
     </span>
-  )
+  );
 }
 
 export function SkillDetailBody({
@@ -40,11 +40,11 @@ export function SkillDetailBody({
   usedBy,
   heading: Heading = 'h2',
 }: {
-  skill: Skill
+  skill: Skill;
   /** "workflow › step" breadcrumbs (`skillUsedBy`). Omit to hide the section (the pickers'
    *  preview has no workflow catalog at hand — absence must not read as "unused"). */
-  usedBy?: readonly string[]
-  heading?: 'h2' | 'h3'
+  usedBy?: readonly string[];
+  heading?: 'h2' | 'h3';
 }) {
   return (
     <div data-slot="skill-detail" className="min-w-0">
@@ -85,15 +85,13 @@ export function SkillDetailBody({
       ) : null}
 
       <section className="mt-5">
-        <h3 className="text-[11px] font-semibold tracking-[.04em] text-soft-foreground uppercase">
-          Content
-        </h3>
+        <h3 className="text-[11px] font-semibold tracking-[.04em] text-soft-foreground uppercase">Content</h3>
         <div data-slot="skill-body" className="mt-2 text-sm">
           <Markdown>{skill.body}</Markdown>
         </div>
       </section>
     </div>
-  )
+  );
 }
 
 /**
@@ -104,10 +102,7 @@ export function SkillDetailBody({
 export function SkillPreviewDialog({ skill, onClose }: { skill: Skill | null; onClose: () => void }) {
   return (
     <Dialog open={skill !== null} onOpenChange={(open) => (open ? undefined : onClose())}>
-      <DialogContent
-        data-slot="skill-preview"
-        className="block max-h-[80dvh] overflow-y-auto sm:max-w-2xl"
-      >
+      <DialogContent data-slot="skill-preview" className="block max-h-[80dvh] overflow-y-auto sm:max-w-2xl">
         {skill ? (
           <>
             {/* The visible title is SkillDetailBody's heading; these two feed the dialog a11y contract. */}
@@ -128,5 +123,5 @@ export function SkillPreviewDialog({ skill, onClose }: { skill: Skill | null; on
         ) : null}
       </DialogContent>
     </Dialog>
-  )
+  );
 }

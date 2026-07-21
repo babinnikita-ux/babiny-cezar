@@ -162,7 +162,19 @@ describe('parseOwnerName', () => {
 
 describe('parseCountsPage', () => {
   it('flattens nodes into a number→count map and surfaces the cursor', () => {
-    expect(parseCountsPage(page('issues', [{ number: 7, count: 3 }, { number: 9, count: 0 }], 'CUR'), 'issues')).toEqual({
+    expect(
+      parseCountsPage(
+        page(
+          'issues',
+          [
+            { number: 7, count: 3 },
+            { number: 9, count: 0 },
+          ],
+          'CUR',
+        ),
+        'issues',
+      ),
+    ).toEqual({
       counts: { 7: 3, 9: 0 },
       hasNextPage: true,
       endCursor: 'CUR',
@@ -195,7 +207,10 @@ describe('fetchCommentCounts', () => {
   });
 
   it('accumulates across pages and passes the endCursor forward', async () => {
-    const issuePages = [page('issues', [{ number: 1, count: 1 }], 'C1'), page('issues', [{ number: 2, count: 2 }], null)];
+    const issuePages = [
+      page('issues', [{ number: 1, count: 1 }], 'C1'),
+      page('issues', [{ number: 2, count: 2 }], null),
+    ];
     let issueCall = 0;
     const runGraphql = vi.fn(async (q: string, vars: Record<string, string>) => {
       if (q.includes('pullRequests(')) return page('pullRequests', [], null);
@@ -210,7 +225,9 @@ describe('fetchCommentCounts', () => {
 
   it('stops at the page cap even when hasNextPage never goes false', async () => {
     const runGraphql = vi.fn(async (q: string) =>
-      q.includes('pullRequests(') ? page('pullRequests', [], null) : page('issues', [{ number: 1, count: 1 }], 'MORE'),
+      q.includes('pullRequests(')
+        ? page('pullRequests', [], null)
+        : page('issues', [{ number: 1, count: 1 }], 'MORE'),
     );
     await fetchCommentCounts(runGraphql, 'o', 'n', 3);
     // 3 issue pages + 1 PR page (PR stops immediately with no next).
@@ -384,7 +401,7 @@ describe('fetchGithub per-project list-cache isolation (step 2.6)', () => {
     vi.unstubAllEnvs();
   });
 
-  it('never serves project A\'s issues/PRs to project B inside the TTL window', async () => {
+  it("never serves project A's issues/PRs to project B inside the TTL window", async () => {
     const a = await fetchGithub('/repo/list-iso/proj-a');
     expect(a.repo).toBe('owner/a');
     expect(a.issues[0]?.title).toBe('a-issue');
@@ -531,21 +548,19 @@ describe('TIMELINE_EVENT_KINDS (#525)', () => {
   });
 
   it('covers exactly the 11 kinds the wire type declares', () => {
-    expect([...TIMELINE_EVENT_KINDS].sort()).toEqual(
-      [
-        'assigned',
-        'closed',
-        'committed',
-        'cross-referenced',
-        'head_ref_force_pushed',
-        'labeled',
-        'merged',
-        'renamed',
-        'reopened',
-        'unassigned',
-        'unlabeled',
-      ],
-    );
+    expect([...TIMELINE_EVENT_KINDS].sort()).toEqual([
+      'assigned',
+      'closed',
+      'committed',
+      'cross-referenced',
+      'head_ref_force_pushed',
+      'labeled',
+      'merged',
+      'renamed',
+      'reopened',
+      'unassigned',
+      'unlabeled',
+    ]);
   });
 });
 
@@ -556,13 +571,19 @@ describe('timeline fetch bounds (#525)', () => {
     // end-to-end by 'returns a full 200 comments AND 200 events from one over-long timeline'
     // in the integration block below.
     const events = Array.from({ length: 250 }, (_, i) => ({
-      event: 'labeled', id: i,
+      event: 'labeled',
+      id: i,
       created_at: new Date(Date.UTC(2026, 0, 1) + i * 60_000).toISOString(),
-      actor: { login: 'a' }, label: { name: `l${i}` },
+      actor: { login: 'a' },
+      label: { name: `l${i}` },
     }));
     const comments: ForgeComment[] = Array.from({ length: 250 }, (_, i) => ({
-      id: i, author: 'a', createdAt: new Date(Date.UTC(2026, 0, 1) + i * 60_000).toISOString(),
-      body: '', kind: 'comment', url: `u${i}`,
+      id: i,
+      author: 'a',
+      createdAt: new Date(Date.UTC(2026, 0, 1) + i * 60_000).toISOString(),
+      body: '',
+      kind: 'comment',
+      url: `u${i}`,
     }));
 
     expect(normalizeEvents(events).events).toHaveLength(200);
@@ -651,11 +672,41 @@ describe('normalizeEvents (#525)', () => {
 
   it('maps each kind onto its own fields', () => {
     const { events } = normalizeEvents([
-      { event: 'labeled', id: 1, created_at: '2026-01-01T00:00:00Z', actor: { login: 'a' }, label: { name: 'bug', color: 'd73a4a' } },
-      { event: 'unlabeled', id: 2, created_at: '2026-01-01T00:00:01Z', actor: { login: 'a' }, label: { name: 'wip' } },
-      { event: 'assigned', id: 3, created_at: '2026-01-01T00:00:02Z', actor: { login: 'a' }, assignee: { login: 'bob' } },
-      { event: 'unassigned', id: 4, created_at: '2026-01-01T00:00:03Z', actor: { login: 'a' }, assignee: { login: 'bob' } },
-      { event: 'renamed', id: 5, created_at: '2026-01-01T00:00:04Z', actor: { login: 'a' }, rename: { from: 'old', to: 'new title' } },
+      {
+        event: 'labeled',
+        id: 1,
+        created_at: '2026-01-01T00:00:00Z',
+        actor: { login: 'a' },
+        label: { name: 'bug', color: 'd73a4a' },
+      },
+      {
+        event: 'unlabeled',
+        id: 2,
+        created_at: '2026-01-01T00:00:01Z',
+        actor: { login: 'a' },
+        label: { name: 'wip' },
+      },
+      {
+        event: 'assigned',
+        id: 3,
+        created_at: '2026-01-01T00:00:02Z',
+        actor: { login: 'a' },
+        assignee: { login: 'bob' },
+      },
+      {
+        event: 'unassigned',
+        id: 4,
+        created_at: '2026-01-01T00:00:03Z',
+        actor: { login: 'a' },
+        assignee: { login: 'bob' },
+      },
+      {
+        event: 'renamed',
+        id: 5,
+        created_at: '2026-01-01T00:00:04Z',
+        actor: { login: 'a' },
+        rename: { from: 'old', to: 'new title' },
+      },
       { event: 'merged', id: 6, created_at: '2026-01-01T00:00:05Z', actor: { login: 'a' } },
       { event: 'closed', id: 7, created_at: '2026-01-01T00:00:06Z', actor: { login: 'a' } },
       { event: 'reopened', id: 8, created_at: '2026-01-01T00:00:07Z', actor: { login: 'a' } },
@@ -666,14 +717,30 @@ describe('normalizeEvents (#525)', () => {
         node_id: null,
         created_at: '2026-01-01T00:00:09Z',
         actor: { login: 'a' },
-        source: { issue: { number: 520, title: 'Sibling work', html_url: 'https://github.com/o/r/pull/520', pull_request: {} } },
+        source: {
+          issue: {
+            number: 520,
+            title: 'Sibling work',
+            html_url: 'https://github.com/o/r/pull/520',
+            pull_request: {},
+          },
+        },
       },
       commitRow({ author: { name: 'Ada', date: '2026-01-01T00:00:10Z' } }),
     ]);
 
     expect(events.map((e) => e.kind)).toEqual([
-      'labeled', 'unlabeled', 'assigned', 'unassigned', 'renamed',
-      'merged', 'closed', 'reopened', 'head_ref_force_pushed', 'cross-referenced', 'committed',
+      'labeled',
+      'unlabeled',
+      'assigned',
+      'unassigned',
+      'renamed',
+      'merged',
+      'closed',
+      'reopened',
+      'head_ref_force_pushed',
+      'cross-referenced',
+      'committed',
     ]);
     expect(events[0]!.label).toEqual({ name: 'bug', color: 'd73a4a' });
     expect(events[1]!.label).toEqual({ name: 'wip' }); // color omitted, not null
@@ -688,11 +755,11 @@ describe('normalizeEvents (#525)', () => {
     // anything else, and one bad value in an aliased chunk costs all 50 commits their glyphs
     // rather than just the one. Enforced at the boundary instead of assumed.
     const { events } = normalizeEvents([
-      commitRow({ sha: 'abc1234' }),                       // abbreviated
-      commitRow({ sha: `${'a'.repeat(39)}z`, id: 2 }),      // non-hex
-      commitRow({ sha: SHA, id: 3 }),                       // valid
+      commitRow({ sha: 'abc1234' }), // abbreviated
+      commitRow({ sha: `${'a'.repeat(39)}z`, id: 2 }), // non-hex
+      commitRow({ sha: SHA, id: 3 }), // valid
     ]);
-    expect(events).toHaveLength(3);        // the rows still render, just without a sha
+    expect(events).toHaveLength(3); // the rows still render, just without a sha
     expect(events[0]!.sha).toBeUndefined();
     expect(events[1]!.sha).toBeUndefined();
     expect(events[2]!.sha).toBe(SHA);
@@ -710,7 +777,13 @@ describe('normalizeEvents (#525)', () => {
     const { events } = normalizeEvents([
       { event: 'labeled', id: 42, node_id: 'LA_x', created_at: '2026-01-01T00:00:00Z', label: { name: 'a' } },
       commitRow({ node_id: 'C_kwDOopaque' }), // carries BOTH sha and node_id → sha wins
-      { event: 'cross-referenced', id: null, node_id: null, created_at: '2026-01-01T00:00:02Z', source: { issue: { number: 1 } } },
+      {
+        event: 'cross-referenced',
+        id: null,
+        node_id: null,
+        created_at: '2026-01-01T00:00:02Z',
+        source: { issue: { number: 1 } },
+      },
     ]);
     expect(events.map((e) => e.id)).toEqual([`evt-42`, `evt-${SHA}`, 'evt-2']);
     expect(events[1]!.id).not.toContain('C_kwDOopaque');
@@ -740,7 +813,13 @@ describe('normalizeEvents (#525)', () => {
     // the id DOES shift when an earlier row disappears. That is precisely why the fallback is
     // confined to one kind instead of being the general scheme; as the general scheme every row
     // below an insertion would remount on each 60 s refetch.
-    const xref = { event: 'cross-referenced', id: null, node_id: null, created_at: '2026-01-02T00:00:00Z', source: { issue: { number: 1 } } };
+    const xref = {
+      event: 'cross-referenced',
+      id: null,
+      node_id: null,
+      created_at: '2026-01-02T00:00:00Z',
+      source: { issue: { number: 1 } },
+    };
     const withLeading = normalizeEvents([
       { event: 'closed', id: 7, created_at: '2026-01-01T00:00:00Z', actor: { login: 'a' } },
       xref,
@@ -775,7 +854,10 @@ describe('normalizeEvents (#525)', () => {
 
   it('reports truncated=false at exactly the cap — the ambiguity the return shape exists for', () => {
     const rows = Array.from({ length: 200 }, (_, i) => ({
-      event: 'closed', id: i, created_at: new Date(Date.UTC(2026, 0, 1) + i * 1000).toISOString(), actor: { login: 'a' },
+      event: 'closed',
+      id: i,
+      created_at: new Date(Date.UTC(2026, 0, 1) + i * 1000).toISOString(),
+      actor: { login: 'a' },
     }));
     const { events, truncated } = normalizeEvents(rows, 200);
     expect(events).toHaveLength(200);
@@ -839,7 +921,9 @@ describe('fetchTimelinePages (#525)', () => {
   });
 
   it('rethrows a page-1 failure so the caller can decide whether substitution helps', async () => {
-    const run = vi.fn(async () => { throw new Error('HTTP 404'); });
+    const run = vi.fn(async () => {
+      throw new Error('HTTP 404');
+    });
     await expect(fetchTimelinePages(run)).rejects.toThrow('HTTP 404');
   });
 
@@ -909,8 +993,20 @@ describe('fetchGithubComments timeline integration (#525)', () => {
     routeGh({
       timeline: () => [
         commented(1),
-        { event: 'labeled', id: 90, created_at: '2026-01-01T12:00:00Z', actor: { login: 'octocat' }, label: { name: 'bug', color: 'd73a4a' } },
-        { event: 'committed', created_at: null, sha: SHA, message: 'do the thing', author: { name: 'Ada', date: '2026-01-01T13:00:00Z' } },
+        {
+          event: 'labeled',
+          id: 90,
+          created_at: '2026-01-01T12:00:00Z',
+          actor: { login: 'octocat' },
+          label: { name: 'bug', color: 'd73a4a' },
+        },
+        {
+          event: 'committed',
+          created_at: null,
+          sha: SHA,
+          message: 'do the thing',
+          author: { name: 'Ada', date: '2026-01-01T13:00:00Z' },
+        },
         commented(2),
       ],
     });
@@ -955,7 +1051,12 @@ describe('fetchGithubComments timeline integration (#525)', () => {
     // inner-catch scoping exists to prevent.
     const realTimelineCommentedRow = {
       event: 'commented',
-      actor: { login: 'pkarw', id: 18116827, avatar_url: 'https://avatars.githubusercontent.com/u/18116827?v=4', type: 'User' },
+      actor: {
+        login: 'pkarw',
+        id: 18116827,
+        avatar_url: 'https://avatars.githubusercontent.com/u/18116827?v=4',
+        type: 'User',
+      },
       id: 5024963753,
       node_id: 'IC_kwDOShuET88AAAABK4LcqQ',
       url: 'https://api.github.com/repos/open-mercato/cezar/issues/comments/5024963753',
@@ -964,7 +1065,12 @@ describe('fetchGithubComments timeline integration (#525)', () => {
       created_at: '2026-07-20T17:07:49Z',
       updated_at: '2026-07-20T17:07:49Z',
       author_association: 'MEMBER',
-      user: { login: 'pkarw', id: 18116827, avatar_url: 'https://avatars.githubusercontent.com/u/18116827?v=4', type: 'User' },
+      user: {
+        login: 'pkarw',
+        id: 18116827,
+        avatar_url: 'https://avatars.githubusercontent.com/u/18116827?v=4',
+        type: 'User',
+      },
       body: '## 📸 Evidence\n\nThe GitHub tab detail thread as it renders today.',
       reactions: { url: 'https://api.github.com/…/reactions', total_count: 0 },
       performed_via_github_app: null,
@@ -1019,13 +1125,17 @@ describe('fetchGithubComments timeline integration (#525)', () => {
     const legacy = Array.from({ length: 250 }, (_, i) => comment(i + 1));
     const labels = (page: number) =>
       Array.from({ length: 100 }, (_, i) => ({
-        event: 'labeled', id: page * 100 + i, created_at: '2026-01-01T00:00:00Z',
-        actor: { login: 'a' }, label: { name: `l${page}-${i}` },
+        event: 'labeled',
+        id: page * 100 + i,
+        created_at: '2026-01-01T00:00:00Z',
+        actor: { login: 'a' },
+        label: { name: `l${page}-${i}` },
       }));
     routeGh({
       // Every page is full, so the walk runs to the page cap → stoppedShort. Only page 1 carries
       // comments, so the prefix holds 3 of the thread's real 250.
-      timeline: (page) => (page === 1 ? [...labels(1).slice(0, 97), commented(1), commented(2), commented(3)] : labels(page)),
+      timeline: (page) =>
+        page === 1 ? [...labels(1).slice(0, 97), commented(1), commented(2), commented(3)] : labels(page),
       comments: () => legacy,
     });
 
@@ -1041,8 +1151,11 @@ describe('fetchGithubComments timeline integration (#525)', () => {
     // fall through to the fallback (the same call) or the outer catch (which empties the thread).
     const labels = (page: number) =>
       Array.from({ length: 100 }, (_, i) => ({
-        event: 'labeled', id: page * 100 + i, created_at: '2026-01-01T00:00:00Z',
-        actor: { login: 'a' }, label: { name: `l${page}-${i}` },
+        event: 'labeled',
+        id: page * 100 + i,
+        created_at: '2026-01-01T00:00:00Z',
+        actor: { login: 'a' },
+        label: { name: `l${page}-${i}` },
       }));
     routeGh({
       timeline: (page) => (page === 1 ? [...labels(1).slice(0, 99), commented(1)] : labels(page)),
@@ -1063,12 +1176,16 @@ describe('fetchGithubComments timeline integration (#525)', () => {
     const rows = [
       ...Array.from({ length: 250 }, (_, i) => commented(i + 1)),
       ...Array.from({ length: 250 }, (_, i) => ({
-        event: 'labeled', id: 10_000 + i,
+        event: 'labeled',
+        id: 10_000 + i,
         created_at: new Date(Date.UTC(2026, 0, 1) + i * 60_000).toISOString(),
-        actor: { login: 'a' }, label: { name: `l${i}` },
+        actor: { login: 'a' },
+        label: { name: `l${i}` },
       })),
     ];
-    routeGh({ timeline: (page) => (page === 1 ? rows.slice(0, 100) : rows.slice((page - 1) * 100, page * 100)) });
+    routeGh({
+      timeline: (page) => (page === 1 ? rows.slice(0, 100) : rows.slice((page - 1) * 100, page * 100)),
+    });
 
     const data = await fetchGithubComments(repoRoot, 'issue', 1);
 
@@ -1080,11 +1197,14 @@ describe('fetchGithubComments timeline integration (#525)', () => {
 
   it('sets truncated when only the event stream was capped', async () => {
     routeGh({
-      timeline: () => Array.from({ length: 250 }, (_, i) => ({
-        event: 'labeled', id: i,
-        created_at: new Date(Date.UTC(2026, 0, 1) + i * 60_000).toISOString(),
-        actor: { login: 'a' }, label: { name: `l${i}` },
-      })),
+      timeline: () =>
+        Array.from({ length: 250 }, (_, i) => ({
+          event: 'labeled',
+          id: i,
+          created_at: new Date(Date.UTC(2026, 0, 1) + i * 60_000).toISOString(),
+          actor: { login: 'a' },
+          label: { name: `l${i}` },
+        })),
     });
 
     const data = await fetchGithubComments(repoRoot, 'issue', 1);
@@ -1099,12 +1219,22 @@ describe('fetchGithubComments timeline integration (#525)', () => {
     execFileMock.mockImplementation((...args: unknown[]) => {
       const argv = args[1] as string[];
       const cb = args[args.length - 1] as (e: unknown, r: unknown) => void;
-      const ok = (v: unknown) => cb(null, { stdout: typeof v === 'string' ? v : JSON.stringify(v), stderr: '' });
+      const ok = (v: unknown) =>
+        cb(null, { stdout: typeof v === 'string' ? v : JSON.stringify(v), stderr: '' });
       if (argv[0] === 'repo') return ok('o/r');
-      if (argv[1] === 'graphql') return ok({ data: { repository: { c0: { statusCheckRollup: { state: 'SUCCESS' } } } } });
+      if (argv[1] === 'graphql')
+        return ok({ data: { repository: { c0: { statusCheckRollup: { state: 'SUCCESS' } } } } });
       const path = argv.find((a) => a.includes('repos/{owner}/{repo}')) ?? '';
       if (path.includes('/timeline')) {
-        return ok([{ event: 'committed', created_at: null, sha: commitSha, message: 'ship it', author: { name: 'Ada', date: '2026-01-01T00:00:00Z' } }]);
+        return ok([
+          {
+            event: 'committed',
+            created_at: null,
+            sha: commitSha,
+            message: 'ship it',
+            author: { name: 'Ada', date: '2026-01-01T00:00:00Z' },
+          },
+        ]);
       }
       if (path.includes('/reviews')) return ok([]);
       return cb(new Error('unexpected'), null);
@@ -1122,12 +1252,20 @@ describe('fetchGithubComments timeline integration (#525)', () => {
     execFileMock.mockImplementation((...args: unknown[]) => {
       const argv = args[1] as string[];
       const cb = args[args.length - 1] as (e: unknown, r: unknown) => void;
-      const ok = (v: unknown) => cb(null, { stdout: typeof v === 'string' ? v : JSON.stringify(v), stderr: '' });
+      const ok = (v: unknown) =>
+        cb(null, { stdout: typeof v === 'string' ? v : JSON.stringify(v), stderr: '' });
       if (argv[0] === 'repo') return ok('o/r');
       if (argv[1] === 'graphql') return cb(new Error('HTTP 502'), null); // rollup fails
       const path = argv.find((a) => a.includes('repos/{owner}/{repo}')) ?? '';
       if (path.includes('/timeline')) {
-        return ok([{ event: 'committed', created_at: null, sha: commitSha, author: { name: 'Ada', date: '2026-01-01T00:00:00Z' } }]);
+        return ok([
+          {
+            event: 'committed',
+            created_at: null,
+            sha: commitSha,
+            author: { name: 'Ada', date: '2026-01-01T00:00:00Z' },
+          },
+        ]);
       }
       if (path.includes('/reviews')) return ok([]);
       return cb(new Error('unexpected'), null);
@@ -1142,7 +1280,15 @@ describe('fetchGithubComments timeline integration (#525)', () => {
 
   it('skips the checks query entirely when the timeline has no commits', async () => {
     routeGh({
-      timeline: () => [{ event: 'labeled', id: 1, created_at: '2026-01-01T00:00:00Z', actor: { login: 'a' }, label: { name: 'bug' } }],
+      timeline: () => [
+        {
+          event: 'labeled',
+          id: 1,
+          created_at: '2026-01-01T00:00:00Z',
+          actor: { login: 'a' },
+          label: { name: 'bug' },
+        },
+      ],
     });
     await fetchGithubComments(repoRoot, 'issue', 1);
     const calls = execFileMock.mock.calls.map((c) => (c[1] as string[]).join(' '));
@@ -1153,10 +1299,16 @@ describe('fetchGithubComments timeline integration (#525)', () => {
   it('still fetches PR reviews alongside the timeline', async () => {
     routeGh({
       timeline: () => [commented(1)],
-      reviews: () => [{
-        id: 500, user: { login: 'rev' }, body: 'LGTM', state: 'APPROVED',
-        submitted_at: '2026-01-05T00:00:00Z', html_url: 'https://github.com/o/r/pull/1#pullrequestreview-500',
-      }],
+      reviews: () => [
+        {
+          id: 500,
+          user: { login: 'rev' },
+          body: 'LGTM',
+          state: 'APPROVED',
+          submitted_at: '2026-01-05T00:00:00Z',
+          html_url: 'https://github.com/o/r/pull/1#pullrequestreview-500',
+        },
+      ],
     });
 
     const data = await fetchGithubComments(repoRoot, 'pr', 1);
@@ -1171,7 +1323,12 @@ describe('mergeThread is unaffected by events (#525)', () => {
   // is no server-side merge. These tests pin that separation so a later refactor cannot quietly
   // introduce a combined cap, which is the §2 defect the spec's review caught in its first draft.
   const comment = (id: number, at: string): ForgeComment => ({
-    id, author: 'a', createdAt: at, body: '', kind: 'comment', url: `u${id}`,
+    id,
+    author: 'a',
+    createdAt: at,
+    body: '',
+    kind: 'comment',
+    url: `u${id}`,
   });
 
   it('takes only ForgeComment lists — events have no way in', () => {
@@ -1193,9 +1350,11 @@ describe('mergeThread is unaffected by events (#525)', () => {
     // Normalizing 250 events alongside must not touch the comment stream in any way.
     normalizeEvents(
       Array.from({ length: 250 }, (_, i) => ({
-        event: 'labeled', id: i,
+        event: 'labeled',
+        id: i,
         created_at: new Date(Date.UTC(2026, 0, 1) + i * 60_000).toISOString(),
-        actor: { login: 'a' }, label: { name: `l${i}` },
+        actor: { login: 'a' },
+        label: { name: `l${i}` },
       })),
     );
     expect(mergeThread([comments])).toEqual(before);
@@ -1303,7 +1462,9 @@ describe('fetchCommitChecks (#525 Phase 2)', () => {
   });
 
   it('degrades to an empty map when every chunk fails, never throwing', async () => {
-    const runGraphql = vi.fn(async () => { throw new Error('offline'); });
+    const runGraphql = vi.fn(async () => {
+      throw new Error('offline');
+    });
     await expect(fetchCommitChecks(runGraphql, 'o', 'n', [sha(1)])).resolves.toEqual({});
   });
 
@@ -1315,7 +1476,10 @@ describe('fetchCommitChecks (#525 Phase 2)', () => {
 
   it('embeds full 40-char SHAs — oid rejects abbreviated ones', async () => {
     let sent = '';
-    const runGraphql = vi.fn(async (q: string) => { sent = q; return reply(['SUCCESS']); });
+    const runGraphql = vi.fn(async (q: string) => {
+      sent = q;
+      return reply(['SUCCESS']);
+    });
     await fetchCommitChecks(runGraphql, 'o', 'n', [sha(1)]);
     expect(sent).toContain(`object(oid: "${sha(1)}")`);
     expect(sha(1)).toHaveLength(40);

@@ -11,7 +11,8 @@ function makeCtx(over: {
   reconfigure?: Set<string>;
 }): InstallContext {
   const runner: Runner = {
-    capture: over.runner?.capture ?? (async (): Promise<CommandResult> => ({ code: 0, stdout: '', stderr: '' })),
+    capture:
+      over.runner?.capture ?? (async (): Promise<CommandResult> => ({ code: 0, stdout: '', stderr: '' })),
     interactive: over.runner?.interactive ?? (async () => 0),
   };
   return {
@@ -60,7 +61,10 @@ describe('sudoStep', () => {
     const interactive = vi.fn(async () => 0);
     const verify = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
     const ui = scriptedUi(['sudo', 'sudo'], [true]); // 2 sudo runs, 1 redo=yes
-    const ctx = makeCtx({ ui, runner: { interactive, capture: async () => ({ code: 1, stdout: '', stderr: '' }) } });
+    const ctx = makeCtx({
+      ui,
+      runner: { interactive, capture: async () => ({ code: 1, stdout: '', stderr: '' }) },
+    });
     await sudoStep(ctx, { description: 'install nginx', command: 'apt-get install -y nginx', verify });
     expect(interactive).toHaveBeenCalledTimes(2);
     expect(verify).toHaveBeenCalledTimes(2);
@@ -70,7 +74,10 @@ describe('sudoStep', () => {
     const interactive = vi.fn(async () => 0);
     const verify = vi.fn(async () => true);
     const ui = scriptedUi(['delegate'], [true]); // choose delegate, confirm done
-    const ctx = makeCtx({ ui, runner: { interactive, capture: async () => ({ code: 1, stdout: '', stderr: '' }) } });
+    const ctx = makeCtx({
+      ui,
+      runner: { interactive, capture: async () => ({ code: 1, stdout: '', stderr: '' }) },
+    });
     await sudoStep(ctx, { description: 'write vhost', command: 'tee /etc/nginx/x', verify });
     expect(interactive).not.toHaveBeenCalled();
     expect(verify).toHaveBeenCalledTimes(1);
@@ -103,9 +110,18 @@ describe('sudoStep', () => {
   it('skippable step offers Skip on repeated failure and throws StepSkipped', async () => {
     const verify = vi.fn(async () => false);
     const ui = scriptedUi(['delegate', 'skip'], [true]); // pick delegate, confirm run, then skip
-    const ctx = makeCtx({ ui, runner: { interactive: async () => 0, capture: async () => ({ code: 1, stdout: '', stderr: '' }) } });
+    const ctx = makeCtx({
+      ui,
+      runner: { interactive: async () => 0, capture: async () => ({ code: 1, stdout: '', stderr: '' }) },
+    });
     await expect(
-      sudoStep(ctx, { description: 'ssl', command: 'certbot ...', skippable: true, skipHint: 'later', verify }),
+      sudoStep(ctx, {
+        description: 'ssl',
+        command: 'certbot ...',
+        skippable: true,
+        skipHint: 'later',
+        verify,
+      }),
     ).rejects.toBeInstanceOf(StepSkipped);
   });
 

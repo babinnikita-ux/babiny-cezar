@@ -1,14 +1,14 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { CheckIcon, GitBranchIcon, GitPullRequestIcon, PlusIcon } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { CheckIcon, GitBranchIcon, GitPullRequestIcon, PlusIcon } from 'lucide-react';
+import { useState, type FormEvent } from 'react';
 
-import { createRepoBranch, putConfig } from '@/api/client'
-import { queryKeys, useGithub, useHealth } from '@/api/queries'
-import type { GithubItem, RepoInfo, RepoResponse } from '@/api/types'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { toast } from '@/components/ui/toaster'
-import { cn, isHttpUrl } from '@/lib/utils'
+import { createRepoBranch, putConfig } from '@/api/client';
+import { queryKeys, useGithub, useHealth } from '@/api/queries';
+import type { GithubItem, RepoInfo, RepoResponse } from '@/api/types';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { toast } from '@/components/ui/toaster';
+import { cn, isHttpUrl } from '@/lib/utils';
 
 /**
  * The repo view's Branches segment (R5 Step 1.7): the branch list `GET /api/repo` already
@@ -23,21 +23,21 @@ import { cn, isHttpUrl } from '@/lib/utils'
  * `/api/github`) only behind it.
  */
 export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: RepoInfo }) {
-  const health = useHealth()
-  const queryClient = useQueryClient()
-  const onError = (error: Error) => toast(error.message, { tone: 'danger' })
+  const health = useHealth();
+  const queryClient = useQueryClient();
+  const onError = (error: Error) => toast(error.message, { tone: 'danger' });
 
   const branchAction = useMutation({
     mutationFn: (name: string) => createRepoBranch({ name }),
     onSuccess: (result) => {
-      toast(result.created ? `Created and switched to ${result.branch}` : `Switched to ${result.branch}`)
+      toast(result.created ? `Created and switched to ${result.branch}` : `Switched to ${result.branch}`);
       // The checkout moved: the repo payload (branch, log), the working-tree diff (children
       // of the same key) and the sidebar's health chip are all stale now.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.repo })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.health })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.repo });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.health });
     },
     onError,
-  })
+  });
 
   const setBase = useMutation({
     mutationFn: (baseBranch: string | null) => putConfig({ baseBranch }),
@@ -46,19 +46,19 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
         result.baseBranch
           ? `Agents now branch from ${result.baseBranch}`
           : 'Agents now branch from the current checkout',
-      )
-      void queryClient.invalidateQueries({ queryKey: queryKeys.repo })
+      );
+      void queryClient.invalidateQueries({ queryKey: queryKeys.repo });
     },
     onError,
-  })
+  });
 
-  const [newName, setNewName] = useState('')
+  const [newName, setNewName] = useState('');
   const submitCreate = (event: FormEvent) => {
-    event.preventDefault()
-    const name = newName.trim()
-    if (!name) return
-    branchAction.mutate(name, { onSuccess: () => setNewName('') })
-  }
+    event.preventDefault();
+    const name = newName.trim();
+    if (!name) return;
+    branchAction.mutate(name, { onSuccess: () => setNewName('') });
+  };
 
   return (
     <section data-slot="repo-branches" className="flex flex-col gap-6 px-4 py-4 md:px-6">
@@ -66,11 +66,18 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
         <h2 className="text-xs font-semibold tracking-wide text-soft-foreground uppercase">Branches</h2>
         <ul data-slot="repo-branch-list" className="mt-2 flex max-w-xl flex-col divide-y divide-border">
           {repo.branches.map((name) => {
-            const current = name === info.branch
+            const current = name === info.branch;
             return (
-              <li key={name} data-slot="branch-row" data-branch={name} className="flex min-h-9 items-center gap-2 py-1">
+              <li
+                key={name}
+                data-slot="branch-row"
+                data-branch={name}
+                className="flex min-h-9 items-center gap-2 py-1"
+              >
                 <GitBranchIcon aria-hidden="true" className="size-3.5 shrink-0 text-muted-foreground" />
-                <span className={cn('min-w-0 truncate font-mono text-xs', current && 'font-semibold')}>{name}</span>
+                <span className={cn('min-w-0 truncate font-mono text-xs', current && 'font-semibold')}>
+                  {name}
+                </span>
                 {current ? (
                   <span
                     data-slot="branch-current"
@@ -92,11 +99,15 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
                   </Button>
                 )}
               </li>
-            )
+            );
           })}
         </ul>
 
-        <form data-slot="branch-create" className="mt-3 flex max-w-md items-center gap-2" onSubmit={submitCreate}>
+        <form
+          data-slot="branch-create"
+          className="mt-3 flex max-w-md items-center gap-2"
+          onSubmit={submitCreate}
+        >
           <Input
             aria-label="New branch name"
             placeholder="new-branch-name"
@@ -145,17 +156,19 @@ export function RepoBranchesSection({ repo, info }: { repo: RepoResponse; info: 
 
       {health.data?.forge?.available ? <ForgePullRequests /> : null}
     </section>
-  )
+  );
 }
 
 /** Mounted only behind the forge gate, so `/api/github` is fetched only when a driver is
  *  available. The payload itself still degrades (`available:false` + reason) — rendered
  *  honestly rather than hidden, since at this point a forge was detected. */
 function ForgePullRequests() {
-  const github = useGithub({ limit: 20 })
+  const github = useGithub({ limit: 20 });
   return (
     <div data-slot="repo-prs" className="max-w-xl">
-      <h2 className="text-xs font-semibold tracking-wide text-soft-foreground uppercase">Open pull requests</h2>
+      <h2 className="text-xs font-semibold tracking-wide text-soft-foreground uppercase">
+        Open pull requests
+      </h2>
       {github.isPending ? (
         <p className="mt-2 text-xs text-soft-foreground">Loading pull requests…</p>
       ) : github.isError ? (
@@ -174,7 +187,7 @@ function ForgePullRequests() {
         </ul>
       )}
     </div>
-  )
+  );
 }
 
 function PullRequestRow({ pr }: { pr: GithubItem }) {
@@ -185,8 +198,8 @@ function PullRequestRow({ pr }: { pr: GithubItem }) {
       <span className="min-w-0 flex-1 truncate text-[13px]">{pr.title}</span>
       {pr.checks ? <ChecksBadge checks={pr.checks} /> : null}
     </>
-  )
-  const rowClass = 'flex min-w-0 items-center gap-2 rounded-sm px-1.5 py-2'
+  );
+  const rowClass = 'flex min-w-0 items-center gap-2 rounded-sm px-1.5 py-2';
   return (
     <li data-slot="pr-row" data-number={pr.number}>
       {/* href protocol guard (#431): link only for http(s) URLs, else inert row. */}
@@ -198,7 +211,7 @@ function PullRequestRow({ pr }: { pr: GithubItem }) {
         <span className={rowClass}>{inner}</span>
       )}
     </li>
-  )
+  );
 }
 
 /** The checks badge — the same three words the GitHub tab uses, tinted by outcome. */
@@ -216,5 +229,5 @@ function ChecksBadge({ checks }: { checks: 'passing' | 'failing' | 'pending' }) 
     >
       {checks}
     </span>
-  )
+  );
 }

@@ -58,7 +58,10 @@ describe('pastedAttachmentsText / pastedAttachmentsNote', () => {
 
   it('wraps the same text as a trailing text ContentBlock', () => {
     const attachments = [{ name: 'pasted-1.png', url: '/api/x', path: '/abs/pasted-1.png' }];
-    expect(pastedAttachmentsNote(attachments)).toEqual({ type: 'text', text: pastedAttachmentsText(attachments) });
+    expect(pastedAttachmentsNote(attachments)).toEqual({
+      type: 'text',
+      text: pastedAttachmentsText(attachments),
+    });
   });
 });
 
@@ -120,7 +123,8 @@ describe('pasted screenshots materialize to disk and reach the agent as file pat
     for (;;) {
       const status = store.getRun(runId)?.status;
       if (status && statuses.includes(status)) return status;
-      if (Date.now() > deadline) throw new Error(`run did not reach ${statuses.join('/')} in time (was ${status})`);
+      if (Date.now() > deadline)
+        throw new Error(`run did not reach ${statuses.join('/')} in time (was ${status})`);
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
   }
@@ -142,7 +146,10 @@ describe('pasted screenshots materialize to disk and reach the agent as file pat
       type: 'image',
       source: { type: 'base64', media_type: 'image/png', data: TINY_PNG_B64 },
     };
-    const record = manager.startRun(workflow, { task: 'save the pasted screenshot to disk', images: [image] });
+    const record = manager.startRun(workflow, {
+      task: 'save the pasted screenshot to disk',
+      images: [image],
+    });
 
     await waitForStatus(record.id, ['done', 'review', 'failed', 'cancelled']);
 
@@ -199,7 +206,11 @@ describe('pasted screenshots materialize to disk and reach the agent as file pat
     const pathMatch = followUp?.userText.match(/- (.*pasted-\d+\.jpg)/);
     expect(pathMatch).toBeTruthy();
     const filePath = pathMatch?.[1] as string;
-    expect(filePath).toMatch(new RegExp(`^${join(dataDir, 'runs', `${record.id}-images`).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/pasted-\\d+\\.jpg$`));
+    expect(filePath).toMatch(
+      new RegExp(
+        `^${join(dataDir, 'runs', `${record.id}-images`).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/pasted-\\d+\\.jpg$`,
+      ),
+    );
     expect(existsSync(filePath)).toBe(true);
     expect(readFileSync(filePath).equals(Buffer.from(TINY_PNG_B64, 'base64'))).toBe(true);
 

@@ -1,15 +1,15 @@
-import { QueryClientProvider } from '@tanstack/react-query'
-import { useState } from 'react'
-import { BrowserRouter } from 'react-router'
+import { QueryClientProvider } from '@tanstack/react-query';
+import { useState } from 'react';
+import { BrowserRouter } from 'react-router';
 
-import { GlobalEventsProvider } from './api/global-events'
-import { createQueryClient } from './api/query-client'
-import { AppShellContainer } from './components/app-shell-container'
-import { AppearanceProvider } from './components/appearance-provider'
-import { RunNotifications } from './components/run-notifications'
-import { ThemeProvider } from './components/theme-provider'
-import { Toaster } from './components/ui/toaster'
-import { AppRoutes } from './routes'
+import { GlobalEventsProvider } from './api/global-events';
+import { createQueryClient } from './api/query-client';
+import { AppShellContainer } from './components/app-shell-container';
+import { AppearanceProvider } from './components/appearance-provider';
+import { RunNotifications } from './components/run-notifications';
+import { ThemeProvider } from './components/theme-provider';
+import { Toaster } from './components/ui/toaster';
+import { AppRoutes } from './routes';
 
 /** Real URLs, no basename: the cockpit is always mounted at the origin root, and the server
  *  serves index.html for every non-/api GET (src/server/static-ui.ts), so a deep link like
@@ -27,7 +27,7 @@ export function App() {
   // Lazy initial state rather than a module-level constant: one client per App instance, so a
   // test (or a remount) never inherits another's cache, and StrictMode's double-invoke of the
   // component body still yields exactly one client.
-  const [queryClient] = useState(createQueryClient)
+  const [queryClient] = useState(createQueryClient);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -51,5 +51,5 @@ export function App() {
         </ThemeProvider>
       </GlobalEventsProvider>
     </QueryClientProvider>
-  )
+  );
 }

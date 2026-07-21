@@ -96,8 +96,10 @@ const runNpm = (args, cwd) => {
 const publish = (dir, label) => {
   const args = [
     'publish',
-    '--tag', 'latest',
-    '--access', 'public',
+    '--tag',
+    'latest',
+    '--access',
+    'public',
     '--ignore-scripts',
     ...provenance,
     ...(dryRun ? ['--dry-run'] : []),

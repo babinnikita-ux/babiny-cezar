@@ -92,16 +92,27 @@ describe('Codex model discovery', () => {
       { id: 1, result: {} },
       { id: 2, error: { code: -32601, message: 'Method not found' } },
     ]);
-    await expect(discoverCodexModels({ cwd: '/repo', spawn: () => fake.child })).rejects.toThrow('Method not found');
+    await expect(discoverCodexModels({ cwd: '/repo', spawn: () => fake.child })).rejects.toThrow(
+      'Method not found',
+    );
   });
 
   it('rejects malformed model pages and malformed NDJSON', async () => {
-    const invalidPage = fakeChild([{ id: 1, result: {} }, { id: 2, result: { data: [{ model: 42 }] } }]);
-    await expect(discoverCodexModels({ cwd: '/repo', spawn: () => invalidPage.child })).rejects.toThrow('malformed model data');
+    const invalidPage = fakeChild([
+      { id: 1, result: {} },
+      { id: 2, result: { data: [{ model: 42 }] } },
+    ]);
+    await expect(discoverCodexModels({ cwd: '/repo', spawn: () => invalidPage.child })).rejects.toThrow(
+      'malformed model data',
+    );
 
     const invalidJson = fakeChild([{ id: 1, result: {} }]);
-    invalidJson.child.stdin.on('data', () => queueMicrotask(() => (invalidJson.child.stdout as PassThrough).write('{broken\n')));
-    await expect(discoverCodexModels({ cwd: '/repo', spawn: () => invalidJson.child })).rejects.toThrow('malformed NDJSON');
+    invalidJson.child.stdin.on('data', () =>
+      queueMicrotask(() => (invalidJson.child.stdout as PassThrough).write('{broken\n')),
+    );
+    await expect(discoverCodexModels({ cwd: '/repo', spawn: () => invalidJson.child })).rejects.toThrow(
+      'malformed NDJSON',
+    );
   });
 
   it('rejects cursor loops instead of returning an incomplete catalog', async () => {
@@ -110,7 +121,9 @@ describe('Codex model discovery', () => {
       { id: 2, result: { data: [], nextCursor: 'again' } },
       { id: 3, result: { data: [], nextCursor: 'again' } },
     ]);
-    await expect(discoverCodexModels({ cwd: '/repo', spawn: () => fake.child })).rejects.toThrow('cursor loop');
+    await expect(discoverCodexModels({ cwd: '/repo', spawn: () => fake.child })).rejects.toThrow(
+      'cursor loop',
+    );
   });
 
   it('rejects oversized catalogs and excessive pagination', async () => {
@@ -124,7 +137,9 @@ describe('Codex model discovery', () => {
         },
       },
     ]);
-    await expect(discoverCodexModels({ cwd: '/repo', spawn: () => tooMany.child })).rejects.toThrow('size limit');
+    await expect(discoverCodexModels({ cwd: '/repo', spawn: () => tooMany.child })).rejects.toThrow(
+      'size limit',
+    );
 
     const tooManyPages = fakeChild([
       { id: 1, result: {} },
@@ -133,12 +148,16 @@ describe('Codex model discovery', () => {
         result: { data: [], nextCursor: `page-${index + 2}` },
       })),
     ]);
-    await expect(discoverCodexModels({ cwd: '/repo', spawn: () => tooManyPages.child })).rejects.toThrow('page limit');
+    await expect(discoverCodexModels({ cwd: '/repo', spawn: () => tooManyPages.child })).rejects.toThrow(
+      'page limit',
+    );
   });
 
   it('times out a non-responsive child', async () => {
     const fake = fakeChild();
-    await expect(discoverCodexModels({ cwd: '/repo', timeoutMs: 10, spawn: () => fake.child })).rejects.toThrow('timed out');
+    await expect(
+      discoverCodexModels({ cwd: '/repo', timeoutMs: 10, spawn: () => fake.child }),
+    ).rejects.toThrow('timed out');
   });
 
   it('rejects when the child exits while a request is pending', async () => {

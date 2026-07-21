@@ -1,12 +1,12 @@
-import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { QueryClientProvider } from '@tanstack/react-query';
+import { cleanup, render, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ProjectScopeProvider } from '@/api/project-scope-context'
-import { createQueryClient } from '@/api/query-client'
-import type { HealthResponse, ProjectsResponse, Skill } from '@/api/types'
-import { BookmarkletPanel } from './bookmarklets-section'
+import { ProjectScopeProvider } from '@/api/project-scope-context';
+import { createQueryClient } from '@/api/query-client';
+import type { HealthResponse, ProjectsResponse, Skill } from '@/api/types';
+import { BookmarkletPanel } from './bookmarklets-section';
 
 /**
  * #422: the bookmark's visible label (what a browser stamps as the bookmark's name when it is
@@ -17,7 +17,7 @@ import { BookmarkletPanel } from './bookmarklets-section'
  * THAT project's URL prefix and THAT project's launch key — the second describe below.
  */
 
-const fetchMock = vi.fn<typeof fetch>()
+const fetchMock = vi.fn<typeof fetch>();
 
 const HEALTH: HealthResponse = {
   version: '0.1.5',
@@ -27,32 +27,30 @@ const HEALTH: HealthResponse = {
   defaultRunner: 'claude',
   forge: null,
   capabilities: { localHandoff: true, followups: false },
-}
+};
 
-const SKILLS: Skill[] = [
-  { name: 'om-fix', body: '', path: '.ai/skills/om-fix.md', source: 'ai' },
-]
+const SKILLS: Skill[] = [{ name: 'om-fix', body: '', path: '.ai/skills/om-fix.md', source: 'ai' }];
 
 function serve(routes: Record<string, unknown>): void {
   fetchMock.mockImplementation(async (input) => {
-    const path = String(input)
-    if (!(path in routes)) return new Response(JSON.stringify({ error: 'not found' }), { status: 404 })
+    const path = String(input);
+    if (!(path in routes)) return new Response(JSON.stringify({ error: 'not found' }), { status: 404 });
     return new Response(JSON.stringify(routes[path]), {
       status: 200,
       headers: { 'content-type': 'application/json' },
-    })
-  })
+    });
+  });
 }
 
 beforeEach(() => {
-  vi.stubGlobal('fetch', fetchMock)
-})
+  vi.stubGlobal('fetch', fetchMock);
+});
 
 afterEach(() => {
-  cleanup()
-  fetchMock.mockReset()
-  vi.unstubAllGlobals()
-})
+  cleanup();
+  fetchMock.mockReset();
+  vi.unstubAllGlobals();
+});
 
 /**
  * Mount the panel the way the router does: at a `/p/<id>/settings/bookmarklets` URL, optionally
@@ -71,45 +69,45 @@ function renderPanel(
         </ProjectScopeProvider>
       </MemoryRouter>
     </QueryClientProvider>,
-  )
+  );
 }
 
 const label = (text: string) =>
-  [...document.querySelectorAll('[data-slot="bm-link"]')].find((el) => el.textContent?.trim() === text)
+  [...document.querySelectorAll('[data-slot="bm-link"]')].find((el) => el.textContent?.trim() === text);
 
 /** The program a browser would run — the generated `href` is set imperatively after mount. */
 const hrefOf = (slot: string) =>
   decodeURIComponent(
     document.querySelector(`[data-slot="${slot}"] [data-slot="bm-link"]`)?.getAttribute('href') ?? '',
-  )
+  );
 
 describe('BookmarkletPanel repo-name labels (#422)', () => {
   it('stamps the repo name (the sidebar chip basename) into the generic and per-skill labels', async () => {
-    serve({ '/api/health': HEALTH, '/api/launch-key': { key: 'sekret' } })
-    renderPanel()
+    serve({ '/api/health': HEALTH, '/api/launch-key': { key: 'sekret' } });
+    renderPanel();
 
-    await waitFor(() => expect(label('cezar (cezar): this PR/issue')).toBeTruthy())
-    expect(label('/om-fix (cezar)')).toBeTruthy()
-  })
+    await waitFor(() => expect(label('cezar (cezar): this PR/issue')).toBeTruthy());
+    expect(label('/om-fix (cezar)')).toBeTruthy();
+  });
 
   it('falls back to the plain, repo-less label while health is unknown', () => {
     // A never-resolving fetch: health stays pending, so the repo name is not yet known.
-    fetchMock.mockImplementation(() => new Promise<Response>(() => {}))
-    renderPanel()
+    fetchMock.mockImplementation(() => new Promise<Response>(() => {}));
+    renderPanel();
 
-    expect(label('cezar: this PR/issue')).toBeTruthy()
-    expect(label('/om-fix')).toBeTruthy()
-    expect(label('/om-fix (cezar)')).toBeFalsy()
-  })
+    expect(label('cezar: this PR/issue')).toBeTruthy();
+    expect(label('/om-fix')).toBeTruthy();
+    expect(label('/om-fix (cezar)')).toBeFalsy();
+  });
 
   it('falls back to the plain label outside a git repository', async () => {
-    serve({ '/api/health': { ...HEALTH, repo: null }, '/api/launch-key': { key: 'sekret' } })
-    renderPanel()
+    serve({ '/api/health': { ...HEALTH, repo: null }, '/api/launch-key': { key: 'sekret' } });
+    renderPanel();
 
-    await waitFor(() => expect(label('cezar: this PR/issue')).toBeTruthy())
-    expect(label('/om-fix')).toBeTruthy()
-  })
-})
+    await waitFor(() => expect(label('cezar: this PR/issue')).toBeTruthy());
+    expect(label('/om-fix')).toBeTruthy();
+  });
+});
 
 /** The registry both projects resolve their display name against. `/api/projects` is
  *  workspace-level (never scoped), so it answers the same under either mount below. */
@@ -136,7 +134,7 @@ const REGISTRY: ProjectsResponse = {
   ],
   bootProject: 'cezar',
   projectsDir: '~/cezar/projects',
-}
+};
 
 describe('BookmarkletPanel project scoping (multi-project spec, step 3.6)', () => {
   it("bakes the ACTIVE project's URL prefix and that project's own launch key", async () => {
@@ -148,46 +146,46 @@ describe('BookmarkletPanel project scoping (multi-project spec, step 3.6)', () =
       // scope rejects — the exact cross-project leak the assertions below rule out.
       '/api/launch-key': { key: 'boot-key' },
       '/api/p/acme/launch-key': { key: 'acme-key' },
-    })
-    renderPanel(SKILLS, { at: '/p/acme/settings/bookmarklets', scope: 'acme' })
+    });
+    renderPanel(SKILLS, { at: '/p/acme/settings/bookmarklets', scope: 'acme' });
 
-    await waitFor(() => expect(hrefOf('bm-generic')).toContain('key=acme-key'))
-    expect(hrefOf('bm-generic')).toContain(`/p/acme/new?'+q`)
-    expect(hrefOf('bm-generic')).not.toContain('boot-key')
+    await waitFor(() => expect(hrefOf('bm-generic')).toContain('key=acme-key'));
+    expect(hrefOf('bm-generic')).toContain(`/p/acme/new?'+q`);
+    expect(hrefOf('bm-generic')).not.toContain('boot-key');
     // The name stamp comes from the registry entry for THIS project, not from `/api/health`
     // (workspace-level: it always describes the boot repo).
-    expect(label('cezar (acme-repo): this PR/issue')).toBeTruthy()
-    expect(label('/om-fix (acme-repo)')).toBeTruthy()
-  })
+    expect(label('cezar (acme-repo): this PR/issue')).toBeTruthy();
+    expect(label('/om-fix (acme-repo)')).toBeTruthy();
+  });
 
   it('names the boot project too — it is unscoped, but the URL still says which project', async () => {
-    serve({ '/api/health': HEALTH, '/api/projects': REGISTRY, '/api/launch-key': { key: 'boot-key' } })
-    renderPanel(SKILLS, { at: '/p/cezar/settings/bookmarklets', scope: null })
+    serve({ '/api/health': HEALTH, '/api/projects': REGISTRY, '/api/launch-key': { key: 'boot-key' } });
+    renderPanel(SKILLS, { at: '/p/cezar/settings/bookmarklets', scope: null });
 
-    await waitFor(() => expect(hrefOf('bm-generic')).toContain('key=boot-key'))
+    await waitFor(() => expect(hrefOf('bm-generic')).toContain('key=boot-key'));
     // The boot project mounts UNSCOPED, so only the URL prefix can answer here.
-    expect(hrefOf('bm-generic')).toContain(`/p/cezar/new?'+q`)
+    expect(hrefOf('bm-generic')).toContain(`/p/cezar/new?'+q`);
     // …and the protected query grammar is untouched by the prefix.
-    expect(hrefOf('bm-generic')).toContain(`q='auto=0&key=boot-key&ref='`)
-  })
+    expect(hrefOf('bm-generic')).toContain(`q='auto=0&key=boot-key&ref='`);
+  });
 
   it('falls back to the boot project when the URL carries no prefix at all', async () => {
     // A legacy flat URL still mid-redirect: health names the boot project, so the generated
     // launcher already lands where the redirect would have taken it.
-    serve({ '/api/health': { ...HEALTH, bootProject: 'cezar' }, '/api/launch-key': { key: 'k' } })
-    renderPanel(SKILLS, { at: '/settings/bookmarklets', scope: null })
+    serve({ '/api/health': { ...HEALTH, bootProject: 'cezar' }, '/api/launch-key': { key: 'k' } });
+    renderPanel(SKILLS, { at: '/settings/bookmarklets', scope: null });
 
-    await waitFor(() => expect(hrefOf('bm-generic')).toContain(`/p/cezar/new?'+q`))
-  })
+    await waitFor(() => expect(hrefOf('bm-generic')).toContain(`/p/cezar/new?'+q`));
+  });
 
   it('degrades to the legacy flat /new when nothing names a project', async () => {
     // Registry and health both unavailable. The flat path is not a dead end — the cockpit
     // permanently redirects it to the boot project, so the launcher still lands.
-    serve({ '/api/launch-key': { key: 'k' } })
-    renderPanel(SKILLS, { at: '/settings/bookmarklets', scope: null })
+    serve({ '/api/launch-key': { key: 'k' } });
+    renderPanel(SKILLS, { at: '/settings/bookmarklets', scope: null });
 
-    await waitFor(() => expect(hrefOf('bm-generic')).toContain('key=k'))
-    expect(hrefOf('bm-generic')).toContain(`/new?'+q`)
-    expect(hrefOf('bm-generic')).not.toContain('/p/')
-  })
-})
+    await waitFor(() => expect(hrefOf('bm-generic')).toContain('key=k'));
+    expect(hrefOf('bm-generic')).toContain(`/new?'+q`);
+    expect(hrefOf('bm-generic')).not.toContain('/p/');
+  });
+});

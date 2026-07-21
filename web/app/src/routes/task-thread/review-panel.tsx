@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   CheckIcon,
   CopyIcon,
@@ -6,22 +6,22 @@ import {
   ExternalLinkIcon,
   EyeIcon,
   GitPullRequestIcon,
-} from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 
-import { ApiError, continueRun, createRunPr } from '@/api/client'
-import { queryKeys } from '@/api/queries'
-import type { ApiRun, RunStatus } from '@/api/types'
-import { TwinkleBackdrop } from '@/components/centered-state'
-import { RunDiff } from '@/components/run-diff'
-import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
-import { toast } from '@/components/ui/toaster'
-import { isSubmitShortcut } from '@/lib/use-submit-shortcut'
-import { isHttpUrl } from '@/lib/utils'
+import { ApiError, continueRun, createRunPr } from '@/api/client';
+import { queryKeys } from '@/api/queries';
+import type { ApiRun, RunStatus } from '@/api/types';
+import { TwinkleBackdrop } from '@/components/centered-state';
+import { RunDiff } from '@/components/run-diff';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from '@/components/ui/toaster';
+import { isSubmitShortcut } from '@/lib/use-submit-shortcut';
+import { isHttpUrl } from '@/lib/utils';
 
-import { finishTitle } from './run-actions'
-import { useFinishRun } from './use-finish-run'
+import { finishTitle } from './run-actions';
+import { useFinishRun } from './use-finish-run';
 
 /**
  * The review gate (spec 009, §"Task thread" review bullet) on the new surface — cezar's core
@@ -51,18 +51,18 @@ export function ReviewPanel({ run }: { run: ApiRun }) {
       <RunDiff runId={run.id} />
       <ReviewActions run={run} />
     </section>
-  )
+  );
 }
 
 // ---- notes + exits --------------------------------------------------------------------------
 
 function ReviewActions({ run }: { run: ApiRun }) {
-  const queryClient = useQueryClient()
-  const notesRef = useRef<HTMLTextAreaElement>(null)
-  const [notes, setNotes] = useState('')
-  const [manual, setManual] = useState<string | null>(null)
-  const finish = useFinishRun(run.id)
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
+  const queryClient = useQueryClient();
+  const notesRef = useRef<HTMLTextAreaElement>(null);
+  const [notes, setNotes] = useState('');
+  const [manual, setManual] = useState<string | null>(null);
+  const finish = useFinishRun(run.id);
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: queryKeys.runs.all });
 
   // Legacy send-back semantics verbatim (web/app.js `data-action="send-back"`): the notes go
   // back into the SAME session via continue, prefixed `Review feedback:` — the run leaves
@@ -70,34 +70,34 @@ function ReviewActions({ run }: { run: ApiRun }) {
   const sendBack = useMutation({
     mutationFn: (text: string) => continueRun(run.id, { text: `Review feedback:\n${text}` }),
     onSuccess: () => {
-      setNotes('')
-      invalidate()
+      setNotes('');
+      invalidate();
     },
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
-  })
+  });
 
   const draftPr = useMutation({
     mutationFn: () => createRunPr(run.id),
     onSuccess: (result) => {
-      toast(`Draft PR created — ${result.url}`)
-      invalidate() // the run completed as done with `pullRequestUrl` — refetch shows PR ↗
+      toast(`Draft PR created — ${result.url}`);
+      invalidate(); // the run completed as done with `pullRequestUrl` — refetch shows PR ↗
     },
     onError: (error: Error) => {
-      if (error instanceof ApiError && error.manual !== undefined) setManual(error.manual)
-      toast(error.message, { tone: 'danger' })
+      if (error instanceof ApiError && error.manual !== undefined) setManual(error.manual);
+      toast(error.message, { tone: 'danger' });
     },
-  })
+  });
 
   const submitNotes = () => {
-    const text = notes.trim()
+    const text = notes.trim();
     if (text.length === 0) {
       // Legacy `alertBar('Write what to change first.')` + focus.
-      toast('Write what to change first.')
-      notesRef.current?.focus()
-      return
+      toast('Write what to change first.');
+      notesRef.current?.focus();
+      return;
     }
-    sendBack.mutate(text)
-  }
+    sendBack.mutate(text);
+  };
 
   return (
     <div data-slot="review-actions" className="flex flex-col gap-2">
@@ -121,10 +121,10 @@ function ReviewActions({ run }: { run: ApiRun }) {
             altKey: event.altKey,
             repeat: event.repeat,
             isComposing: event.nativeEvent.isComposing,
-          })
+          });
           if (submits && (event.metaKey || event.ctrlKey)) {
-            event.preventDefault()
-            submitNotes()
+            event.preventDefault();
+            submitNotes();
           }
         }}
         className="min-h-[52px] text-[13px]"
@@ -186,7 +186,7 @@ function ReviewActions({ run }: { run: ApiRun }) {
       </div>
       {manual !== null ? <ManualMergeLine command={manual} /> : null}
     </div>
-  )
+  );
 }
 
 /** The 409 fallback: the PR could not be opened, but the branch is real — show the merge
@@ -201,14 +201,14 @@ function ManualMergeLine({ command }: { command: string }) {
         void navigator.clipboard
           .writeText(command)
           .then(() => toast('Command copied to clipboard.'))
-          .catch(() => toast(`Run manually: ${command}`))
+          .catch(() => toast(`Run manually: ${command}`));
       }}
       className="flex w-full min-w-0 items-center gap-1.5 rounded-sm px-1 py-0.5 text-left font-mono text-[11px] text-soft-foreground hover:bg-muted hover:text-foreground"
     >
       <CopyIcon className="size-3 shrink-0" aria-hidden="true" />
       <span className="truncate">manual path: {command}</span>
     </button>
-  )
+  );
 }
 
 // ---- the accept celebration -----------------------------------------------------------------
@@ -220,10 +220,10 @@ export function prefersReducedMotion(): boolean {
     typeof window !== 'undefined' &&
     typeof window.matchMedia === 'function' &&
     window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  )
+  );
 }
 
-const CELEBRATION_MS = 1500
+const CELEBRATION_MS = 1500;
 
 /**
  * The brief twinkle moment when a review is accepted (spec §"Design system": lifecycle
@@ -233,20 +233,20 @@ const CELEBRATION_MS = 1500
  * pointer-transparent); the status pill is the accessible record of what happened.
  */
 export function AcceptCelebration({ status }: { status: RunStatus }) {
-  const previous = useRef(status)
-  const [celebrating, setCelebrating] = useState(false)
+  const previous = useRef(status);
+  const [celebrating, setCelebrating] = useState(false);
 
   useEffect(() => {
-    const before = previous.current
-    previous.current = status
-    if (before !== 'review' || status !== 'done') return
-    if (prefersReducedMotion()) return
-    setCelebrating(true)
-    const timer = setTimeout(() => setCelebrating(false), CELEBRATION_MS)
-    return () => clearTimeout(timer)
-  }, [status])
+    const before = previous.current;
+    previous.current = status;
+    if (before !== 'review' || status !== 'done') return;
+    if (prefersReducedMotion()) return;
+    setCelebrating(true);
+    const timer = setTimeout(() => setCelebrating(false), CELEBRATION_MS);
+    return () => clearTimeout(timer);
+  }, [status]);
 
-  if (!celebrating) return null
+  if (!celebrating) return null;
   return (
     <div
       data-slot="accept-celebration"
@@ -260,5 +260,5 @@ export function AcceptCelebration({ status }: { status: RunStatus }) {
         </span>
       </div>
     </div>
-  )
+  );
 }

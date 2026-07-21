@@ -2,11 +2,7 @@ import { realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, join, resolve, sep } from 'node:path';
 import { getRepoInfo } from '../server/git.js';
-import {
-  mergeWriteWorkspaceConfig,
-  loadWorkspaceConfig,
-  type WorkspaceProject,
-} from './config.js';
+import { mergeWriteWorkspaceConfig, loadWorkspaceConfig, type WorkspaceProject } from './config.js';
 
 /**
  * Project registry operations over `~/.cezar/config.json` (spec
@@ -136,7 +132,10 @@ export async function registerProject(
       return;
     }
     entry = {
-      id: allocateProjectSlug(real, config.projects.map((p) => p.id)),
+      id: allocateProjectSlug(
+        real,
+        config.projects.map((p) => p.id),
+      ),
       root: real,
       name: basename(real),
       addedAt: now,
@@ -208,9 +207,7 @@ async function probeRoot(root: string): Promise<RootProbe> {
  * SAME shape the list route does — one project, one shape, whichever route
  * produced it.
  */
-export async function probeProjectStatus(
-  root: string,
-): Promise<Pick<ProjectListEntry, 'status' | 'branch'>> {
+export async function probeProjectStatus(root: string): Promise<Pick<ProjectListEntry, 'status' | 'branch'>> {
   return probeRoot(root);
 }
 

@@ -320,10 +320,39 @@ describe('live-vs-disk equivalence', () => {
 
 describe('isV2WireEventType (the SSE event-name router)', () => {
   it('routes dotted v2 types to ui-event and every v1 type to run-event', () => {
-    for (const t of ['session.started', 'session.ended', 'session.error', 'turn.started', 'turn.completed', 'item.started', 'item.updated', 'item.completed', 'plan.updated', 'usage.updated', 'permission.requested']) {
+    for (const t of [
+      'session.started',
+      'session.ended',
+      'session.error',
+      'turn.started',
+      'turn.completed',
+      'item.started',
+      'item.updated',
+      'item.completed',
+      'plan.updated',
+      'usage.updated',
+      'permission.requested',
+    ]) {
       expect(isV2WireEventType(t), t).toBe(true);
     }
-    for (const t of ['text', 'tool-call', 'tool-result', 'image', 'token-usage', 'cost', 'session', 'turn-end', 'note', 'done', 'error', 'lifecycle', 'step-start', 'step-end', 'check-output', 'user-message']) {
+    for (const t of [
+      'text',
+      'tool-call',
+      'tool-result',
+      'image',
+      'token-usage',
+      'cost',
+      'session',
+      'turn-end',
+      'note',
+      'done',
+      'error',
+      'lifecycle',
+      'step-start',
+      'step-end',
+      'check-output',
+      'user-message',
+    ]) {
       expect(isV2WireEventType(t), t).toBe(false);
     }
   });
@@ -345,13 +374,27 @@ describe('reasoning text survives persist → replay (#528)', () => {
     { method: 'turn/started', params: { turn: { id: TURN, status: 'inProgress', items: [] } } },
     {
       method: 'item/started',
-      params: { threadId: THREAD, turnId: TURN, item: { type: 'reasoning', id: 'item_rsn_1', summary: 'Tracing it' } },
+      params: {
+        threadId: THREAD,
+        turnId: TURN,
+        item: { type: 'reasoning', id: 'item_rsn_1', summary: 'Tracing it' },
+      },
     },
-    { method: 'item/reasoning/textDelta', params: { threadId: THREAD, turnId: TURN, itemId: 'item_rsn_1', delta: 'The session cookie ' } },
-    { method: 'item/reasoning/textDelta', params: { threadId: THREAD, turnId: TURN, itemId: 'item_rsn_1', delta: 'is dropped on refresh.' } },
+    {
+      method: 'item/reasoning/textDelta',
+      params: { threadId: THREAD, turnId: TURN, itemId: 'item_rsn_1', delta: 'The session cookie ' },
+    },
+    {
+      method: 'item/reasoning/textDelta',
+      params: { threadId: THREAD, turnId: TURN, itemId: 'item_rsn_1', delta: 'is dropped on refresh.' },
+    },
     {
       method: 'item/completed',
-      params: { threadId: THREAD, turnId: TURN, item: { type: 'reasoning', id: 'item_rsn_1', summary: 'Tracing it' } },
+      params: {
+        threadId: THREAD,
+        turnId: TURN,
+        item: { type: 'reasoning', id: 'item_rsn_1', summary: 'Tracing it' },
+      },
     },
   ];
 

@@ -185,7 +185,9 @@ async function serveCommand(repoRoot: string, preferredPort: number, openBrowser
       () => [] as string[],
     );
     if (orphans.length > 0) {
-      console.log(`  cleaned ${orphans.length} orphaned worktree(s): ${orphans.map((id) => id.slice(0, 8)).join(', ')}`);
+      console.log(
+        `  cleaned ${orphans.length} orphaned worktree(s): ${orphans.map((id) => id.slice(0, 8)).join(', ')}`,
+      );
     }
     // Count-based worktree retention (#483): reclaim finished worktrees beyond
     // the keep-limit (directory only — `cez/<id8>` branch kept, so recoverable).
@@ -193,7 +195,9 @@ async function serveCommand(repoRoot: string, preferredPort: number, openBrowser
     const keep = await resolveWorktreeRetention(repoRoot).catch(() => DEFAULT_WORKTREE_RETENTION);
     const reclaimed = await reclaimWorktrees(repoRoot, store, keep).catch(() => [] as string[]);
     if (reclaimed.length > 0) {
-      console.log(`  reclaimed ${reclaimed.length} old worktree(s), branch kept: ${reclaimed.map((id) => id.slice(0, 8)).join(', ')}`);
+      console.log(
+        `  reclaimed ${reclaimed.length} old worktree(s), branch kept: ${reclaimed.map((id) => id.slice(0, 8)).join(', ')}`,
+      );
     }
   }
 
@@ -210,7 +214,9 @@ async function serveCommand(repoRoot: string, preferredPort: number, openBrowser
   void checkForUpdate(pkgName, version).then((latest) => {
     if (!latest) return;
     update.latest = latest;
-    console.log(`\n  ⬆ cezar ${latest} is available (running ${version}) — restart with: npx ${pkgName}@latest\n`);
+    console.log(
+      `\n  ⬆ cezar ${latest} is available (running ${version}) — restart with: npx ${pkgName}@latest\n`,
+    );
   });
 
   const port = await pickPort(preferredPort);
@@ -218,7 +224,9 @@ async function serveCommand(repoRoot: string, preferredPort: number, openBrowser
   const url = `http://localhost:${port}`;
 
   console.log(`\n  cezar v${version} — ${repoRoot}`);
-  console.log(`  ${repo ? `branch ${repo.branch}` : 'not a git repository (tasks run in place, one at a time; repo view is empty)'}`);
+  console.log(
+    `  ${repo ? `branch ${repo.branch}` : 'not a git repository (tasks run in place, one at a time; repo view is empty)'}`,
+  );
   for (const check of checks) {
     const mark = check.available ? '✓' : '✗';
     const detail = check.available ? (check.version ?? 'ok') : (check.hint ?? 'missing');
@@ -321,7 +329,9 @@ async function runCommand(
         console.log(String(event.text ?? ''));
         break;
       case 'step-start':
-        console.log(`\n── step: ${String(event.name)} ${Number(event.iteration) > 1 ? `(attempt ${event.iteration})` : ''}`);
+        console.log(
+          `\n── step: ${String(event.name)} ${Number(event.iteration) > 1 ? `(attempt ${event.iteration})` : ''}`,
+        );
         break;
       case 'note':
       case 'lifecycle':
@@ -338,13 +348,16 @@ async function runCommand(
   // the GUI's review gate; the diff waits on the task branch/cockpit instead.
   const final = await new Promise<string>((resolveStatus) => {
     store.on('run', (r) => {
-      if (r.id === run.id && ['done', 'review', 'failed', 'cancelled'].includes(r.status)) resolveStatus(r.status);
+      if (r.id === run.id && ['done', 'review', 'failed', 'cancelled'].includes(r.status))
+        resolveStatus(r.status);
     });
   });
   store.flush();
   const record = store.getRun(run.id);
   if (final === 'review') {
-    console.log(`\n  changes ready for review on branch ${record?.branch ?? '?'} — inspect them in the cockpit: npx cezar`);
+    console.log(
+      `\n  changes ready for review on branch ${record?.branch ?? '?'} — inspect them in the cockpit: npx cezar`,
+    );
   }
   console.log(`\nrun ${final} — ${record?.tokensUsed ?? 0} tokens — details in the cockpit: npx cezar`);
   process.exitCode = final === 'done' || final === 'review' ? 0 : 1;
@@ -364,7 +377,12 @@ async function runCommand(
 function augmentPathFromLoginShell(): void {
   try {
     const out = execFileSync('bash', ['-lc', 'printf %s "$PATH"'], { timeout: 5000, encoding: 'utf8' });
-    const loginPath = out.split('\n').map((s) => s.trim()).filter(Boolean).pop() ?? '';
+    const loginPath =
+      out
+        .split('\n')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .pop() ?? '';
     if (!loginPath) return;
     const seen = new Set<string>();
     process.env.PATH = [...loginPath.split(':'), ...(process.env.PATH ?? '').split(':')]
@@ -390,7 +408,8 @@ async function serverCommand(
 
   const { getStrategy, availablePlatformIds } = await import('./server-install/strategies.js');
   const { runInstall, runUninstall, runDeploy } = await import('./server-install/engine.js');
-  const { loadServerState, listServerInstances, nextFreeInstancePort } = await import('./server-install/state.js');
+  const { loadServerState, listServerInstances, nextFreeInstancePort } =
+    await import('./server-install/state.js');
   const { instanceSlug, DEFAULT_SERVER_INSTANCE } = await import('./paths.js');
 
   const ids = availablePlatformIds();
@@ -399,7 +418,13 @@ async function serverCommand(
   // interactive install with an existing cockpit and no --domain also offers to
   // stand up a second instance — the exact "it asks me to reinstall" case.
   let domain = (flags.domain ?? '').trim() || undefined;
-  if (mode === 'install' && !domain && !flags.yes && process.stdin.isTTY && loadServerState(DEFAULT_SERVER_INSTANCE).installed) {
+  if (
+    mode === 'install' &&
+    !domain &&
+    !flags.yes &&
+    process.stdin.isTTY &&
+    loadServerState(DEFAULT_SERVER_INSTANCE).installed
+  ) {
     try {
       const { createClackUi } = await import('./server-install/ui.js');
       const answer = await createClackUi().text({
@@ -445,14 +470,21 @@ async function serverCommand(
     const known = listServerInstances().some((i) => i.instance === instance);
     if (!known) {
       port = nextFreeInstancePort();
-      console.log(`\n  New instance "${instance}" (${domain}) → loopback port ${port} (override with --port).`);
+      console.log(
+        `\n  New instance "${instance}" (${domain}) → loopback port ${port} (override with --port).`,
+      );
     }
   }
 
   const runOpts = {
     dryRun: process.env.CEZ_DRY_RUN === '1',
     assumeYes: flags.yes,
-    reconfigure: new Set((flags.reconfigure ?? '').split(',').map((s) => s.trim()).filter(Boolean)),
+    reconfigure: new Set(
+      (flags.reconfigure ?? '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ),
     reinstall: Boolean(flags.reinstall),
     repoRoot,
     now: new Date().toISOString(),
@@ -474,7 +506,9 @@ async function serverCommand(
           : await runUninstall(strategy, runOpts);
     if (mode === 'install' && result.status === 'complete') {
       console.log(`\n  cezar server-install (${label}) complete.`);
-      console.log(`  Redeploy a new version any time with: cezar server-deploy --platform ${chosen}${domainFlag}\n`);
+      console.log(
+        `  Redeploy a new version any time with: cezar server-deploy --platform ${chosen}${domainFlag}\n`,
+      );
     } else if (mode === 'deploy' && result.status === 'complete') {
       console.log(`\n  cezar server-deploy (${label}) complete — the service was reloaded and verified.\n`);
     } else if (mode === 'uninstall' && result.status === 'complete') {
@@ -552,7 +586,15 @@ function openStore(repoRoot: string, opts?: { keepLive?: boolean }): RunStore {
 /** Keep run data out of the user's repo history; workflows/skills stay committable. */
 function ensureDataGitignore(repoRoot: string): void {
   const path = join(repoRoot, '.ai/cezar', '.gitignore');
-  const wanted = ['runs.json', 'runs.json.tmp', 'runs/', 'worktrees/', 'todos.json', 'todos.json.tmp', 'launch-key'];
+  const wanted = [
+    'runs.json',
+    'runs.json.tmp',
+    'runs/',
+    'worktrees/',
+    'todos.json',
+    'todos.json.tmp',
+    'launch-key',
+  ];
   try {
     mkdirSync(join(repoRoot, '.ai/cezar'), { recursive: true });
     const current = existsSync(path) ? readFileSync(path, 'utf8') : '';
@@ -589,8 +631,7 @@ function readOwnVersion(): string {
 }
 
 function openUrl(url: string): void {
-  const cmd =
-    process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
+  const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
   const args = process.platform === 'win32' ? ['/c', 'start', '', url] : [url];
   try {
     const child = spawn(cmd, args, { stdio: 'ignore', detached: true });

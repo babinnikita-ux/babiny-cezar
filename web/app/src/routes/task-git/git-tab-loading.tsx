@@ -1,11 +1,11 @@
-import { LoaderCircleIcon, SearchXIcon, TriangleAlertIcon } from 'lucide-react'
-import { Link } from '@/lib/project-router'
+import { LoaderCircleIcon, SearchXIcon, TriangleAlertIcon } from 'lucide-react';
+import { Link } from '@/lib/project-router';
 
-import { ApiError } from '@/api/client'
-import { CenteredState } from '@/components/centered-state'
-import { Button } from '@/components/ui/button'
+import { ApiError } from '@/api/client';
+import { CenteredState } from '@/components/centered-state';
+import { Button } from '@/components/ui/button';
 
-import type { RunTab } from '../task-thread/run-header'
+import type { RunTab } from '../task-thread/run-header';
 
 /**
  * The Changes/Files tabs' loading + error surfaces, in their own module for the same reason
@@ -22,13 +22,13 @@ export function GitTabLoading({ tab }: { tab: Exclude<RunTab, 'session'> }) {
         subtitle="Fetching the run record."
       />
     </div>
-  )
+  );
 }
 
 /** The run fetch failed — same grammar as the thread route's error state (task-thread.tsx),
  *  because a dead `/tasks/:id/changes` link deserves the same honesty as a dead `/tasks/:id`. */
 export function GitTabLoadError({ tab, error }: { tab: Exclude<RunTab, 'session'>; error: Error }) {
-  const notFound = error instanceof ApiError && error.status === 404
+  const notFound = error instanceof ApiError && error.status === 404;
   return (
     <div data-route={`task-${tab}`} className="flex min-h-full flex-col">
       <CenteredState
@@ -47,5 +47,5 @@ export function GitTabLoadError({ tab, error }: { tab: Exclude<RunTab, 'session'
         }
       />
     </div>
-  )
+  );
 }

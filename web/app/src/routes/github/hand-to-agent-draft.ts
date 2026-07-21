@@ -17,34 +17,34 @@
  */
 
 export interface FollowupSelection {
-  workflow: string | null
-  skills: string[]
+  workflow: string | null;
+  skills: string[];
 }
 
-const EMPTY_SELECTION: FollowupSelection = { workflow: null, skills: [] }
+const EMPTY_SELECTION: FollowupSelection = { workflow: null, skills: [] };
 
-const SELECTION_KEY = 'cez-followup-selection'
+const SELECTION_KEY = 'cez-followup-selection';
 
 function normalizeSelection(raw: unknown): FollowupSelection {
-  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
   return {
     workflow: typeof obj.workflow === 'string' ? obj.workflow : null,
     skills: Array.isArray(obj.skills) ? obj.skills.filter((s): s is string => typeof s === 'string') : [],
-  }
+  };
 }
 
 export function readFollowupSelection(): FollowupSelection {
   try {
-    const stored = localStorage.getItem(SELECTION_KEY)
-    return stored ? normalizeSelection(JSON.parse(stored)) : { ...EMPTY_SELECTION }
+    const stored = localStorage.getItem(SELECTION_KEY);
+    return stored ? normalizeSelection(JSON.parse(stored)) : { ...EMPTY_SELECTION };
   } catch {
-    return { ...EMPTY_SELECTION } // private mode / bad JSON — start clean, still works this session
+    return { ...EMPTY_SELECTION }; // private mode / bad JSON — start clean, still works this session
   }
 }
 
 export function writeFollowupSelection(next: FollowupSelection): void {
   try {
-    localStorage.setItem(SELECTION_KEY, JSON.stringify(next))
+    localStorage.setItem(SELECTION_KEY, JSON.stringify(next));
   } catch {
     // Storage disabled/full — the picker still works this session, just won't be remembered.
   }
@@ -53,20 +53,20 @@ export function writeFollowupSelection(next: FollowupSelection): void {
 /** Test isolation. */
 export function resetFollowupSelection(): void {
   try {
-    localStorage.removeItem(SELECTION_KEY)
+    localStorage.removeItem(SELECTION_KEY);
   } catch {
     // ignore
   }
 }
 
-const PROMPT_KEY_PREFIX = 'cez-followup-prompt:'
+const PROMPT_KEY_PREFIX = 'cez-followup-prompt:';
 
 /** An untouched item (never typed into, or already spent by a successful run) answers ''. */
 export function readFollowupPrompt(itemUrl: string): string {
   try {
-    return localStorage.getItem(PROMPT_KEY_PREFIX + itemUrl) ?? ''
+    return localStorage.getItem(PROMPT_KEY_PREFIX + itemUrl) ?? '';
   } catch {
-    return ''
+    return '';
   }
 }
 
@@ -74,8 +74,8 @@ export function readFollowupPrompt(itemUrl: string): string {
  *  leaves no trace, so this store never grows unbounded with every item ever visited. */
 export function writeFollowupPrompt(itemUrl: string, prompt: string): void {
   try {
-    if (prompt === '') localStorage.removeItem(PROMPT_KEY_PREFIX + itemUrl)
-    else localStorage.setItem(PROMPT_KEY_PREFIX + itemUrl, prompt)
+    if (prompt === '') localStorage.removeItem(PROMPT_KEY_PREFIX + itemUrl);
+    else localStorage.setItem(PROMPT_KEY_PREFIX + itemUrl, prompt);
   } catch {
     // Storage disabled/full — the textarea still works this session, just won't be remembered.
   }

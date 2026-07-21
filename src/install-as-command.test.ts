@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  BIN_NAMES,
-  PACKAGE_NAME,
-  globalBinDir,
-  globalShimPaths,
-  planInstall,
-} from './install-as-command.js';
+import { BIN_NAMES, PACKAGE_NAME, globalBinDir, globalShimPaths, planInstall } from './install-as-command.js';
 
 // The decisions behind `npm run install-as-command` (scripts/install-as-command.mjs):
 // which npm command runs per mode, and where the global bin shims land. Spec 013.

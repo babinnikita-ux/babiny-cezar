@@ -119,9 +119,7 @@ describe('workspace semaphore across RunManagers (step 2.5)', () => {
     const slowA = a.manager.startRun(SLOW, { task: 'hold a slot (A)' });
     const slowB = b.manager.startRun(SLOW, { task: 'hold a slot (B)' });
     await waitFor(
-      () =>
-        a.store.getRun(slowA.id)?.status === 'running' &&
-        b.store.getRun(slowB.id)?.status === 'running',
+      () => a.store.getRun(slowA.id)?.status === 'running' && b.store.getRun(slowB.id)?.status === 'running',
       'both slot holders to run',
     );
 
@@ -148,18 +146,13 @@ describe('workspace semaphore across RunManagers (step 2.5)', () => {
     // B's agent run parks at `waiting` (markerless mock turn-end) — and by the
     // #347 rule gives its slot back while parked.
     const waitingRun = b.manager.startRun(AGENT, { task: 'park and wait', worktree: false });
-    await waitFor(
-      () => b.store.getRun(waitingRun.id)?.status === 'waiting',
-      "B's run to park at waiting",
-    );
+    await waitFor(() => b.store.getRun(waitingRun.id)?.status === 'waiting', "B's run to park at waiting");
 
     // Project A saturates the workspace cap: 2 running holders, busy == cap.
     const slow1 = a.manager.startRun(SLOW, { task: 'saturate 1' });
     const slow2 = a.manager.startRun(SLOW, { task: 'saturate 2' });
     await waitFor(
-      () =>
-        a.store.getRun(slow1.id)?.status === 'running' &&
-        a.store.getRun(slow2.id)?.status === 'running',
+      () => a.store.getRun(slow1.id)?.status === 'running' && a.store.getRun(slow2.id)?.status === 'running',
       'A to saturate the cap',
     );
 
@@ -167,9 +160,7 @@ describe('workspace semaphore across RunManagers (step 2.5)', () => {
     // no slot acquire, no queue — even though that momentarily exceeds the
     // cap. Before #347 (and if a resume ever acquired a workspace slot) this
     // would hang until A's runs finished.
-    expect(
-      b.manager.sendMessage(waitingRun.id, [{ type: 'text', text: 'carry on please' }]),
-    ).toBe(true);
+    expect(b.manager.sendMessage(waitingRun.id, [{ type: 'text', text: 'carry on please' }])).toBe(true);
     const resumed = b.store.getRun(waitingRun.id);
     expect(resumed?.status).toBe('running'); // resumed instantly, cap exceeded by design
     // ...while A's saturating runs are genuinely still holding both slots.

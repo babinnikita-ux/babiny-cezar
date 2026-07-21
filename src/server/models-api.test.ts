@@ -51,22 +51,36 @@ describe('workspace model catalog API', () => {
   });
 
   it('degrades discovery failures to an unavailable 200 response', async () => {
-    const response = await apiRequest(app(async () => { throw new Error('secret detail'); }), '/api/models?runner=codex');
+    const response = await apiRequest(
+      app(async () => {
+        throw new Error('secret detail');
+      }),
+      '/api/models?runner=codex',
+    );
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
-      runner: 'codex', models: [], source: 'unavailable', stale: false,
+      runner: 'codex',
+      models: [],
+      source: 'unavailable',
+      stale: false,
       reason: 'Codex model discovery is temporarily unavailable',
     });
   });
 
   it.each(['/api/models', '/api/models?runner=claude'])('rejects invalid query %s', async (path) => {
-    const response = await apiRequest(app(async () => []), path);
+    const response = await apiRequest(
+      app(async () => []),
+      path,
+    );
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: 'runner must be codex' });
   });
 
   it('is workspace-level rather than project-scoped', async () => {
-    const response = await apiRequest(app(async () => []), '/api/p/default/models?runner=codex');
+    const response = await apiRequest(
+      app(async () => []),
+      '/api/p/default/models?runner=codex',
+    );
     expect(response.status).toBe(404);
   });
 });

@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  computeStableVersion,
-  isReleaseBump,
-  stampStableManifests,
-  type ManifestLike,
-} from './stable.js';
+import { computeStableVersion, isReleaseBump, stampStableManifests, type ManifestLike } from './stable.js';
 
 describe('computeStableVersion', () => {
   it('increments each semver component the way npm version does', () => {
@@ -54,8 +49,18 @@ describe('stampStableManifests', () => {
 
   it('lets the alias inherit repository/homepage/bugs from root so provenance validates', () => {
     const repository = { type: 'git', url: 'https://github.com/open-mercato/cezar' };
-    const root: ManifestLike = { name: '@scope/impl', version: '0.1.5', repository, homepage: 'https://example.test', bugs: { url: 'https://example.test/issues' } };
-    const alias: ManifestLike = { name: 'impl-cli', version: '0.1.5', dependencies: { '@scope/impl': '^0.1.5' } };
+    const root: ManifestLike = {
+      name: '@scope/impl',
+      version: '0.1.5',
+      repository,
+      homepage: 'https://example.test',
+      bugs: { url: 'https://example.test/issues' },
+    };
+    const alias: ManifestLike = {
+      name: 'impl-cli',
+      version: '0.1.5',
+      dependencies: { '@scope/impl': '^0.1.5' },
+    };
 
     const stamped = stampStableManifests(root, alias, '0.1.6');
 
@@ -66,7 +71,11 @@ describe('stampStableManifests', () => {
 
   it('leaves the alias untouched when root declares no repository', () => {
     const root: ManifestLike = { name: '@scope/impl', version: '0.1.5' };
-    const alias: ManifestLike = { name: 'impl-cli', version: '0.1.5', dependencies: { '@scope/impl': '^0.1.5' } };
+    const alias: ManifestLike = {
+      name: 'impl-cli',
+      version: '0.1.5',
+      dependencies: { '@scope/impl': '^0.1.5' },
+    };
     expect('repository' in stampStableManifests(root, alias, '0.1.6').alias).toBe(false);
   });
 });

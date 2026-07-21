@@ -1,15 +1,11 @@
-import { useQueryClient } from '@tanstack/react-query'
-import * as React from 'react'
+import { useQueryClient } from '@tanstack/react-query';
+import * as React from 'react';
 
-import { putWorkspaceUiState } from '@/api/client'
-import { useWorkspaceUiState, workspaceQueryKeys } from '@/api/queries'
-import { Switch } from '@/components/ui/switch'
-import { toast } from '@/components/ui/toaster'
-import {
-  normalizeNotifications,
-  notificationSupport,
-  type NotificationSupport,
-} from '@/lib/notifications'
+import { putWorkspaceUiState } from '@/api/client';
+import { useWorkspaceUiState, workspaceQueryKeys } from '@/api/queries';
+import { Switch } from '@/components/ui/switch';
+import { toast } from '@/components/ui/toaster';
+import { normalizeNotifications, notificationSupport, type NotificationSupport } from '@/lib/notifications';
 
 /**
  * Settings → Notifications (R6 Step 1.7, spec §"Cross-cutting").
@@ -30,57 +26,57 @@ import {
  *    per-browser) — the section then says plainly that this browser is blocking delivery.
  */
 export function NotificationsSection() {
-  const queryClient = useQueryClient()
-  const uiState = useWorkspaceUiState()
+  const queryClient = useQueryClient();
+  const uiState = useWorkspaceUiState();
 
-  const [enabled, setEnabled] = React.useState(false)
-  const [permission, setPermission] = React.useState<NotificationSupport>(notificationSupport)
+  const [enabled, setEnabled] = React.useState(false);
+  const [permission, setPermission] = React.useState<NotificationSupport>(notificationSupport);
 
   // The server's word wins — including "no notifications key" meaning the off default, so
   // wiping ui-state.json honestly resets every browser that visits.
-  const serverState = uiState.data
+  const serverState = uiState.data;
   React.useEffect(() => {
-    if (serverState === undefined) return
-    setEnabled(normalizeNotifications(serverState.notifications).enabled)
-  }, [serverState])
+    if (serverState === undefined) return;
+    setEnabled(normalizeNotifications(serverState.notifications).enabled);
+  }, [serverState]);
 
   const save = React.useCallback(
     (next: boolean) => {
-      setEnabled(next)
+      setEnabled(next);
       putWorkspaceUiState({ notifications: { enabled: next } })
         .then((merged) => queryClient.setQueryData(workspaceQueryKeys.uiState, merged))
         .catch((error: unknown) => {
-          toast(error instanceof Error ? error.message : String(error), { tone: 'danger' })
-          void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.uiState })
-        })
+          toast(error instanceof Error ? error.message : String(error), { tone: 'danger' });
+          void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.uiState });
+        });
     },
     [queryClient],
-  )
+  );
 
   const onToggle = React.useCallback(
     (next: boolean) => {
       if (!next) {
-        save(false)
-        return
+        save(false);
+        return;
       }
       // Permission is requested HERE and nowhere else (spec: "permission requested on enable
       // only") — and only when the browser has never been asked. `granted`/`denied` are final
       // answers Chrome would ignore a re-request for anyway.
       if (notificationSupport() !== 'default') {
-        save(true)
-        return
+        save(true);
+        return;
       }
       // Persist first, then ask: the preference is not conditional on the answer, and an
       // `await` before the write would let a closed permission prompt strand the toggle.
-      save(true)
+      save(true);
       Notification.requestPermission()
         .then((answer) => setPermission(answer))
-        .catch(() => setPermission(notificationSupport()))
+        .catch(() => setPermission(notificationSupport()));
     },
     [save],
-  )
+  );
 
-  const unsupported = permission === 'unsupported'
+  const unsupported = permission === 'unsupported';
 
   return (
     <div
@@ -94,8 +90,8 @@ export function NotificationsSection() {
               <label htmlFor="notifications-enabled">Notify when an agent needs you</label>
             </h2>
             <p className="text-[13px] text-muted-foreground">
-              A browser notification when a task starts waiting, asks for review, or fails —
-              only while this tab is in the background. Off by default.
+              A browser notification when a task starts waiting, asks for review, or fails — only while this
+              tab is in the background. Off by default.
             </p>
           </div>
           <Switch
@@ -115,12 +111,11 @@ export function NotificationsSection() {
 
         {!unsupported && enabled && permission === 'denied' ? (
           <p data-slot="notifications-denied" className="text-[13px] text-danger">
-            This browser is blocking notifications for the cockpit. The preference is saved, but
-            nothing will be delivered here until you allow notifications in the browser&apos;s
-            site settings.
+            This browser is blocking notifications for the cockpit. The preference is saved, but nothing will
+            be delivered here until you allow notifications in the browser&apos;s site settings.
           </p>
         ) : null}
       </section>
     </div>
-  )
+  );
 }

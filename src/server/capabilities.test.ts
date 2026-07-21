@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { isLoopbackHost, isLoopbackHostHeader, normalizeHostname, resolveCapabilities } from './capabilities.js';
+import {
+  isLoopbackHost,
+  isLoopbackHostHeader,
+  normalizeHostname,
+  resolveCapabilities,
+} from './capabilities.js';
 
 /**
  * `resolveCapabilities` takes its env as a parameter, so these drive it

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { ReactNode } from 'react';
 
 /**
  * One labelled settings row — title, one-line hint, control(s).
@@ -13,9 +13,9 @@ export function SettingsField({
   hint,
   children,
 }: {
-  title: string
-  hint: string
-  children: ReactNode
+  title: string;
+  hint: string;
+  children: ReactNode;
 }) {
   return (
     <section className="flex flex-col gap-2">
@@ -25,5 +25,5 @@ export function SettingsField({
       </div>
       {children}
     </section>
-  )
+  );
 }

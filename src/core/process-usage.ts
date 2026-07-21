@@ -213,7 +213,7 @@ function runPs(): Promise<string | null> {
         [
           '-NoProfile',
           '-Command',
-          "Get-CimInstance Win32_Process | ForEach-Object { \"$($_.ProcessId) $($_.ParentProcessId) $([math]::Round($_.WorkingSetSize/1024)) 0\" }",
+          'Get-CimInstance Win32_Process | ForEach-Object { "$($_.ProcessId) $($_.ParentProcessId) $([math]::Round($_.WorkingSetSize/1024)) 0" }',
         ],
         { maxBuffer: 16 * 1024 * 1024, windowsHide: true },
         (err, stdout) => resolve(err ? null : stdout),
@@ -221,11 +221,8 @@ function runPs(): Promise<string | null> {
     });
   }
   return new Promise((resolve) => {
-    execFile(
-      'ps',
-      ['-axo', 'pid=,ppid=,rss=,%cpu='],
-      { maxBuffer: 16 * 1024 * 1024 },
-      (err, stdout) => resolve(err ? null : stdout),
+    execFile('ps', ['-axo', 'pid=,ppid=,rss=,%cpu='], { maxBuffer: 16 * 1024 * 1024 }, (err, stdout) =>
+      resolve(err ? null : stdout),
     );
   });
 }

@@ -69,9 +69,7 @@ describe('resolveModelIdentity — bare ids per backend', () => {
   });
 
   it('the legacy claude-cli id resolves identically to claude', () => {
-    expect(resolveModelIdentity('claude-cli', 'sonnet')).toEqual(
-      resolveModelIdentity('claude', 'sonnet'),
-    );
+    expect(resolveModelIdentity('claude-cli', 'sonnet')).toEqual(resolveModelIdentity('claude', 'sonnet'));
   });
 
   it('codex bare ids resolve to openai', () => {
@@ -130,9 +128,7 @@ describe('resolveModelIdentity — bare ids per backend', () => {
 describe('toBackendModel — wire form per backend', () => {
   it('single-provider backends get the bare model id', () => {
     expect(toBackendModel('claude', { provider: 'anthropic', model: 'opus' })).toBe('opus');
-    expect(toBackendModel('codex', { provider: 'openai', model: 'gpt-5.1-codex' })).toBe(
-      'gpt-5.1-codex',
-    );
+    expect(toBackendModel('codex', { provider: 'openai', model: 'gpt-5.1-codex' })).toBe('gpt-5.1-codex');
   });
 
   it('multi-provider backends (opencode) get the full provider/model', () => {

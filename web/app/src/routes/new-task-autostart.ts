@@ -1,7 +1,7 @@
-import type { CreateRunInput } from '@/api/types'
+import type { CreateRunInput } from '@/api/types';
 
-import { buildCreateRunBody, type TaskSource } from './new-task-form'
-import type { NewTaskParams } from './new-task-params'
+import { buildCreateRunBody, type TaskSource } from './new-task-form';
+import type { NewTaskParams } from './new-task-params';
 
 /**
  * Bookmarklet auto-start (spec 011) — the React half of `handleDeepLink()` in web/app.js,
@@ -26,9 +26,7 @@ import type { NewTaskParams } from './new-task-params'
  *  bookmarklet start never sent them (the server defaults everything). */
 export function bookmarkletRunBody(params: NewTaskParams): CreateRunInput {
   const source: TaskSource =
-    params.skill !== ''
-      ? { source: 'skill', ref: params.skill }
-      : { source: 'workflow', ref: 'quick-task' }
+    params.skill !== '' ? { source: 'skill', ref: params.skill } : { source: 'workflow', ref: 'quick-task' };
   return buildCreateRunBody({
     task: params.ref,
     source,
@@ -41,14 +39,11 @@ export function bookmarkletRunBody(params: NewTaskParams): CreateRunInput {
     // wire exactly as before — but if an in-app link ever arms auto, the inbox bookkeeping
     // (#374) rides along here too rather than being silently lost on this path.
     todoId: params.todo,
-  })
+  });
 }
 
 /** Why the composer is showing a prefilled form instead of a started run. */
-export type DeepLinkNotice =
-  | { kind: 'prefill' }
-  | { kind: 'blocked' }
-  | { kind: 'failed'; message: string }
+export type DeepLinkNotice = { kind: 'prefill' } | { kind: 'blocked' } | { kind: 'failed'; message: string };
 
 /** The one toast the deep-link handling shows (legacy `alertBar` had exactly one line too).
  *  `unknownSkill` is the skill param when it matches nothing installed here — the honest case
@@ -58,22 +53,22 @@ export function deepLinkToast(
   unknownSkill: string,
 ): { message: string; tone: 'default' | 'danger' } {
   if (notice.kind === 'failed') {
-    return { message: `Auto-start failed: ${notice.message} — review and press Start`, tone: 'danger' }
+    return { message: `Auto-start failed: ${notice.message} — review and press Start`, tone: 'danger' };
   }
   if (notice.kind === 'blocked') {
-    return { message: 'Auto-start blocked (bad key) — review and press Start', tone: 'danger' }
+    return { message: 'Auto-start blocked (bad key) — review and press Start', tone: 'danger' };
   }
   if (unknownSkill !== '') {
     return {
       message: `Unknown skill "${unknownSkill}" — prefilled for quick-task; review and press Start`,
       tone: 'danger',
-    }
+    };
   }
-  return { message: 'Prefilled from link — review and press Start', tone: 'default' }
+  return { message: 'Prefilled from link — review and press Start', tone: 'default' };
 }
 
 /** Legacy's prefill for a skill the picker cannot select: the intent goes into the task text
  *  verbatim (`initFromQuery` wrote exactly this string) and quick-task resolves it from prose. */
 export function unknownSkillPrefillText(skill: string, ref: string): string {
-  return `Use the "${skill}" skill on: ${ref}`
+  return `Use the "${skill}" skill on: ${ref}`;
 }

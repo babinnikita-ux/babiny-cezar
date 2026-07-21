@@ -1,14 +1,14 @@
-import type { ReactNode } from 'react'
+import type { ReactNode } from 'react';
 
-import { useHealth, useProjects, useTodos } from '@/api/queries'
-import type { HealthResponse } from '@/api/types'
-import { AppShell, type RepoChip } from '@/components/app-shell'
-import { CommandPalette } from '@/components/command-palette'
-import { ListViewProvider } from '@/components/list-view'
-import { ProjectGroups } from '@/components/project-groups'
-import { SkillsBanner } from '@/components/skills-banner'
-import { TaskQuickListContainer } from '@/components/task-quick-list'
-import { ToolsMenu } from '@/components/tools-menu'
+import { useHealth, useProjects, useTodos } from '@/api/queries';
+import type { HealthResponse } from '@/api/types';
+import { AppShell, type RepoChip } from '@/components/app-shell';
+import { CommandPalette } from '@/components/command-palette';
+import { ListViewProvider } from '@/components/list-view';
+import { ProjectGroups } from '@/components/project-groups';
+import { SkillsBanner } from '@/components/skills-banner';
+import { TaskQuickListContainer } from '@/components/task-quick-list';
+import { ToolsMenu } from '@/components/tools-menu';
 
 /**
  * Derive the sidebar's repo chip from `/api/health`.
@@ -22,11 +22,14 @@ import { ToolsMenu } from '@/components/tools-menu'
  * `/repo/` doesn't chip as an empty string.
  */
 export function repoChipOf(health: HealthResponse | undefined): RepoChip | null {
-  const repo = health?.repo
-  if (!repo) return null
-  const name = repo.root.replace(/[\\/]+$/, '').split(/[\\/]/).pop()
-  if (!name) return null
-  return { name, branch: repo.branch }
+  const repo = health?.repo;
+  if (!repo) return null;
+  const name = repo.root
+    .replace(/[\\/]+$/, '')
+    .split(/[\\/]/)
+    .pop();
+  if (!name) return null;
+  return { name, branch: repo.branch };
 }
 
 /**
@@ -42,19 +45,19 @@ export function repoChipOf(health: HealthResponse | undefined): RepoChip | null 
  * reconcile — not a change here.
  */
 export function AppShellContainer({ children }: { children: ReactNode }) {
-  const health = useHealth()
+  const health = useHealth();
   // The global inbox is opt-in (#471). With the capability off there is no Inbox nav item to
   // badge and the endpoint can only answer [], so the query parks rather than polls.
-  const inboxAvailable = health.data?.capabilities.followups === true
-  const todos = useTodos(inboxAvailable)
-  const registry = useProjects().data
+  const inboxAvailable = health.data?.capabilities.followups === true;
+  const todos = useTodos(inboxAvailable);
+  const registry = useProjects().data;
 
   // Multi-project sidebar only from the SECOND project on (multi-project spec, "Sidebar").
   // With one registered project — or with the registry still loading, or unreachable — the
   // group header would say nothing the repo chip does not already say, so the shell keeps the
   // flat nav + single quick-list it has always had. That degenerate case is the upgrade path:
   // an existing user boots the new version in their usual repo and sees no difference.
-  const projects = registry && registry.projects.length > 1 ? registry : null
+  const projects = registry && registry.projects.length > 1 ? registry : null;
 
   return (
     // The Active/Archived filter is shared by the quick-list below and the Tasks table (Step 3.4),
@@ -102,5 +105,5 @@ export function AppShellContainer({ children }: { children: ReactNode }) {
           because it needs the query client and router this container already assumes. */}
       <CommandPalette />
     </ListViewProvider>
-  )
+  );
 }

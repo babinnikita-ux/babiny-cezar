@@ -87,11 +87,7 @@ export async function discoverSkills(repoRoot: string): Promise<Skill[]> {
  * symlinks, and `readdir({recursive})` would not descend into them. Depth-
  * capped and cycle-guarded via realpath.
  */
-async function walkMarkdownFiles(
-  dir: string,
-  depth: number,
-  visited: Set<string>,
-): Promise<string[]> {
+async function walkMarkdownFiles(dir: string, depth: number, visited: Set<string>): Promise<string[]> {
   if (depth < 0) return [];
   let real: string;
   try {
@@ -143,9 +139,7 @@ async function readMarkdownSkills(dir: string, source: Skill['source']): Promise
     // The `SKILL.md` convention names the skill after its directory.
     const fallback = base.toLowerCase() === 'skill' ? basename(dirname(absPath)) : base;
     const name =
-      typeof frontmatter.name === 'string' && frontmatter.name.trim()
-        ? frontmatter.name.trim()
-        : fallback;
+      typeof frontmatter.name === 'string' && frontmatter.name.trim() ? frontmatter.name.trim() : fallback;
     const description =
       typeof frontmatter.description === 'string' && frontmatter.description.trim()
         ? frontmatter.description.trim()

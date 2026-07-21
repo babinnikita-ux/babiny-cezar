@@ -9,19 +9,19 @@ import {
   KeyboardIcon,
   NotebookPenIcon,
   PaletteIcon,
-} from 'lucide-react'
-import type { ComponentType, SVGProps } from 'react'
+} from 'lucide-react';
+import type { ComponentType, SVGProps } from 'react';
 
-import { CenteredState } from '@/components/centered-state'
-import { AgentConfigSection } from './agent-config-section'
-import { AgentsSection } from './agents-section'
-import { AppearanceSection } from './appearance'
-import { BookmarkletsSection } from './bookmarklets-section'
-import { NotificationsSection } from './notifications-section'
-import { ProjectsSection } from './projects-section'
-import { PromptTemplatesSection } from './prompt-templates-section'
-import { ResourcesSection } from './resources-section'
-import { WorktreesSection } from './worktrees-section'
+import { CenteredState } from '@/components/centered-state';
+import { AgentConfigSection } from './agent-config-section';
+import { AgentsSection } from './agents-section';
+import { AppearanceSection } from './appearance';
+import { BookmarkletsSection } from './bookmarklets-section';
+import { NotificationsSection } from './notifications-section';
+import { ProjectsSection } from './projects-section';
+import { PromptTemplatesSection } from './prompt-templates-section';
+import { ResourcesSection } from './resources-section';
+import { WorktreesSection } from './worktrees-section';
 
 /**
  * The Settings section registry (R6 Step 1.3, spec §"Settings"): the ONE place a section is
@@ -49,22 +49,22 @@ export type SettingsSectionId =
   | 'projects'
   | 'notifications'
   | 'prompt-templates'
-  | 'keyboard'
+  | 'keyboard';
 
 /** Which settings area a section belongs to — and therefore which store it writes. */
-export type SettingsScope = 'project' | 'global'
+export type SettingsScope = 'project' | 'global';
 
 export interface SettingsSection {
-  id: SettingsSectionId
-  title: string
+  id: SettingsSectionId;
+  title: string;
   /** The one-liner under the title — the shell's desktop header and the index cards share it. */
-  description: string
-  icon: ComponentType<SVGProps<SVGSVGElement>>
-  component: ComponentType
+  description: string;
+  icon: ComponentType<SVGProps<SVGSVGElement>>;
+  component: ComponentType;
   /** `project` → `/p/<projectId>/settings/<id>`, `global` → `/settings/global/<id>`. */
-  scope: SettingsScope
+  scope: SettingsScope;
   /** Declared but not yet implemented: no nav entry, no route (the URL is honestly a 404). */
-  hidden?: boolean
+  hidden?: boolean;
 }
 
 /** A registry entry whose real section arrives in a later Step — routable, honest about it. */
@@ -78,8 +78,8 @@ function comingSoon(title: string, Icon: ComponentType<SVGProps<SVGSVGElement>>)
         subtitle="This section arrives in a later phase of the redesign."
         heading="h2"
       />
-    )
-  }
+    );
+  };
 }
 
 export const SETTINGS_SECTIONS: SettingsSection[] = [
@@ -166,7 +166,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     scope: 'global',
     hidden: true,
   },
-]
+];
 
 /**
  * What one settings area's nav and route table actually show — hidden sections drop out
@@ -174,5 +174,5 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
  * the same shell, so this filter is the only thing keeping them apart.
  */
 export function visibleSettingsSections(scope: SettingsScope): SettingsSection[] {
-  return SETTINGS_SECTIONS.filter((section) => !section.hidden && section.scope === scope)
+  return SETTINGS_SECTIONS.filter((section) => !section.hidden && section.scope === scope);
 }

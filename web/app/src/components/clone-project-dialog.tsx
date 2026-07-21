@@ -1,11 +1,11 @@
-import { SettingsIcon } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link as RouterLink, useNavigate } from 'react-router'
+import { SettingsIcon } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link as RouterLink, useNavigate } from 'react-router';
 
-import { onWorkspaceEvent } from '@/api/global-events'
-import { useCheckoutProject, useProjects } from '@/api/queries'
-import type { CheckoutProgressEvent } from '@/api/types'
-import { Button } from '@/components/ui/button'
+import { onWorkspaceEvent } from '@/api/global-events';
+import { useCheckoutProject, useProjects } from '@/api/queries';
+import type { CheckoutProgressEvent } from '@/api/types';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -13,9 +13,9 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 /**
  * "Add project → Clone from GitHub" (multi-project spec, "Add project" option B / step 4.3).
@@ -40,65 +40,71 @@ export function CloneProjectDialog({
   open,
   onOpenChange,
 }: {
-  open: boolean
-  onOpenChange: (open: boolean) => void
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
-  const [url, setUrl] = useState('')
-  const [name, setName] = useState('')
-  const [progress, setProgress] = useState<string | null>(null)
-  const projects = useProjects()
-  const checkout = useCheckoutProject()
-  const navigate = useNavigate()
+  const [url, setUrl] = useState('');
+  const [name, setName] = useState('');
+  const [progress, setProgress] = useState<string | null>(null);
+  const projects = useProjects();
+  const checkout = useCheckoutProject();
+  const navigate = useNavigate();
 
   // One id per mounted dialog. The dialog is mounted only while open (AddProjectMenu), so a
   // second clone attempt in a second opening is a second id — which is the point: a stale
   // event from an abandoned clone must never drive this one's progress line.
-  const checkoutId = useMemo(() => `co-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`, [])
+  const checkoutId = useMemo(
+    () => `co-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`,
+    [],
+  );
 
   // Kept in a ref, not state: the listener below must read the CURRENT id without re-subscribing
   // (a resubscribe per render would drop events between teardown and setup).
-  const idRef = useRef(checkoutId)
-  idRef.current = checkoutId
+  const idRef = useRef(checkoutId);
+  idRef.current = checkoutId;
 
   useEffect(() => {
     return onWorkspaceEvent((eventName, payload) => {
-      if (eventName !== 'checkout-progress') return
-      const event = payload as CheckoutProgressEvent
-      if (event?.checkoutId !== idRef.current) return
+      if (eventName !== 'checkout-progress') return;
+      const event = payload as CheckoutProgressEvent;
+      if (event?.checkoutId !== idRef.current) return;
       // `error` is surfaced through the mutation's own rejection (the response carries it too),
       // so the terminal phases only stop the progress line rather than racing it.
-      if (event.phase === 'cloning' && event.line) setProgress(event.line)
-      else if (event.phase !== 'cloning') setProgress(null)
-    })
-  }, [])
+      if (event.phase === 'cloning' && event.line) setProgress(event.line);
+      else if (event.phase !== 'cloning') setProgress(null);
+    });
+  }, []);
 
   /** The repo half of whatever was typed, used as the default folder name. Deliberately naive —
    *  it mirrors the server's default, and the server re-derives it anyway when `name` is blank. */
   const derivedName = useMemo(() => {
-    const cleaned = url.trim().replace(/\/+$/, '').replace(/\.git$/, '')
-    const last = cleaned.split('/').pop() ?? ''
-    return last.includes(':') ? (last.split(':').pop() ?? '') : last
-  }, [url])
-  const effectiveName = name.trim() === '' ? derivedName : name.trim()
+    const cleaned = url
+      .trim()
+      .replace(/\/+$/, '')
+      .replace(/\.git$/, '');
+    const last = cleaned.split('/').pop() ?? '';
+    return last.includes(':') ? (last.split(':').pop() ?? '') : last;
+  }, [url]);
+  const effectiveName = name.trim() === '' ? derivedName : name.trim();
 
-  const projectsDir = projects.data?.projectsDir ?? ''
-  const target = effectiveName === '' ? '' : `${projectsDir.replace(/\/+$/, '')}/${effectiveName}`
+  const projectsDir = projects.data?.projectsDir ?? '';
+  const target = effectiveName === '' ? '' : `${projectsDir.replace(/\/+$/, '')}/${effectiveName}`;
 
   const clone = () => {
-    if (url.trim() === '' || checkout.isPending) return
-    setProgress(null)
+    if (url.trim() === '' || checkout.isPending) return;
+    setProgress(null);
     checkout.mutate(
       { url: url.trim(), checkoutId, ...(name.trim() === '' ? {} : { name: name.trim() }) },
       {
         onSuccess: ({ project }) => {
-          onOpenChange(false)
+          onOpenChange(false);
           // Raw react-router `useNavigate`, not the scope-aware wrapper — a deliberate
           // cross-project jump, exactly as the folder-browser dialog does.
-          navigate(`/p/${encodeURIComponent(project.id)}/`)
+          navigate(`/p/${encodeURIComponent(project.id)}/`);
         },
       },
-    )
-  }
+    );
+  };
 
   return (
     <Dialog open={open} onOpenChange={(next) => (checkout.isPending ? undefined : onOpenChange(next))}>
@@ -121,7 +127,7 @@ export function CloneProjectDialog({
             disabled={checkout.isPending}
             onChange={(event) => setUrl(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === 'Enter') clone()
+              if (event.key === 'Enter') clone();
             }}
           />
         </div>
@@ -199,5 +205,5 @@ export function CloneProjectDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  )
+  );
 }

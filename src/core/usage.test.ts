@@ -48,7 +48,11 @@ describe('costWeightedTokens', () => {
       { name: 'rounds a fractional cache read down', usage: { cache_read_input_tokens: 14 }, expected: 1 },
       { name: 'rounds a fractional cache creation', usage: { cache_creation_input_tokens: 3 }, expected: 4 },
       // Rounding happens once on the total, not per field: 0.1 + 0.25 = 0.35 → 0, not 0 + 0.
-      { name: 'rounds the total, not each term', usage: { cache_read_input_tokens: 5, cache_creation_input_tokens: 2 }, expected: 3 },
+      {
+        name: 'rounds the total, not each term',
+        usage: { cache_read_input_tokens: 5, cache_creation_input_tokens: 2 },
+        expected: 3,
+      },
     ])('$name', ({ usage, expected }) => {
       expect(costWeightedTokens(usage)).toBe(expected);
     });
@@ -58,6 +62,8 @@ describe('costWeightedTokens', () => {
     expect(CACHE_READ_WEIGHT).toBe(0.1);
     expect(CACHE_CREATION_WEIGHT).toBe(1.25);
     expect(costWeightedTokens({ cache_read_input_tokens: 100 })).toBe(Math.round(100 * CACHE_READ_WEIGHT));
-    expect(costWeightedTokens({ cache_creation_input_tokens: 100 })).toBe(Math.round(100 * CACHE_CREATION_WEIGHT));
+    expect(costWeightedTokens({ cache_creation_input_tokens: 100 })).toBe(
+      Math.round(100 * CACHE_CREATION_WEIGHT),
+    );
   });
 });

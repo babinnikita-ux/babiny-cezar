@@ -1,7 +1,7 @@
-import { CompassIcon } from 'lucide-react'
-import { CenteredState } from '@/components/centered-state'
-import { Link } from '@/lib/project-router'
-import { Button } from '@/components/ui/button'
+import { CompassIcon } from 'lucide-react';
+import { CenteredState } from '@/components/centered-state';
+import { Link } from '@/lib/project-router';
+import { Button } from '@/components/ui/button';
 
 /** The 404. Neutral, not danger — a mistyped URL is a dead end, not a failure of ours —
  *  and the one action is the way home (spec, "Routing": unknown routes → CenteredState 404
@@ -21,5 +21,5 @@ export function NotFoundRoute() {
         }
       />
     </div>
-  )
+  );
 }

@@ -222,7 +222,9 @@ describe('reviewGate round-trip (optional review gate, #489)', () => {
 
   it('GET exposes reviewGate; PUT true/false/null round-trips and clears the raw key', async () => {
     // Default (no config key) is null — the CEZ_REVIEW_GATE env (OFF) decides.
-    expect(((await (await apiRequest(app, '/api/config')).json()) as Record<string, unknown>).reviewGate).toBeNull();
+    expect(
+      ((await (await apiRequest(app, '/api/config')).json()) as Record<string, unknown>).reviewGate,
+    ).toBeNull();
 
     const on = (await (await put({ reviewGate: true })).json()) as Record<string, unknown>;
     expect(on.reviewGate).toBe(true);

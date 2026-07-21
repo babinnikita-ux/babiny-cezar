@@ -6,77 +6,77 @@ import {
   SearchIcon,
   SettingsIcon,
   XIcon,
-} from 'lucide-react'
-import * as React from 'react'
-import type { ReactNode } from 'react'
-import { Link as RouterLink, useLocation } from 'react-router'
+} from 'lucide-react';
+import * as React from 'react';
+import type { ReactNode } from 'react';
+import { Link as RouterLink, useLocation } from 'react-router';
 
-import { AddProjectDialog } from '@/components/add-project-dialog'
-import { CloneProjectDialog } from '@/components/clone-project-dialog'
-import { openCommandPalette } from '@/components/command-palette'
-import { GithubIcon } from '@/components/icons'
-import { Link, stripProjectPrefix } from '@/lib/project-router'
-import { StatusDot } from '@/components/status-dot'
-import { ThemeToggle } from '@/components/theme-toggle'
-import { Button } from '@/components/ui/button'
+import { AddProjectDialog } from '@/components/add-project-dialog';
+import { CloneProjectDialog } from '@/components/clone-project-dialog';
+import { openCommandPalette } from '@/components/command-palette';
+import { GithubIcon } from '@/components/icons';
+import { Link, stripProjectPrefix } from '@/lib/project-router';
+import { StatusDot } from '@/components/status-dot';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
-import { activeNavItem, activeNavPath, visibleNavItems, type NavItem } from '@/components/nav-items'
-import { cn } from '@/lib/utils'
+} from '@/components/ui/dropdown-menu';
+import { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
+import { activeNavItem, activeNavPath, visibleNavItems, type NavItem } from '@/components/nav-items';
+import { cn } from '@/lib/utils';
 // The Open Mercato brand mark (web/open-mercato.svg), bundled by Vite so it resolves in both
 // the dev server and the built cockpit. Its own gradient + rounded corners ARE the tile.
-import brandLogoUrl from '../../../open-mercato.svg'
+import brandLogoUrl from '../../../open-mercato.svg';
 
 /** Tailwind's `md`. The drawer is the `<md` affordance, so this must stay in step with the
  *  `md:hidden` / `md:flex` classes below — they are the same breakpoint expressed twice, once
  *  for CSS and once for the state machine. */
-const DESKTOP_MEDIA_QUERY = '(min-width: 768px)'
+const DESKTOP_MEDIA_QUERY = '(min-width: 768px)';
 
 export type RepoChip = {
-  name: string
-  branch: string
-}
+  name: string;
+  branch: string;
+};
 
 export type AppShellProps = {
   /** The routed view. Renders into the one scrolling region. */
-  children: ReactNode
+  children: ReactNode;
   /** Repo + branch for the brand chip. Null until Step 3.1/3.2 wires `/api/health` — the chip
    *  is simply absent rather than showing an invented repo name. */
-  repo?: RepoChip | null
+  repo?: RepoChip | null;
   /** Inbox badge count. Null/0 renders no badge. Step 3.2 feeds it from the SSE stream. */
-  inboxCount?: number | null
+  inboxCount?: number | null;
   /** cezar version for the footer chip. Null until Step 3.1 reads it from `/api/health`. */
-  version?: string | null
+  version?: string | null;
   /** The npm registry's newer version, when the server's update check found one (#368). The
    *  chip grows a pulsing pending dot + tooltip; absent or equal to `version`, it stays plain. */
-  latestVersion?: string | null
+  latestVersion?: string | null;
   /** Step 3.3's grouped task quick-list. */
-  taskQuickList?: ReactNode
+  taskQuickList?: ReactNode;
   /** Step 4.2's Tools dropdown trigger. */
-  toolsMenu?: ReactNode
+  toolsMenu?: ReactNode;
   /** Forge gating (R6 Step 1.1): `false` drops the GitHub nav item — see `visibleNavItems`.
    *  Defaults to shown so the presentational shell stays renderable alone; the container
    *  passes the health payload's truth. */
-  forgeAvailable?: boolean
+  forgeAvailable?: boolean;
   /** Inbox gating (#471): `false` drops the Inbox nav item and its badge — the global inbox is
    *  opt-in via `CEZ_FOLLOWUPS=1`. Defaults to shown for the same reason as `forgeAvailable`. */
-  inboxAvailable?: boolean
+  inboxAvailable?: boolean;
   /** Global chrome banner (#391's `SkillsBanner`), rendered in its own row above the scroller.
    *  Absent renders nothing — the slot is generic, not skills-specific. */
-  banner?: ReactNode
+  banner?: ReactNode;
   /** Step 3.3's multi-project sidebar: one collapsible group per registered project, each
    *  carrying its own nav + task list. When present it REPLACES the flat nav and the
    *  `taskQuickList` slot (each group brings its own copies of both); absent — the registry
    *  still loading, or unreachable — the shell renders the single-project sidebar it always
    *  did, which is the honest degradation, not a special case. */
-  projectGroups?: ReactNode
-}
+  projectGroups?: ReactNode;
+};
 
 /**
  * The drawer's close-on-navigate callback, published to whatever renders inside the sidebar's
@@ -85,10 +85,10 @@ export type AppShellProps = {
  * Tasks navigates home even when already active), which changes no pathname at all. Undefined
  * on desktop, where there is nothing to close.
  */
-const SidebarNavigateContext = React.createContext<(() => void) | undefined>(undefined)
+const SidebarNavigateContext = React.createContext<(() => void) | undefined>(undefined);
 
 export function useSidebarNavigate(): (() => void) | undefined {
-  return React.useContext(SidebarNavigateContext)
+  return React.useContext(SidebarNavigateContext);
 }
 
 /**
@@ -125,14 +125,14 @@ export function AppShell({
   banner,
   projectGroups,
 }: AppShellProps) {
-  const { pathname } = useLocation()
+  const { pathname } = useLocation();
   // The nav's area rules reason about the flat route map — strip any `/p/:projectId` prefix
   // (multi-project spec, step 3.2) so `/p/cezar/git/commits` still lights Git.
-  const areaPathname = stripProjectPrefix(pathname)
-  const activeTo = activeNavPath(areaPathname)
-  const current = activeNavItem(areaPathname)
-  const [menuOpen, setMenuOpen] = React.useState(false)
-  const mainRef = React.useRef<HTMLElement>(null)
+  const areaPathname = stripProjectPrefix(pathname);
+  const activeTo = activeNavPath(areaPathname);
+  const current = activeNavItem(areaPathname);
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const mainRef = React.useRef<HTMLElement>(null);
 
   // The scroller PERSISTS across routes (it is the shell's, not the view's), so without this
   // a deep scroll on one page carries into the next — most visibly on mobile, where Tasks or
@@ -140,29 +140,29 @@ export function AppShell({
   // that own their arrival position (the task thread's cached-restore / stick-to-bottom) set
   // it later, in their own effects once their content ref lands, so they still win.
   React.useLayoutEffect(() => {
-    const main = mainRef.current
-    if (main) main.scrollTop = 0
-  }, [pathname])
+    const main = mainRef.current;
+    if (main) main.scrollTop = 0;
+  }, [pathname]);
 
   // Close on route change. Without this the drawer survives the navigation it triggered and sits
   // on top of the view the user just asked for — and back/forward and the ⌘K palette (Step 4.3)
   // navigate without going through the drawer's own links at all.
   React.useEffect(() => {
-    setMenuOpen(false)
-  }, [pathname])
+    setMenuOpen(false);
+  }, [pathname]);
 
   // The drawer must not outlive its breakpoint: widening past `md` reveals the real sidebar, and
   // an open drawer would leave a focus-trapping modal over an already-visible nav.
   React.useEffect(() => {
-    const query = window.matchMedia?.(DESKTOP_MEDIA_QUERY)
-    if (!query) return
-    if (query.matches) setMenuOpen(false)
+    const query = window.matchMedia?.(DESKTOP_MEDIA_QUERY);
+    if (!query) return;
+    if (query.matches) setMenuOpen(false);
     const onChange = (event: MediaQueryListEvent) => {
-      if (event.matches) setMenuOpen(false)
-    }
-    query.addEventListener('change', onChange)
-    return () => query.removeEventListener('change', onChange)
-  }, [])
+      if (event.matches) setMenuOpen(false);
+    };
+    query.addEventListener('change', onChange);
+    return () => query.removeEventListener('change', onChange);
+  }, []);
 
   const nav = {
     activeTo,
@@ -175,7 +175,7 @@ export function AppShell({
     taskQuickList,
     toolsMenu,
     projectGroups,
-  }
+  };
 
   return (
     // The Sheet root renders no DOM of its own — it is the context that lets the top bar's menu
@@ -207,27 +207,24 @@ export function AppShell({
 
           {/* Row 4: the composer dock (thread reply, Step R3). Empty today, but it still carries
               the bottom safe-area gutter so the scroller never runs under the home indicator. */}
-          <div
-            data-slot="composer"
-            className="row-start-4 pb-[env(safe-area-inset-bottom)]"
-          />
+          <div data-slot="composer" className="row-start-4 pb-[env(safe-area-inset-bottom)]" />
         </div>
       </div>
     </Sheet>
-  )
+  );
 }
 
 type NavProps = {
-  activeTo: string | null
-  items: NavItem[]
-  repo: RepoChip | null
-  inboxCount: number | null
-  version: string | null
-  latestVersion: string | null
-  taskQuickList?: ReactNode
-  toolsMenu?: ReactNode
-  projectGroups?: ReactNode
-}
+  activeTo: string | null;
+  items: NavItem[];
+  repo: RepoChip | null;
+  inboxCount: number | null;
+  version: string | null;
+  latestVersion: string | null;
+  taskQuickList?: ReactNode;
+  toolsMenu?: ReactNode;
+  projectGroups?: ReactNode;
+};
 
 /** The desktop frame: a fixed 264px column, from `md` up. */
 function Sidebar(props: NavProps) {
@@ -238,7 +235,7 @@ function Sidebar(props: NavProps) {
     >
       <SidebarContent {...props} />
     </aside>
-  )
+  );
 }
 
 /**
@@ -277,7 +274,7 @@ function MobileNavDrawer({ onNavigate, ...props }: NavProps & { onNavigate: () =
         }
       />
     </SheetContent>
-  )
+  );
 }
 
 /**
@@ -304,9 +301,9 @@ function SidebarContent({
   /** Fires on any in-drawer navigation. The route-change effect already closes the drawer for
    *  every *changed* route; this also covers re-clicking the active item (per the spec, Tasks
    *  navigates home even when already active), which changes no pathname at all. */
-  onNavigate?: () => void
+  onNavigate?: () => void;
   /** The drawer's close button. Absent on desktop, which has nothing to close. */
-  headerAction?: ReactNode
+  headerAction?: ReactNode;
 }) {
   return (
     <div
@@ -369,8 +366,8 @@ function SidebarContent({
         <>
           <nav aria-label="Main" className="px-2.5 py-1.5">
             {items.map((item) => {
-              const isActive = item.to === activeTo
-              const Icon = item.icon
+              const isActive = item.to === activeTo;
+              const Icon = item.icon;
               // Link, not NavLink, on purpose. NavLink derives `aria-current` from its own prefix
               // match against `to`, and that rule is wrong here: it would *not* light Tasks on
               // /tasks/:id — which the spec requires. `aria-current` cannot be forced past NavLink's
@@ -385,7 +382,7 @@ function SidebarContent({
                     // h-[34px] is the mockup's desktop row. In the drawer these are touch targets, so
                     // they relax to 44px — the one place the two framings legitimately differ.
                     'flex h-11 w-full items-center gap-2.5 rounded-md px-2.5 text-[13.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:h-[34px]',
-                    isActive && 'bg-muted font-semibold text-foreground'
+                    isActive && 'bg-muted font-semibold text-foreground',
                   )}
                 >
                   <Icon className="size-4 shrink-0" aria-hidden="true" />
@@ -399,7 +396,7 @@ function SidebarContent({
                     </span>
                   ) : null}
                 </Link>
-              )
+              );
             })}
           </nav>
 
@@ -425,7 +422,7 @@ function SidebarContent({
         <ThemeToggle />
       </div>
     </div>
-  )
+  );
 }
 
 /**
@@ -436,13 +433,7 @@ function SidebarContent({
  * that is not a route. Icon-only to keep the footer's one row intact; the accessible name and
  * the tooltip both carry the label.
  */
-function GlobalSettingsLink({
-  className,
-  onNavigate,
-}: {
-  className?: string
-  onNavigate?: () => void
-}) {
+function GlobalSettingsLink({ className, onNavigate }: { className?: string; onNavigate?: () => void }) {
   return (
     <Button asChild variant="ghost" size="icon" className={cn('size-7', className)}>
       <RouterLink
@@ -455,7 +446,7 @@ function GlobalSettingsLink({
         <SettingsIcon className="size-4" aria-hidden="true" />
       </RouterLink>
     </Button>
-  )
+  );
 }
 
 /**
@@ -477,8 +468,8 @@ function GlobalSettingsLink({
  * cheaper half of the trade.
  */
 function AddProjectMenu() {
-  const [browsing, setBrowsing] = React.useState(false)
-  const [cloning, setCloning] = React.useState(false)
+  const [browsing, setBrowsing] = React.useState(false);
+  const [cloning, setCloning] = React.useState(false);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -507,7 +498,7 @@ function AddProjectMenu() {
       {browsing ? <AddProjectDialog open onOpenChange={setBrowsing} /> : null}
       {cloning ? <CloneProjectDialog open onOpenChange={setCloning} /> : null}
     </DropdownMenu>
-  )
+  );
 }
 
 /**
@@ -528,7 +519,7 @@ function CommandPaletteHint() {
       <SearchIcon className="size-[9px]" aria-hidden="true" />
       ⌘K
     </button>
-  )
+  );
 }
 
 /**
@@ -537,7 +528,7 @@ function CommandPaletteHint() {
  * its tooltip — an affordance, not an alert: updating is optional, so the chrome stays quiet.
  */
 function VersionChip({ version, latestVersion }: { version: string; latestVersion: string | null }) {
-  const updateAvailable = Boolean(latestVersion && latestVersion !== version)
+  const updateAvailable = Boolean(latestVersion && latestVersion !== version);
   return (
     <span
       data-slot="version-chip"
@@ -545,10 +536,9 @@ function VersionChip({ version, latestVersion }: { version: string; latestVersio
       title={updateAvailable ? `update available: v${latestVersion}` : undefined}
       className="flex items-center gap-1 rounded-full border border-border px-1.5 py-px font-mono text-[10px] font-medium text-soft-foreground"
     >
-      {updateAvailable ? <StatusDot tone="pending" pulse className="size-[5px]" /> : null}
-      v{version}
+      {updateAvailable ? <StatusDot tone="pending" pulse className="size-[5px]" /> : null}v{version}
     </span>
-  )
+  );
 }
 
 /** The Open Mercato brand mark. The SVG carries its own gradient and rounded corners, so it is
@@ -562,7 +552,7 @@ function BrandTile() {
       data-slot="brand-tile"
       className="size-[26px] shrink-0 rounded-sm"
     />
-  )
+  );
 }
 
 /** Mobile chrome (<md): the sidebar's replacement. Its menu button opens `MobileNavDrawer`. */
@@ -593,5 +583,5 @@ function MobileTopBar({ title }: { title: string }) {
         <div data-slot="mobile-status" className="ml-auto flex items-center gap-2" />
       </div>
     </header>
-  )
+  );
 }

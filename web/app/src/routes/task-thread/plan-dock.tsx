@@ -1,8 +1,8 @@
-import { ChevronDownIcon } from 'lucide-react'
-import { useState } from 'react'
+import { ChevronDownIcon } from 'lucide-react';
+import { useState } from 'react';
 
-import type { PlanEntry, PlanStatus } from '@/protocol/ui-events'
-import { cn } from '@/lib/utils'
+import type { PlanEntry, PlanStatus } from '@/protocol/ui-events';
+import { cn } from '@/lib/utils';
 
 /**
  * The plan/todo dock (spec §"Task thread", issue #382; mockup `.plan-dock`): the agent's
@@ -16,12 +16,12 @@ import { cn } from '@/lib/utils'
 
 /** Collapse memory per run id — a module-level map on purpose (the scroll-cache pattern):
  *  the choice survives route changes for the session without inventing server persistence. */
-const openByRun = new Map<string, boolean>()
+const openByRun = new Map<string, boolean>();
 
 /** Desktop starts expanded, phones collapsed (the mockup's mobile reflow keeps only the
  *  odometer). jsdom has no matchMedia — that environment counts as desktop. */
 function defaultOpen(): boolean {
-  return typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 768px)').matches
+  return typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 768px)').matches;
 }
 
 /** The "N/M" odometer math: completed entries over all entries the agent still
@@ -33,27 +33,30 @@ export function planCounts(entries: PlanEntry[]): { done: number; total: number 
   return {
     done: entries.filter((entry) => entry.status === 'completed').length,
     total: entries.filter((entry) => entry.status !== 'cancelled').length,
-  }
+  };
 }
 
 /** What the collapsed head names: the in-progress entry, else the next pending one. A fully
  *  completed plan has no current item — the odometer alone says it all. (`cancelled` is
  *  neither, so it is never named as the current item.) */
 export function planActiveEntry(entries: PlanEntry[]): PlanEntry | undefined {
-  return entries.find((entry) => entry.status === 'in_progress') ?? entries.find((entry) => entry.status === 'pending')
+  return (
+    entries.find((entry) => entry.status === 'in_progress') ??
+    entries.find((entry) => entry.status === 'pending')
+  );
 }
 
 export function PlanDock({ runId, entries }: { runId: string; entries: PlanEntry[] }) {
-  const [open, setOpen] = useState(() => openByRun.get(runId) ?? defaultOpen())
-  if (entries.length === 0) return null // full-replacement can empty the plan — nothing to dock
+  const [open, setOpen] = useState(() => openByRun.get(runId) ?? defaultOpen());
+  if (entries.length === 0) return null; // full-replacement can empty the plan — nothing to dock
 
-  const { done, total } = planCounts(entries)
-  const active = planActiveEntry(entries)
+  const { done, total } = planCounts(entries);
+  const active = planActiveEntry(entries);
   const toggle = () =>
     setOpen((value) => {
-      openByRun.set(runId, !value)
-      return !value
-    })
+      openByRun.set(runId, !value);
+      return !value;
+    });
 
   return (
     <section
@@ -67,7 +70,10 @@ export function PlanDock({ runId, entries }: { runId: string; entries: PlanEntry
         type="button"
         onClick={toggle}
         aria-expanded={open}
-        className={cn('flex w-full items-center gap-2 px-3.5 text-left text-[13px]', open ? 'pt-2 pb-1.5' : 'py-2')}
+        className={cn(
+          'flex w-full items-center gap-2 px-3.5 text-left text-[13px]',
+          open ? 'pt-2 pb-1.5' : 'py-2',
+        )}
       >
         <span className="shrink-0 font-semibold">Plan</span>
         <span data-slot="plan-count" className="shrink-0 text-muted-foreground tabular-nums">
@@ -80,7 +86,10 @@ export function PlanDock({ runId, entries }: { runId: string; entries: PlanEntry
         ) : null}
         <ChevronDownIcon
           aria-hidden
-          className={cn('ml-auto size-3.5 shrink-0 text-soft-foreground transition-transform', !open && 'rotate-180')}
+          className={cn(
+            'ml-auto size-3.5 shrink-0 text-soft-foreground transition-transform',
+            !open && 'rotate-180',
+          )}
         />
       </button>
       {open ? (
@@ -91,7 +100,7 @@ export function PlanDock({ runId, entries }: { runId: string; entries: PlanEntry
         </ul>
       ) : null}
     </section>
-  )
+  );
 }
 
 function PlanRow({ entry }: { entry: PlanEntry }) {
@@ -119,7 +128,7 @@ function PlanRow({ entry }: { entry: PlanEntry }) {
         </span>
       ) : null}
     </li>
-  )
+  );
 }
 
 /** The mockup's three checkbox glyphs, verbatim paths: ✓ in a faint circle / a pulsing
@@ -140,7 +149,7 @@ function PlanIcon({ status }: { status: PlanStatus }) {
         <circle cx="12" cy="12" r="8.5" opacity=".5" />
         <path d="m8.5 15.5 7-7" />
       </svg>
-    )
+    );
   }
   if (status === 'completed') {
     return (
@@ -157,7 +166,7 @@ function PlanIcon({ status }: { status: PlanStatus }) {
         <circle cx="12" cy="12" r="9" opacity=".35" />
         <path d="m8.5 12.2 2.4 2.4 4.6-5" />
       </svg>
-    )
+    );
   }
   if (status === 'in_progress') {
     return (
@@ -171,7 +180,7 @@ function PlanIcon({ status }: { status: PlanStatus }) {
         <circle className="stroke-pending" cx="12" cy="12" r="8.5" strokeWidth="2" />
         <path className="fill-pending" d="M12 3.5 A8.5 8.5 0 0 1 12 20.5 Z" />
       </svg>
-    )
+    );
   }
   return (
     <svg
@@ -184,5 +193,5 @@ function PlanIcon({ status }: { status: PlanStatus }) {
     >
       <circle cx="12" cy="12" r="8.5" />
     </svg>
-  )
+  );
 }

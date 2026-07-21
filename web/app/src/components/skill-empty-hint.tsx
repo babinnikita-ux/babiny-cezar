@@ -18,10 +18,10 @@
  *  minus the per-agent mirrors (`.claude/skills` & co.), which the copy folds into one "agent
  *  mirrors like …" mention rather than listing five times. Pinned by
  *  `test/unit/skill-dirs.test.ts`; keep the two in step. */
-const SKILL_PROJECT_DIRS = ['.ai/cezar/skills/', '.ai/skills/', '.agents/skills/'] as const
+const SKILL_PROJECT_DIRS = ['.ai/cezar/skills/', '.ai/skills/', '.agents/skills/'] as const;
 
 function Path({ children }: { children: string }) {
-  return <span className="font-mono">{children}</span>
+  return <span className="font-mono">{children}</span>;
 }
 
 /** Renders `SKILL_PROJECT_DIRS` as "a, b, or c" with each entry in `<Path>`. */
@@ -35,7 +35,7 @@ function ProjectDirList() {
         </span>
       ))}
     </>
-  )
+  );
 }
 
 /** Full copy — the Skills tab's empty list (room for the frontmatter aside + a Refresh hint). */
@@ -44,10 +44,10 @@ export function SkillEmptyHint() {
     <>
       No skills yet. Drop Markdown files into <ProjectDirList /> (agent mirrors like{' '}
       <Path>.claude/skills/</Path> work too) — optional frontmatter: <Path>name</Path>,{' '}
-      <Path>description</Path>. Global (<Path>~/.agents/skills</Path>) and team-repo skills
-      appear here too — try Refresh.
+      <Path>description</Path>. Global (<Path>~/.agents/skills</Path>) and team-repo skills appear here too —
+      try Refresh.
     </>
-  )
+  );
 }
 
 /** Compact copy — the workflow builder's skill palette, where space is tighter and there is no
@@ -55,8 +55,7 @@ export function SkillEmptyHint() {
 export function SkillEmptyHintCompact() {
   return (
     <>
-      No skills yet — drop Markdown files into <ProjectDirList /> (or a global/team-repo skill
-      source).
+      No skills yet — drop Markdown files into <ProjectDirList /> (or a global/team-repo skill source).
     </>
-  )
+  );
 }

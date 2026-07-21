@@ -1,6 +1,14 @@
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { collectSecretValues, redactDeep, redactSecrets } from '../core/secret-redaction.js';
@@ -63,9 +71,7 @@ const runRecordSchema = z.object({
   titleSummary: z.string().optional(),
   /** `git diff --shortstat` of the worktree vs its base, refreshed on every
    *  turn-end (#389) — what the quick list / table shows without a git call. */
-  diffStat: z
-    .object({ adds: z.number(), dels: z.number(), files: z.number() })
-    .optional(),
+  diffStat: z.object({ adds: z.number(), dels: z.number(), files: z.number() }).optional(),
   workflow: z.string(),
   task: z.string(),
   /** Prompt messages stacked onto this run while it was queued (#472). Optional:
@@ -316,9 +322,7 @@ export class RunStore extends EventEmitter {
             // panel, Send back (resume) and Draft PR all still work.
             if (
               !opts?.keepLive &&
-              (run.status === 'running' ||
-                run.status === 'queued' ||
-                run.status === 'waiting')
+              (run.status === 'running' || run.status === 'queued' || run.status === 'waiting')
             ) {
               run.status = 'failed';
               run.error = 'interrupted — cezar process exited during the run';

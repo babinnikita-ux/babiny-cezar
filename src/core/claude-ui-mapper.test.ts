@@ -84,7 +84,16 @@ describe('mapClaudeMessage edge cases', () => {
   const state = createClaudeUiState();
 
   it('non-object and unknown message types produce no events and never throw', () => {
-    for (const msg of [null, undefined, 42, 'assistant', [], {}, { type: 'stream_event', event: {} }, { type: 'control_request' }]) {
+    for (const msg of [
+      null,
+      undefined,
+      42,
+      'assistant',
+      [],
+      {},
+      { type: 'stream_event', event: {} },
+      { type: 'control_request' },
+    ]) {
       const mapped = mapClaudeMessage(msg, state);
       expect(mapped.events).toEqual([]);
       expect(mapped.state).toBe(state);
@@ -113,7 +122,9 @@ describe('mapClaudeMessage edge cases', () => {
   it('malformed message envelopes (content not an array, message missing) are safe', () => {
     expect(mapClaudeMessage({ type: 'assistant', message: { content: 'oops' } }, state).events).toEqual([]);
     expect(mapClaudeMessage({ type: 'assistant' }, state).events).toEqual([]);
-    expect(mapClaudeMessage({ type: 'user', message: { content: [{ type: 'tool_result' }] } }, state).events).toEqual([]);
+    expect(
+      mapClaudeMessage({ type: 'user', message: { content: [{ type: 'tool_result' }] } }, state).events,
+    ).toEqual([]);
   });
 
   it('state carries across messages: a tool opened earlier is completed by a later result', () => {
@@ -122,15 +133,27 @@ describe('mapClaudeMessage edge cases', () => {
     const start = mapClaudeMessage(
       {
         type: 'assistant',
-        message: { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_x', name: 'Bash', input: { command: 'ls' } }] },
+        message: {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: 'toolu_x', name: 'Bash', input: { command: 'ls' } }],
+        },
       },
       s,
     );
     s = start.state;
     // An unrelated message in between must not disturb the open tool.
-    s = mapClaudeMessage({ type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'hm' }] } }, s).state;
+    s = mapClaudeMessage(
+      { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'hm' }] } },
+      s,
+    ).state;
     const done = mapClaudeMessage(
-      { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_x', content: 'a b c' }] } },
+      {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: 'toolu_x', content: 'a b c' }],
+        },
+      },
       s,
     );
     expect(done.events).toEqual([
@@ -156,13 +179,27 @@ describe('mapClaudeMessage edge cases', () => {
 
   it('a tool_result for an id that never started still completes an item', () => {
     const mapped = mapClaudeMessage(
-      { type: 'user', message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: 'toolu_ghost', content: 'late', is_error: true }] } },
+      {
+        type: 'user',
+        message: {
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: 'toolu_ghost', content: 'late', is_error: true }],
+        },
+      },
       state,
     );
     expect(mapped.events).toEqual([
       {
         type: 'item.completed',
-        item: { kind: 'tool', id: 'toolu_ghost', name: 'unknown', toolKind: 'other', title: 'Tool', status: 'failed', error: 'late' },
+        item: {
+          kind: 'tool',
+          id: 'toolu_ghost',
+          name: 'unknown',
+          toolKind: 'other',
+          title: 'Tool',
+          status: 'failed',
+          error: 'late',
+        },
       },
     ]);
   });
@@ -197,17 +234,33 @@ describe('mapClaudeMessage edge cases', () => {
               type: 'tool_use',
               id: 'toolu_t',
               name: 'TodoWrite',
-              input: { todos: [{ content: 'ok', status: 'pending' }, { content: 'bad status', status: 'later' }, { status: 'pending' }, 'junk'] },
+              input: {
+                todos: [
+                  { content: 'ok', status: 'pending' },
+                  { content: 'bad status', status: 'later' },
+                  { status: 'pending' },
+                  'junk',
+                ],
+              },
             },
           ],
         },
       },
       state,
     );
-    expect(good.events.at(-1)).toEqual({ type: 'plan.updated', entries: [{ content: 'ok', status: 'pending' }] });
+    expect(good.events.at(-1)).toEqual({
+      type: 'plan.updated',
+      entries: [{ content: 'ok', status: 'pending' }],
+    });
 
     const bad = mapClaudeMessage(
-      { type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'toolu_t2', name: 'TodoWrite', input: { todos: 'nope' } }] } },
+      {
+        type: 'assistant',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: 'toolu_t2', name: 'TodoWrite', input: { todos: 'nope' } }],
+        },
+      },
       state,
     );
     expect(bad.events.map((e) => e.type)).toEqual(['item.started']);
@@ -229,7 +282,12 @@ describe('mapClaudeMessage edge cases', () => {
     message: {
       role: 'user',
       content: [
-        { type: 'tool_result', tool_use_id: toolUseId, content, ...(isError === undefined ? {} : { is_error: isError }) },
+        {
+          type: 'tool_result',
+          tool_use_id: toolUseId,
+          content,
+          ...(isError === undefined ? {} : { is_error: isError }),
+        },
       ],
     },
   });
@@ -241,8 +299,14 @@ describe('mapClaudeMessage edge cases', () => {
     id: string,
     extra: Record<string, unknown> = {},
   ) => {
-    const used = mapClaudeMessage(taskUse(toolUseId, 'TaskCreate', { subject, description: 'd', ...extra }), state);
-    return mapClaudeMessage(taskResult(toolUseId, `Task #${id} created successfully: ${subject}`), used.state);
+    const used = mapClaudeMessage(
+      taskUse(toolUseId, 'TaskCreate', { subject, description: 'd', ...extra }),
+      state,
+    );
+    return mapClaudeMessage(
+      taskResult(toolUseId, `Task #${id} created successfully: ${subject}`),
+      used.state,
+    );
   };
 
   it('builds a plan incrementally, keying tasks by the id the TaskCreate result reports', () => {
@@ -255,7 +319,10 @@ describe('mapClaudeMessage edge cases', () => {
       state,
     );
     expect(used.events.map((event) => event.type)).toEqual(['item.started']);
-    const landed = mapClaudeMessage(taskResult('toolu_c1', 'Task #1 created successfully: Wire the dock'), used.state);
+    const landed = mapClaudeMessage(
+      taskResult('toolu_c1', 'Task #1 created successfully: Wire the dock'),
+      used.state,
+    );
     state = landed.state;
     expect(landed.events.at(-1)).toEqual({
       type: 'plan.updated',
@@ -273,7 +340,10 @@ describe('mapClaudeMessage edge cases', () => {
     });
 
     // An update carries the harness's own taskId, so it applies at call time.
-    const update = mapClaudeMessage(taskUse('toolu_u1', 'TaskUpdate', { taskId: '1', status: 'in_progress' }), state);
+    const update = mapClaudeMessage(
+      taskUse('toolu_u1', 'TaskUpdate', { taskId: '1', status: 'in_progress' }),
+      state,
+    );
     state = update.state;
     expect(update.events.at(-1)).toEqual({
       type: 'plan.updated',
@@ -284,7 +354,10 @@ describe('mapClaudeMessage edge cases', () => {
     });
 
     // A numeric taskId is coerced, so the update still lands on task 2.
-    const numeric = mapClaudeMessage(taskUse('toolu_u2', 'TaskUpdate', { taskId: 2, status: 'completed' }), state);
+    const numeric = mapClaudeMessage(
+      taskUse('toolu_u2', 'TaskUpdate', { taskId: 2, status: 'completed' }),
+      state,
+    );
     state = numeric.state;
     expect(numeric.events.at(-1)).toEqual({
       type: 'plan.updated',
@@ -294,9 +367,15 @@ describe('mapClaudeMessage edge cases', () => {
       ],
     });
 
-    const unknown = mapClaudeMessage(taskUse('toolu_u3', 'TaskUpdate', { taskId: '9', status: 'completed' }), state);
+    const unknown = mapClaudeMessage(
+      taskUse('toolu_u3', 'TaskUpdate', { taskId: '9', status: 'completed' }),
+      state,
+    );
     expect(unknown.events.map((event) => event.type)).toEqual(['item.started']);
-    const unchanged = mapClaudeMessage(taskUse('toolu_u4', 'TaskUpdate', { taskId: '2', status: 'completed' }), state);
+    const unchanged = mapClaudeMessage(
+      taskUse('toolu_u4', 'TaskUpdate', { taskId: '2', status: 'completed' }),
+      state,
+    );
     expect(unchanged.events.map((event) => event.type)).toEqual(['item.started']);
   });
 
@@ -307,7 +386,10 @@ describe('mapClaudeMessage edge cases', () => {
     // under '1' and then land task 3's updates on it — a confidently wrong plan
     // in the dock, which is worse than an empty one. The id comes off the wire.
     let state = createClaudeUiState();
-    const resumedUpdate = mapClaudeMessage(taskUse('toolu_u0', 'TaskUpdate', { taskId: '1', status: 'in_progress' }), state);
+    const resumedUpdate = mapClaudeMessage(
+      taskUse('toolu_u0', 'TaskUpdate', { taskId: '1', status: 'in_progress' }),
+      state,
+    );
     // Task 1 belongs to the pre-resume session: unknown here, so it is dropped
     // rather than applied to whatever this mapper happens to hold.
     expect(resumedUpdate.events.map((event) => event.type)).toEqual(['item.started']);
@@ -322,19 +404,23 @@ describe('mapClaudeMessage edge cases', () => {
 
     // The id the mapper would have guessed ('1') must not touch the new task…
     expect(
-      mapClaudeMessage(taskUse('toolu_u1', 'TaskUpdate', { taskId: '1', status: 'completed' }), state).events.map(
-        (event) => event.type,
-      ),
+      mapClaudeMessage(
+        taskUse('toolu_u1', 'TaskUpdate', { taskId: '1', status: 'completed' }),
+        state,
+      ).events.map((event) => event.type),
     ).toEqual(['item.started']);
     // …and the real one must.
-    const real = mapClaudeMessage(taskUse('toolu_u2', 'TaskUpdate', { taskId: '3', status: 'completed' }), state);
+    const real = mapClaudeMessage(
+      taskUse('toolu_u2', 'TaskUpdate', { taskId: '3', status: 'completed' }),
+      state,
+    );
     expect(real.events.at(-1)).toEqual({
       type: 'plan.updated',
       entries: [{ content: 'New task', status: 'completed' }],
     });
   });
 
-  it('recovers a resumed session\'s pre-existing tasks from a TaskList result', () => {
+  it("recovers a resumed session's pre-existing tasks from a TaskList result", () => {
     let state = createClaudeUiState();
     // TaskList is the only message carrying the whole list, so it is how tasks
     // created before this mapper existed reach the dock at all.
@@ -356,7 +442,10 @@ describe('mapClaudeMessage edge cases', () => {
     });
 
     // Recovered ids are real ids: updates against them now land.
-    const update = mapClaudeMessage(taskUse('toolu_u1', 'TaskUpdate', { taskId: '4', status: 'completed' }), state);
+    const update = mapClaudeMessage(
+      taskUse('toolu_u1', 'TaskUpdate', { taskId: '4', status: 'completed' }),
+      state,
+    );
     expect(update.events.at(-1)).toEqual({
       type: 'plan.updated',
       entries: [
@@ -378,7 +467,10 @@ describe('mapClaudeMessage edge cases', () => {
     expect(resync.events.map((event) => event.type)).toEqual(['item.completed']);
     state = resync.state;
 
-    const moved = mapClaudeMessage(taskUse('toolu_u1', 'TaskUpdate', { taskId: '1', status: 'in_progress' }), state);
+    const moved = mapClaudeMessage(
+      taskUse('toolu_u1', 'TaskUpdate', { taskId: '1', status: 'in_progress' }),
+      state,
+    );
     expect(moved.events.at(-1)).toEqual({
       type: 'plan.updated',
       entries: [{ content: 'One', status: 'in_progress', activeForm: 'Oneing' }],
@@ -430,10 +522,16 @@ describe('mapClaudeMessage edge cases', () => {
     let state = createClaudeUiState();
     state = create(state, 'toolu_c1', 'Main task', '1').state;
 
-    const sub = mapClaudeMessage(taskUse('toolu_c2', 'TaskCreate', { subject: 'Sub task' }, 'toolu_agent'), state);
+    const sub = mapClaudeMessage(
+      taskUse('toolu_c2', 'TaskCreate', { subject: 'Sub task' }, 'toolu_agent'),
+      state,
+    );
     expect(sub.events.map((event) => event.type)).toEqual(['item.started']);
     expect(sub.state.pendingTaskCreates.size).toBe(0);
-    const subResult = mapClaudeMessage(taskResult('toolu_c2', 'Task #1 created successfully: Sub task'), sub.state);
+    const subResult = mapClaudeMessage(
+      taskResult('toolu_c2', 'Task #1 created successfully: Sub task'),
+      sub.state,
+    );
     expect(subResult.events.map((event) => event.type)).toEqual(['item.completed']);
     expect([...subResult.state.tasks.values()]).toEqual([{ content: 'Main task', status: 'pending' }]);
 
@@ -455,7 +553,10 @@ describe('mapClaudeMessage edge cases', () => {
 
   it('tolerates `running` as an alias for in_progress, though the schema has no such status', () => {
     const state = create(createClaudeUiState(), 'toolu_c1', 'A', '1').state;
-    const mapped = mapClaudeMessage(taskUse('toolu_u1', 'TaskUpdate', { taskId: '1', status: 'running' }), state);
+    const mapped = mapClaudeMessage(
+      taskUse('toolu_u1', 'TaskUpdate', { taskId: '1', status: 'running' }),
+      state,
+    );
     expect(mapped.events.at(-1)).toEqual({
       type: 'plan.updated',
       entries: [{ content: 'A', status: 'in_progress' }],
@@ -468,7 +569,10 @@ describe('mapClaudeMessage edge cases', () => {
     state = create(state, 'toolu_c2', 'Task B', '2').state;
 
     // `deleted` is a real TaskUpdate status: it removes the task outright.
-    const deleted = mapClaudeMessage(taskUse('toolu_u1', 'TaskUpdate', { taskId: '1', status: 'deleted' }), state);
+    const deleted = mapClaudeMessage(
+      taskUse('toolu_u1', 'TaskUpdate', { taskId: '1', status: 'deleted' }),
+      state,
+    );
     state = deleted.state;
     expect(deleted.events.at(-1)).toEqual({
       type: 'plan.updated',
@@ -478,7 +582,10 @@ describe('mapClaudeMessage edge cases', () => {
     // The harness does not renumber after a delete — Task B stays '2' and the
     // next create is '3'.
     state = create(state, 'toolu_c3', 'Task C', '3').state;
-    const progressed = mapClaudeMessage(taskUse('toolu_u2', 'TaskUpdate', { taskId: '3', status: 'completed' }), state);
+    const progressed = mapClaudeMessage(
+      taskUse('toolu_u2', 'TaskUpdate', { taskId: '3', status: 'completed' }),
+      state,
+    );
     state = progressed.state;
     expect(progressed.events.at(-1)).toEqual({
       type: 'plan.updated',
@@ -490,12 +597,19 @@ describe('mapClaudeMessage edge cases', () => {
 
     // Deleting an unknown id changes nothing; deleting the rest empties the plan.
     expect(
-      mapClaudeMessage(taskUse('toolu_u3', 'TaskUpdate', { taskId: '1', status: 'deleted' }), state).events.map(
-        (event) => event.type,
-      ),
+      mapClaudeMessage(
+        taskUse('toolu_u3', 'TaskUpdate', { taskId: '1', status: 'deleted' }),
+        state,
+      ).events.map((event) => event.type),
     ).toEqual(['item.started']);
-    state = mapClaudeMessage(taskUse('toolu_u4', 'TaskUpdate', { taskId: '2', status: 'deleted' }), state).state;
-    const emptied = mapClaudeMessage(taskUse('toolu_u5', 'TaskUpdate', { taskId: '3', status: 'deleted' }), state);
+    state = mapClaudeMessage(
+      taskUse('toolu_u4', 'TaskUpdate', { taskId: '2', status: 'deleted' }),
+      state,
+    ).state;
+    const emptied = mapClaudeMessage(
+      taskUse('toolu_u5', 'TaskUpdate', { taskId: '3', status: 'deleted' }),
+      state,
+    );
     expect(emptied.events.at(-1)).toEqual({ type: 'plan.updated', entries: [] });
   });
 
@@ -509,7 +623,11 @@ describe('mapClaudeMessage edge cases', () => {
     });
 
     const renamed = mapClaudeMessage(
-      taskUse('toolu_u1', 'TaskUpdate', { taskId: '1', subject: 'New name', activeForm: 'Doing the new thing' }),
+      taskUse('toolu_u1', 'TaskUpdate', {
+        taskId: '1',
+        subject: 'New name',
+        activeForm: 'Doing the new thing',
+      }),
       state,
     );
     state = renamed.state;
@@ -519,7 +637,10 @@ describe('mapClaudeMessage edge cases', () => {
     });
 
     // A metadata-only update that changes nothing we render stays silent.
-    const noop = mapClaudeMessage(taskUse('toolu_u2', 'TaskUpdate', { taskId: '1', owner: 'someone' }), state);
+    const noop = mapClaudeMessage(
+      taskUse('toolu_u2', 'TaskUpdate', { taskId: '1', owner: 'someone' }),
+      state,
+    );
     expect(noop.events.map((event) => event.type)).toEqual(['item.started']);
   });
 
@@ -587,14 +708,20 @@ describe('ClaudeCliRunner v2 wiring (against the bundled mock CLI)', () => {
         (e): e is Extract<UiEvent, { type: 'item.started' }> =>
           e.type === 'item.started' && e.item.kind === 'tool' && e.item.name === 'Bash',
       );
-      expect(bashStart?.item).toMatchObject({ toolKind: 'execute', title: 'Ran git status --short', status: 'running' });
+      expect(bashStart?.item).toMatchObject({
+        toolKind: 'execute',
+        title: 'Ran git status --short',
+        status: 'running',
+      });
       const bashDone = v2.find(
         (e): e is Extract<UiEvent, { type: 'item.completed' }> =>
           e.type === 'item.completed' && e.item.kind === 'tool' && e.item.name === 'Bash',
       );
       expect(bashDone?.item).toMatchObject({ status: 'completed', output: ' M src/example.ts' });
       expect(v2.some((e) => e.type === 'image' && e.itemId !== undefined)).toBe(true);
-      const turnDone = v2.find((e): e is Extract<UiEvent, { type: 'turn.completed' }> => e.type === 'turn.completed');
+      const turnDone = v2.find(
+        (e): e is Extract<UiEvent, { type: 'turn.completed' }> => e.type === 'turn.completed',
+      );
       expect(turnDone).toMatchObject({
         turnId: 'turn_1',
         stopReason: 'end_turn',
@@ -673,16 +800,21 @@ describe('claude blank thinking blocks (#528)', () => {
     };
   }
 
-  it.each([['', 'empty'], ['   ', 'spaces'], ['\n\t ', 'whitespace']])(
-    'mints no reasoning item for a %s thinking block (%s)',
-    (thinking) => {
-      expect(reasoningItems(assistant(thinking))).toEqual([]);
-    },
-  );
+  it.each([
+    ['', 'empty'],
+    ['   ', 'spaces'],
+    ['\n\t ', 'whitespace'],
+  ])('mints no reasoning item for a %s thinking block (%s)', (thinking) => {
+    expect(reasoningItems(assistant(thinking))).toEqual([]);
+  });
 
   it('still mints an item for real thinking text', () => {
     const events = reasoningItems(assistant('Checking the auth path.'));
     expect(events).toHaveLength(2); // started + completed
-    expect(events.every((e) => 'item' in e && e.item.kind === 'reasoning' && e.item.text === 'Checking the auth path.')).toBe(true);
+    expect(
+      events.every(
+        (e) => 'item' in e && e.item.kind === 'reasoning' && e.item.text === 'Checking the auth path.',
+      ),
+    ).toBe(true);
   });
 });

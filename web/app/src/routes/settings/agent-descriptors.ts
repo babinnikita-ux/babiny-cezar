@@ -1,4 +1,4 @@
-import type { AgentConfigFile, Runner } from '@/api/types'
+import type { AgentConfigFile, Runner } from '@/api/types';
 
 /**
  * Per-agent descriptor driving the Settings → Agent config pane (spec
@@ -17,42 +17,37 @@ import type { AgentConfigFile, Runner } from '@/api/types'
  */
 
 export interface AgentGroup {
-  id: 'settings' | 'mcp' | 'memory'
-  label: string
+  id: 'settings' | 'mcp' | 'memory';
+  label: string;
   /** Group-level caveat — e.g. where this agent keeps its MCP servers. */
-  note?: string
-  files: (f: AgentConfigFile) => boolean
+  note?: string;
+  files: (f: AgentConfigFile) => boolean;
 }
 
 export interface AgentDescriptor {
-  id: Runner
-  label: string
+  id: Runner;
+  label: string;
   /** Pane-level caveat shown under the agent's heading. */
-  note?: string
-  groups: AgentGroup[]
+  note?: string;
+  groups: AgentGroup[];
 }
 
 const EDITOR_PLUS_COMMIT =
-  'An editor-plus-commit: a saved change reaches a run after you commit it to the base branch.'
+  'An editor-plus-commit: a saved change reaches a run after you commit it to the base branch.';
 
 function ownedBy(agent: Runner) {
-  return (f: AgentConfigFile) => f.runners.includes(agent)
+  return (f: AgentConfigFile) => f.runners.includes(agent);
 }
 
-function group(
-  agent: Runner,
-  id: AgentGroup['id'],
-  label: string,
-  note?: string,
-): AgentGroup {
-  const owned = ownedBy(agent)
+function group(agent: Runner, id: AgentGroup['id'], label: string, note?: string): AgentGroup {
+  const owned = ownedBy(agent);
   // `holdsMcp` files appear in the MCP group AND their own kind group — both
   // occurrences open the same editor; hiding either would misstate the file.
   const member =
     id === 'mcp'
       ? (f: AgentConfigFile) => owned(f) && (f.holdsMcp === true || f.kind === 'mcp')
-      : (f: AgentConfigFile) => owned(f) && f.kind === id
-  return { id, label, note, files: member }
+      : (f: AgentConfigFile) => owned(f) && f.kind === id;
+  return { id, label, note, files: member };
 }
 
 export const AGENT_DESCRIPTORS: AgentDescriptor[] = [
@@ -61,12 +56,7 @@ export const AGENT_DESCRIPTORS: AgentDescriptor[] = [
     label: 'Claude',
     groups: [
       group('claude', 'settings', 'Settings'),
-      group(
-        'claude',
-        'mcp',
-        'MCP',
-        'A dedicated .mcp.json (key: mcpServers), shared via version control.',
-      ),
+      group('claude', 'mcp', 'MCP', 'A dedicated .mcp.json (key: mcpServers), shared via version control.'),
       group('claude', 'memory', 'Memory & instructions'),
     ],
   },
@@ -100,10 +90,10 @@ export const AGENT_DESCRIPTORS: AgentDescriptor[] = [
       group('opencode', 'memory', 'Memory & instructions'),
     ],
   },
-]
+];
 
 export function descriptorFor(agent: Runner): AgentDescriptor {
-  const found = AGENT_DESCRIPTORS.find((d) => d.id === agent)
-  if (!found) throw new Error(`no agent descriptor for ${agent}`)
-  return found
+  const found = AGENT_DESCRIPTORS.find((d) => d.id === agent);
+  if (!found) throw new Error(`no agent descriptor for ${agent}`);
+  return found;
 }

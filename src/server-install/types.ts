@@ -39,9 +39,7 @@ export const stepArtifactSchema = z.object({
 export type StepArtifact = z.infer<typeof stepArtifactSchema>;
 
 /** What a step returns from `run()`; `undo()` receives it back verbatim. */
-export const stepCreatedSchema = z
-  .object({ artifacts: z.array(stepArtifactSchema).default([]) })
-  .nullable();
+export const stepCreatedSchema = z.object({ artifacts: z.array(stepArtifactSchema).default([]) }).nullable();
 export type StepCreated = z.infer<typeof stepCreatedSchema>;
 
 /**
@@ -189,7 +187,11 @@ export interface Runner {
    * secret-passing channel for privileged commands (`cat > file` style), so
    * credentials never ride in argv where `ps` can read them.
    */
-  interactive(program: string, args: string[], opts?: { input?: string; env?: Record<string, string> }): Promise<number>;
+  interactive(
+    program: string,
+    args: string[],
+    opts?: { input?: string; env?: Record<string, string> },
+  ): Promise<number>;
 }
 
 /** Live install/uninstall context, threaded through every step. */

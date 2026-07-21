@@ -1,8 +1,8 @@
-import { ChevronRightIcon } from 'lucide-react'
-import { Link as RouterLink, NavLink as RouterNavLink } from 'react-router'
-import { Link as ScopedLink, NavLink as ScopedNavLink } from '@/lib/project-router'
-import { cn } from '@/lib/utils'
-import { visibleSettingsSections, type SettingsScope, type SettingsSection } from './registry'
+import { ChevronRightIcon } from 'lucide-react';
+import { Link as RouterLink, NavLink as RouterNavLink } from 'react-router';
+import { Link as ScopedLink, NavLink as ScopedNavLink } from '@/lib/project-router';
+import { cn } from '@/lib/utils';
+import { visibleSettingsSections, type SettingsScope, type SettingsSection } from './registry';
 
 /**
  * The registry-driven Settings shell (R6 Step 1.3, spec §"Settings").
@@ -29,28 +29,22 @@ import { visibleSettingsSections, type SettingsScope, type SettingsSection } fro
 
 /** The area's URL root — also what `SettingsSkillsRedirect` and the legacy redirects target. */
 export function settingsSectionPath(scope: SettingsScope, id: SettingsSection['id']): string {
-  return scope === 'global' ? `/settings/global/${id}` : `/settings/${id}`
+  return scope === 'global' ? `/settings/global/${id}` : `/settings/${id}`;
 }
 
 function settingsIndexPath(scope: SettingsScope): string {
-  return scope === 'global' ? '/settings/global' : '/settings'
+  return scope === 'global' ? '/settings/global' : '/settings';
 }
 
 /** Global links bypass the project prefix; project links get it. See the header comment. */
 function navComponents(scope: SettingsScope) {
   return scope === 'global'
     ? { Link: RouterLink, NavLink: RouterNavLink }
-    : { Link: ScopedLink, NavLink: ScopedNavLink }
+    : { Link: ScopedLink, NavLink: ScopedNavLink };
 }
 
-function SectionNav({
-  scope,
-  activeId,
-}: {
-  scope: SettingsScope
-  activeId: SettingsSection['id'] | null
-}) {
-  const { NavLink } = navComponents(scope)
+function SectionNav({ scope, activeId }: { scope: SettingsScope; activeId: SettingsSection['id'] | null }) {
+  const { NavLink } = navComponents(scope);
   return (
     <nav
       aria-label="Settings sections"
@@ -81,18 +75,12 @@ function SectionNav({
         <p className="mt-auto px-2.5 pt-3 text-[11px] text-soft-foreground">Stored in ~/.cezar</p>
       ) : null}
     </nav>
-  )
+  );
 }
 
 /** The mobile stand-in for the left nav: one segmented, scrollable pill row. */
-function SectionPills({
-  scope,
-  activeId,
-}: {
-  scope: SettingsScope
-  activeId: SettingsSection['id']
-}) {
-  const { NavLink } = navComponents(scope)
+function SectionPills({ scope, activeId }: { scope: SettingsScope; activeId: SettingsSection['id'] }) {
+  const { NavLink } = navComponents(scope);
   return (
     <nav
       aria-label="Settings sections"
@@ -116,18 +104,12 @@ function SectionPills({
         </NavLink>
       ))}
     </nav>
-  )
+  );
 }
 
 /** One registered section inside the shell — `/p/<id>/settings/<id>` or `/settings/global/<id>`. */
-export function SettingsSectionRoute({
-  section,
-  scope,
-}: {
-  section: SettingsSection
-  scope: SettingsScope
-}) {
-  const Body = section.component
+export function SettingsSectionRoute({ section, scope }: { section: SettingsSection; scope: SettingsScope }) {
+  const Body = section.component;
   return (
     <div
       data-route={scope === 'global' ? `settings-global-${section.id}` : `settings-${section.id}`}
@@ -152,14 +134,14 @@ export function SettingsSectionRoute({
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 /** The area's index: the same registry rendered as a stacked list of cards (the mobile drill-in
  *  page; on desktop it sits beside the nav as a plain directory). */
 export function SettingsIndexRoute({ scope }: { scope: SettingsScope }) {
-  const { Link } = navComponents(scope)
-  const global = scope === 'global'
+  const { Link } = navComponents(scope);
+  const global = scope === 'global';
   return (
     <div data-route={global ? 'settings-global' : 'settings'} className="flex min-h-full flex-col">
       <header className="sticky top-0 z-10 hidden h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-5 md:flex">
@@ -217,5 +199,5 @@ export function SettingsIndexRoute({ scope }: { scope: SettingsScope }) {
         </div>
       </div>
     </div>
-  )
+  );
 }

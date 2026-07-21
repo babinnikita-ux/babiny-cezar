@@ -94,7 +94,13 @@ describe('request-origin guard (#426)', () => {
   // an attacker can register any of these hostnames, point them at 127.0.0.1
   // and be genuinely same-origin with the cockpit, which satisfies the Origin
   // and Sec-Fetch-Site checks too. A prefix match hands them the whole API.
-  const REBINDING_HOSTS = ['127.0.0.1.evil.com', '127.evil.com', '127.0.0.1.nip.io', '1270.0.0.1', '127.0.0.1x'];
+  const REBINDING_HOSTS = [
+    '127.0.0.1.evil.com',
+    '127.evil.com',
+    '127.0.0.1.nip.io',
+    '1270.0.0.1',
+    '127.0.0.1x',
+  ];
 
   for (const host of REBINDING_HOSTS) {
     it(`rejects a READ whose Host is the rebinding hostname ${host} → 403`, async () => {

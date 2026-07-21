@@ -1,15 +1,15 @@
-import { GitBranchIcon, TriangleAlertIcon } from 'lucide-react'
+import { GitBranchIcon, TriangleAlertIcon } from 'lucide-react';
 
-import { useRepo } from '@/api/queries'
-import type { RepoInfo, RepoResponse } from '@/api/types'
-import { CenteredState } from '@/components/centered-state'
-import { TabLink } from '@/components/tab-link'
+import { useRepo } from '@/api/queries';
+import type { RepoInfo, RepoResponse } from '@/api/types';
+import { CenteredState } from '@/components/centered-state';
+import { TabLink } from '@/components/tab-link';
 
-import { BranchChip } from '../task-git/diff-controls'
-import { RepoBranchesSection } from './repo-branches'
-import { RepoChangesSection } from './repo-changes'
-import { RepoCommitsSection } from './repo-commits'
-import { RepoGitLoading } from './repo-git-loading'
+import { BranchChip } from '../task-git/diff-controls';
+import { RepoBranchesSection } from './repo-branches';
+import { RepoChangesSection } from './repo-changes';
+import { RepoCommitsSection } from './repo-commits';
+import { RepoGitLoading } from './repo-git-loading';
 
 /**
  * `/git` — the repo view rebuilt on the task git view's own components (spec §"Session git
@@ -23,12 +23,12 @@ import { RepoGitLoading } from './repo-git-loading'
  * Session | Changes | Files row — and each one is a URL (`/git`, `/git/commits[/:sha]`,
  * `/git/branches`), so every surface deep-links and survives a refresh.
  */
-export type RepoTab = 'changes' | 'commits' | 'branches'
+export type RepoTab = 'changes' | 'commits' | 'branches';
 
 export function RepoGitRoute({ tab }: { tab: RepoTab }) {
-  const repo = useRepo()
+  const repo = useRepo();
 
-  if (repo.isPending) return <RepoGitLoading />
+  if (repo.isPending) return <RepoGitLoading />;
   if (repo.isError) {
     return (
       <div data-route="repo-git" className="flex min-h-full flex-col">
@@ -39,9 +39,9 @@ export function RepoGitRoute({ tab }: { tab: RepoTab }) {
           subtitle={repo.error.message}
         />
       </div>
-    )
+    );
   }
-  const info = repo.data.info
+  const info = repo.data.info;
   if (!info) {
     return (
       <div data-route="repo-git" className="flex min-h-full flex-col">
@@ -52,9 +52,9 @@ export function RepoGitRoute({ tab }: { tab: RepoTab }) {
           subtitle="cezar is running outside a git repository — start it inside one to browse changes, commits and branches."
         />
       </div>
-    )
+    );
   }
-  return <RepoView repo={repo.data} info={info} tab={tab} />
+  return <RepoView repo={repo.data} info={info} tab={tab} />;
 }
 
 function RepoView({ repo, info, tab }: { repo: RepoResponse; info: RepoInfo; tab: RepoTab }) {
@@ -68,7 +68,10 @@ function RepoView({ repo, info, tab }: { repo: RepoResponse; info: RepoInfo; tab
           <h1 className="text-lg font-semibold">Git</h1>
           <BranchChip branch={info.branch} />
           {info.remote ? (
-            <span data-slot="repo-remote" className="hidden min-w-0 truncate text-[11px] text-soft-foreground md:inline">
+            <span
+              data-slot="repo-remote"
+              className="hidden min-w-0 truncate text-[11px] text-soft-foreground md:inline"
+            >
               {info.remote}
             </span>
           ) : null}
@@ -95,5 +98,5 @@ function RepoView({ repo, info, tab }: { repo: RepoResponse; info: RepoInfo; tab
         <RepoBranchesSection repo={repo} info={info} />
       )}
     </div>
-  )
+  );
 }

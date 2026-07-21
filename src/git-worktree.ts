@@ -32,11 +32,8 @@ interface RegisteredWorktree {
 /** Run git, never throw — degradation is the caller's policy. */
 function git(cwd: string, args: string[]): Promise<GitResult> {
   return new Promise((resolve) => {
-    execFile(
-      'git',
-      args,
-      { cwd, maxBuffer: 32 * 1024 * 1024, encoding: 'utf8' },
-      (err, stdout, stderr) => resolve({ ok: !err, stdout: stdout ?? '', stderr: stderr ?? '' }),
+    execFile('git', args, { cwd, maxBuffer: 32 * 1024 * 1024, encoding: 'utf8' }, (err, stdout, stderr) =>
+      resolve({ ok: !err, stdout: stdout ?? '', stderr: stderr ?? '' }),
     );
   });
 }
@@ -230,11 +227,7 @@ export function worktreeSizeBytes(path: string): Promise<number | null> {
 }
 
 /** Remove a task worktree and its branch. Best effort — never throws. */
-export async function removeWorktree(
-  repoRoot: string,
-  worktreePath: string,
-  branch?: string,
-): Promise<void> {
+export async function removeWorktree(repoRoot: string, worktreePath: string, branch?: string): Promise<void> {
   await git(repoRoot, ['worktree', 'remove', '--force', worktreePath]);
   await rm(worktreePath, { recursive: true, force: true }).catch(() => undefined);
   await git(repoRoot, ['worktree', 'prune']);
@@ -463,10 +456,7 @@ export async function worktreeDiff(
  * `git diff --stat` version of `worktreeDiff` (spec 010 — the variant
  * comparison columns). Same merge-base anchoring; returns '' on any failure.
  */
-export async function worktreeDiffStat(
-  worktreePath: string,
-  baseBranch: string,
-): Promise<string> {
+export async function worktreeDiffStat(worktreePath: string, baseBranch: string): Promise<string> {
   if (!isSafeGitRef(baseBranch)) return '';
   await git(worktreePath, ['add', '-N', '.']); // intent-to-add: untracked files show up
   const mergeBase = await git(worktreePath, ['merge-base', baseBranch, 'HEAD']);
@@ -506,10 +496,7 @@ export function parseShortstat(s: string): DiffStat {
  * numbers. Null on git failure (the caller notes it, never fails the run);
  * an empty diff is a valid all-zero stat.
  */
-export async function worktreeShortstat(
-  worktreePath: string,
-  baseBranch: string,
-): Promise<DiffStat | null> {
+export async function worktreeShortstat(worktreePath: string, baseBranch: string): Promise<DiffStat | null> {
   if (!isSafeGitRef(baseBranch)) return null;
   await git(worktreePath, ['add', '-N', '.']); // intent-to-add: untracked files show up
   const mergeBase = await git(worktreePath, ['merge-base', baseBranch, 'HEAD']);
@@ -523,10 +510,7 @@ export async function worktreeShortstat(
  * `.ai/cezar/worktrees/` whose run id is no longer in the store (and its
  * branch). Returns the removed run ids for the boot log. Never throws.
  */
-export async function pruneOrphans(
-  repoRoot: string,
-  validIds: ReadonlySet<string>,
-): Promise<string[]> {
+export async function pruneOrphans(repoRoot: string, validIds: ReadonlySet<string>): Promise<string[]> {
   await git(repoRoot, ['worktree', 'prune']);
   let entries: Dirent[];
   try {

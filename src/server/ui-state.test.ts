@@ -56,9 +56,7 @@ describe('PUT /api/ui-state — promptTemplates', () => {
   it('accepts a template with NO skills key — the pre-assignment client must keep working', async () => {
     expect((await put({ promptTemplates: [template()] })).status).toBe(200);
     const read = await apiRequest(app, '/api/ui-state');
-    expect(((await read.json()) as { promptTemplates: unknown[] }).promptTemplates[0]).toEqual(
-      template(),
-    );
+    expect(((await read.json()) as { promptTemplates: unknown[] }).promptTemplates[0]).toEqual(template());
   });
 
   it('accepts a deliberately empty list — "I cleared every template" is a real state', async () => {

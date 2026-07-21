@@ -5,11 +5,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 import { branchFor, createWorktree, removeWorktree } from '../git-worktree.js';
-import {
-  isReclaimable,
-  rematerializeReclaimedWorktree,
-  type RematerializeStore,
-} from './retention.js';
+import { isReclaimable, rematerializeReclaimedWorktree, type RematerializeStore } from './retention.js';
 import type { RunRecord } from './store.js';
 
 const run = promisify(execFile);

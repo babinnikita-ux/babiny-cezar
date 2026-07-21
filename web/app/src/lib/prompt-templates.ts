@@ -12,25 +12,25 @@
  */
 
 export interface PromptTemplate {
-  id: string
-  label: string
-  text: string
+  id: string;
+  label: string;
+  text: string;
   /**
    * Skill names (`Skill.name` — the repo's skill identity) this template is assigned to. When one
    * of these skills is picked in a composer and the prompt box is still untouched, the template
    * auto-applies (`autoApplyText` / `resolveAutoApply`). Absent or empty = a manual-only template:
    * it still lists in the menu, it just never applies itself.
    */
-  skills?: string[]
+  skills?: string[];
 }
 
-const LABEL_MAX = 80
-const TEXT_MAX = 2000
-const LIST_MAX = 50
+const LABEL_MAX = 80;
+const TEXT_MAX = 2000;
+const LIST_MAX = 50;
 /** Matches the server's `ref` bound for a skill name (`uiStateSchema.lastTask.ref`). */
-const SKILL_NAME_MAX = 200
+const SKILL_NAME_MAX = 200;
 /** A template assigned to more skills than this is almost certainly a mis-edit, not a workflow. */
-const SKILLS_MAX = 50
+const SKILLS_MAX = 50;
 
 /** Sensible built-ins (issue #413: "a small set of reusable prompt templates"). Order is the
  *  order they render in the menu and in Settings. */
@@ -60,10 +60,10 @@ export const DEFAULT_PROMPT_TEMPLATES: readonly PromptTemplate[] = [
     label: 'Double-check edge cases',
     text: 'Double-check edge cases and error handling before finishing.',
   },
-]
+];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object'
+  return !!value && typeof value === 'object';
 }
 
 /**
@@ -75,19 +75,19 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * cleared every template gets no templates, not the defaults reappearing underneath them.
  */
 export function normalizePromptTemplates(raw: unknown): PromptTemplate[] {
-  if (raw === undefined) return DEFAULT_PROMPT_TEMPLATES.map((template) => ({ ...template }))
-  if (!Array.isArray(raw)) return DEFAULT_PROMPT_TEMPLATES.map((template) => ({ ...template }))
+  if (raw === undefined) return DEFAULT_PROMPT_TEMPLATES.map((template) => ({ ...template }));
+  if (!Array.isArray(raw)) return DEFAULT_PROMPT_TEMPLATES.map((template) => ({ ...template }));
 
-  const seen = new Set<string>()
-  const out: PromptTemplate[] = []
+  const seen = new Set<string>();
+  const out: PromptTemplate[] = [];
   for (const entry of raw) {
-    if (!isRecord(entry)) continue
-    const id = typeof entry.id === 'string' ? entry.id.trim() : ''
-    const label = typeof entry.label === 'string' ? entry.label.trim() : ''
-    const text = typeof entry.text === 'string' ? entry.text.trim() : ''
-    if (!id || !label || !text || seen.has(id)) continue
-    seen.add(id)
-    const skills = normalizeAssignedSkills(entry.skills)
+    if (!isRecord(entry)) continue;
+    const id = typeof entry.id === 'string' ? entry.id.trim() : '';
+    const label = typeof entry.label === 'string' ? entry.label.trim() : '';
+    const text = typeof entry.text === 'string' ? entry.text.trim() : '';
+    if (!id || !label || !text || seen.has(id)) continue;
+    seen.add(id);
+    const skills = normalizeAssignedSkills(entry.skills);
     out.push({
       id,
       label: label.slice(0, LABEL_MAX),
@@ -96,25 +96,25 @@ export function normalizePromptTemplates(raw: unknown): PromptTemplate[] {
       // the same thing, and keeping one shape keeps the Settings dirty-check (a JSON compare)
       // from seeing a phantom edit on every load of an old ui-state.json.
       ...(skills.length > 0 ? { skills } : {}),
-    })
-    if (out.length >= LIST_MAX) break
+    });
+    if (out.length >= LIST_MAX) break;
   }
-  return out
+  return out;
 }
 
 /** Assigned skill names: same "garbage degrades, never throws" contract as the list itself —
  *  a non-array, or entries that are not usable names, simply yield no assignment. */
 function normalizeAssignedSkills(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return []
-  const seen = new Set<string>()
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
   for (const entry of raw) {
-    if (typeof entry !== 'string') continue
-    const name = entry.trim()
-    if (!name || seen.has(name)) continue
-    seen.add(name.slice(0, SKILL_NAME_MAX))
-    if (seen.size >= SKILLS_MAX) break
+    if (typeof entry !== 'string') continue;
+    const name = entry.trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name.slice(0, SKILL_NAME_MAX));
+    if (seen.size >= SKILLS_MAX) break;
   }
-  return [...seen]
+  return [...seen];
 }
 
 /** Templates assigned to ANY of `skillNames`, in list order (so Settings' ordering decides what
@@ -123,21 +123,18 @@ export function templatesForSkills(
   templates: readonly PromptTemplate[],
   skillNames: readonly string[],
 ): PromptTemplate[] {
-  if (skillNames.length === 0) return []
-  const wanted = new Set(skillNames)
-  return templates.filter((template) => template.skills?.some((name) => wanted.has(name)))
+  if (skillNames.length === 0) return [];
+  const wanted = new Set(skillNames);
+  return templates.filter((template) => template.skills?.some((name) => wanted.has(name)));
 }
 
 /** The prompt text a skill selection auto-applies: every assigned template, blank-line separated
  *  (the `insertTemplate` separator, so a stacked auto-apply reads like a hand-stacked one).
  *  No assignments → `''`, which callers treat as "auto-apply contributes nothing". */
-export function autoApplyText(
-  templates: readonly PromptTemplate[],
-  skillNames: readonly string[],
-): string {
+export function autoApplyText(templates: readonly PromptTemplate[], skillNames: readonly string[]): string {
   return templatesForSkills(templates, skillNames)
     .map((template) => template.text)
-    .join('\n\n')
+    .join('\n\n');
 }
 
 /**
@@ -170,18 +167,18 @@ export function resolveAutoApply(
   base = '',
 ): { text: string; applied: string } {
   if (current === '' || current === base || current === previousAuto) {
-    const text = base && nextAuto ? `${base}\n\n${nextAuto}` : base || nextAuto
-    return { text, applied: nextAuto ? text : '' }
+    const text = base && nextAuto ? `${base}\n\n${nextAuto}` : base || nextAuto;
+    return { text, applied: nextAuto ? text : '' };
   }
   // The user owns the box now — leave it alone, and keep remembering the auto text we wrote, so
   // that clearing it back to empty later re-opens the door above.
-  return { text: current, applied: previousAuto }
+  return { text: current, applied: previousAuto };
 }
 
 /** A fresh id for a template a user adds in Settings — client-side only, never sent anywhere
  *  else, so a timestamp+random suffix is plenty (no collision handling needed beyond that). */
 export function makeTemplateId(): string {
-  return `tpl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  return `tpl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 /**
@@ -200,15 +197,15 @@ export function insertTemplate(
   caret: number,
   snippet: string,
 ): { text: string; caret: number } {
-  const safeCaret = Math.max(0, Math.min(caret, text.length))
-  const before = text.slice(0, safeCaret)
-  const after = text.slice(safeCaret)
+  const safeCaret = Math.max(0, Math.min(caret, text.length));
+  const before = text.slice(0, safeCaret);
+  const after = text.slice(safeCaret);
 
-  let leading = ''
+  let leading = '';
   if (before.length > 0) {
-    if (before.endsWith('\n\n')) leading = ''
-    else if (before.endsWith('\n')) leading = '\n'
-    else leading = '\n\n'
+    if (before.endsWith('\n\n')) leading = '';
+    else if (before.endsWith('\n')) leading = '\n';
+    else leading = '\n\n';
   }
 
   // The tail is about to start a line of its own, so the SPACES that used to separate it from the
@@ -216,13 +213,13 @@ export function insertTemplate(
   // which is never what was meant. Horizontal whitespace only, and stripped BEFORE `trailing` is
   // measured: a leading newline is part of the separator we are about to complete, not padding —
   // eating it ("One.\n|Two." → "One.\n\nSNIP\nTwo.") would cost the blank line this is all for.
-  const tail = after.replace(/^[ \t]+/, '')
+  const tail = after.replace(/^[ \t]+/, '');
 
-  let trailing = ''
+  let trailing = '';
   if (tail.length > 0) {
-    if (tail.startsWith('\n\n')) trailing = ''
-    else if (tail.startsWith('\n')) trailing = '\n'
-    else trailing = '\n\n'
+    if (tail.startsWith('\n\n')) trailing = '';
+    else if (tail.startsWith('\n')) trailing = '\n';
+    else trailing = '\n\n';
   }
 
   return {
@@ -230,5 +227,5 @@ export function insertTemplate(
     // Right after the snippet itself — the trailing separator belongs to the tail, not to the
     // text the user just inserted.
     caret: before.length + leading.length + snippet.length,
-  }
+  };
 }

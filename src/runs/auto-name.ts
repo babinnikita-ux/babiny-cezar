@@ -89,7 +89,8 @@ export function buildNamerPrompt(ctx: NamerContext): string {
     clip(ctx.task, 500),
   ];
   if (refs.length) lines.push('', `References found programmatically (advisory): ${refs.join(', ')}`);
-  if (ctx.turnText) lines.push('', 'Latest progress (context only — do not quote it):', clip(ctx.turnText, 400));
+  if (ctx.turnText)
+    lines.push('', 'Latest progress (context only — do not quote it):', clip(ctx.turnText, 400));
   if (ctx.diffStat) lines.push('', `Change size so far: ${ctx.diffStat}`);
   return lines.join('\n');
 }
@@ -121,9 +122,14 @@ export function crossCheckRefs(
 ): { prNumber?: number; issueNumber?: number } {
   const inTask = (n: number | undefined): boolean =>
     n !== undefined && new RegExp(`(^|\\D)${n}(\\D|$)`).test(task);
-  const claimedPr = refs.prNumber ?? (raw.pr !== undefined && (inTask(raw.pr) || refs.ambiguousNumber === raw.pr) ? raw.pr : undefined);
+  const claimedPr =
+    refs.prNumber ??
+    (raw.pr !== undefined && (inTask(raw.pr) || refs.ambiguousNumber === raw.pr) ? raw.pr : undefined);
   const claimedIssue =
-    refs.issueNumber ?? (raw.issue !== undefined && (inTask(raw.issue) || refs.ambiguousNumber === raw.issue) ? raw.issue : undefined);
+    refs.issueNumber ??
+    (raw.issue !== undefined && (inTask(raw.issue) || refs.ambiguousNumber === raw.issue)
+      ? raw.issue
+      : undefined);
   return {
     ...(claimedPr !== undefined ? { prNumber: claimedPr } : {}),
     ...(claimedIssue !== undefined ? { issueNumber: claimedIssue } : {}),
@@ -139,7 +145,11 @@ export function postValidateTitle(title: string, refNumber?: number): string {
   }
   if (t) t = t[0]?.toLowerCase() + t.slice(1);
   const chars = [...t];
-  if (chars.length > TITLE_MAX) t = `${chars.slice(0, TITLE_MAX - 1).join('').trimEnd()}…`;
+  if (chars.length > TITLE_MAX)
+    t = `${chars
+      .slice(0, TITLE_MAX - 1)
+      .join('')
+      .trimEnd()}…`;
   return refNumber !== undefined ? `${refNumber}: ${t}`.trim().replace(/:\s*$/, ':') : t;
 }
 

@@ -1,8 +1,8 @@
-import { ChevronDownIcon, SettingsIcon } from 'lucide-react'
-import { Link } from '@/lib/project-router'
+import { ChevronDownIcon, SettingsIcon } from 'lucide-react';
+import { Link } from '@/lib/project-router';
 
-import type { BackendCheck, HealthResponse } from '@/api/types'
-import { StatusDot } from '@/components/status-dot'
+import type { BackendCheck, HealthResponse } from '@/api/types';
+import { StatusDot } from '@/components/status-dot';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,7 +10,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+} from '@/components/ui/dropdown-menu';
 
 /**
  * The sidebar footer's Tools dropdown (spec, "App shell & navigation" footer): one compact
@@ -26,9 +26,9 @@ import {
 /** The trigger's hover tooltip: the cezar version, plus whichever tools need attention.
  *  Exported for the tests — the string is a small contract of its own. */
 export function toolsTooltip(health: HealthResponse): string {
-  const missing = health.checks.filter((check) => !check.available).map((check) => check.name)
-  const base = `cezar v${health.version}`
-  return missing.length ? `${base} · needs attention: ${missing.join(', ')}` : base
+  const missing = health.checks.filter((check) => !check.available).map((check) => check.name);
+  const base = `cezar v${health.version}`;
+  return missing.length ? `${base} · needs attention: ${missing.join(', ')}` : base;
 }
 
 /**
@@ -37,19 +37,19 @@ export function toolsTooltip(health: HealthResponse): string {
  * no explaining. Exported for the tests — the two sentences are a small contract.
  */
 export function forgeNote(health: HealthResponse): string | null {
-  if (health.forge?.available) return null
+  if (health.forge?.available) return null;
   if (!health.forge) {
-    return 'No GitHub remote detected — the GitHub tab is hidden. Every plain-git feature still works.'
+    return 'No GitHub remote detected — the GitHub tab is hidden. Every plain-git feature still works.';
   }
-  return `GitHub is unreachable — ${health.forge.reason ?? 'unknown reason'}. The GitHub tab is hidden until it comes back.`
+  return `GitHub is unreachable — ${health.forge.reason ?? 'unknown reason'}. The GitHub tab is hidden until it comes back.`;
 }
 
 export function ToolsMenu({ health }: { health: HealthResponse | undefined }) {
-  if (!health) return null
+  if (!health) return null;
 
   // Green only when nothing needs attention. `pending` (amber), not `danger`: a missing
   // optional tool is "worth a look", not an outage — the per-row dot is where red lives.
-  const allAvailable = health.checks.every((check) => check.available)
+  const allAvailable = health.checks.every((check) => check.available);
 
   return (
     <DropdownMenu>
@@ -67,17 +67,16 @@ export function ToolsMenu({ health }: { health: HealthResponse | undefined }) {
       </DropdownMenuTrigger>
 
       {/* Anchored above the trigger — the trigger sits in the shell's bottom edge. */}
-      <DropdownMenuContent
-        side="top"
-        align="start"
-        data-slot="tools-menu-content"
-        className="w-[240px]"
-      >
+      <DropdownMenuContent side="top" align="start" data-slot="tools-menu-content" className="w-[240px]">
         <DropdownMenuLabel className="text-[11px] font-semibold tracking-[.04em] text-soft-foreground uppercase">
           Installed tools
         </DropdownMenuLabel>
         {health.checks.map((check) =>
-          check.available ? <AvailableToolRow key={check.name} check={check} /> : <UnavailableToolRow key={check.name} check={check} />
+          check.available ? (
+            <AvailableToolRow key={check.name} check={check} />
+          ) : (
+            <UnavailableToolRow key={check.name} check={check} />
+          ),
         )}
         {forgeNote(health) ? (
           <>
@@ -100,7 +99,7 @@ export function ToolsMenu({ health }: { health: HealthResponse | undefined }) {
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
+  );
 }
 
 /** A present tool: dot, mono name, right-aligned version. Informational, not interactive —
@@ -122,7 +121,7 @@ function AvailableToolRow({ check }: { check: BackendCheck }) {
         {check.version ?? 'not found'}
       </span>
     </div>
-  )
+  );
 }
 
 /**
@@ -162,5 +161,5 @@ function UnavailableToolRow({ check }: { check: BackendCheck }) {
         </span>
       </Link>
     </DropdownMenuItem>
-  )
+  );
 }

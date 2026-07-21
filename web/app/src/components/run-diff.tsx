@@ -1,13 +1,13 @@
-import { useQueryClient } from '@tanstack/react-query'
-import { ChevronRightIcon } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query';
+import { ChevronRightIcon } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
-import { queryKeys, useRunDiff } from '@/api/queries'
-import { Button } from '@/components/ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
-import { highlight, highlightSync, type SynToken } from '@/lib/highlighter'
-import { diffTotals, parseUnifiedDiff, type DiffFile } from '@/lib/unified-diff'
-import { cn } from '@/lib/utils'
+import { queryKeys, useRunDiff } from '@/api/queries';
+import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { highlight, highlightSync, type SynToken } from '@/lib/highlighter';
+import { diffTotals, parseUnifiedDiff, type DiffFile } from '@/lib/unified-diff';
+import { cn } from '@/lib/utils';
 
 /**
  * A run's worktree diff (`GET /api/runs/:id/diff`) as collapsible per-file sections — shared by
@@ -21,29 +21,29 @@ import { cn } from '@/lib/utils'
  */
 
 /** Sections beyond this many start hidden behind "Show N more files". */
-const FILE_CAP = 20
+const FILE_CAP = 20;
 /** Per-file line cap — a generated lockfile must not wedge the page. */
-const DIFF_CLAMP_LINES = 300
+const DIFF_CLAMP_LINES = 300;
 
 export function RunDiff({ runId }: { runId: string }) {
-  const queryClient = useQueryClient()
-  const diff = useRunDiff(runId)
+  const queryClient = useQueryClient();
+  const diff = useRunDiff(runId);
   // Legacy parity (web/app.js: the review panel "(re)loads the diff on each entry"): both
   // consumers mount this exactly when the reader enters the surface — marking the cached diff
   // stale here refetches it on every re-entry, never showing a pre-send-back diff after the
   // agent worked again.
   useEffect(() => {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.runs.diff(runId) })
-  }, [queryClient, runId])
+    void queryClient.invalidateQueries({ queryKey: queryKeys.runs.diff(runId) });
+  }, [queryClient, runId]);
 
-  const files = useMemo(() => parseUnifiedDiff(diff.data ?? ''), [diff.data])
-  const [showAllFiles, setShowAllFiles] = useState(false)
+  const files = useMemo(() => parseUnifiedDiff(diff.data ?? ''), [diff.data]);
+  const [showAllFiles, setShowAllFiles] = useState(false);
 
   if (diff.isPending) {
-    return <p className="px-1 text-xs text-soft-foreground">Loading diff…</p>
+    return <p className="px-1 text-xs text-soft-foreground">Loading diff…</p>;
   }
   if (diff.isError) {
-    return <p className="px-1 text-xs text-danger">{diff.error.message}</p>
+    return <p className="px-1 text-xs text-danger">{diff.error.message}</p>;
   }
   if (files.length === 0) {
     // Not a diff: the server's own sentence ("(no worktree — …)", "(diff failed …)") or an
@@ -52,11 +52,11 @@ export function RunDiff({ runId }: { runId: string }) {
       <p data-slot="run-diff-empty" className="px-1 font-mono text-xs text-soft-foreground">
         {diff.data.trim() || '(no changes)'}
       </p>
-    )
+    );
   }
 
-  const totals = diffTotals(files)
-  const shown = showAllFiles ? files : files.slice(0, FILE_CAP)
+  const totals = diffTotals(files);
+  const shown = showAllFiles ? files : files.slice(0, FILE_CAP);
   return (
     <div data-slot="run-diff" className="flex min-w-0 flex-col gap-2">
       <p className="flex items-center gap-2 px-1 text-xs text-muted-foreground">
@@ -77,19 +77,19 @@ export function RunDiff({ runId }: { runId: string }) {
         </Button>
       ) : null}
     </div>
-  )
+  );
 }
 
 const statusBadge: Partial<Record<DiffFile['status'], string>> = {
   added: 'added',
   deleted: 'deleted',
   renamed: 'renamed',
-}
+};
 
 /** One file of the diff as a collapsible card: path (with rename lineage), ± counts, body. */
 function DiffFileSection({ file }: { file: DiffFile }) {
-  const [open, setOpen] = useState(true)
-  const badge = statusBadge[file.status]
+  const [open, setOpen] = useState(true);
+  const badge = statusBadge[file.status];
   return (
     <Collapsible
       open={open}
@@ -139,7 +139,7 @@ function DiffFileSection({ file }: { file: DiffFile }) {
         </div>
       </CollapsibleContent>
     </Collapsible>
-  )
+  );
 }
 
 /**
@@ -149,22 +149,22 @@ function DiffFileSection({ file }: { file: DiffFile }) {
  * an explicit "Show all" for huge files.
  */
 function DiffFileBody({ lines }: { lines: string[] }) {
-  const [expanded, setExpanded] = useState(false)
-  const shown = expanded ? lines : lines.slice(0, DIFF_CLAMP_LINES)
-  const text = shown.join('\n')
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? lines : lines.slice(0, DIFF_CLAMP_LINES);
+  const text = shown.join('\n');
 
   // Sync when the grammar is already resident (every file after the first), async once.
-  const [loaded, setLoaded] = useState<{ text: string; tokens: SynToken[][] } | null>(null)
+  const [loaded, setLoaded] = useState<{ text: string; tokens: SynToken[][] } | null>(null);
   useEffect(() => {
-    let cancelled = false
+    let cancelled = false;
     void highlight(text, 'diff').then((result) => {
-      if (!cancelled) setLoaded({ text, tokens: result.tokens })
-    })
+      if (!cancelled) setLoaded({ text, tokens: result.tokens });
+    });
     return () => {
-      cancelled = true
-    }
-  }, [text])
-  const tokens = loaded?.text === text ? loaded.tokens : (highlightSync(text, 'diff')?.tokens ?? null)
+      cancelled = true;
+    };
+  }, [text]);
+  const tokens = loaded?.text === text ? loaded.tokens : (highlightSync(text, 'diff')?.tokens ?? null);
 
   return (
     <>
@@ -205,5 +205,5 @@ function DiffFileBody({ lines }: { lines: string[] }) {
         </button>
       ) : null}
     </>
-  )
+  );
 }

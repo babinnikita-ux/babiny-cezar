@@ -1,20 +1,20 @@
-import { useQueryClient } from '@tanstack/react-query'
-import { ChevronDownIcon } from 'lucide-react'
-import * as React from 'react'
-import { useLocation } from 'react-router'
+import { useQueryClient } from '@tanstack/react-query';
+import { ChevronDownIcon } from 'lucide-react';
+import * as React from 'react';
+import { useLocation } from 'react-router';
 
-import { putWorkspaceUiState } from '@/api/client'
-import { useProjectRuns, useWorkspaceUiState, workspaceQueryKeys } from '@/api/queries'
-import type { ProjectListEntry, WorkspaceUiState } from '@/api/types'
-import { useSidebarNavigate } from '@/components/app-shell'
-import { useListView } from '@/components/list-view'
-import { activeNavPath, visibleNavItems } from '@/components/nav-items'
-import { QuickListBuckets } from '@/components/task-quick-list'
-import { toast } from '@/components/ui/toaster'
-import { Link, pathnameProjectId, scopeTo, stripProjectPrefix, useProjectMatch } from '@/lib/project-router'
-import { capBuckets, groupRuns, listCounts, type ListView } from '@/lib/task-groups'
-import { useNow } from '@/lib/use-now'
-import { cn } from '@/lib/utils'
+import { putWorkspaceUiState } from '@/api/client';
+import { useProjectRuns, useWorkspaceUiState, workspaceQueryKeys } from '@/api/queries';
+import type { ProjectListEntry, WorkspaceUiState } from '@/api/types';
+import { useSidebarNavigate } from '@/components/app-shell';
+import { useListView } from '@/components/list-view';
+import { activeNavPath, visibleNavItems } from '@/components/nav-items';
+import { QuickListBuckets } from '@/components/task-quick-list';
+import { toast } from '@/components/ui/toaster';
+import { Link, pathnameProjectId, scopeTo, stripProjectPrefix, useProjectMatch } from '@/lib/project-router';
+import { capBuckets, groupRuns, listCounts, type ListView } from '@/lib/task-groups';
+import { useNow } from '@/lib/use-now';
+import { cn } from '@/lib/utils';
 
 /**
  * The multi-project sidebar (multi-project spec, "Sidebar"): one collapsible group per
@@ -29,12 +29,12 @@ import { cn } from '@/lib/utils'
 
 /** The spec's "10 most recent tasks", counted ACROSS buckets — a collapsed variant tile is one
  *  row, because it occupies one row of sidebar. */
-const RECENT_LIMIT = 10
+const RECENT_LIMIT = 10;
 
 /** Collapse is a click-through-a-list gesture: a user opening three groups in a row should cost
  *  the server one write, not three. Short enough that a reload right after a toggle still finds
  *  the new state. */
-const COLLAPSE_WRITE_DEBOUNCE_MS = 400
+const COLLAPSE_WRITE_DEBOUNCE_MS = 400;
 
 /**
  * Whether a group renders collapsed.
@@ -49,9 +49,9 @@ export function isProjectCollapsed(
   projectId: string,
   activeProjectId: string | null,
 ): boolean {
-  const stored = collapsed?.[projectId]
-  if (stored !== undefined) return stored
-  return projectId !== activeProjectId
+  const stored = collapsed?.[projectId];
+  if (stored !== undefined) return stored;
+  return projectId !== activeProjectId;
 }
 
 /**
@@ -67,60 +67,60 @@ export function isProjectCollapsed(
  * } }` replaces `sidebar` outright and would drop any sibling key a future step puts there.
  */
 function useSidebarCollapse(activeProjectId: string | null) {
-  const queryClient = useQueryClient()
-  const uiState = useWorkspaceUiState()
-  const collapsed = uiState.data?.sidebar?.collapsed
+  const queryClient = useQueryClient();
+  const uiState = useWorkspaceUiState();
+  const collapsed = uiState.data?.sidebar?.collapsed;
 
-  const pending = React.useRef<WorkspaceUiState['sidebar'] | null>(null)
-  const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+  const pending = React.useRef<WorkspaceUiState['sidebar'] | null>(null);
+  const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flush = React.useCallback(() => {
-    timer.current = null
-    const sidebar = pending.current
-    if (!sidebar) return
-    pending.current = null
+    timer.current = null;
+    const sidebar = pending.current;
+    if (!sidebar) return;
+    pending.current = null;
     putWorkspaceUiState({ sidebar })
       .then((merged) => queryClient.setQueryData(workspaceQueryKeys.uiState, merged))
       .catch((error: unknown) => {
-        toast(error instanceof Error ? error.message : String(error), { tone: 'danger' })
-        void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.uiState })
-      })
-  }, [queryClient])
+        toast(error instanceof Error ? error.message : String(error), { tone: 'danger' });
+        void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.uiState });
+      });
+  }, [queryClient]);
 
   // A toggle in the last few hundred milliseconds before unmount (a full page navigation, a
   // closing tab) still lands: the cleanup sends it rather than dropping the timer on the floor.
   React.useEffect(
     () => () => {
-      if (timer.current === null) return
-      clearTimeout(timer.current)
-      flush()
+      if (timer.current === null) return;
+      clearTimeout(timer.current);
+      flush();
     },
     [flush],
-  )
+  );
 
   const toggle = React.useCallback(
     (projectId: string) => {
       // Read the cache rather than close over `uiState.data`: two toggles inside one debounce
       // window must compose, and the second must see the first one's optimistic write.
-      const current = queryClient.getQueryData<WorkspaceUiState>(workspaceQueryKeys.uiState)
-      const currentCollapsed = current?.sidebar?.collapsed
+      const current = queryClient.getQueryData<WorkspaceUiState>(workspaceQueryKeys.uiState);
+      const currentCollapsed = current?.sidebar?.collapsed;
       const sidebar = {
         ...current?.sidebar,
         collapsed: {
           ...currentCollapsed,
           [projectId]: !isProjectCollapsed(currentCollapsed, projectId, activeProjectId),
         },
-      }
-      queryClient.setQueryData<WorkspaceUiState>(workspaceQueryKeys.uiState, { ...current, sidebar })
+      };
+      queryClient.setQueryData<WorkspaceUiState>(workspaceQueryKeys.uiState, { ...current, sidebar });
 
-      pending.current = sidebar
-      if (timer.current !== null) clearTimeout(timer.current)
-      timer.current = setTimeout(flush, COLLAPSE_WRITE_DEBOUNCE_MS)
+      pending.current = sidebar;
+      if (timer.current !== null) clearTimeout(timer.current);
+      timer.current = setTimeout(flush, COLLAPSE_WRITE_DEBOUNCE_MS);
     },
     [activeProjectId, flush, queryClient],
-  )
+  );
 
-  return { collapsed, toggle }
+  return { collapsed, toggle };
 }
 
 export function ProjectGroups({
@@ -130,35 +130,35 @@ export function ProjectGroups({
   inboxAvailable = false,
   inboxCount = null,
 }: {
-  projects: ProjectListEntry[]
+  projects: ProjectListEntry[];
   /** The project a flat, unprefixed URL resolves to — so the boot project is the one that
    *  auto-expands before the user has navigated into any `/p/<id>` scope. */
-  bootProjectId: string
-  forgeAvailable?: boolean
-  inboxAvailable?: boolean
-  inboxCount?: number | null
+  bootProjectId: string;
+  forgeAvailable?: boolean;
+  inboxAvailable?: boolean;
+  inboxCount?: number | null;
 }) {
-  const { pathname } = useLocation()
+  const { pathname } = useLocation();
   // The shell renders outside the routes, so there is no `ProjectScopeProvider` above it — the
   // URL's own prefix is the scope, exactly as `project-router` resolves it for links.
-  const activeProjectId = pathnameProjectId(pathname) ?? bootProjectId
-  const { collapsed, toggle } = useSidebarCollapse(activeProjectId)
+  const activeProjectId = pathnameProjectId(pathname) ?? bootProjectId;
+  const { collapsed, toggle } = useSidebarCollapse(activeProjectId);
 
   // One filter for the whole cockpit (`ListViewProvider`): switching the Tasks table to Archived
   // switches every group with it, rather than leaving the sidebar answering a different question.
-  const [view] = useListView()
-  const activeTo = activeNavPath(stripProjectPrefix(pathname))
-  const runMatch = useProjectMatch('/tasks/:id/*')
-  const runExact = useProjectMatch('/tasks/:id')
-  const currentRunId = runMatch?.params.id ?? runExact?.params.id ?? null
-  const now = useNow(30_000)
+  const [view] = useListView();
+  const activeTo = activeNavPath(stripProjectPrefix(pathname));
+  const runMatch = useProjectMatch('/tasks/:id/*');
+  const runExact = useProjectMatch('/tasks/:id');
+  const currentRunId = runMatch?.params.id ?? runExact?.params.id ?? null;
+  const now = useNow(30_000);
 
   // Most-recently-opened first, per the spec. Sorted here rather than trusted from the wire so
   // the order is a property of the sidebar, not of whichever route last touched the registry.
   const ordered = React.useMemo(
     () => [...projects].sort((a, b) => b.lastOpenedAt.localeCompare(a.lastOpenedAt)),
     [projects],
-  )
+  );
 
   return (
     <div data-slot="project-group-list">
@@ -180,7 +180,7 @@ export function ProjectGroups({
         />
       ))}
     </div>
-  )
+  );
 }
 
 function ProjectGroup({
@@ -197,31 +197,31 @@ function ProjectGroup({
   inboxAvailable,
   inboxCount,
 }: {
-  project: ProjectListEntry
+  project: ProjectListEntry;
   /** The boot project's runs cache lives under the `'default'` scope key (it mounts
    *  unscoped) — see `useProjectRuns`' `boot` parameter. */
-  boot: boolean
-  active: boolean
-  collapsed: boolean
-  onToggle: (projectId: string) => void
-  view: ListView
+  boot: boolean;
+  active: boolean;
+  collapsed: boolean;
+  onToggle: (projectId: string) => void;
+  view: ListView;
   /** The `to` of the nav item that owns the current URL — applied to the ACTIVE group only. */
-  activeTo: string | null
-  currentRunId: string | null
-  now: number
-  forgeAvailable: boolean
-  inboxAvailable: boolean
-  inboxCount: number | null
+  activeTo: string | null;
+  currentRunId: string | null;
+  now: number;
+  forgeAvailable: boolean;
+  inboxAvailable: boolean;
+  inboxCount: number | null;
 }) {
-  const missing = project.status === 'missing'
+  const missing = project.status === 'missing';
   // Collapsed (or missing) groups never fetch — a 40-project workspace costs one registry
   // request, not 40 run lists. A collapsed group still READS whatever is cached, which is what
   // keeps its attention badge alive after the user shuts it.
-  const runs = useProjectRuns(project.id, !collapsed && !missing, boot)
-  const onNavigate = useSidebarNavigate()
+  const runs = useProjectRuns(project.id, !collapsed && !missing, boot);
+  const onNavigate = useSidebarNavigate();
 
-  const waiting = runs.data ? listCounts(runs.data).waiting : 0
-  const buckets = runs.data ? capBuckets(groupRuns(runs.data, view), RECENT_LIMIT) : []
+  const waiting = runs.data ? listCounts(runs.data).waiting : 0;
+  const buckets = runs.data ? capBuckets(groupRuns(runs.data, view), RECENT_LIMIT) : [];
 
   // A missing project's panes all 409 (spec, "Registered project folder deleted/moved"), so
   // there is nothing behind the chevron — the row renders greyed and inert rather than
@@ -245,10 +245,10 @@ function ProjectGroup({
           </span>
         </div>
       </div>
-    )
+    );
   }
 
-  const bodyId = `project-group-${project.id}`
+  const bodyId = `project-group-${project.id}`;
 
   return (
     <div
@@ -304,8 +304,8 @@ function ProjectGroup({
             {visibleNavItems({ forge: forgeAvailable, inbox: inboxAvailable }).map((item) => {
               // Only the active group can own the current URL: the flat route map is
               // project-agnostic, so `/git` lights Git in exactly one project — the scoped one.
-              const isActive = active && item.to === activeTo
-              const Icon = item.icon
+              const isActive = active && item.to === activeTo;
+              const Icon = item.icon;
               // Explicitly scoped (`/p/<id>/…`) rather than left to the wrapper's active-project
               // prefix: a group's whole point is linking into a project that is NOT active.
               return (
@@ -333,7 +333,7 @@ function ProjectGroup({
                     </span>
                   ) : null}
                 </Link>
-              )
+              );
             })}
           </nav>
 
@@ -357,5 +357,5 @@ function ProjectGroup({
         </div>
       )}
     </div>
-  )
+  );
 }

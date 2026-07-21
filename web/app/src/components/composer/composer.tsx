@@ -1,5 +1,5 @@
-import { useQueryClient } from '@tanstack/react-query'
-import { ArrowUpIcon, CheckIcon, MicIcon, PaperclipIcon, XIcon } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query';
+import { ArrowUpIcon, CheckIcon, MicIcon, PaperclipIcon, XIcon } from 'lucide-react';
 import {
   useCallback,
   useEffect,
@@ -13,29 +13,24 @@ import {
   type KeyboardEvent,
   type ReactNode,
   type Ref,
-} from 'react'
+} from 'react';
 
-import { putUiState } from '@/api/client'
-import { queryKeys, useSkills, useUiState } from '@/api/queries'
-import type { ImageInput } from '@/api/types'
-import { Button } from '@/components/ui/button'
-import { Command, CommandItem, CommandList } from '@/components/ui/command'
-import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
-import { toast } from '@/components/ui/toaster'
-import { insertTemplate } from '@/lib/prompt-templates'
-import { bumpSkillUsage, filterSkills, fuzzyMatch, isProjectSkill } from '@/lib/skills'
-import { useNow } from '@/lib/use-now'
-import { isSubmitShortcut } from '@/lib/use-submit-shortcut'
-import { cn } from '@/lib/utils'
+import { putUiState } from '@/api/client';
+import { queryKeys, useSkills, useUiState } from '@/api/queries';
+import type { ImageInput } from '@/api/types';
+import { Button } from '@/components/ui/button';
+import { Command, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
+import { toast } from '@/components/ui/toaster';
+import { insertTemplate } from '@/lib/prompt-templates';
+import { bumpSkillUsage, filterSkills, fuzzyMatch, isProjectSkill } from '@/lib/skills';
+import { useNow } from '@/lib/use-now';
+import { isSubmitShortcut } from '@/lib/use-submit-shortcut';
+import { cn } from '@/lib/utils';
 
-import {
-  fileToPendingImage,
-  MAX_IMAGES,
-  screenFiles,
-  type PendingImage,
-} from './composer-images'
-import { applyCompletion, detectTrigger, type TriggerState } from './composer-text'
-import { formatElapsed, useDictation } from './dictation'
+import { fileToPendingImage, MAX_IMAGES, screenFiles, type PendingImage } from './composer-images';
+import { applyCompletion, detectTrigger, type TriggerState } from './composer-text';
+import { formatElapsed, useDictation } from './dictation';
 
 /**
  * The SHARED composer (spec §"Task thread" composer + §"New task" composer intelligence —
@@ -50,45 +45,45 @@ import { formatElapsed, useDictation } from './dictation'
 export interface ComposerProps {
   /** Deliver the message. Rejection = the message did NOT land: the composer toasts the error
    *  and restores the draft (nothing the user typed is ever lost). */
-  onSubmit: (text: string, images: ImageInput[]) => Promise<unknown>
+  onSubmit: (text: string, images: ImageInput[]) => Promise<unknown>;
   /**
    * Controlled text (pass BOTH or neither): the /new host owns the draft so it survives
    * navigation (spec: "Queued form state survives navigation"). Every internal edit — typing,
    * completions, the optimistic clear, the on-error restore — flows through `onValueChange`.
    */
-  value?: string
-  onValueChange?: (text: string) => void
+  value?: string;
+  onValueChange?: (text: string) => void;
   /** Focus the textarea on mount — the /new hero, where typing is the whole point of arriving. */
-  autoFocus?: boolean
+  autoFocus?: boolean;
   /** Rendered in the footer bar after the paperclip — the /new picker pill row. */
-  footerStart?: ReactNode
+  footerStart?: ReactNode;
   /** Rendered between Dictation and the send button — the /new mode segment + kbd hint. */
-  footerEnd?: ReactNode
+  footerEnd?: ReactNode;
   /** The send button's accessible name. */
-  sendAriaLabel?: string
-  disabled?: boolean
+  sendAriaLabel?: string;
+  disabled?: boolean;
   /** Shown as the placeholder while disabled — e.g. the legacy "Session closed — Continue to
    *  reopen." */
-  disabledReason?: string
+  disabledReason?: string;
   /** Rendered in the footer bar while disabled — the host's way out (the thread passes its
    *  Continue button). */
-  disabledAction?: ReactNode
-  placeholder?: string
-  ariaLabel?: string
+  disabledAction?: ReactNode;
+  placeholder?: string;
+  ariaLabel?: string;
   /** `/` opens the project-first skills autocomplete (#380). */
-  autocompleteSkills?: boolean
+  autocompleteSkills?: boolean;
   /** Alt+A → "Yes, approved." / Alt+C → "Continue." — the legacy quick replies, window-global
    *  while the composer is enabled. */
-  quickReplies?: boolean
+  quickReplies?: boolean;
   /**
    * The `@` mention source seam. TODAY the thread feeds it the file paths its tool items
    * touched (real data — edit/read locations and diffs); R5's `/files` API upgrades this same
    * prop to a worktree-wide fuzzy search without touching the composer. Absent ⇒ `@` stays
    * plain text.
    */
-  getMentionCandidates?: () => string[]
+  getMentionCandidates?: () => string[];
   /** Exposes `ComposerHandle` — see there for why this exists. */
-  ref?: Ref<ComposerHandle>
+  ref?: Ref<ComposerHandle>;
 }
 
 /** The imperative seam a host needs when it wants to write INTO the draft the composer owns —
@@ -97,10 +92,10 @@ export interface ComposerProps {
 export interface ComposerHandle {
   /** Insert `snippet` at the caret, blank-line separated (`insertTemplate`), then refocus with
    *  the caret parked right after it. */
-  insertAtCaret: (snippet: string) => void
+  insertAtCaret: (snippet: string) => void;
 }
 
-const QUICK_REPLIES: Record<string, string> = { KeyA: 'Yes, approved.', KeyC: 'Continue.' }
+const QUICK_REPLIES: Record<string, string> = { KeyA: 'Yes, approved.', KeyC: 'Continue.' };
 
 export function Composer({
   onSubmit,
@@ -122,45 +117,45 @@ export function Composer({
 }: ComposerProps) {
   // Optionally controlled: `value` (when given) shadows the internal state, and every write is
   // mirrored to both — updater functions resolve against whichever is authoritative right now.
-  const [internalText, setInternalText] = useState('')
-  const text = value ?? internalText
-  const textRef = useRef(text)
-  textRef.current = text
-  const onValueChangeRef = useRef(onValueChange)
-  onValueChangeRef.current = onValueChange
+  const [internalText, setInternalText] = useState('');
+  const text = value ?? internalText;
+  const textRef = useRef(text);
+  textRef.current = text;
+  const onValueChangeRef = useRef(onValueChange);
+  onValueChangeRef.current = onValueChange;
   const setText = useCallback((next: string | ((current: string) => string)) => {
-    const resolved = typeof next === 'function' ? next(textRef.current) : next
-    setInternalText(resolved)
-    onValueChangeRef.current?.(resolved)
-  }, [])
-  const [images, setImages] = useState<PendingImage[]>([])
+    const resolved = typeof next === 'function' ? next(textRef.current) : next;
+    setInternalText(resolved);
+    onValueChangeRef.current?.(resolved);
+  }, []);
+  const [images, setImages] = useState<PendingImage[]>([]);
   // Mirrors `images` for reads inside event handlers that must not run through a setState updater
   // (StrictMode double-invokes those in dev — see addFiles / #double-paste).
-  const imagesRef = useRef(images)
-  imagesRef.current = images
-  const [busy, setBusy] = useState(false)
-  const [trigger, setTrigger] = useState<TriggerState | null>(null)
-  const [menuValue, setMenuValue] = useState('')
+  const imagesRef = useRef(images);
+  imagesRef.current = images;
+  const [busy, setBusy] = useState(false);
+  const [trigger, setTrigger] = useState<TriggerState | null>(null);
+  const [menuValue, setMenuValue] = useState('');
   // Skills load on the FIRST `/` trigger and stay cached — not on every thread visit.
-  const [skillsWanted, setSkillsWanted] = useState(false)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const rootRef = useRef<HTMLDivElement>(null)
-  const pendingCaretRef = useRef<number | null>(null)
+  const [skillsWanted, setSkillsWanted] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const pendingCaretRef = useRef<number | null>(null);
 
-  const skills = useSkills(autocompleteSkills && skillsWanted)
+  const skills = useSkills(autocompleteSkills && skillsWanted);
   // The `/` list orders most-used first (#519) and a pick bumps `skillUsage`, so this — the
   // highest-traffic skill surface — both reads and feeds the same stats as the pickers.
-  const uiState = useUiState()
-  const queryClient = useQueryClient()
-  const dictation = useDictation((message) => toast(message, { tone: 'danger' }))
+  const uiState = useUiState();
+  const queryClient = useQueryClient();
+  const dictation = useDictation((message) => toast(message, { tone: 'danger' }));
 
   // On-mount only, by design: re-focusing on a later `autoFocus` flip would steal focus mid-visit.
   // The ref pins the MOUNT-TIME value so the effect can stay dep-free and still be honest about
   // what it reads — depending on the prop itself is exactly the refocus bug we're avoiding.
-  const autoFocusOnMountRef = useRef(autoFocus)
+  const autoFocusOnMountRef = useRef(autoFocus);
   useEffect(() => {
-    if (autoFocusOnMountRef.current) textareaRef.current?.focus()
-  }, [])
+    if (autoFocusOnMountRef.current) textareaRef.current?.focus();
+  }, []);
 
   // Rides the same `pendingCaretRef` + layout-effect restore the `/` autocomplete uses, rather
   // than a rAF: the caret is set in the same paint as the text, so there is no window in which a
@@ -169,42 +164,42 @@ export function Composer({
     ref,
     () => ({
       insertAtCaret: (snippet: string) => {
-        const el = textareaRef.current
-        const result = insertTemplate(textRef.current, el?.selectionStart ?? textRef.current.length, snippet)
-        setText(result.text)
-        pendingCaretRef.current = result.caret
-        el?.focus()
+        const el = textareaRef.current;
+        const result = insertTemplate(textRef.current, el?.selectionStart ?? textRef.current.length, snippet);
+        setText(result.text);
+        pendingCaretRef.current = result.caret;
+        el?.focus();
       },
     }),
     [setText],
-  )
+  );
 
   // ---- autocomplete ------------------------------------------------------------------------
 
   /** Re-read the trigger from the real textarea (value + caret) — the one source of truth. */
   const syncTrigger = useCallback(() => {
-    const el = textareaRef.current
+    const el = textareaRef.current;
     if (!el || disabled) {
-      setTrigger(null)
-      return
+      setTrigger(null);
+      return;
     }
-    const next = detectTrigger(el.value, el.selectionStart ?? el.value.length)
-    if (next?.trigger === '/' && !autocompleteSkills) return setTrigger(null)
-    if (next?.trigger === '@' && getMentionCandidates === undefined) return setTrigger(null)
-    if (next?.trigger === '/') setSkillsWanted(true)
-    setTrigger(next)
-  }, [autocompleteSkills, disabled, getMentionCandidates])
+    const next = detectTrigger(el.value, el.selectionStart ?? el.value.length);
+    if (next?.trigger === '/' && !autocompleteSkills) return setTrigger(null);
+    if (next?.trigger === '@' && getMentionCandidates === undefined) return setTrigger(null);
+    if (next?.trigger === '/') setSkillsWanted(true);
+    setTrigger(next);
+  }, [autocompleteSkills, disabled, getMentionCandidates]);
 
   interface MenuCandidate {
-    value: string
-    insert: string
-    label: string
-    description?: string
-    emphasized: boolean
+    value: string;
+    insert: string;
+    label: string;
+    description?: string;
+    emphasized: boolean;
   }
 
   const candidates = useMemo((): MenuCandidate[] => {
-    if (trigger === null) return []
+    if (trigger === null) return [];
     if (trigger.trigger === '/') {
       return filterSkills(skills.data ?? [], trigger.query, uiState.data?.skillUsage).map((skill) => ({
         // The path suffix keeps values unique when a project skill shadows a global one.
@@ -213,26 +208,24 @@ export function Composer({
         label: skill.name,
         description: skill.description,
         emphasized: isProjectSkill(skill),
-      }))
+      }));
     }
-    const paths = getMentionCandidates?.() ?? []
+    const paths = getMentionCandidates?.() ?? [];
     return paths
       .filter((path) => fuzzyMatch(path, trigger.query))
-      .map((path) => ({ value: path, insert: path, label: path, emphasized: false }))
-  }, [getMentionCandidates, skills.data, trigger, uiState.data?.skillUsage])
+      .map((path) => ({ value: path, insert: path, label: path, emphasized: false }));
+  }, [getMentionCandidates, skills.data, trigger, uiState.data?.skillUsage]);
 
-  const activeValue = candidates.some((c) => c.value === menuValue)
-    ? menuValue
-    : candidates[0]?.value
-  const menuOpen = trigger !== null
+  const activeValue = candidates.some((c) => c.value === menuValue) ? menuValue : candidates[0]?.value;
+  const menuOpen = trigger !== null;
 
-  const closeMenu = useCallback(() => setTrigger(null), [])
+  const closeMenu = useCallback(() => setTrigger(null), []);
 
   const pick = (candidate: MenuCandidate) => {
-    const el = textareaRef.current
-    if (!el || trigger === null) return
-    const caret = el.selectionStart ?? el.value.length
-    const next = applyCompletion(el.value, trigger, caret, candidate.insert)
+    const el = textareaRef.current;
+    if (!el || trigger === null) return;
+    const caret = el.selectionStart ?? el.value.length;
+    const next = applyCompletion(el.value, trigger, caret, candidate.insert);
     // Frequency sort (#519): a `/` completion is a skill pick, so it counts — same guard as
     // /new's submit (#408): only bump once the CURRENT map is known. The PUT merge is shallow,
     // so bumping off an unresolved/errored ui-state query would send a one-entry map and wipe
@@ -240,133 +233,133 @@ export function Composer({
     if (trigger.trigger === '/' && uiState.data !== undefined) {
       putUiState({ skillUsage: bumpSkillUsage(uiState.data.skillUsage, candidate.insert) })
         .then(() => queryClient.invalidateQueries({ queryKey: queryKeys.uiState }))
-        .catch(() => {})
+        .catch(() => {});
     }
-    setText(next.text)
-    pendingCaretRef.current = next.caret
-    setTrigger(null)
-    el.focus()
-  }
+    setText(next.text);
+    pendingCaretRef.current = next.caret;
+    setTrigger(null);
+    el.focus();
+  };
 
   // Restore the caret after a completion replaced the token mid-draft.
   useLayoutEffect(() => {
-    const caret = pendingCaretRef.current
-    const el = textareaRef.current
+    const caret = pendingCaretRef.current;
+    const el = textareaRef.current;
     if (caret !== null && el) {
-      el.setSelectionRange(caret, caret)
-      pendingCaretRef.current = null
+      el.setSelectionRange(caret, caret);
+      pendingCaretRef.current = null;
     }
-  }, [text])
+  }, [text]);
 
   // ---- sizing (mockup: min 54px, grows with content, never past ~1/3 screen) ----------------
 
   useLayoutEffect(() => {
-    const el = textareaRef.current
-    if (!el) return
-    el.style.height = 'auto'
-    el.style.height = `${Math.min(el.scrollHeight, 220)}px`
-  }, [text])
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
+  }, [text]);
 
   // ---- images --------------------------------------------------------------------------------
 
   const addFiles = useCallback(
     (files: readonly File[]) => {
-      if (disabled) return
+      if (disabled) return;
       // Side effects (screening toasts + async encode) run OUTSIDE any setState updater: React
       // StrictMode double-invokes updater functions in dev, so screening here would encode and
       // append each pasted image twice (#double-paste). `imagesRef` gives the current count
       // without reading through state; each async append re-checks the cap functionally.
-      const intake = screenFiles(files, imagesRef.current.length)
-      for (const reason of intake.rejected) toast(reason, { tone: 'danger' })
+      const intake = screenFiles(files, imagesRef.current.length);
+      for (const reason of intake.rejected) toast(reason, { tone: 'danger' });
       for (const file of intake.accepted) {
         void fileToPendingImage(file).then((image) =>
           setImages((prev) => (prev.length >= MAX_IMAGES ? prev : [...prev, image])),
-        )
+        );
       }
     },
     [disabled],
-  )
+  );
 
   const onPaste = (event: ClipboardEvent) => {
     const files = [...(event.clipboardData?.items ?? [])]
       .filter((item) => item.type.startsWith('image/'))
       .map((item) => item.getAsFile())
-      .filter((file): file is File => file !== null)
-    if (files.length === 0) return
-    event.preventDefault()
-    addFiles(files)
-  }
+      .filter((file): file is File => file !== null);
+    if (files.length === 0) return;
+    event.preventDefault();
+    addFiles(files);
+  };
 
   const onDrop = (event: DragEvent) => {
-    const files = [...(event.dataTransfer?.files ?? [])]
-    if (files.length === 0) return
-    event.preventDefault()
-    addFiles(files)
-  }
+    const files = [...(event.dataTransfer?.files ?? [])];
+    if (files.length === 0) return;
+    event.preventDefault();
+    addFiles(files);
+  };
 
   // ---- submit --------------------------------------------------------------------------------
 
   const send = useCallback(
     async (messageText: string, messageImages: PendingImage[], restoreOnError: boolean) => {
-      const body = messageText.trim()
-      if (disabled || busy || (body === '' && messageImages.length === 0)) return
-      setBusy(true)
+      const body = messageText.trim();
+      if (disabled || busy || (body === '' && messageImages.length === 0)) return;
+      setBusy(true);
       try {
         await onSubmit(
           body,
           messageImages.map(({ mediaType, data }) => ({ mediaType, data })),
-        )
+        );
       } catch (error) {
-        toast(error instanceof Error ? error.message : String(error), { tone: 'danger' })
+        toast(error instanceof Error ? error.message : String(error), { tone: 'danger' });
         if (restoreOnError) {
           // The optimistic clear already happened — put the message back, in front of anything
           // typed since, so nothing the user wrote is lost.
-          setText((current) => (current === '' ? messageText : `${messageText}\n${current}`))
-          setImages((current) => [...messageImages, ...current].slice(0, MAX_IMAGES))
+          setText((current) => (current === '' ? messageText : `${messageText}\n${current}`));
+          setImages((current) => [...messageImages, ...current].slice(0, MAX_IMAGES));
         }
       } finally {
-        setBusy(false)
+        setBusy(false);
       }
     },
     [busy, disabled, onSubmit, setText],
-  )
+  );
 
   const submitDraft = useCallback(() => {
-    if (text.trim() === '' && images.length === 0) return
-    const draftText = text
-    const draftImages = images
+    if (text.trim() === '' && images.length === 0) return;
+    const draftText = text;
+    const draftImages = images;
     // Optimistic clear — the reply feels instant; a rejection restores it above.
-    setText('')
-    setImages([])
-    setTrigger(null)
-    void send(draftText, draftImages, true)
-  }, [images, send, setText, text])
+    setText('');
+    setImages([]);
+    setTrigger(null);
+    void send(draftText, draftImages, true);
+  }, [images, send, setText, text]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (menuOpen) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        event.preventDefault()
-        if (candidates.length === 0) return
-        const at = candidates.findIndex((c) => c.value === activeValue)
-        const delta = event.key === 'ArrowDown' ? 1 : -1
-        const next = candidates[(at + delta + candidates.length) % candidates.length]!
-        setMenuValue(next.value)
-        return
+        event.preventDefault();
+        if (candidates.length === 0) return;
+        const at = candidates.findIndex((c) => c.value === activeValue);
+        const delta = event.key === 'ArrowDown' ? 1 : -1;
+        const next = candidates[(at + delta + candidates.length) % candidates.length]!;
+        setMenuValue(next.value);
+        return;
       }
       if (event.key === 'Escape') {
-        event.preventDefault()
-        closeMenu()
-        return
+        event.preventDefault();
+        closeMenu();
+        return;
       }
       if ((event.key === 'Enter' || event.key === 'Tab') && !event.shiftKey) {
-        const active = candidates.find((c) => c.value === activeValue)
+        const active = candidates.find((c) => c.value === activeValue);
         if (active) {
-          event.preventDefault()
-          pick(active)
-          return
+          event.preventDefault();
+          pick(active);
+          return;
         }
         // No match to accept: the menu is inert — close it and let Enter mean "send".
-        closeMenu()
+        closeMenu();
       }
     }
     const shouldSend = isSubmitShortcut({
@@ -377,47 +370,47 @@ export function Composer({
       altKey: event.altKey,
       repeat: event.repeat,
       isComposing: event.nativeEvent.isComposing,
-    })
+    });
     if (shouldSend) {
-      event.preventDefault()
-      submitDraft()
+      event.preventDefault();
+      submitDraft();
     }
-  }
+  };
 
   // ---- quick replies (legacy parity: window-global, only while the composer can send) --------
 
   useEffect(() => {
-    if (!quickReplies || disabled) return
+    if (!quickReplies || disabled) return;
     const onWindowKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (!event.altKey || event.metaKey || event.ctrlKey || event.repeat) return
-      const reply = QUICK_REPLIES[event.code]
-      if (reply === undefined) return
-      event.preventDefault()
+      if (!event.altKey || event.metaKey || event.ctrlKey || event.repeat) return;
+      const reply = QUICK_REPLIES[event.code];
+      if (reply === undefined) return;
+      event.preventDefault();
       // Canned replies bypass the draft entirely — nothing to restore on failure.
-      void send(reply, [], false)
-    }
-    window.addEventListener('keydown', onWindowKeyDown)
-    return () => window.removeEventListener('keydown', onWindowKeyDown)
-  }, [disabled, quickReplies, send])
+      void send(reply, [], false);
+    };
+    window.addEventListener('keydown', onWindowKeyDown);
+    return () => window.removeEventListener('keydown', onWindowKeyDown);
+  }, [disabled, quickReplies, send]);
 
   // ---- dictation actions -----------------------------------------------------------------------
 
   const insertTranscript = (alsoSend: boolean) => {
-    const transcript = dictation.finish()
-    if (transcript === '') return
-    const merged = text.trim() === '' ? transcript : `${text.replace(/\s*$/, '')} ${transcript}`
+    const transcript = dictation.finish();
+    if (transcript === '') return;
+    const merged = text.trim() === '' ? transcript : `${text.replace(/\s*$/, '')} ${transcript}`;
     if (alsoSend) {
-      setText('')
-      setImages([])
-      void send(merged, images, true)
-      return
+      setText('');
+      setImages([]);
+      void send(merged, images, true);
+      return;
     }
-    setText(merged)
-    pendingCaretRef.current = merged.length
-    textareaRef.current?.focus()
-  }
+    setText(merged);
+    pendingCaretRef.current = merged.length;
+    textareaRef.current?.focus();
+  };
 
-  const recording = dictation.recording
+  const recording = dictation.recording;
 
   return (
     <Popover open={menuOpen} onOpenChange={(open) => (open ? undefined : closeMenu())}>
@@ -464,8 +457,8 @@ export function Composer({
             // 16px on touch widths — iOS zooms any focused input below 16px (spec mobile rule).
             className="block max-h-[220px] min-h-[54px] w-full resize-none bg-transparent px-4 pt-3 pb-1 text-base leading-normal outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed md:text-sm"
             onChange={(event) => {
-              setText(event.target.value)
-              syncTrigger()
+              setText(event.target.value);
+              syncTrigger();
             }}
             onKeyDown={onKeyDown}
             onSelect={syncTrigger}
@@ -543,7 +536,7 @@ export function Composer({
         // Interacting with the composer itself (typing, clicking the textarea) is not
         // "outside" — only a genuine elsewhere-click dismisses.
         onInteractOutside={(event) => {
-          if (rootRef.current?.contains(event.target as Node)) event.preventDefault()
+          if (rootRef.current?.contains(event.target as Node)) event.preventDefault();
         }}
       >
         <Command shouldFilter={false} value={activeValue ?? ''} onValueChange={setMenuValue}>
@@ -592,7 +585,7 @@ export function Composer({
         </Command>
       </PopoverContent>
     </Popover>
-  )
+  );
 }
 
 /** The paperclip + its hidden multi-file input (legacy `#msg-attach`). */
@@ -600,10 +593,10 @@ function AttachButton({
   disabled,
   onFiles,
 }: {
-  disabled: boolean
-  onFiles: (files: readonly File[]) => void
+  disabled: boolean;
+  onFiles: (files: readonly File[]) => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null);
   return (
     <>
       <Button
@@ -627,12 +620,12 @@ function AttachButton({
         aria-hidden="true"
         tabIndex={-1}
         onChange={(event) => {
-          onFiles([...(event.target.files ?? [])])
-          event.target.value = ''
+          onFiles([...(event.target.files ?? [])]);
+          event.target.value = '';
         }}
       />
     </>
-  )
+  );
 }
 
 /**
@@ -646,13 +639,13 @@ function DictationBar({
   onInsert,
   onInsertAndSend,
 }: {
-  transcript: string
-  startedAt: number
-  onCancel: () => void
-  onInsert: () => void
-  onInsertAndSend: () => void
+  transcript: string;
+  startedAt: number;
+  onCancel: () => void;
+  onInsert: () => void;
+  onInsertAndSend: () => void;
 }) {
-  const now = useNow(1000)
+  const now = useNow(1000);
   return (
     <div
       data-slot="dictation-overlay"
@@ -672,11 +665,7 @@ function DictationBar({
         aria-live="polite"
         className="min-w-0 flex-1 truncate text-sm text-foreground"
       >
-        {transcript === '' ? (
-          <span className="text-muted-foreground">Listening…</span>
-        ) : (
-          transcript
-        )}
+        {transcript === '' ? <span className="text-muted-foreground">Listening…</span> : transcript}
       </span>
       <Button
         type="button"
@@ -708,5 +697,5 @@ function DictationBar({
         <ArrowUpIcon aria-hidden="true" />
       </Button>
     </div>
-  )
+  );
 }

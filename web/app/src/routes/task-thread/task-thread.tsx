@@ -1,10 +1,10 @@
-import { MessageSquareTextIcon, SearchXIcon } from 'lucide-react'
-import { useMemo, useState } from 'react'
-import { useLocation, useParams } from 'react-router'
+import { MessageSquareTextIcon, SearchXIcon } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useLocation, useParams } from 'react-router';
 
-import { Link } from '@/lib/project-router'
+import { Link } from '@/lib/project-router';
 
-import { ApiError } from '@/api/client'
+import { ApiError } from '@/api/client';
 import {
   useEditQueuedMessage,
   usePatchRun,
@@ -12,16 +12,16 @@ import {
   useRun,
   useRuns,
   useSendMessage,
-} from '@/api/queries'
-import { useRunEvents } from '@/api/run-events'
-import type { ApiRun } from '@/api/types'
-import { CenteredState } from '@/components/centered-state'
-import { Composer } from '@/components/composer/composer'
-import { StatusDot } from '@/components/status-dot'
-import { Button } from '@/components/ui/button'
-import { useKeyboardInsetVar } from '@/lib/keyboard-inset'
-import { taskPrUrl } from '@/lib/tasks-table'
-import { cn, isHttpUrl } from '@/lib/utils'
+} from '@/api/queries';
+import { useRunEvents } from '@/api/run-events';
+import type { ApiRun } from '@/api/types';
+import { CenteredState } from '@/components/centered-state';
+import { Composer } from '@/components/composer/composer';
+import { StatusDot } from '@/components/status-dot';
+import { Button } from '@/components/ui/button';
+import { useKeyboardInsetVar } from '@/lib/keyboard-inset';
+import { taskPrUrl } from '@/lib/tasks-table';
+import { cn, isHttpUrl } from '@/lib/utils';
 
 import {
   AssistantMessage,
@@ -33,21 +33,21 @@ import {
   ToolStreak,
   UserBubble,
   WorkingIndicator,
-} from './thread-items'
-import { ContinueAction } from './follow-up-engine'
-import { AgentsDock } from './agents-dock'
-import { PlanDock, planCounts } from './plan-dock'
-import { collectSubagents, findSubagent, subagentChildren } from './subagent-dock'
-import { SubagentSheet } from './subagent-sheet'
-import { AcceptCelebration, ReviewPanel } from './review-panel'
-import { queuePosition } from './run-actions'
-import { RunHeader } from './run-header'
-import { AskCard } from './ask-card'
-import { groupThreadItems, type ThreadBlock } from './thread-groups'
-import { ThreadLoading } from './thread-loading'
-import { ThreadCardCache } from './thread-open-cards'
-import { threadRenderMode } from './thread-scroll'
-import { JumpToLatestPill, ThreadRows, useThreadScroll, type ThreadRow } from './thread-scroller'
+} from './thread-items';
+import { ContinueAction } from './follow-up-engine';
+import { AgentsDock } from './agents-dock';
+import { PlanDock, planCounts } from './plan-dock';
+import { collectSubagents, findSubagent, subagentChildren } from './subagent-dock';
+import { SubagentSheet } from './subagent-sheet';
+import { AcceptCelebration, ReviewPanel } from './review-panel';
+import { queuePosition } from './run-actions';
+import { RunHeader } from './run-header';
+import { AskCard } from './ask-card';
+import { groupThreadItems, type ThreadBlock } from './thread-groups';
+import { ThreadLoading } from './thread-loading';
+import { ThreadCardCache } from './thread-open-cards';
+import { threadRenderMode } from './thread-scroll';
+import { JumpToLatestPill, ThreadRows, useThreadScroll, type ThreadRow } from './thread-scroller';
 import {
   latestPlanEntries,
   reduceThread,
@@ -55,7 +55,7 @@ import {
   threadFooter,
   type ThreadEntry,
   type ThreadState,
-} from './thread-state'
+} from './thread-state';
 
 /**
  * `/tasks/:id` — the Session tab (spec, "Task thread"): the run header (title/meta/tabs/
@@ -69,15 +69,15 @@ import {
  * (thread-scroller.tsx — flat + content-visibility below ~300 rows, virtua above).
  */
 export function TaskThreadRoute() {
-  const { id } = useParams<{ id: string }>()
-  const run = useRun(id)
-  const events = useRunEvents(id)
-  const thread = useMemo(() => reduceThread(events), [events])
+  const { id } = useParams<{ id: string }>();
+  const run = useRun(id);
+  const events = useRunEvents(id);
+  const thread = useMemo(() => reduceThread(events), [events]);
 
-  if (run.isPending) return <ThreadLoading />
+  if (run.isPending) return <ThreadLoading />;
 
   if (run.isError) {
-    const notFound = run.error instanceof ApiError && run.error.status === 404
+    const notFound = run.error instanceof ApiError && run.error.status === 404;
     return (
       <div data-route="task-thread" className="flex min-h-full flex-col">
         <CenteredState
@@ -96,10 +96,10 @@ export function TaskThreadRoute() {
           }
         />
       </div>
-    )
+    );
   }
 
-  return <ThreadView run={run.data} thread={thread} />
+  return <ThreadView run={run.data} thread={thread} />;
 }
 
 /**
@@ -113,12 +113,12 @@ export function buildThreadRows(
   /** Queued-run affordances (#472). Omitted (the default) renders every bubble read-only,
    *  which is what every caller outside the live thread view wants. */
   edit?: {
-    onEditTask: (text: string) => Promise<void>
-    onEditMessage: (msgId: string, text: string) => Promise<void>
-    onRemoveMessage: (msgId: string) => Promise<void>
+    onEditTask: (text: string) => Promise<void>;
+    onEditMessage: (msgId: string, text: string) => Promise<void>;
+    onRemoveMessage: (msgId: string) => Promise<void>;
   },
 ): ThreadRow[] {
-  const rows: ThreadRow[] = []
+  const rows: ThreadRow[] = [];
   // The initial prompt: the engine writes no v1 `user-message` line for it — the task on
   // the run record IS that message, so it renders from there, not from an invented event.
   if (run.task)
@@ -133,7 +133,7 @@ export function buildThreadRows(
           editLabel="Edit the prompt"
         />
       ),
-    })
+    });
   // Messages stacked onto the run while it waits for a slot (#472). Same provenance as the
   // task bubble — they live on the record, not in the event stream, and the engine writes no
   // `user-message` line for them (they are folded into the prompt, not sent as turns). So
@@ -150,7 +150,7 @@ export function buildThreadRows(
           onRemove={edit ? () => edit.onRemoveMessage(message.id) : undefined}
         />
       ),
-    })
+    });
   }
   for (const turn of thread.turns) {
     if (turn.userMessage) {
@@ -163,37 +163,37 @@ export function buildThreadRows(
             images={turn.userMessage.images}
           />
         ),
-      })
+      });
     }
     for (const block of groupThreadItems(turn.items)) {
       rows.push({
         key: `${turn.id}:${block.id}`,
         node: <ThreadBlockView block={block} scope={turn.id} runId={run.id} />,
-      })
+      });
     }
   }
-  return rows
+  return rows;
 }
 
 /** The loaded thread. The header owns its own data hooks (mutations, the runs list); the
  *  thread body stays presentational — tests drive it with reduced fixture states directly. */
 export function ThreadView({ run, thread }: { run: ApiRun; thread: ThreadState }) {
-  const footer = threadFooter(run.status, run.error)
+  const footer = threadFooter(run.status, run.error);
   // The dock's data: the latest plan snapshot across turns (full replacement — an emptied
   // plan hides the dock and the header mirror alike).
-  const plan = latestPlanEntries(thread)
-  const planTally = plan !== undefined && plan.length > 0 ? planCounts(plan) : undefined
+  const plan = latestPlanEntries(thread);
+  const planTally = plan !== undefined && plan.length > 0 ? planCounts(plan) : undefined;
   // The Agents dock's data: the current fan-out's sub-agents, or [] when there is none to
   // show (#474). Derived from the same reduced turns the thread renders — no new subscription.
   // The legacy session-open rule (web/app.js `updateDetail`): the composer can deliver while
   // the engine owns a live session — running queues the message, waiting answers it.
-  const sessionOpen = run.status === 'running' || run.status === 'waiting'
+  const sessionOpen = run.status === 'running' || run.status === 'waiting';
   // …and the third state (#472): a queued run has not started, so its prompt is still
   // authorable. "Session closed — Continue to reopen." was wrong on its own terms here —
   // the session is not closed, it was never opened, and Continue means nothing for a run
   // that has not run. Deliberately `queued` only: review/done/failed/cancelled keep the
   // existing copy and their Continue action.
-  const queued = run.status === 'queued'
+  const queued = run.status === 'queued';
   // A closed session can never settle its in-flight items — nothing in the reducer rewrites a
   // `running` item on `session.ended`, so an interrupted fan-out stays `running` in the
   // persisted stream forever. Without this, reopening it pulses `Agents · 0/1` above a dead
@@ -202,29 +202,29 @@ export function ThreadView({ run, thread }: { run: ApiRun; thread: ThreadState }
   // Derived from `sessionOpen` rather than enumerated, so it cannot drift when a status is
   // added: anything that is neither live nor still queued is closed. `review` matters most —
   // it is where this pipeline's runs normally END, and `threadFooter` already calls it closed.
-  const runIsTerminal = !sessionOpen && run.status !== 'queued'
-  const agents = useMemo(() => collectSubagents(thread.turns, runIsTerminal), [thread.turns, runIsTerminal])
+  const runIsTerminal = !sessionOpen && run.status !== 'queued';
+  const agents = useMemo(() => collectSubagents(thread.turns, runIsTerminal), [thread.turns, runIsTerminal]);
   // The drill-down's whole state: which agent is open. Ephemeral by design (spec Q2/Q5) —
   // sub-agents have no stable identity outside their run, so there is nothing to persist.
-  const [openAgentId, setOpenAgentId] = useState<string | undefined>(undefined)
+  const [openAgentId, setOpenAgentId] = useState<string | undefined>(undefined);
   // Item ids repeat across runs (codex mints `item_1`, `item_rv_1` per session), so a
   // selection carried across a route change could pop the sheet open on an unrelated item.
-  const [selectionRunId, setSelectionRunId] = useState(run.id)
+  const [selectionRunId, setSelectionRunId] = useState(run.id);
   if (selectionRunId !== run.id) {
-    setSelectionRunId(run.id)
-    setOpenAgentId(undefined)
+    setSelectionRunId(run.id);
+    setOpenAgentId(undefined);
   }
   // Resolved from the turns, NOT from `agents`: the dock can yield to the transcript (Q6)
   // while a sheet is open, and that must not slam the panel shut mid-read.
   const openAgent = useMemo(
     () => (openAgentId === undefined ? undefined : findSubagent(thread.turns, openAgentId, runIsTerminal)),
     [thread.turns, openAgentId, runIsTerminal],
-  )
+  );
   const openAgentChildren = useMemo(
     () => (openAgentId === undefined ? [] : subagentChildren(thread.turns, openAgentId)),
     [thread.turns, openAgentId],
-  )
-  const sendMessage = useSendMessage(run.id)
+  );
+  const sendMessage = useSendMessage(run.id);
 
   // The queued-run affordances (#472), passed only while the run is queued — so the bubbles
   // go read-only on the next `run` SSE frame once it starts. The bubbles await these promises
@@ -233,29 +233,31 @@ export function ThreadView({ run, thread }: { run: ApiRun; thread: ThreadState }
   // fresh result object every render, so memoizing on those would rebuild `edit` — and with it
   // every thread row — on each render, defeating the memo that exists because these threads get
   // big enough to virtualize. `mutateAsync` is referentially stable.
-  const { mutateAsync: patchRunAsync } = usePatchRun(run.id)
-  const { mutateAsync: editQueuedAsync } = useEditQueuedMessage(run.id)
-  const { mutateAsync: removeQueuedAsync } = useRemoveQueuedMessage(run.id)
+  const { mutateAsync: patchRunAsync } = usePatchRun(run.id);
+  const { mutateAsync: editQueuedAsync } = useEditQueuedMessage(run.id);
+  const { mutateAsync: removeQueuedAsync } = useRemoveQueuedMessage(run.id);
   const edit = useMemo(
     () =>
-      queued ?
-        {
-          onEditTask: async (text: string) => { await patchRunAsync({ task: text }) },
-          onEditMessage: (msgId: string, text: string) =>
-            editQueuedAsync({ msgId, message: { text } }).then(() => undefined),
-          onRemoveMessage: (msgId: string) => removeQueuedAsync(msgId).then(() => undefined),
-        }
-      : undefined,
+      queued
+        ? {
+            onEditTask: async (text: string) => {
+              await patchRunAsync({ task: text });
+            },
+            onEditMessage: (msgId: string, text: string) =>
+              editQueuedAsync({ msgId, message: { text } }).then(() => undefined),
+            onRemoveMessage: (msgId: string) => removeQueuedAsync(msgId).then(() => undefined),
+          }
+        : undefined,
     [queued, patchRunAsync, editQueuedAsync, removeQueuedAsync],
-  )
+  );
 
-  const rows = useMemo(() => buildThreadRows(run, thread, edit), [run, thread, edit])
-  const { search } = useLocation()
-  const mode = threadRenderMode(search, rows.length)
-  const scroll = useThreadScroll(run.id)
+  const rows = useMemo(() => buildThreadRows(run, thread, edit), [run, thread, edit]);
+  const { search } = useLocation();
+  const mode = threadRenderMode(search, rows.length);
+  const scroll = useThreadScroll(run.id);
   // The iOS keyboard lifts the dock via `--kb`; once it settles, a pinned reader re-pins
   // (research §7: re-run scrollToEnd after the viewport settles).
-  useKeyboardInsetVar(scroll.restickIfStuck)
+  useKeyboardInsetVar(scroll.restickIfStuck);
 
   return (
     <div data-route="task-thread" className="flex min-h-full flex-col">
@@ -382,9 +384,11 @@ export function ThreadView({ run, thread }: { run: ApiRun; thread: ThreadState }
             // renders no disabled action at all (it is not disabled in the first place).
             disabledAction={<ContinueAction run={run} />}
             placeholder={
-              queued ? 'Add to the prompt — sent when the run starts…'
-              : run.status === 'waiting' ? 'Reply — / for skills, @ for files…'
-              : 'Message the agent — / for skills, @ for files…'
+              queued
+                ? 'Add to the prompt — sent when the run starts…'
+                : run.status === 'waiting'
+                  ? 'Reply — / for skills, @ for files…'
+                  : 'Message the agent — / for skills, @ for files…'
             }
             autocompleteSkills
             quickReplies
@@ -393,15 +397,15 @@ export function ThreadView({ run, thread }: { run: ApiRun; thread: ThreadState }
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 /** The queued run's honest empty state (legacy #351): a queued run has emitted nothing, so
  *  instead of a blank thread the placeholder names the parked state and its live position in
  *  the FIFO queue (from the runs list — the same feed the sidebar uses). */
 function QueuedPlaceholder({ run }: { run: ApiRun }) {
-  const runs = useRuns()
-  const position = queuePosition(runs.data ?? [], run.id)
+  const runs = useRuns();
+  const position = queuePosition(runs.data ?? [], run.id);
   return (
     <div data-slot="queued-state" className="flex flex-col items-center gap-1.5 py-10 text-center">
       <StatusDot tone="pending" pulse />
@@ -412,7 +416,7 @@ function QueuedPlaceholder({ run }: { run: ApiRun }) {
         {run.workflow} · starts automatically when a slot frees up
       </p>
     </div>
-  )
+  );
 }
 
 /** One grouped block → its surface. Grouping (context groups, streaks, sub-agent nesting) is
@@ -421,11 +425,11 @@ function QueuedPlaceholder({ run }: { run: ApiRun }) {
 function ThreadBlockView({ block, scope, runId }: { block: ThreadBlock; scope: string; runId: string }) {
   switch (block.kind) {
     case 'entry':
-      return <ThreadEntryView entry={block.entry} scope={scope} runId={runId} />
+      return <ThreadEntryView entry={block.entry} scope={scope} runId={runId} />;
     case 'tool-card':
-      return <ToolCard item={block.item} nested={block.children} cacheKey={`${scope}:${block.id}`} />
+      return <ToolCard item={block.item} nested={block.children} cacheKey={`${scope}:${block.id}`} />;
     case 'context-group':
-      return <ContextGroup group={block} scope={scope} />
+      return <ContextGroup group={block} scope={scope} />;
     case 'streak':
       return (
         <ToolStreak count={block.count}>
@@ -433,7 +437,7 @@ function ThreadBlockView({ block, scope, runId }: { block: ThreadBlock; scope: s
             <ThreadBlockView key={inner.id} block={inner} scope={scope} runId={runId} />
           ))}
         </ToolStreak>
-      )
+      );
   }
 }
 
@@ -446,16 +450,16 @@ function ThreadEntryView({ entry, scope, runId }: { entry: ThreadEntry; scope: s
         <AssistantMessage text={entry.text} />
       ) : (
         <UserBubble text={entry.text} />
-      )
+      );
     case 'reasoning':
-      return <ReasoningItem text={entry.text} />
+      return <ReasoningItem text={entry.text} />;
     case 'tool':
-      return <ToolCard item={entry} cacheKey={`${scope}:${entry.id}`} />
+      return <ToolCard item={entry} cacheKey={`${scope}:${entry.id}`} />;
     case 'note':
-      return <NoteLine note={entry} />
+      return <NoteLine note={entry} />;
     case 'image':
-      return <ImageItem image={entry} />
+      return <ImageItem image={entry} />;
     case 'ask':
-      return <AskCard ask={entry} runId={runId} />
+      return <AskCard ask={entry} runId={runId} />;
   }
 }

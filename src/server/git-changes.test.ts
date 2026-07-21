@@ -204,9 +204,15 @@ describe('assemblePayload — patches attach to files by path, not by position (
   // `-z` name-status: `X NUL path NUL`. Two modified files, in this order.
   const nameStatus = 'M\0a.txt\0M\0b.txt\0';
   const numstat = '1\t0\ta.txt\x002\t1\tb.txt\x00';
-  const patchA = ['diff --git a/a.txt b/a.txt', '--- a/a.txt', '+++ b/a.txt', '@@ -1 +1 @@', '-old-a', '+new-a', ''].join(
-    '\n',
-  );
+  const patchA = [
+    'diff --git a/a.txt b/a.txt',
+    '--- a/a.txt',
+    '+++ b/a.txt',
+    '@@ -1 +1 @@',
+    '-old-a',
+    '+new-a',
+    '',
+  ].join('\n');
   const patchB = [
     'diff --git a/b.txt b/b.txt',
     '--- a/b.txt',
@@ -341,7 +347,13 @@ describe('readWorktreePath — Files tab browsing', () => {
     if (listing.kind === 'dir') expect(listing.entries).toEqual([{ name: 'b.txt', type: 'file', size: 5 }]);
 
     const file = await readWorktreePath(dir, 'sub/b.txt');
-    expect(file).toMatchObject({ kind: 'file', path: 'sub/b.txt', binary: false, tooLarge: false, content: 'beta\n' });
+    expect(file).toMatchObject({
+      kind: 'file',
+      path: 'sub/b.txt',
+      binary: false,
+      tooLarge: false,
+      content: 'beta\n',
+    });
   });
 
   it('flags binary files and withholds their content', async () => {
@@ -409,7 +421,7 @@ describe('isOsOpenableImage — the OS-launcher allowlist (#365)', () => {
     expect(isOsOpenableImage('shot.avif')).toBe(true);
   });
 
-  it('refuses SVG — the raw route\'s CSP does not exist once the OS opens the file', () => {
+  it("refuses SVG — the raw route's CSP does not exist once the OS opens the file", () => {
     // `imageMimeType` says yes (inert in an <img>, plus a no-script CSP); the OS launcher
     // applies neither, and the default .svg handler is usually a script-executing browser.
     expect(imageMimeType('icon.svg')).toBe('image/svg+xml');
@@ -541,7 +553,10 @@ describe('session git API routes', () => {
     expect(file.status).toBe(200);
     expect((await file.json()) as object).toMatchObject({ type: 'file', content: 'base\n' });
 
-    const evil = await apiRequest(app, `/api/runs/${run.id}/files?path=${encodeURIComponent('../../etc/passwd')}`);
+    const evil = await apiRequest(
+      app,
+      `/api/runs/${run.id}/files?path=${encodeURIComponent('../../etc/passwd')}`,
+    );
     expect(evil.status).toBe(409);
     expect(((await evil.json()) as { error: string }).error).toContain('escapes the worktree');
   });
@@ -579,7 +594,8 @@ describe('session git API routes', () => {
   });
 
   it('GET /files?raw=1 still rejects traversal with a 409', async () => {
-    const res = await apiRequest(app,
+    const res = await apiRequest(
+      app,
       `/api/runs/${run.id}/files?path=${encodeURIComponent('../../etc/passwd')}&raw=1`,
     );
     expect(res.status).toBe(409);
@@ -618,7 +634,12 @@ describe('session git API routes', () => {
 
       const first = await apiRequest(app, `/api/runs/${run.id}/git/push`, { method: 'POST' });
       expect(first.status).toBe(200);
-      expect((await first.json()) as object).toMatchObject({ pushed: true, branch: 'task', remote: 'origin', upstreamSet: true });
+      expect((await first.json()) as object).toMatchObject({
+        pushed: true,
+        branch: 'task',
+        remote: 'origin',
+        upstreamSet: true,
+      });
 
       // Second push goes through the existing upstream.
       const second = await apiRequest(app, `/api/runs/${run.id}/git/push`, { method: 'POST' });

@@ -152,7 +152,12 @@ function mapAssistant(msg: Record<string, unknown>, state: ClaudeUiMapperState):
     if (raw.type === 'text' && typeof raw.text === 'string') {
       // Whole blocks per API round-trip — claude sends no deltas in this
       // mode, so we never fake `item.delta`s: started + completed.
-      const item: UiMessageItem = { kind: 'message', id: `item_${++itemSeq}`, role: 'assistant', text: raw.text };
+      const item: UiMessageItem = {
+        kind: 'message',
+        id: `item_${++itemSeq}`,
+        role: 'assistant',
+        text: raw.text,
+      };
       if (parentItemId !== undefined) item.parentItemId = parentItemId;
       events.push({ type: 'item.started', item }, { type: 'item.completed', item });
     } else if (raw.type === 'thinking' && typeof raw.thinking === 'string' && raw.thinking.trim() !== '') {
@@ -292,7 +297,10 @@ function applyTaskListResult(
   resultText: string,
   tasks: ReadonlyMap<string, PlanEntry>,
 ): Map<string, PlanEntry> | undefined {
-  const lines = resultText.split('\n').map((line) => line.trim()).filter((line) => line !== '');
+  const lines = resultText
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line !== '');
   if (lines.length === 0) return undefined;
   const next = new Map<string, PlanEntry>();
   for (const line of lines) {
@@ -354,7 +362,11 @@ function applyTaskUpdate(
   }
   // An empty activeForm would blank the dock's label exactly while the row is
   // in progress, so it is ignored like an empty subject.
-  if (typeof input.activeForm === 'string' && input.activeForm !== '' && input.activeForm !== existing.activeForm) {
+  if (
+    typeof input.activeForm === 'string' &&
+    input.activeForm !== '' &&
+    input.activeForm !== existing.activeForm
+  ) {
     entry.activeForm = input.activeForm;
     changed = true;
   }
@@ -395,7 +407,14 @@ function mapToolResults(msg: Record<string, unknown>, state: ClaudeUiMapperState
     // item — consumers upsert by id, so a lone snapshot renders fine.
     const item: UiToolItem = open
       ? { ...open }
-      : { kind: 'tool', id: raw.tool_use_id, name: 'unknown', toolKind: 'other', title: 'Tool', status: 'running' };
+      : {
+          kind: 'tool',
+          id: raw.tool_use_id,
+          name: 'unknown',
+          toolKind: 'other',
+          title: 'Tool',
+          status: 'running',
+        };
     if (!open && parentItemId !== undefined) item.parentItemId = parentItemId;
     const text = stringifyToolResultContent(raw.content);
     if (raw.is_error === true) {
@@ -505,7 +524,11 @@ function mapResult(msg: Record<string, unknown>, state: ClaudeUiMapperState): Cl
     typeof msg.total_cost_usd === 'number' && Number.isFinite(msg.total_cost_usd)
       ? msg.total_cost_usd
       : undefined;
-  const turnEvent: UiTurnCompletedEvent = { type: 'turn.completed', turnId, stopReason: resultStopReason(msg) };
+  const turnEvent: UiTurnCompletedEvent = {
+    type: 'turn.completed',
+    turnId,
+    stopReason: resultStopReason(msg),
+  };
   if (usage) turnEvent.usage = usage;
   if (costUsd !== undefined) turnEvent.costUsd = costUsd;
   events.push(turnEvent);

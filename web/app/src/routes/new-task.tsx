@@ -1,19 +1,12 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import {
-  CheckIcon,
-  EyeIcon,
-  FolderOpenIcon,
-  SparklesIcon,
-  SquareIcon,
-  WorkflowIcon,
-} from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { useParams, useSearchParams } from 'react-router'
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { CheckIcon, EyeIcon, FolderOpenIcon, SparklesIcon, SquareIcon, WorkflowIcon } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useParams, useSearchParams } from 'react-router';
 
-import { useNavigate } from '@/lib/project-router'
+import { useNavigate } from '@/lib/project-router';
 
-import { createRun, getLaunchKey, postPlan, putConfig, putUiState } from '@/api/client'
-import { useProjectScope } from '@/api/project-scope-context'
+import { createRun, getLaunchKey, postPlan, putConfig, putUiState } from '@/api/client';
+import { useProjectScope } from '@/api/project-scope-context';
 import {
   queryKeys,
   useConfig,
@@ -24,19 +17,13 @@ import {
   useSkills,
   useUiState,
   useWorkflows,
-} from '@/api/queries'
-import type {
-  ImageInput,
-  ProjectListEntry,
-  RepoResponse,
-  Skill,
-  WorkflowDef,
-} from '@/api/types'
-import { TwinkleBackdrop } from '@/components/centered-state'
-import { Composer, type ComposerHandle } from '@/components/composer/composer'
-import { PickerPill, RunnerPill, chevron, chipClass } from '@/components/picker-pill'
-import { PromptTemplateMenu } from '@/components/prompt-template-menu'
-import { SkillPreviewDialog } from '@/components/skill-detail'
+} from '@/api/queries';
+import type { ImageInput, ProjectListEntry, RepoResponse, Skill, WorkflowDef } from '@/api/types';
+import { TwinkleBackdrop } from '@/components/centered-state';
+import { Composer, type ComposerHandle } from '@/components/composer/composer';
+import { PickerPill, RunnerPill, chevron, chipClass } from '@/components/picker-pill';
+import { PromptTemplateMenu } from '@/components/prompt-template-menu';
+import { SkillPreviewDialog } from '@/components/skill-detail';
 import {
   Command,
   CommandEmpty,
@@ -44,14 +31,10 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from '@/components/ui/command'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { toast } from '@/components/ui/toaster'
-import {
-  autoApplyText,
-  normalizePromptTemplates,
-  resolveAutoApply,
-} from '@/lib/prompt-templates'
+} from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { toast } from '@/components/ui/toaster';
+import { autoApplyText, normalizePromptTemplates, resolveAutoApply } from '@/lib/prompt-templates';
 import {
   bumpSkillUsage,
   isProjectSkill,
@@ -60,17 +43,17 @@ import {
   searchSkills,
   searchWorkflows,
   skillKeywords,
-} from '@/lib/skills'
-import { submitShortcutHint } from '@/lib/use-submit-shortcut'
-import { cn } from '@/lib/utils'
+} from '@/lib/skills';
+import { submitShortcutHint } from '@/lib/use-submit-shortcut';
+import { cn } from '@/lib/utils';
 
 import {
   bookmarkletRunBody,
   deepLinkToast,
   unknownSkillPrefillText,
   type DeepLinkNotice,
-} from './new-task-autostart'
-import { clearDraftText, readDraft, writeDraft, type NewTaskDraft } from './new-task-draft'
+} from './new-task-autostart';
+import { clearDraftText, readDraft, writeDraft, type NewTaskDraft } from './new-task-draft';
 import {
   availableRunners,
   buildCreateRunBody,
@@ -82,10 +65,10 @@ import {
   resolveSource,
   startedRunPath,
   type TaskSource,
-} from './new-task-form'
-import { parseNewTaskParams } from './new-task-params'
-import { buildPlannedRunBody, pendingPlanOf, type PendingPlan } from './new-task-plan'
-import { PlanReview } from './plan-review'
+} from './new-task-form';
+import { parseNewTaskParams } from './new-task-params';
+import { buildPlannedRunBody, pendingPlanOf, type PendingPlan } from './new-task-plan';
+import { PlanReview } from './plan-review';
 
 /**
  * `/new` — the full-screen new-task hero (spec §"New task (full-screen, #386)"; visual
@@ -100,9 +83,9 @@ import { PlanReview } from './plan-review'
  * web/app.js, verbatim (see new-task-autostart.ts for the verified semantics).
  */
 export function NewTaskRoute() {
-  const [search] = useSearchParams()
-  const navigate = useNavigate()
-  const queryClient = useQueryClient()
+  const [search] = useSearchParams();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   // The composer's project (multi-project spec, step 3.4). TWO ids, deliberately:
   //  - `urlProjectId` is what the URL names — always a real project, boot included. It is the
@@ -112,99 +95,92 @@ export function NewTaskRoute() {
   //    storage key and a draft typed before this upgrade survives it.
   // Both are absent when this route renders outside a `/p/:projectId` prefix (a component
   // test), and everything below degrades to exactly the single-project behavior.
-  const { projectId: urlProjectId } = useParams()
-  const draftProjectId = useProjectScope().projectId
-  const projects = useProjects()
+  const { projectId: urlProjectId } = useParams();
+  const draftProjectId = useProjectScope().projectId;
+  const projects = useProjects();
 
   // The deep-link params, captured ONCE: the mount effect below strips them from the URL
   // (legacy's `history.replaceState` — the launch key must not survive in history or survive
   // a reload to re-trigger), so live search params would vanish under us.
-  const [deepLink] = useState(() => parseNewTaskParams(search))
+  const [deepLink] = useState(() => parseNewTaskParams(search));
 
-  const health = useHealth()
-  const workflows = useWorkflows()
-  const skills = useSkills()
-  const repo = useRepo()
-  const uiState = useUiState()
+  const health = useHealth();
+  const workflows = useWorkflows();
+  const skills = useSkills();
+  const repo = useRepo();
+  const uiState = useUiState();
   // Settings → Agents `defaultModels` (R6 1.5): the per-runner preset the Model pill starts on.
-  const config = useConfig()
+  const config = useConfig();
 
   // The draft survives navigation (module store); explicit deep-link params beat it — a
   // pasted `/new?skill=&ref=` link states intent, a leftover draft only remembers it.
   const [draft, setDraft] = useState<NewTaskDraft>(() => {
-    const stored = readDraft(draftProjectId)
+    const stored = readDraft(draftProjectId);
     return {
       ...stored,
       ...(deepLink.ref !== '' ? { text: deepLink.ref } : {}),
-      ...(deepLink.skill !== ''
-        ? { source: { source: 'skill', ref: deepLink.skill } as TaskSource }
-        : {}),
-    }
-  })
+      ...(deepLink.skill !== '' ? { source: { source: 'skill', ref: deepLink.skill } as TaskSource } : {}),
+    };
+  });
   useEffect(() => {
-    writeDraft(draft, draftProjectId)
-  }, [draft, draftProjectId])
-  const update = (patch: Partial<NewTaskDraft>) =>
-    setDraft((current) => ({ ...current, ...patch }))
+    writeDraft(draft, draftProjectId);
+  }, [draft, draftProjectId]);
+  const update = (patch: Partial<NewTaskDraft>) => setDraft((current) => ({ ...current, ...patch }));
 
   // ---- effective picker values (rules in new-task-form.ts, mirrored from legacy) -----------
-  const recentSources = uiState.data?.recentSources
+  const recentSources = uiState.data?.recentSources;
   // Memoized so the picker gets a STABLE array identity across renders that don't actually
   // change the catalog or the usage stats (#408 — a raw `orderSkillsByUsage(...)` call here
   // would create a new array on EVERY render, including ones unrelated to skills/usage).
-  const skillsData = skills.data
-  const skillUsage = uiState.data?.skillUsage
-  const skillList = useMemo(
-    () => orderSkillsByUsage(skillsData ?? [], skillUsage),
-    [skillsData, skillUsage],
-  )
-  const workflowList = workflows.data?.workflows ?? []
+  const skillsData = skills.data;
+  const skillUsage = uiState.data?.skillUsage;
+  const skillList = useMemo(() => orderSkillsByUsage(skillsData ?? [], skillUsage), [skillsData, skillUsage]);
+  const workflowList = workflows.data?.workflows ?? [];
   // The registry the project pill offers. Empty while it loads or when it errors — the pill
   // simply does not render, which is the honest state: there is no second project to offer.
-  const projectList = projects.data?.projects ?? []
-  const sourcesReady =
-    skills.data !== undefined && workflows.data !== undefined && !uiState.isPending
-  const source = resolveSource([draft.source, uiState.data?.lastTask], skillList, workflowList)
+  const projectList = projects.data?.projects ?? [];
+  const sourcesReady = skills.data !== undefined && workflows.data !== undefined && !uiState.isPending;
+  const source = resolveSource([draft.source, uiState.data?.lastTask], skillList, workflowList);
 
   // ---- prompt templates (#413 follow-up) ----------------------------------------------------
   // The same list the GitHub hand-over and Inbox composers read. Two ways in here: the footer's
   // icon trigger inserts one by hand at the caret, and a skill whose templates are assigned to it
   // applies them on selection — but only into a box the user has not typed in (`resolveAutoApply`).
-  const composerRef = useRef<ComposerHandle>(null)
+  const composerRef = useRef<ComposerHandle>(null);
   const templates = useMemo(
     () => normalizePromptTemplates(uiState.data?.promptTemplates),
     [uiState.data?.promptTemplates],
-  )
-  const autoText = autoApplyText(templates, source.source === 'skill' ? [source.ref] : [])
-  const draftTextRef = useRef(draft.text)
-  draftTextRef.current = draft.text
-  const autoAppliedRef = useRef('')
+  );
+  const autoText = autoApplyText(templates, source.source === 'skill' ? [source.ref] : []);
+  const draftTextRef = useRef(draft.text);
+  draftTextRef.current = draft.text;
+  const autoAppliedRef = useRef('');
   useEffect(() => {
     // Wait for the pickers' data: before it lands `source` is still a provisional guess, and
     // auto-applying against it would flash text in for a skill the user may not end up on.
-    if (!sourcesReady) return
-    const resolved = resolveAutoApply(draftTextRef.current, autoAppliedRef.current, autoText)
-    autoAppliedRef.current = resolved.applied
-    if (resolved.text !== draftTextRef.current) update({ text: resolved.text })
+    if (!sourcesReady) return;
+    const resolved = resolveAutoApply(draftTextRef.current, autoAppliedRef.current, autoText);
+    autoAppliedRef.current = resolved.applied;
+    if (resolved.text !== draftTextRef.current) update({ text: resolved.text });
     // `autoText` is a derived STRING — this fires when the assigned set changes, not every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoText, sourcesReady])
+  }, [autoText, sourcesReady]);
 
-  const runners = availableRunners(health.data?.checks ?? [])
-  const runner = resolveRunner(draft.runner, runners, health.data?.defaultRunner ?? 'claude')
-  const catalog = useRunnerModels()
-  const models = modelsForRunner(runner, catalog.data, [draft.model, config.data?.defaultModels?.[runner]])
-  const model = resolveModel(draft.model, runner, config.data?.defaultModels, catalog.data)
+  const runners = availableRunners(health.data?.checks ?? []);
+  const runner = resolveRunner(draft.runner, runners, health.data?.defaultRunner ?? 'claude');
+  const catalog = useRunnerModels();
+  const models = modelsForRunner(runner, catalog.data, [draft.model, config.data?.defaultModels?.[runner]]);
+  const model = resolveModel(draft.model, runner, config.data?.defaultModels, catalog.data);
 
   // Parallel variants need a worktree per variant, hence git (the server 409s without it).
-  const hasGit = health.data === undefined || health.data.repo !== null
-  const variants = hasGit ? draft.variants : 1
+  const hasGit = health.data === undefined || health.data.repo !== null;
+  const variants = hasGit ? draft.variants : 1;
 
   // Worktree opt-out (#worktree-toggle): only offered for a single skill run in a git repo —
   // workflows and variants always isolate, and a non-git repo already runs in place. The choice
   // is remembered (draft → last-used → default on).
-  const worktreeToggleShown = hasGit && source.source === 'skill' && variants <= 1
-  const worktreeOn = worktreeToggleShown ? (draft.worktree ?? uiState.data?.lastWorktree ?? true) : true
+  const worktreeToggleShown = hasGit && source.source === 'skill' && variants <= 1;
+  const worktreeOn = worktreeToggleShown ? (draft.worktree ?? uiState.data?.lastWorktree ?? true) : true;
 
   // Autonomous (#autonomous): the run never pauses for the user. An explicit toggle this session
   // wins; otherwise skills default ON (a skill run is meant to just execute), workflows fall back
@@ -212,116 +188,114 @@ export function NewTaskRoute() {
   // planning is inherently interactive, so the run must be able to hand the ball back.
   const autonomousOn = draft.planFirst
     ? false
-    : (draft.autonomous ?? (source.source === 'skill' ? true : (uiState.data?.lastAutonomous ?? false)))
+    : (draft.autonomous ?? (source.source === 'skill' ? true : (uiState.data?.lastAutonomous ?? false)));
 
   // Follow-up generation (#444) is offered only while the server has the global inbox on
   // (#471, `CEZ_FOLLOWUPS=1`) — there is no inbox for the follow-ups to land in otherwise, and
   // the server pins the flag to false regardless, so a toggle would be a lie. Hidden, the value
   // is false, matching what the server will do. Health unknown → assume offered, the `hasGit`
   // rule above: the composer must not flicker its controls while health is in flight.
-  const followupsToggleShown = health.data === undefined || health.data.capabilities.followups
+  const followupsToggleShown = health.data === undefined || health.data.capabilities.followups;
   // Within an enabled server it stays opt-out: a draft choice wins, then the remembered UI
   // preference; absent state from older installs keeps the historical enabled behavior.
   const generateFollowupsOn = followupsToggleShown
     ? (draft.generateFollowups ?? uiState.data?.lastGenerateFollowups ?? true)
-    : false
+    : false;
 
   // ---- plan mode (#383 + spec 008) ----------------------------------------------------------
-  const [plan, setPlan] = useState<PendingPlan | null>(null)
-  const [planning, setPlanning] = useState(false)
-  const [starting, setStarting] = useState(false)
+  const [plan, setPlan] = useState<PendingPlan | null>(null);
+  const [planning, setPlanning] = useState(false);
+  const [starting, setStarting] = useState(false);
 
   // ---- bookmarklet deep-link (spec 011 — legacy handleDeepLink, verbatim) -------------------
   // `auto=1` with a ref arms the unattended start; the composer stays hidden behind a
   // "Starting…" surface until the key check + POST settle (or fail into the prefill path).
-  const [autoStarting, setAutoStarting] = useState(() => deepLink.auto && deepLink.ref !== '')
+  const [autoStarting, setAutoStarting] = useState(() => deepLink.auto && deepLink.ref !== '');
   const [notice, setNotice] = useState<DeepLinkNotice | null>(() =>
     !deepLink.auto && deepLink.ref !== '' ? { kind: 'prefill' } : null,
-  )
-  const deepLinkHandled = useRef(false)
+  );
+  const deepLinkHandled = useRef(false);
   useEffect(() => {
-    if (deepLinkHandled.current) return
-    deepLinkHandled.current = true
+    if (deepLinkHandled.current) return;
+    deepLinkHandled.current = true;
     // Legacy cleans the URL FIRST (`history.replaceState({}, '', '/')` — before anything
     // async): the launch key never lingers in the address bar or history, and a reload can
     // never re-trigger the start. Same move here, staying on this route. (The router's own
     // search, not window.location — MemoryRouter under test never touches the window.)
-    if (search.toString() !== '') void navigate('/new', { replace: true })
-    if (!deepLink.auto || deepLink.ref === '') return
+    if (search.toString() !== '') void navigate('/new', { replace: true });
+    if (!deepLink.auto || deepLink.ref === '') return;
     void (async () => {
-      let launchKey = ''
+      let launchKey = '';
       try {
-        launchKey = (await getLaunchKey()).key
+        launchKey = (await getLaunchKey()).key;
       } catch {
         // key endpoint unreachable → the blocked path, exactly like legacy
       }
       if (launchKey !== '' && deepLink.key === launchKey) {
         try {
-          const created = await createRun(bookmarkletRunBody(deepLink))
-          clearDraftText(draftProjectId)
-          void queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
-          void navigate(startedRunPath(created))
-          return
+          const created = await createRun(bookmarkletRunBody(deepLink));
+          clearDraftText(draftProjectId);
+          void queryClient.invalidateQueries({ queryKey: queryKeys.runs.all });
+          void navigate(startedRunPath(created));
+          return;
         } catch (error) {
           setNotice({
             kind: 'failed',
             message: error instanceof Error ? error.message : String(error),
-          })
+          });
         }
       } else {
         // Wrong or missing key: a drive-by page guessing the URL gets a form, never a run.
-        setNotice({ kind: 'blocked' })
+        setNotice({ kind: 'blocked' });
       }
-      setAutoStarting(false)
-    })()
+      setAutoStarting(false);
+    })();
     // mount-only by design: deepLink is captured state and this must run exactly once
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   // The prefill toast waits for the pickers' data: whether the skill exists decides the
   // wording, and the unknown-skill case rewrites the draft the way legacy did (intent into
   // the text, quick-task as the source — its planner resolves skills from prose).
   useEffect(() => {
-    if (notice === null || !sourcesReady) return
-    setNotice(null)
+    if (notice === null || !sourcesReady) return;
+    setNotice(null);
     const unknownSkill =
-      deepLink.skill !== '' && !skillList.some((s) => s.name === deepLink.skill)
-        ? deepLink.skill
-        : ''
+      deepLink.skill !== '' && !skillList.some((s) => s.name === deepLink.skill) ? deepLink.skill : '';
     if (unknownSkill !== '') {
       update({
         text: unknownSkillPrefillText(deepLink.skill, deepLink.ref),
         ...(workflowList.some((w) => w.name === 'quick-task')
           ? { source: { source: 'workflow', ref: 'quick-task' } as TaskSource }
           : {}),
-      })
+      });
     }
-    const { message, tone } = deepLinkToast(notice, unknownSkill)
-    toast(message, { tone })
+    const { message, tone } = deepLinkToast(notice, unknownSkill);
+    toast(message, { tone });
     // Legacy focused the Run button so a bare Enter submits the reviewed form.
     document
       .querySelector<HTMLButtonElement>(
         '[data-slot="composer"] button[aria-label="Start task"], [data-slot="composer"] button[aria-label="Plan task"]',
       )
-      ?.focus()
-  }, [notice, sourcesReady]) // eslint-disable-line react-hooks/exhaustive-deps
+      ?.focus();
+  }, [notice, sourcesReady]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const submit = async (text: string, images: ImageInput[]) => {
     if (!sourcesReady) {
       // Rejection restores the draft — nothing typed is lost to a race with the pickers.
-      throw new Error('Still loading workflows and skills — try again in a second.')
+      throw new Error('Still loading workflows and skills — try again in a second.');
     }
     if (draft.planFirst) {
       // Plan mode: submit means PLAN. A rejection propagates — the composer toasts and
       // restores the draft; a success restores the text ourselves (the composer already
       // cleared optimistically) so Discard hands back exactly what was typed. The review
       // overlay is deliberate: it's where steps are edited and saved as a reusable chain.
-      setPlanning(true)
+      setPlanning(true);
       try {
-        setPlan(pendingPlanOf(text, images, await postPlan(text)))
-        update({ text })
+        setPlan(pendingPlanOf(text, images, await postPlan(text)));
+        update({ text });
       } finally {
-        setPlanning(false)
+        setPlanning(false);
       }
-      return
+      return;
     }
     const created = await createRun(
       buildCreateRunBody({
@@ -342,7 +316,7 @@ export function NewTaskRoute() {
         // generation for THIS task must not stop the entry it came from being marked started.
         todoId: deepLink.todo,
       }),
-    )
+    );
     // Remember what was actually run so the next visit preselects it (legacy
     // `saveLastTaskSource`) and float it to the top of the picker next time
     // (recency sort) — fire-and-forget: a failed write only costs the convenience.
@@ -362,17 +336,17 @@ export function NewTaskRoute() {
         : {}),
     })
       .then(() => queryClient.invalidateQueries({ queryKey: queryKeys.uiState }))
-      .catch(() => {})
-    clearDraftText(draftProjectId)
-    void queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
-    navigate(startedRunPath(created))
-  }
+      .catch(() => {});
+    clearDraftText(draftProjectId);
+    void queryClient.invalidateQueries({ queryKey: queryKeys.runs.all });
+    navigate(startedRunPath(created));
+  };
 
   /** ▶ Start on the reviewed plan: the (possibly edited) steps go INLINE, with the composer's
    *  current picker choices — legacy `startPlannedRun` semantics on the new surface. */
   const startPlanned = async () => {
-    if (plan === null || plan.steps.length === 0 || starting) return
-    setStarting(true)
+    if (plan === null || plan.steps.length === 0 || starting) return;
+    setStarting(true);
     try {
       const created = await createRun(
         buildPlannedRunBody({
@@ -386,25 +360,25 @@ export function NewTaskRoute() {
           generateFollowups: generateFollowupsOn,
           todoId: deepLink.todo, // #374: planning first must not lose the inbox entry
         }),
-      )
+      );
       // Only remember a choice the user was actually offered (#471, the `lastWorktree` rule):
       // persisting the forced `false` would overwrite their real preference, so turning
       // CEZ_FOLLOWUPS back on later would silently come up off.
       if (followupsToggleShown) {
         void putUiState({ lastGenerateFollowups: generateFollowupsOn })
           .then(() => queryClient.invalidateQueries({ queryKey: queryKeys.uiState }))
-          .catch(() => {})
+          .catch(() => {});
       }
-      clearDraftText(draftProjectId)
-      setPlan(null)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.runs.all })
-      navigate(startedRunPath(created))
+      clearDraftText(draftProjectId);
+      setPlan(null);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.runs.all });
+      navigate(startedRunPath(created));
     } catch (error) {
-      toast(error instanceof Error ? error.message : String(error), { tone: 'danger' })
+      toast(error instanceof Error ? error.message : String(error), { tone: 'danger' });
     } finally {
-      setStarting(false)
+      setStarting(false);
     }
-  }
+  };
 
   // The unattended bookmarklet start in flight: no composer, no params echoed anywhere —
   // just an honest "working on it" until the POST answers (success navigates to the thread;
@@ -423,7 +397,7 @@ export function NewTaskRoute() {
           </p>
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -486,7 +460,11 @@ export function NewTaskRoute() {
                 onInsert={(text) => composerRef.current?.insertAtCaret(text)}
               />
               {runners.length > 1 ? (
-                <RunnerPill runners={runners} value={runner} onPick={(next) => update({ runner: next, model: null })} />
+                <RunnerPill
+                  runners={runners}
+                  value={runner}
+                  onPick={(next) => update({ runner: next, model: null })}
+                />
               ) : null}
               <PickerPill
                 slot="model-pill"
@@ -559,7 +537,7 @@ export function NewTaskRoute() {
         />
       ) : null}
     </div>
-  )
+  );
 }
 
 /** Worktree opt-out toggle (#worktree-toggle): a checkbox-style chip for single skill runs.
@@ -586,7 +564,7 @@ function WorktreeToggle({ on, onChange }: { on: boolean; onChange: (on: boolean)
       )}
       Worktree
     </button>
-  )
+  );
 }
 
 /** Autonomous toggle (#autonomous): checked = the run never pauses for you, auto-continuing
@@ -596,9 +574,9 @@ function AutonomousToggle({
   disabled,
   onChange,
 }: {
-  on: boolean
-  disabled?: boolean
-  onChange: (on: boolean) => void
+  on: boolean;
+  disabled?: boolean;
+  onChange: (on: boolean) => void;
 }) {
   return (
     <button
@@ -624,18 +602,12 @@ function AutonomousToggle({
       )}
       Autonomous
     </button>
-  )
+  );
 }
 
 /** Follow-up toggle: checked lets agents append newly discovered work to the task inbox.
  *  Handoff journaling remains active either way. */
-function GenerateFollowupsToggle({
-  on,
-  onChange,
-}: {
-  on: boolean
-  onChange: (on: boolean) => void
-}) {
+function GenerateFollowupsToggle({ on, onChange }: { on: boolean; onChange: (on: boolean) => void }) {
   return (
     <button
       type="button"
@@ -657,7 +629,7 @@ function GenerateFollowupsToggle({
       )}
       Follow-ups
     </button>
-  )
+  );
 }
 
 /**
@@ -668,24 +640,21 @@ function GenerateFollowupsToggle({
  * recency the sidebar does; a typed query floats name/id PREFIX matches above mid-string ones,
  * each group still in recency order.
  */
-function matchProjects(
-  projects: readonly ProjectListEntry[],
-  search: string,
-): ProjectListEntry[] {
-  const query = search.trim().toLowerCase()
-  if (query === '') return [...projects]
+function matchProjects(projects: readonly ProjectListEntry[], search: string): ProjectListEntry[] {
+  const query = search.trim().toLowerCase();
+  if (query === '') return [...projects];
   const rank = (project: ProjectListEntry): number => {
-    const name = project.name.toLowerCase()
-    const id = project.id.toLowerCase()
-    if (name.startsWith(query) || id.startsWith(query)) return 0
-    if (name.includes(query) || id.includes(query)) return 1
-    return 2
-  }
+    const name = project.name.toLowerCase();
+    const id = project.id.toLowerCase();
+    if (name.startsWith(query) || id.startsWith(query)) return 0;
+    if (name.includes(query) || id.includes(query)) return 1;
+    return 2;
+  };
   return projects
     .map((project, index) => ({ project, rank: rank(project), index }))
     .filter((entry) => entry.rank < 2)
     .sort((a, b) => a.rank - b.rank || a.index - b.index)
-    .map((entry) => entry.project)
+    .map((entry) => entry.project);
 }
 
 /**
@@ -707,21 +676,21 @@ function ProjectPill({
   projectId,
   onPick,
 }: {
-  projects: readonly ProjectListEntry[]
-  projectId: string
-  onPick: (projectId: string) => void
+  projects: readonly ProjectListEntry[];
+  projectId: string;
+  onPick: (projectId: string) => void;
 }) {
-  const [open, setOpen] = useState(false)
-  const [search, setSearch] = useState('')
-  const selected = projects.find((project) => project.id === projectId)
-  const matched = matchProjects(projects, search)
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const selected = projects.find((project) => project.id === projectId);
+  const matched = matchProjects(projects, search);
 
   return (
     <Popover
       open={open}
       onOpenChange={(next) => {
-        setOpen(next)
-        if (!next) setSearch('')
+        setOpen(next);
+        if (!next) setSearch('');
       }}
     >
       <PopoverTrigger asChild>
@@ -739,11 +708,7 @@ function ProjectPill({
           {chevron}
         </button>
       </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        sideOffset={8}
-        className="w-[300px] max-w-[calc(100vw-2rem)] p-0"
-      >
+      <PopoverContent align="start" sideOffset={8} className="w-[300px] max-w-[calc(100vw-2rem)] p-0">
         <Command shouldFilter={false}>
           <CommandInput placeholder="search projects…" value={search} onValueChange={setSearch} />
           {/* Same 3rem headroom rule as the source picker: the list must not eat the search box. */}
@@ -764,8 +729,8 @@ function ProjectPill({
                 // a project whose every request 4xxs.
                 disabled={project.status === 'missing'}
                 onSelect={() => {
-                  onPick(project.id)
-                  setOpen(false)
+                  onPick(project.id);
+                  setOpen(false);
                 }}
               >
                 <span className="min-w-0 flex-1 truncate text-xs font-medium">{project.name}</span>
@@ -790,7 +755,7 @@ function ProjectPill({
         </Command>
       </PopoverContent>
     </Popover>
-  )
+  );
 }
 
 /**
@@ -806,31 +771,31 @@ function SourcePill({
   workflows,
   onPick,
 }: {
-  source: TaskSource
-  ready: boolean
-  skills: readonly Skill[]
-  skillUsage: Readonly<Record<string, number>> | undefined
-  workflows: readonly WorkflowDef[]
-  onPick: (source: TaskSource) => void
+  source: TaskSource;
+  ready: boolean;
+  skills: readonly Skill[];
+  skillUsage: Readonly<Record<string, number>> | undefined;
+  workflows: readonly WorkflowDef[];
+  onPick: (source: TaskSource) => void;
 }) {
-  const [open, setOpen] = useState(false)
-  const [search, setSearch] = useState('')
-  const [preview, setPreview] = useState<Skill | null>(null)
-  const listRef = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const [preview, setPreview] = useState<Skill | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   // #484: rank in JS (cmdk's own score-sort does not re-order reliably here), then split the
   // ranked matches into the #519 display tiers so each group stays match-ordered.
-  const matched = searchSkills(skills, search, skillUsage)
-  const { mostUsed, project, global } = partitionSkillsForDisplay(matched, skillUsage)
-  const matchedWorkflows = searchWorkflows(workflows, search)
+  const matched = searchSkills(skills, search, skillUsage);
+  const { mostUsed, project, global } = partitionSkillsForDisplay(matched, skillUsage);
+  const matchedWorkflows = searchWorkflows(workflows, search);
   const nothingMatches =
-    mostUsed.length === 0 && project.length === 0 && global.length === 0 && matchedWorkflows.length === 0
+    mostUsed.length === 0 && project.length === 0 && global.length === 0 && matchedWorkflows.length === 0;
   const pick = (next: TaskSource) => {
-    onPick(next)
-    setOpen(false)
-  }
+    onPick(next);
+    setOpen(false);
+  };
 
   const skillItem = (skill: Skill, emphasized: boolean) => {
-    const selected = source.source === 'skill' && source.ref === skill.name
+    const selected = source.source === 'skill' && source.ref === skill.name;
     return (
       <CommandItem
         key={skill.path}
@@ -842,13 +807,9 @@ function SourcePill({
         data-source-ref={skill.name}
         onSelect={() => pick({ source: 'skill', ref: skill.name })}
       >
-        <span className={cn('shrink-0 font-mono text-xs', emphasized && 'font-semibold')}>
-          {skill.name}
-        </span>
+        <span className={cn('shrink-0 font-mono text-xs', emphasized && 'font-semibold')}>{skill.name}</span>
         {skill.description ? (
-          <span className="min-w-0 flex-1 truncate text-xs text-soft-foreground">
-            {skill.description}
-          </span>
+          <span className="min-w-0 flex-1 truncate text-xs text-soft-foreground">{skill.description}</span>
         ) : null}
         {/* Read-only "View skill" (spec §Skills) — the Settings catalog's detail component
             as a dialog. stopPropagation: viewing must not pick the source. */}
@@ -858,9 +819,9 @@ function SourcePill({
           aria-label={`View skill ${skill.name}`}
           title="View skill"
           onClick={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            setPreview(skill)
+            event.preventDefault();
+            event.stopPropagation();
+            setPreview(skill);
           }}
           className="ml-auto shrink-0 rounded-sm p-0.5 text-soft-foreground transition-colors hover:text-foreground"
         >
@@ -868,8 +829,8 @@ function SourcePill({
         </button>
         {selected ? <CheckIcon aria-hidden="true" className="size-3.5 shrink-0 text-primary" /> : null}
       </CommandItem>
-    )
-  }
+    );
+  };
 
   return (
     <>
@@ -877,8 +838,8 @@ function SourcePill({
       <Popover
         open={open}
         onOpenChange={(next) => {
-          setOpen(next)
-          if (!next) setSearch('')
+          setOpen(next);
+          if (!next) setSearch('');
         }}
       >
         <PopoverTrigger asChild>
@@ -887,7 +848,10 @@ function SourcePill({
             data-slot="source-pill"
             aria-label="Choose a skill or workflow"
             disabled={!ready}
-            className={cn(chipClass, 'border-foreground/60 font-mono text-[11.5px] font-semibold text-foreground')}
+            className={cn(
+              chipClass,
+              'border-foreground/60 font-mono text-[11.5px] font-semibold text-foreground',
+            )}
           >
             {source.source === 'skill' ? (
               <SparklesIcon aria-hidden="true" className="size-3 shrink-0 text-violet" />
@@ -898,11 +862,7 @@ function SourcePill({
             {chevron}
           </button>
         </PopoverTrigger>
-        <PopoverContent
-          align="start"
-          sideOffset={8}
-          className="w-[336px] max-w-[calc(100vw-2rem)] p-0"
-        >
+        <PopoverContent align="start" sideOffset={8} className="w-[336px] max-w-[calc(100vw-2rem)] p-0">
           <Command shouldFilter={false}>
             <CommandInput
               placeholder="search skills & workflows…"
@@ -933,7 +893,7 @@ function SourcePill({
               {matchedWorkflows.length > 0 ? (
                 <CommandGroup heading="Workflows">
                   {matchedWorkflows.map((workflow) => {
-                    const selected = source.source === 'workflow' && source.ref === workflow.name
+                    const selected = source.source === 'workflow' && source.ref === workflow.name;
                     return (
                       <CommandItem
                         key={workflow.name}
@@ -954,7 +914,7 @@ function SourcePill({
                           <CheckIcon aria-hidden="true" className="ml-auto size-3.5 shrink-0 text-primary" />
                         ) : null}
                       </CommandItem>
-                    )
+                    );
                   })}
                 </CommandGroup>
               ) : null}
@@ -966,28 +926,28 @@ function SourcePill({
         </PopoverContent>
       </Popover>
     </>
-  )
+  );
 }
 
 /** Base-branch picker: worktrees fork from it and PRs target it. It is repo-level CONFIG
  *  (`PUT /api/config`, exactly the legacy Repo tab's picker), not a per-run flag — so it
  *  mutates the server and refetches, rather than living in the draft. Hidden without git. */
 function BaseBranchPill({ repo }: { repo: RepoResponse }) {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: (baseBranch: string | null) => putConfig({ baseBranch }),
     onSuccess: (result) => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.repo })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.repo });
       toast(
         result.baseBranch
           ? `New tasks will branch off "${result.baseBranch}" (PRs target it too).`
           : 'Base branch cleared — tasks follow the current checkout.',
-      )
+      );
     },
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
-  })
-  if (!repo.info) return null
-  const current = repo.baseBranch ?? repo.info.branch
+  });
+  if (!repo.info) return null;
+  const current = repo.baseBranch ?? repo.info.branch;
   return (
     <PickerPill
       slot="base-pill"
@@ -996,11 +956,15 @@ function BaseBranchPill({ repo }: { repo: RepoResponse }) {
       value={repo.baseBranch ?? ''}
       onPick={(value) => mutation.mutate(value === '' ? null : value)}
       options={[
-        { value: '', label: `current checkout (${repo.info.branch})`, desc: 'Follow whatever is checked out' },
+        {
+          value: '',
+          label: `current checkout (${repo.info.branch})`,
+          desc: 'Follow whatever is checked out',
+        },
         ...repo.branches.map((branch) => ({ value: branch, label: branch })),
       ]}
     />
-  )
+  );
 }
 
 /** The `Start | Plan first` segment (#383): a real toggle with an UNMISTAKABLE selected state.
@@ -1012,9 +976,9 @@ function ModeSegment({
   planning,
   onModeChange,
 }: {
-  planFirst: boolean
-  planning: boolean
-  onModeChange: (planFirst: boolean) => void
+  planFirst: boolean;
+  planning: boolean;
+  onModeChange: (planFirst: boolean) => void;
 }) {
   return (
     <div
@@ -1055,7 +1019,7 @@ function ModeSegment({
         {planning ? 'Planning…' : 'Plan first'}
       </button>
     </div>
-  )
+  );
 }
 
 /** Honest static starters (the mockup's ghost chips): they only fill the textarea — the user
@@ -1064,7 +1028,7 @@ const SUGGESTIONS = [
   'Fix a failing or flaky test',
   'Summarize recent commits on this branch',
   'Update the README for recent changes',
-]
+];
 
 function SuggestedChips({ onPick }: { onPick: (text: string) => void }) {
   return (
@@ -1082,5 +1046,5 @@ function SuggestedChips({ onPick }: { onPick: (text: string) => void }) {
         </button>
       ))}
     </div>
-  )
+  );
 }

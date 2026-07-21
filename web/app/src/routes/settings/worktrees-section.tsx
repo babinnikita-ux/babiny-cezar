@@ -1,15 +1,15 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { FolderGit2Icon } from 'lucide-react'
-import { useState } from 'react'
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { FolderGit2Icon } from 'lucide-react';
+import { useState } from 'react';
 
-import { putConfig } from '@/api/client'
-import { queryKeys, useConfig } from '@/api/queries'
-import type { ConfigResponse, SetConfigInput } from '@/api/types'
-import { CenteredState } from '@/components/centered-state'
-import { Button } from '@/components/ui/button'
-import { toast } from '@/components/ui/toaster'
-import { SettingsField } from './settings-field'
-import { WorktreesPanel } from './worktrees-panel'
+import { putConfig } from '@/api/client';
+import { queryKeys, useConfig } from '@/api/queries';
+import type { ConfigResponse, SetConfigInput } from '@/api/types';
+import { CenteredState } from '@/components/centered-state';
+import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/toaster';
+import { SettingsField } from './settings-field';
+import { WorktreesPanel } from './worktrees-panel';
 
 /**
  * Project settings → Worktrees: the retention count (#483) and the disk panel — what used to be
@@ -22,18 +22,18 @@ import { WorktreesPanel } from './worktrees-panel'
  */
 
 /** Worktree retention count bounds (#483) — 0 = unlimited, matching the config schema. */
-const WORKTREE_RETENTION_MIN = 0
-const WORKTREE_RETENTION_MAX = 1000
+const WORKTREE_RETENTION_MIN = 0;
+const WORKTREE_RETENTION_MAX = 1000;
 
 export function WorktreesSection() {
-  const config = useConfig()
+  const config = useConfig();
 
   if (config.isPending) {
     return (
       <p data-slot="worktrees-loading" className="p-4 text-[13px] text-soft-foreground md:p-6">
         Loading worktree settings…
       </p>
-    )
+    );
   }
   if (config.isError) {
     return (
@@ -44,45 +44,45 @@ export function WorktreesSection() {
         subtitle={config.error.message}
         heading="h2"
       />
-    )
+    );
   }
-  return <WorktreesForm config={config.data} />
+  return <WorktreesForm config={config.data} />;
 }
 
 function WorktreesForm({ config }: { config: ConfigResponse }) {
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
 
   const save = useMutation({
     mutationFn: (patch: SetConfigInput) => putConfig(patch),
     onSuccess: (result) => queryClient.setQueryData(queryKeys.config, result),
     onError: (error: Error) => toast(error.message, { tone: 'danger' }),
-  })
+  });
 
   // Retention edits locally and saves explicitly (#483). 0 = unlimited (a meaningful value,
   // always sent as a number so it is never mistaken for "clear back to the default").
-  const [retention, setRetention] = useState(String(config.worktreeRetention))
-  const retentionNum = Number(retention)
+  const [retention, setRetention] = useState(String(config.worktreeRetention));
+  const retentionNum = Number(retention);
   const retentionInvalid =
     retention.trim() === '' ||
     !Number.isInteger(retentionNum) ||
     retentionNum < WORKTREE_RETENTION_MIN ||
-    retentionNum > WORKTREE_RETENTION_MAX
-  const retentionSaved = config.worktreeRetention === (retentionInvalid ? -1 : retentionNum)
+    retentionNum > WORKTREE_RETENTION_MAX;
+  const retentionSaved = config.worktreeRetention === (retentionInvalid ? -1 : retentionNum);
   const saveRetention = () =>
     save.mutate(
       { worktreeRetention: retentionNum },
       {
         onSuccess: () => {
           // Keep the worktrees panel's keep-limit footer in step with the new value.
-          void queryClient.invalidateQueries({ queryKey: queryKeys.worktrees })
+          void queryClient.invalidateQueries({ queryKey: queryKeys.worktrees });
           toast(
             retentionNum === 0
               ? 'Keeping all worktrees (unlimited)'
               : `Keeping the last ${retentionNum} finished worktree${retentionNum === 1 ? '' : 's'}`,
-          )
+          );
         },
       },
-    )
+    );
 
   return (
     <div
@@ -125,7 +125,9 @@ function WorktreesForm({ config }: { config: ConfigResponse }) {
           </p>
         ) : (
           <p className="text-[11px] text-soft-foreground">
-            {retentionNum === 0 ? 'Keeping every finished worktree.' : `Keeping the last ${retentionNum} finished worktree${retentionNum === 1 ? '' : 's'} on disk.`}
+            {retentionNum === 0
+              ? 'Keeping every finished worktree.'
+              : `Keeping the last ${retentionNum} finished worktree${retentionNum === 1 ? '' : 's'} on disk.`}
           </p>
         )}
       </SettingsField>
@@ -137,5 +139,5 @@ function WorktreesForm({ config }: { config: ConfigResponse }) {
         <WorktreesPanel />
       </SettingsField>
     </div>
-  )
+  );
 }

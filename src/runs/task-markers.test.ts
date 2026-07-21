@@ -4,7 +4,11 @@ import { parseTaskMarkers, stripTaskMarkers } from './task-markers.js';
 /** Spec 2026-07-18-task-ref-markers — the in-band declaration layer above the fuzzy tiers. */
 describe('parseTaskMarkers', () => {
   it('reads each marker off its own line', () => {
-    expect(parseTaskMarkers('Working on it.\nCEZ:PR=442\nCEZ:ISSUE=433\nCEZ:TITLE=fixing plan rendering\ndone soon')).toEqual({
+    expect(
+      parseTaskMarkers(
+        'Working on it.\nCEZ:PR=442\nCEZ:ISSUE=433\nCEZ:TITLE=fixing plan rendering\ndone soon',
+      ),
+    ).toEqual({
       pr: 442,
       issue: 433,
       title: 'fixing plan rendering',
@@ -55,12 +59,10 @@ describe('parseTaskMarkers — report-tier reference lines', () => {
   });
 
   it('a CEZ declaration in the same turn outranks a report line', () => {
-    expect(
-      parseTaskMarkers('CEZ:PR=7\nPR: #442 (link: https://github.com/o/r/pull/442)'),
-    ).toEqual({ pr: 7 });
-    expect(
-      parseTaskMarkers('Issue: #9 (link: https://github.com/o/r/issues/9)\nCEZ:ISSUE=3'),
-    ).toEqual({ issue: 3 });
+    expect(parseTaskMarkers('CEZ:PR=7\nPR: #442 (link: https://github.com/o/r/pull/442)')).toEqual({ pr: 7 });
+    expect(parseTaskMarkers('Issue: #9 (link: https://github.com/o/r/issues/9)\nCEZ:ISSUE=3')).toEqual({
+      issue: 3,
+    });
   });
 
   it('still accepts the legacy env-style markers from older skill versions', () => {
@@ -79,7 +81,9 @@ describe('parseTaskMarkers — report-tier reference lines', () => {
   });
 
   it('is line-anchored and exact-shape — prose, placeholders and decorated lines never parse', () => {
-    expect(parseTaskMarkers('the report ends with PR: #442 (link: https://github.com/o/r/pull/442)')).toEqual({});
+    expect(parseTaskMarkers('the report ends with PR: #442 (link: https://github.com/o/r/pull/442)')).toEqual(
+      {},
+    );
     expect(parseTaskMarkers('PR: #<PR number> (link: <full PR URL>)')).toEqual({});
     expect(parseTaskMarkers('- PR: #442 (link: https://github.com/o/r/pull/442)')).toEqual({});
     expect(parseTaskMarkers('PR: #442 (link: https://github.com/o/r/pull/442) — merged')).toEqual({});
@@ -93,9 +97,9 @@ describe('parseTaskMarkers — report-tier reference lines', () => {
 
 describe('stripTaskMarkers', () => {
   it('removes complete marker lines and keeps the surrounding text', () => {
-    expect(stripTaskMarkers('Opened the PR.\nCEZ:PR=442\nCEZ:TITLE=fixing plan rendering\nNext: tests.')).toBe(
-      'Opened the PR.\nNext: tests.',
-    );
+    expect(
+      stripTaskMarkers('Opened the PR.\nCEZ:PR=442\nCEZ:TITLE=fixing plan rendering\nNext: tests.'),
+    ).toBe('Opened the PR.\nNext: tests.');
   });
 
   it('leaves prose mentions and non-marker lines alone', () => {

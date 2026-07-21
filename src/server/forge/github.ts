@@ -216,7 +216,11 @@ export async function fetchGithub(repoRoot: string, refresh = false, limit = 30)
     const fields = 'number,title,author,createdAt,labels,body,url';
     // The repo handle first (cheap) so the counts GraphQL query — which needs owner/name —
     // can run parallel to the two expensive list calls below.
-    const repoOut = await gh(repoRoot, ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'], timeout);
+    const repoOut = await gh(
+      repoRoot,
+      ['repo', 'view', '--json', 'nameWithOwner', '--jq', '.nameWithOwner'],
+      timeout,
+    );
     const ownerName = parseOwnerName(repoOut);
     const runGraphql: GraphqlRunner = (query, variables) => {
       const args = ['api', 'graphql', '-f', `query=${query}`];
@@ -230,20 +234,36 @@ export async function fetchGithub(repoRoot: string, refresh = false, limit = 30)
     const countsMaxPages = Math.min(GH_COUNTS_MAX_PAGES, Math.max(1, Math.ceil(capped / 100)));
     const [issuesOut, prsOut, counts] = await Promise.all([
       gh(repoRoot, ['issue', 'list', '--limit', String(capped), '--json', fields], timeout),
-      gh(repoRoot, ['pr', 'list', '--limit', String(capped), '--json', `${fields},isDraft,additions,deletions,statusCheckRollup`], timeout),
+      gh(
+        repoRoot,
+        [
+          'pr',
+          'list',
+          '--limit',
+          String(capped),
+          '--json',
+          `${fields},isDraft,additions,deletions,statusCheckRollup`,
+        ],
+        timeout,
+      ),
       // Real comment counts (#499). Degrades to empty maps on its own — a failure here leaves
       // every count at 0, never fails the tab. Skipped entirely if the handle isn't parseable.
       ownerName
         ? fetchCommentCounts(runGraphql, ownerName.owner, ownerName.name, countsMaxPages)
-        : Promise.resolve<{ issues: Record<number, number>; prs: Record<number, number> }>({ issues: {}, prs: {} }),
+        : Promise.resolve<{ issues: Record<number, number>; prs: Record<number, number> }>({
+            issues: {},
+            prs: {},
+          }),
     ]);
     // One repo-wide label→color map, filled as we flatten each item's labels.
     const labelColors: Record<string, string> = {};
     const recordColor = (l: { name: string; color: string }) => {
       if (l.color && !labelColors[l.name]) labelColors[l.name] = l.color;
     };
-    const issues = z.array(ghIssueSchema).parse(JSON.parse(issuesOut)).map(
-      (i): GithubItem => {
+    const issues = z
+      .array(ghIssueSchema)
+      .parse(JSON.parse(issuesOut))
+      .map((i): GithubItem => {
         i.labels.forEach(recordColor);
         return {
           kind: 'issue',
@@ -256,10 +276,11 @@ export async function fetchGithub(repoRoot: string, refresh = false, limit = 30)
           url: i.url,
           comments: counts.issues[i.number] ?? 0,
         };
-      },
-    );
-    const prs = z.array(ghPrSchema).parse(JSON.parse(prsOut)).map(
-      (p): GithubItem => {
+      });
+    const prs = z
+      .array(ghPrSchema)
+      .parse(JSON.parse(prsOut))
+      .map((p): GithubItem => {
         p.labels.forEach(recordColor);
         return {
           kind: 'pr',
@@ -276,8 +297,7 @@ export async function fetchGithub(repoRoot: string, refresh = false, limit = 30)
           deletions: p.deletions,
           checks: rollupToChecks(p.statusCheckRollup),
         };
-      },
-    );
+      });
     const data: GithubData = {
       available: true,
       repo: repoOut.trim() || undefined,
@@ -304,12 +324,19 @@ export async function fetchGithub(repoRoot: string, refresh = false, limit = 30)
 }
 
 function firstLine(s: string): string {
-  return s.split('\n').find((l) => l.trim().length > 0)?.trim() ?? 'gh failed';
+  return (
+    s
+      .split('\n')
+      .find((l) => l.trim().length > 0)
+      ?.trim() ?? 'gh failed'
+  );
 }
 
 /** CEZ_DRY_RUN=1 — a small fixed catalog so the GitHub tab is demoable offline. */
 function mockGithub(): GithubData {
-  const mk = (over: Partial<GithubItem> & Pick<GithubItem, 'kind' | 'number' | 'title' | 'body'>): GithubItem => ({
+  const mk = (
+    over: Partial<GithubItem> & Pick<GithubItem, 'kind' | 'number' | 'title' | 'body'>,
+  ): GithubItem => ({
     author: 'mock',
     createdAt: new Date(Date.now() - over.number * 3_600_000).toISOString(),
     labels: [],
@@ -322,13 +349,54 @@ function mockGithub(): GithubData {
     repo: 'mock/repo',
     syncedAt: new Date().toISOString(),
     issues: [
-      mk({ kind: 'issue', number: 142, title: 'Login form drops session on refresh', labels: ['bug', 'auth'], comments: 3, body: 'Repro: log in, hit reload — you land back on /login. The session cookie is set correctly, but the client store rehydrates before the cookie check resolves, so the auth guard redirects.' }),
-      mk({ kind: 'issue', number: 139, title: 'Add --json flag to cez CLI output', labels: ['enhancement', 'cli'], comments: 1, body: 'For scripting it would help if `cez list` and `cez status` could emit machine-readable JSON instead of the table view.' }),
-      mk({ kind: 'issue', number: 135, title: 'Flaky e2e: worktree cleanup race on cancel', labels: ['bug', 'flaky-test'], comments: 6, body: 'Cancelling a run while the agent holds a file lock leaves a dangling worktree. The next run on the same branch then fails with "worktree already exists".' }),
+      mk({
+        kind: 'issue',
+        number: 142,
+        title: 'Login form drops session on refresh',
+        labels: ['bug', 'auth'],
+        comments: 3,
+        body: 'Repro: log in, hit reload — you land back on /login. The session cookie is set correctly, but the client store rehydrates before the cookie check resolves, so the auth guard redirects.',
+      }),
+      mk({
+        kind: 'issue',
+        number: 139,
+        title: 'Add --json flag to cez CLI output',
+        labels: ['enhancement', 'cli'],
+        comments: 1,
+        body: 'For scripting it would help if `cez list` and `cez status` could emit machine-readable JSON instead of the table view.',
+      }),
+      mk({
+        kind: 'issue',
+        number: 135,
+        title: 'Flaky e2e: worktree cleanup race on cancel',
+        labels: ['bug', 'flaky-test'],
+        comments: 6,
+        body: 'Cancelling a run while the agent holds a file lock leaves a dangling worktree. The next run on the same branch then fails with "worktree already exists".',
+      }),
     ],
     prs: [
-      mk({ kind: 'pr', number: 128, title: 'Fix flaky auth test in CI', labels: ['tests'], checks: 'passing', additions: 6, deletions: 3, body: 'Loosens the timing assertion in refresh.test.ts to a realistic budget.' }),
-      mk({ kind: 'pr', number: 124, title: 'Rate limit /api/runs', labels: ['server', 'draft'], isDraft: true, checks: 'failing', additions: 118, deletions: 7, comments: 4, body: 'Draft: token-bucket middleware on the runs router. Still needs the config surface and README docs before review.' }),
+      mk({
+        kind: 'pr',
+        number: 128,
+        title: 'Fix flaky auth test in CI',
+        labels: ['tests'],
+        checks: 'passing',
+        additions: 6,
+        deletions: 3,
+        body: 'Loosens the timing assertion in refresh.test.ts to a realistic budget.',
+      }),
+      mk({
+        kind: 'pr',
+        number: 124,
+        title: 'Rate limit /api/runs',
+        labels: ['server', 'draft'],
+        isDraft: true,
+        checks: 'failing',
+        additions: 118,
+        deletions: 7,
+        comments: 4,
+        body: 'Draft: token-bucket middleware on the runs router. Still needs the config surface and README docs before review.',
+      }),
     ],
     labelColors: {
       bug: 'd73a4a',
@@ -462,15 +530,18 @@ const COMMENT_BODY_CAP = 8_000;
 
 /** `gh api …/issues/{n}/comments` JSON → `ForgeComment[]`. Exported for unit tests. */
 export function normalizeComments(raw: unknown): ForgeComment[] {
-  return z.array(ghIssueCommentSchema).parse(raw).map((c) => ({
-    id: c.id,
-    author: c.user?.login ?? '?',
-    avatarUrl: c.user?.avatar_url ?? undefined,
-    createdAt: c.created_at,
-    body: (c.body ?? '').slice(0, COMMENT_BODY_CAP),
-    kind: 'comment' as const,
-    url: c.html_url,
-  }));
+  return z
+    .array(ghIssueCommentSchema)
+    .parse(raw)
+    .map((c) => ({
+      id: c.id,
+      author: c.user?.login ?? '?',
+      avatarUrl: c.user?.avatar_url ?? undefined,
+      createdAt: c.created_at,
+      body: (c.body ?? '').slice(0, COMMENT_BODY_CAP),
+      kind: 'comment' as const,
+      url: c.html_url,
+    }));
 }
 
 /** `gh api …/pulls/{n}/reviews` JSON → `ForgeComment[]`. Reviews with an empty body AND state
@@ -652,9 +723,7 @@ export function __clearRepoHandleCacheForTests(): void {
 
 /** The `owner/name` for `repoRoot`, memoized. Returns null when the handle isn't a clean two-part
  *  slug or `gh` failed — the caller then skips checks entirely and commits render unglyphed. */
-export async function resolveRepoHandle(
-  repoRoot: string,
-): Promise<{ owner: string; name: string } | null> {
+export async function resolveRepoHandle(repoRoot: string): Promise<{ owner: string; name: string } | null> {
   const memo = repoHandleCache.get(repoRoot);
   if (memo !== undefined) return memo;
   let handle: { owner: string; name: string } | null;
@@ -841,9 +910,7 @@ export async function fetchGithubComments(
         ),
       );
       stoppedShort = pages.stoppedShort;
-      commentRows = pages.rows.filter(
-        (r) => (r as { event?: unknown } | null)?.event === 'commented',
-      );
+      commentRows = pages.rows.filter((r) => (r as { event?: unknown } | null)?.event === 'commented');
       const normalized = normalizeEvents(pages.rows);
       events = normalized.events;
       eventsTruncated = normalized.truncated;
@@ -910,7 +977,11 @@ export async function fetchGithubComments(
 
     const parts: ForgeComment[][] = [normalizeComments(commentRows)];
     if (kind === 'pr') {
-      const reviewsOut = await gh(repoRoot, ['api', `repos/{owner}/{repo}/pulls/${number}/reviews`, '--paginate']);
+      const reviewsOut = await gh(repoRoot, [
+        'api',
+        `repos/{owner}/{repo}/pulls/${number}/reviews`,
+        '--paginate',
+      ]);
       parts.push(normalizeReviews(JSON.parse(reviewsOut)));
     }
     const { comments, truncated } = mergeThread(parts);
@@ -1091,7 +1162,10 @@ export async function createDraftPr(input: DraftPrInput): Promise<DraftPrOutcome
 
   const remote = await execTool(['remote', 'get-url', 'origin'], worktree, 'git');
   if (!remote.ok || !remote.stdout.trim()) {
-    return { ok: false, error: 'no git remote — add one (git remote add origin <url>) or merge the branch locally' };
+    return {
+      ok: false,
+      error: 'no git remote — add one (git remote add origin <url>) or merge the branch locally',
+    };
   }
 
   const push = await execTool(['push', '-u', 'origin', branch], worktree, 'git', PUSH_TIMEOUT_MS);
@@ -1114,7 +1188,10 @@ export async function createDraftPr(input: DraftPrInput): Promise<DraftPrOutcome
   );
   if (!pr.ok) {
     if (pr.notFound) {
-      return { ok: false, error: 'gh not found — install the GitHub CLI and run `gh auth login`, or merge the branch locally' };
+      return {
+        ok: false,
+        error: 'gh not found — install the GitHub CLI and run `gh auth login`, or merge the branch locally',
+      };
     }
     const hint = /auth|log ?in|credential/i.test(pr.stderr) ? ' (try `gh auth login`)' : '';
     return { ok: false, error: `gh pr create failed — ${tail(pr.stderr) || 'unknown error'}${hint}` };
@@ -1226,10 +1303,8 @@ async function detectGithub(repoRoot: string): Promise<ForgeAvailability> {
  */
 export function detectGithubCached(repoRoot: string): ForgeAvailability | null {
   if (process.env.CEZ_DRY_RUN === '1') return { available: true };
-  const cached =
-    detectCache && detectCache.repoRoot === repoRoot ? detectCache.result : null;
-  const fresh =
-    detectCache && detectCache.repoRoot === repoRoot && Date.now() - detectCache.at < CACHE_MS;
+  const cached = detectCache && detectCache.repoRoot === repoRoot ? detectCache.result : null;
+  const fresh = detectCache && detectCache.repoRoot === repoRoot && Date.now() - detectCache.at < CACHE_MS;
   if (!fresh) {
     void detectGithub(repoRoot).catch(() => {}); // revalidate off the request path
   }
@@ -1265,7 +1340,13 @@ export function createGithubDriver(repoRoot: string, repoRef: GithubRepoRef | nu
     prStatus: async (branch) => {
       if (process.env.CEZ_DRY_RUN === '1') return null;
       try {
-        const out = await gh(repoRoot, ['pr', 'view', branch, '--json', 'number,url,state,isDraft,statusCheckRollup']);
+        const out = await gh(repoRoot, [
+          'pr',
+          'view',
+          branch,
+          '--json',
+          'number,url,state,isDraft,statusCheckRollup',
+        ]);
         const pr = ghPrViewSchema.parse(JSON.parse(out));
         return {
           number: pr.number,

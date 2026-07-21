@@ -105,7 +105,10 @@ export function createClackUi(backend: PromptBackend = realBackend): Ui {
       return unwrap(await backend.text({ ...opts, validate: wrapValidate(opts.validate) }), backend.isCancel);
     },
     async password(opts) {
-      return unwrap(await backend.password({ ...opts, validate: wrapValidate(opts.validate) }), backend.isCancel);
+      return unwrap(
+        await backend.password({ ...opts, validate: wrapValidate(opts.validate) }),
+        backend.isCancel,
+      );
     },
     spinner(): SpinnerHandle {
       const s = backend.spinner();
@@ -137,7 +140,7 @@ export function createAutoUi(
   } = {},
 ): Ui {
   const answer = <T>(message: string, fallback: T): T =>
-    (message in answers ? (answers[message] as T) : fallback);
+    message in answers ? (answers[message] as T) : fallback;
   const checkValid = (message: string, v: string, validate?: (v: string) => string | undefined): void => {
     if (!opts.strictValidate) return;
     const invalid = validate?.(v);

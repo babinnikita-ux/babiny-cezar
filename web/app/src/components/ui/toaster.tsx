@@ -1,6 +1,6 @@
-import { useSyncExternalStore } from 'react'
+import { useSyncExternalStore } from 'react';
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/utils';
 
 /**
  * A minimal toast primitive — the transient "that worked / that didn't" line the legacy UI
@@ -12,46 +12,46 @@ import { cn } from '@/lib/utils'
  * `<Toaster />` instance (mounted at the app root) renders whatever the store holds.
  */
 
-export type ToastTone = 'default' | 'danger'
+export type ToastTone = 'default' | 'danger';
 
 export interface ToastItem {
-  id: number
-  message: string
-  tone: ToastTone
+  id: number;
+  message: string;
+  tone: ToastTone;
 }
 
-const TOAST_MS = 5000
+const TOAST_MS = 5000;
 
-let items: readonly ToastItem[] = []
-let nextId = 1
-const listeners = new Set<() => void>()
+let items: readonly ToastItem[] = [];
+let nextId = 1;
+const listeners = new Set<() => void>();
 
 function publish(next: readonly ToastItem[]): void {
-  items = next
-  for (const listener of listeners) listener()
+  items = next;
+  for (const listener of listeners) listener();
 }
 
 function subscribe(listener: () => void): () => void {
-  listeners.add(listener)
-  return () => listeners.delete(listener)
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }
 
 /** Show a transient message. `danger` tone for failures — the message should be the server's
  *  own words wherever one exists (see ApiError). */
 export function toast(message: string, opts: { tone?: ToastTone } = {}): void {
-  const item: ToastItem = { id: nextId++, message, tone: opts.tone ?? 'default' }
-  publish([...items, item])
-  setTimeout(() => publish(items.filter((t) => t.id !== item.id)), TOAST_MS)
+  const item: ToastItem = { id: nextId++, message, tone: opts.tone ?? 'default' };
+  publish([...items, item]);
+  setTimeout(() => publish(items.filter((t) => t.id !== item.id)), TOAST_MS);
 }
 
 /** Test seam: clears the module-level queue so one test's toasts never leak into the next. */
 export function resetToasts(): void {
-  publish([])
+  publish([]);
 }
 
 export function Toaster() {
-  const current = useSyncExternalStore(subscribe, () => items)
-  if (current.length === 0) return null
+  const current = useSyncExternalStore(subscribe, () => items);
+  if (current.length === 0) return null;
   return (
     <div
       data-slot="toaster"
@@ -74,5 +74,5 @@ export function Toaster() {
         </div>
       ))}
     </div>
-  )
+  );
 }

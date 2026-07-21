@@ -37,7 +37,10 @@ export function parseRemote(remote: string): ParsedRemote | null {
     [, host, path] = scp;
   }
   if (!host || !path) return null;
-  const parts = path.replace(/\.git$/i, '').split('/').filter(Boolean);
+  const parts = path
+    .replace(/\.git$/i, '')
+    .split('/')
+    .filter(Boolean);
   const owner = parts[parts.length - 2];
   const repo = parts[parts.length - 1];
   if (!owner || !repo) return null;
@@ -55,4 +58,11 @@ export function resolveForge(repoInfo: RepoInfo | null): ForgeDriver | null {
   return null;
 }
 
-export type { ForgeDriver, ForgeAvailability, ForgeItem, ForgeKind, ForgePrStatus, ForgeRefKind } from './types.js';
+export type {
+  ForgeDriver,
+  ForgeAvailability,
+  ForgeItem,
+  ForgeKind,
+  ForgePrStatus,
+  ForgeRefKind,
+} from './types.js';

@@ -37,11 +37,15 @@ describe('agent-config catalog', () => {
     expect(findConfigFile('opencode.user.config')!.resolve('/repo', HOME)).toBe(
       '/home/u/.config/opencode/opencode.json',
     );
-    expect(findConfigFile('claude.user.settings')!.resolve('/repo', HOME)).toBe('/home/u/.claude/settings.json');
+    expect(findConfigFile('claude.user.settings')!.resolve('/repo', HOME)).toBe(
+      '/home/u/.claude/settings.json',
+    );
   });
 
   it('marks only Claude’s gitignored personal layer as seeded', () => {
-    const seeded = CONFIG_FILES.filter((f) => f.seeded).map((f) => f.id).sort();
+    const seeded = CONFIG_FILES.filter((f) => f.seeded)
+      .map((f) => f.id)
+      .sort();
     expect(seeded).toEqual(['claude.local.memory', 'claude.local.settings']);
     for (const f of CONFIG_FILES) {
       if (f.seeded) expect(f.tracked).toBe('gitignored');
@@ -55,7 +59,9 @@ describe('agent-config catalog', () => {
   });
 
   it('holdsMcp is set exactly where MCP servers actually live', () => {
-    const mcp = CONFIG_FILES.filter((f) => f.holdsMcp).map((f) => f.id).sort();
+    const mcp = CONFIG_FILES.filter((f) => f.holdsMcp)
+      .map((f) => f.id)
+      .sort();
     expect(mcp).toEqual([
       'claude.project.mcp',
       'codex.project.config',

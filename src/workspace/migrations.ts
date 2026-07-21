@@ -62,7 +62,12 @@ async function readRepoResourceKeys(
   const raw = await readRawObject(join(repoRoot, '.ai/cezar', 'config.json'));
   const out: { maxParallel?: number; memoryLimitMb?: number } = {};
   const maxParallel = raw?.maxParallel;
-  if (typeof maxParallel === 'number' && Number.isInteger(maxParallel) && maxParallel >= 1 && maxParallel <= 16) {
+  if (
+    typeof maxParallel === 'number' &&
+    Number.isInteger(maxParallel) &&
+    maxParallel >= 1 &&
+    maxParallel <= 16
+  ) {
     out.maxParallel = maxParallel;
   }
   const memoryLimitMb = raw?.memoryLimitMb;
@@ -114,9 +119,7 @@ const migration001: WorkspaceMigration = {
     });
     if (!bootRepoRoot) return;
     const repoUiState = await readUiState(bootRepoRoot);
-    const uiKeys = (['appearance', 'notifications'] as const).filter(
-      (key) => repoUiState[key] !== undefined,
-    );
+    const uiKeys = (['appearance', 'notifications'] as const).filter((key) => repoUiState[key] !== undefined);
     if (uiKeys.length === 0) return; // nothing to import — don't create the file
     await mergeWriteWorkspaceUiState((state) => {
       for (const key of uiKeys) {

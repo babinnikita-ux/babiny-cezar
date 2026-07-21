@@ -1,7 +1,7 @@
-import { CircleCheckIcon, CircleIcon, CircleXIcon, LoaderCircleIcon } from 'lucide-react'
+import { CircleCheckIcon, CircleIcon, CircleXIcon, LoaderCircleIcon } from 'lucide-react';
 
-import type { StepState, StepStatus } from '@/api/types'
-import { cn } from '@/lib/utils'
+import type { StepState, StepStatus } from '@/api/types';
+import { cn } from '@/lib/utils';
 
 /**
  * The WORKFLOW step rail (spec §"Task thread" — steps ≠ plan: these are the run's own
@@ -12,22 +12,22 @@ import { cn } from '@/lib/utils'
  */
 
 /** The four rail glyphs. Pure so the status → glyph table is testable without rendering. */
-export type RailVisual = 'done' | 'active' | 'pending' | 'failed'
+export type RailVisual = 'done' | 'active' | 'pending' | 'failed';
 
 export function railVisual(status: StepStatus): RailVisual {
   switch (status) {
     case 'done':
-      return 'done'
+      return 'done';
     case 'running':
     case 'waiting': // the agent paused mid-step — the step is still the live one
     case 'review': // parked at the review gate — same: in flight until accepted
-      return 'active'
+      return 'active';
     case 'failed':
     case 'cancelled':
-      return 'failed'
+      return 'failed';
     case 'pending':
     case 'skipped': // never ran — an empty circle is the honest glyph
-      return 'pending'
+      return 'pending';
   }
 }
 
@@ -35,20 +35,20 @@ export function railVisual(status: StepStatus): RailVisual {
  *  set: any TERMINAL step counts 1 (the bar measures progress through the workflow, not
  *  success), any ACTIVE one ½, pending 0. */
 export function railProgress(steps: ReadonlyArray<Pick<StepState, 'status'>>): number {
-  if (steps.length === 0) return 0
-  const TERMINAL: ReadonlySet<StepStatus> = new Set(['done', 'failed', 'cancelled', 'skipped'])
-  const ACTIVE: ReadonlySet<StepStatus> = new Set(['running', 'waiting', 'review'])
-  let score = 0
+  if (steps.length === 0) return 0;
+  const TERMINAL: ReadonlySet<StepStatus> = new Set(['done', 'failed', 'cancelled', 'skipped']);
+  const ACTIVE: ReadonlySet<StepStatus> = new Set(['running', 'waiting', 'review']);
+  let score = 0;
   for (const step of steps) {
-    if (TERMINAL.has(step.status)) score += 1
-    else if (ACTIVE.has(step.status)) score += 0.5
+    if (TERMINAL.has(step.status)) score += 1;
+    else if (ACTIVE.has(step.status)) score += 0.5;
   }
-  return score / steps.length
+  return score / steps.length;
 }
 
 export function StepRail({ steps }: { steps: StepState[] }) {
-  if (steps.length === 0) return null
-  const pct = railProgress(steps) * 100
+  if (steps.length === 0) return null;
+  const pct = railProgress(steps) * 100;
   return (
     <div data-slot="step-rail" className="flex min-w-0 flex-col gap-1">
       {steps.map((step, index) => (
@@ -74,14 +74,14 @@ export function StepRail({ steps }: { steps: StepState[] }) {
         <div className="h-full rounded-full bg-pending" style={{ width: `${pct}%` }} />
       </div>
     </div>
-  )
+  );
 }
 
 function RailIcon({ visual }: { visual: RailVisual }) {
-  const base = 'size-[13px] shrink-0'
+  const base = 'size-[13px] shrink-0';
   switch (visual) {
     case 'done':
-      return <CircleCheckIcon aria-hidden className={cn(base, 'text-success')} />
+      return <CircleCheckIcon aria-hidden className={cn(base, 'text-success')} />;
     case 'active':
       return (
         <LoaderCircleIcon
@@ -90,10 +90,10 @@ function RailIcon({ visual }: { visual: RailVisual }) {
           // stroke-pending, not text-*: amber is a dot & spinner color only (guardian rule).
           className={cn(base, 'animate-spin stroke-pending motion-reduce:animate-none')}
         />
-      )
+      );
     case 'failed':
-      return <CircleXIcon aria-hidden className={cn(base, 'text-danger')} />
+      return <CircleXIcon aria-hidden className={cn(base, 'text-danger')} />;
     case 'pending':
-      return <CircleIcon aria-hidden className={cn(base, 'text-soft-foreground')} />
+      return <CircleIcon aria-hidden className={cn(base, 'text-soft-foreground')} />;
   }
 }

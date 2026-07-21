@@ -1,5 +1,14 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { access, constants as fsConstants, mkdir, readFile, realpath, stat, unlink, writeFile } from 'node:fs/promises';
+import {
+  access,
+  constants as fsConstants,
+  mkdir,
+  readFile,
+  realpath,
+  stat,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Hono, type Context } from 'hono';
@@ -76,7 +85,12 @@ import { reviewGateEnabled } from '../runs/review-gate.js';
 import { readUiState, uiStatePath } from '../ui-state.js';
 import { expandTilde } from '../paths.js';
 import { isLoopbackHostHeader, normalizeHostname, resolveCapabilities } from './capabilities.js';
-import { browseDirectory, isInsideBrowseRoot, isLexicallyInsideBrowseRoot, resolveBrowseRoot } from './fs-browse.js';
+import {
+  browseDirectory,
+  isInsideBrowseRoot,
+  isLexicallyInsideBrowseRoot,
+  resolveBrowseRoot,
+} from './fs-browse.js';
 import { resolveForge } from './forge/index.js';
 import { fetchGithub, fetchGithubComments } from './github.js';
 import { ensureLaunchKey } from './launch-key.js';
@@ -625,7 +639,10 @@ const UI_STATE_BODY_LIMIT = 128 * 1024; // 128 KiB
  *  schema, then cap the top-level key count so a `.passthrough()` schema can't
  *  accumulate an unbounded key set (#429). The merge-on-write stays with each
  *  route (they write different files) but is shallow in both. */
-function parseUiStateBody<S extends z.ZodTypeAny>(schema: S, body: unknown): { data: z.infer<S> } | { error: string } {
+function parseUiStateBody<S extends z.ZodTypeAny>(
+  schema: S,
+  body: unknown,
+): { data: z.infer<S> } | { error: string } {
   const parsed = schema.safeParse(body);
   if (!parsed.success) return { error: parsed.error.issues.map((i) => i.message).join('; ') };
   if (Object.keys(parsed.data as Record<string, unknown>).length > UI_STATE_MAX_KEYS) {
@@ -663,9 +680,11 @@ export function createApp(deps: ServerDeps): Hono {
   // turns into a compile error instead.
   const bootRoot = deps.repoRoot;
   const bootDataDir = join(bootRoot, '.ai/cezar');
-  const modelCatalog = deps.modelCatalog ?? new RunnerModelCatalog({
-    adapters: { codex: { discover: () => discoverCodexModels({ cwd: bootRoot }) } },
-  });
+  const modelCatalog =
+    deps.modelCatalog ??
+    new RunnerModelCatalog({
+      adapters: { codex: { discover: () => discoverCodexModels({ cwd: bootRoot }) } },
+    });
 
   // ---- workspace boot-project identity (multi-project spec) ----------------
   // The boot flow (`initWorkspace` in src/index.ts) registers the boot repo
@@ -788,7 +807,8 @@ export function createApp(deps: ServerDeps): Hono {
     if (!isHostedMode() && !isLoopbackHostHeader(hostName)) {
       return c.json(
         {
-          error: 'forbidden: unexpected Host header — this request did not originate from this machine (see #426)',
+          error:
+            'forbidden: unexpected Host header — this request did not originate from this machine (see #426)',
         },
         403,
       );
@@ -808,7 +828,8 @@ export function createApp(deps: ServerDeps): Hono {
         // alone would let any page served from another loopback port (a local
         // dev server rendering attacker content, an XSS in a local app) start a
         // shell-capable agent here.
-        const sameOrigin = !!originHost && authorityOfOrigin(origin) === authorityOfHost(c.req.header('host'));
+        const sameOrigin =
+          !!originHost && authorityOfOrigin(origin) === authorityOfHost(c.req.header('host'));
         // The one legitimate cross-port case is the `npm run dev` Vite proxy:
         // the browser fetches same-origin from `localhost:5173`, Vite's
         // `changeOrigin` rewrites Host to `127.0.0.1:<api port>` but forwards
@@ -1382,7 +1403,10 @@ export function createApp(deps: ServerDeps): Hono {
           if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
             return c.json({ error: `browse folder does not exist: ${configuredRoot}` }, 400);
           }
-          return c.json({ error: `browse folder unavailable: ${err instanceof Error ? err.message : String(err)}` }, 400);
+          return c.json(
+            { error: `browse folder unavailable: ${err instanceof Error ? err.message : String(err)}` },
+            400,
+          );
         }
       }
       const probeError = await probeWritableDir(expanded, create);
@@ -1663,10 +1687,12 @@ export function createApp(deps: ServerDeps): Hono {
       workflow = workflows.find((w) => w.name === parsed.data.workflow);
       if (!workflow) return c.json({ error: `unknown workflow: ${parsed.data.workflow}` }, 404);
     }
-    const images = parsed.data.images?.map((img): ContentBlock => ({
-      type: 'image',
-      source: { type: 'base64', media_type: img.mediaType, data: img.data },
-    }));
+    const images = parsed.data.images?.map(
+      (img): ContentBlock => ({
+        type: 'image',
+        source: { type: 'base64', media_type: img.mediaType, data: img.data },
+      }),
+    );
     const input = {
       task: parsed.data.task,
       model: parsed.data.model,
@@ -1724,20 +1750,22 @@ export function createApp(deps: ServerDeps): Hono {
     const runs = groupRuns(store, c.req.param('groupId'));
     if (runs.length === 0) return c.json({ error: 'not found' }, 404);
     const detailed = await Promise.all(
-      runs.map(async (r): Promise<GroupVariant> => ({
-        id: r.id,
-        variant: r.variant ?? '?',
-        title: r.title,
-        status: r.status,
-        archived: r.archived,
-        tokensUsed: r.tokensUsed,
-        costUsd: r.costUsd,
-        diffStat:
-          r.worktreePath && existsSync(r.worktreePath)
-            ? await worktreeDiffStat(r.worktreePath, r.baseBranch ?? 'HEAD')
-            : '',
-        handoffExcerpt: handoffProgressExcerpt(readHandoff(dataDir, r.id)),
-      })),
+      runs.map(
+        async (r): Promise<GroupVariant> => ({
+          id: r.id,
+          variant: r.variant ?? '?',
+          title: r.title,
+          status: r.status,
+          archived: r.archived,
+          tokensUsed: r.tokensUsed,
+          costUsd: r.costUsd,
+          diffStat:
+            r.worktreePath && existsSync(r.worktreePath)
+              ? await worktreeDiffStat(r.worktreePath, r.baseBranch ?? 'HEAD')
+              : '',
+          handoffExcerpt: handoffProgressExcerpt(readHandoff(dataDir, r.id)),
+        }),
+      ),
     );
     return c.json({
       groupId: c.req.param('groupId'),
@@ -1869,10 +1897,12 @@ export function createApp(deps: ServerDeps): Hono {
       return c.json({ error: parsed.error.issues.map((i) => i.message).join('; ') }, 400);
     }
     const content: ContentBlock[] = [
-      ...parsed.data.images.map((img): ContentBlock => ({
-        type: 'image',
-        source: { type: 'base64', media_type: img.mediaType, data: img.data },
-      })),
+      ...parsed.data.images.map(
+        (img): ContentBlock => ({
+          type: 'image',
+          source: { type: 'base64', media_type: img.mediaType, data: img.data },
+        }),
+      ),
       ...(parsed.data.text.trim() ? [{ type: 'text', text: parsed.data.text } satisfies ContentBlock] : []),
     ];
     // Three-rung delivery ladder (#472). Branch on the ENGINE's answer rather
@@ -1895,7 +1925,10 @@ export function createApp(deps: ServerDeps): Hono {
       }
       const stackedImages = stack.reduce((n, m) => n + (m.images?.length ?? 0), 0);
       if (stackedImages + parsed.data.images.length > MAX_QUEUED_IMAGES) {
-        return c.json({ error: `too many queued images — ${MAX_QUEUED_IMAGES} image limit across the stack` }, 400);
+        return c.json(
+          { error: `too many queued images — ${MAX_QUEUED_IMAGES} image limit across the stack` },
+          400,
+        );
       }
       const prospective = foldedLength(run.task, [...stack, { text: parsed.data.text }]);
       if (prospective > MAX_FOLDED_TASK_CHARS) {
@@ -1939,7 +1972,10 @@ export function createApp(deps: ServerDeps): Hono {
     const others = stack.filter((m) => m.id !== msgId);
     const stackedImages = others.reduce((n, m) => n + (m.images?.length ?? 0), 0);
     if (stackedImages + effectiveImageCount > MAX_QUEUED_IMAGES) {
-      return c.json({ error: `too many queued images — ${MAX_QUEUED_IMAGES} image limit across the stack` }, 400);
+      return c.json(
+        { error: `too many queued images — ${MAX_QUEUED_IMAGES} image limit across the stack` },
+        400,
+      );
     }
     const prospective = foldedLength(run.task, [...others, { text: effectiveText }]);
     if (prospective > MAX_FOLDED_TASK_CHARS) {
@@ -1952,11 +1988,11 @@ export function createApp(deps: ServerDeps): Hono {
     }
 
     const images: ContentBlock[] | undefined = parsed.data.images?.map(
-        (img): ContentBlock => ({
-          type: 'image',
-          source: { type: 'base64', media_type: img.mediaType, data: img.data },
-        }),
-      );
+      (img): ContentBlock => ({
+        type: 'image',
+        source: { type: 'base64', media_type: img.mediaType, data: img.data },
+      }),
+    );
     const message = manager.editQueuedMessage(id, msgId, {
       ...(parsed.data.text !== undefined ? { text: parsed.data.text } : {}),
       ...(images !== undefined ? { images } : {}),
@@ -2047,7 +2083,9 @@ export function createApp(deps: ServerDeps): Hono {
 
   // "Open in…" session takeover (#open-in): the editors/file-manager/terminal
   // detected on THIS machine. Empty in hosted mode (no local desktop to open).
-  api.get('/open-targets', (c) => c.json({ targets: capabilities().localHandoff ? detectOpenTargets() : [] }));
+  api.get('/open-targets', (c) =>
+    c.json({ targets: capabilities().localHandoff ? detectOpenTargets() : [] }),
+  );
 
   // Open a run's worktree (or the repo root) in the chosen local app.
   api.post('/runs/:id/open-in', async (c) => {
@@ -2132,11 +2170,15 @@ export function createApp(deps: ServerDeps): Hono {
     // and what the client's cliTargetResumes now labels. Resume-after-finish is untouched.
     const cliRunner = agentCliRunner(target);
     if (cliRunner) {
-      const engineOwnsSession = run.status === 'running' || run.status === 'queued' || run.status === 'waiting';
-      const sessionId = engineOwnsSession ? undefined : [...run.steps].reverse().find((s) => s.sessionId)?.sessionId;
+      const engineOwnsSession =
+        run.status === 'running' || run.status === 'queued' || run.status === 'waiting';
+      const sessionId = engineOwnsSession
+        ? undefined
+        : [...run.steps].reverse().find((s) => s.sessionId)?.sessionId;
       // An id resumeCommand refuses (#431) degrades to a fresh CLI in the worktree,
       // exactly like a run that never recorded a session.
-      const resume = sessionId && cliRunner === (run.runner ?? 'claude') ? resumeCommand(cliRunner, sessionId) : null;
+      const resume =
+        sessionId && cliRunner === (run.runner ?? 'claude') ? resumeCommand(cliRunner, sessionId) : null;
       const command = resume ?? cliRunner;
       const opened = await openInTerminal(dir, command);
       if (!opened) {
@@ -2434,7 +2476,9 @@ export function createApp(deps: ServerDeps): Hono {
   // merely switched off) and the mutators 409 as defense in depth — the shape
   // the hosted-mode open-in-* handlers already use. Existing todos.json entries
   // are never touched, so flipping the env back on restores them.
-  api.get('/todos', async (c) => c.json(capabilities().followups ? await readTodos(c.get('project').dataDir) : []));
+  api.get('/todos', async (c) =>
+    c.json(capabilities().followups ? await readTodos(c.get('project').dataDir) : []),
+  );
 
   // Check off = delete the entry.
   api.delete('/todos/:id', async (c) => {
@@ -2588,7 +2632,9 @@ export function createApp(deps: ServerDeps): Hono {
       // watcher (step 2.3), so with the capability off we never subscribe —
       // no watcher, no fd. Scoped to this stream's dataDir: another
       // project's todos.json writes never reach this connection.
-      const offTodos = capabilities().followups ? onTodosChanged(dataDir, () => void sendTodos()) : () => undefined;
+      const offTodos = capabilities().followups
+        ? onTodosChanged(dataDir, () => void sendTodos())
+        : () => undefined;
       // Live resource telemetry (#348): the sampler ticks ~every 2 s only
       // while some run has a registered process; each tick is relayed as one
       // `usage` message (runId → {cpuPct, rssBytes, procCount}). Never
@@ -2660,7 +2706,9 @@ export function createApp(deps: ServerDeps): Hono {
         };
         // Same opt-in gate as the per-project stream (#471): no capability, no
         // watcher — and each subscription is scoped to its own dataDir (2.3).
-        const offTodos = capabilities().followups ? onTodosChanged(dataDir, () => void sendTodos()) : () => undefined;
+        const offTodos = capabilities().followups
+          ? onTodosChanged(dataDir, () => void sendTodos())
+          : () => undefined;
         store.on('run', onRun);
         store.on('deleted', onDeleted);
         attached.set(project, {
@@ -2745,7 +2793,9 @@ export function createApp(deps: ServerDeps): Hono {
   api.get('/github', async (c) => {
     const { root: repoRoot } = c.get('project');
     const limit = Number.parseInt(c.req.query('limit') ?? '', 10);
-    return c.json(await fetchGithub(repoRoot, c.req.query('refresh') === '1', Number.isFinite(limit) ? limit : 30));
+    return c.json(
+      await fetchGithub(repoRoot, c.req.query('refresh') === '1', Number.isFinite(limit) ? limit : 30),
+    );
   });
 
   // The full comment thread for one issue/PR (#499). Additive sibling of /api/github — lazy
@@ -2763,7 +2813,12 @@ export function createApp(deps: ServerDeps): Hono {
     });
     if (!parsed.success) return c.json({ error: 'invalid kind or number' }, 400);
     return c.json(
-      await fetchGithubComments(repoRoot, parsed.data.kind, parsed.data.number, c.req.query('refresh') === '1'),
+      await fetchGithubComments(
+        repoRoot,
+        parsed.data.kind,
+        parsed.data.number,
+        c.req.query('refresh') === '1',
+      ),
     );
   });
 
@@ -2824,7 +2879,12 @@ export function createApp(deps: ServerDeps): Hono {
   const setConfigSchema = z.object({
     baseBranch: z.string().trim().min(1).max(200).nullable().optional(),
     defaultRunner: z.enum(['claude', 'codex', 'opencode']).optional(),
-    systemPrompt: z.string().trim().max(20_000, 'systemPrompt must be at most 20000 characters').nullable().optional(),
+    systemPrompt: z
+      .string()
+      .trim()
+      .max(20_000, 'systemPrompt must be at most 20000 characters')
+      .nullable()
+      .optional(),
     defaultModels: z
       .object({
         claude: modelPresetSchema,

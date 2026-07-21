@@ -1,6 +1,6 @@
-import { LoaderCircleIcon } from 'lucide-react'
+import { LoaderCircleIcon } from 'lucide-react';
 
-import { CenteredState } from '@/components/centered-state'
+import { CenteredState } from '@/components/centered-state';
 
 /**
  * The compare view's loading state — like thread-loading.tsx, in its own module ON PURPOSE:
@@ -18,5 +18,5 @@ export function CompareLoading() {
         subtitle="Fetching every variant's status, spend and diff summary."
       />
     </div>
-  )
+  );
 }

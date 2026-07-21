@@ -163,7 +163,12 @@ describe('buildChildEnv — Windows-shaped env (#427 review)', () => {
   it('honors lower-cased proxy vars and CEZ_* / passthrough case-insensitively', () => {
     const env = buildChildEnv({
       backend: 'claude',
-      source: { ...WIN, http_proxy: 'http://p:3128', CEZ_ENV_PASSTHROUGH: 'my_tool_dir', my_tool_dir: 'C:\\tc' },
+      source: {
+        ...WIN,
+        http_proxy: 'http://p:3128',
+        CEZ_ENV_PASSTHROUGH: 'my_tool_dir',
+        my_tool_dir: 'C:\\tc',
+      },
     });
     expect(env.http_proxy).toBe('http://p:3128');
     expect(env.my_tool_dir).toBe('C:\\tc');
@@ -239,7 +244,13 @@ describe('buildChildEnv — Bedrock/Vertex toggles (#427 review)', () => {
 
 describe('looksSecret', () => {
   it('flags credential-shaped names', () => {
-    for (const n of ['GITHUB_TOKEN', 'AWS_SECRET_ACCESS_KEY', 'FOO_API_KEY', 'DB_PASSWORD', 'NODE_AUTH_TOKEN']) {
+    for (const n of [
+      'GITHUB_TOKEN',
+      'AWS_SECRET_ACCESS_KEY',
+      'FOO_API_KEY',
+      'DB_PASSWORD',
+      'NODE_AUTH_TOKEN',
+    ]) {
       expect(looksSecret(n)).toBe(true);
     }
   });

@@ -14,5 +14,5 @@ export function SkillsLoading() {
         Loading skills…
       </p>
     </div>
-  )
+  );
 }

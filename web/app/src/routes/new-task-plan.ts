@@ -1,10 +1,4 @@
-import type {
-  CreateRunInput,
-  ImageInput,
-  PlanResponse,
-  Runner,
-  WorkflowStepDef,
-} from '@/api/types'
+import type { CreateRunInput, ImageInput, PlanResponse, Runner, WorkflowStepDef } from '@/api/types';
 
 /**
  * Plan-mode logic (spec 008 / Implementation Plan step 14), kept pure so every rule is
@@ -18,11 +12,11 @@ import type {
  *  at submit time. Images captured here ride into the started run (legacy parity — the plan
  *  request itself never carries them). */
 export interface PendingPlan {
-  task: string
-  steps: WorkflowStepDef[]
-  rationale: string
-  fallback: boolean
-  images: ImageInput[]
+  task: string;
+  steps: WorkflowStepDef[];
+  rationale: string;
+  fallback: boolean;
+  images: ImageInput[];
 }
 
 export function pendingPlanOf(
@@ -36,42 +30,38 @@ export function pendingPlanOf(
     rationale: response.rationale,
     fallback: response.fallback,
     images: [...images],
-  }
+  };
 }
 
 /** Remove the step at `index`. Out-of-range answers the input unchanged — a stale click on a
  *  card that just moved must not eat a neighbor. */
 export function removeStep(steps: readonly WorkflowStepDef[], index: number): WorkflowStepDef[] {
-  if (!Number.isInteger(index) || index < 0 || index >= steps.length) return [...steps]
-  return steps.filter((_, i) => i !== index)
+  if (!Number.isInteger(index) || index < 0 || index >= steps.length) return [...steps];
+  return steps.filter((_, i) => i !== index);
 }
 
 /** Move the step at `from` so it lands at `to` (legacy splice semantics: remove, then insert).
  *  `to` is clamped into the list; an invalid `from` or a no-op move answers the input order. */
-export function moveStep(
-  steps: readonly WorkflowStepDef[],
-  from: number,
-  to: number,
-): WorkflowStepDef[] {
-  const copy = [...steps]
-  if (!Number.isInteger(from) || from < 0 || from >= copy.length) return copy
-  const target = Math.max(0, Math.min(copy.length - 1, to))
-  if (target === from) return copy
-  const [moved] = copy.splice(from, 1)
-  copy.splice(target, 0, moved!)
-  return copy
+export function moveStep(steps: readonly WorkflowStepDef[], from: number, to: number): WorkflowStepDef[] {
+  const copy = [...steps];
+  if (!Number.isInteger(from) || from < 0 || from >= copy.length) return copy;
+  const target = Math.max(0, Math.min(copy.length - 1, to));
+  if (target === from) return copy;
+  const [moved] = copy.splice(from, 1);
+  copy.splice(target, 0, moved!);
+  return copy;
 }
 
 /** The quiet second line of a step card — what the step will DO: the shell command for a
  *  check step, the prompt otherwise (exactly legacy's `s.command ?? s.prompt ?? ''`). */
 export function stepHint(step: WorkflowStepDef): string {
-  return step.command ?? step.prompt ?? ''
+  return step.command ?? step.prompt ?? '';
 }
 
 /** First line of the task, capped — the overlay's title line (legacy `oneLine`). */
 export function planTaskLine(task: string, max = 120): string {
-  const first = task.split('\n')[0] ?? ''
-  return first.length > max ? `${first.slice(0, max - 1)}…` : first
+  const first = task.split('\n')[0] ?? '';
+  return first.length > max ? `${first.slice(0, max - 1)}…` : first;
 }
 
 /**
@@ -83,18 +73,17 @@ export function planTaskLine(task: string, max = 120): string {
  * planning the follow-up first still starts it, so the entry must still be marked started).
  */
 export function buildPlannedRunBody(opts: {
-  task: string
-  steps: readonly WorkflowStepDef[]
-  model: string
-  runner: Runner
-  runnerCount: number
-  variants: number
-  images: readonly ImageInput[]
-  generateFollowups?: boolean
-  todoId?: string
+  task: string;
+  steps: readonly WorkflowStepDef[];
+  model: string;
+  runner: Runner;
+  runnerCount: number;
+  variants: number;
+  images: readonly ImageInput[];
+  generateFollowups?: boolean;
+  todoId?: string;
 }): CreateRunInput {
-  const { task, steps, model, runner, runnerCount, variants, images, generateFollowups, todoId } =
-    opts
+  const { task, steps, model, runner, runnerCount, variants, images, generateFollowups, todoId } = opts;
   return {
     task,
     steps: [...steps],
@@ -104,5 +93,5 @@ export function buildPlannedRunBody(opts: {
     images: images.length > 0 ? [...images] : undefined,
     generateFollowups: generateFollowups === false ? false : undefined,
     todoId: todoId || undefined,
-  }
+  };
 }

@@ -49,7 +49,9 @@ const distDir = path.join(repoRoot, 'dist');
 const build = mode !== 'uninstall' && !noBuild;
 
 if (mode !== 'uninstall' && noBuild && !existsSync(path.join(distDir, 'index.js'))) {
-  console.error('install-as-command: --no-build was set but dist/ is missing — run once without --no-build first.');
+  console.error(
+    'install-as-command: --no-build was set but dist/ is missing — run once without --no-build first.',
+  );
   process.exit(1);
 }
 
@@ -111,10 +113,14 @@ if (planner && prefix) {
   if (present.length === planner.BIN_NAMES.length) {
     console.log(`\ninstall-as-command: installed ${names} → ${binDir}`);
   } else {
-    console.log(`\ninstall-as-command: done, but only ${present.length}/${planner.BIN_NAMES.length} shims found in ${binDir}`);
+    console.log(
+      `\ninstall-as-command: done, but only ${present.length}/${planner.BIN_NAMES.length} shims found in ${binDir}`,
+    );
   }
   console.log(`  Ensure this is on your PATH:\n    ${binDir}`);
   console.log('  Then, from any repo:  cezar --help');
 } else {
-  console.log('\ninstall-as-command: done. Ensure your npm global bin dir is on PATH, then run `cezar --help`.');
+  console.log(
+    '\ninstall-as-command: done. Ensure your npm global bin dir is on PATH, then run `cezar --help`.',
+  );
 }

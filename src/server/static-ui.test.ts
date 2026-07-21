@@ -43,7 +43,11 @@ describe('resolveGetRequest', () => {
     // (?skill=&ref=&auto=1&key=, BACKWARD_COMPATIBILITY.md) since R4 Step 1.3,
     // and R7 removed the ?legacy=1 escape hatch with the page it pointed at.
     { name: '/new → the shell (React composer owns the bookmarklet contract)', path: '/new', target: 'dist' },
-    { name: '/new?legacy=1 has no special meaning — the query is not the path', path: '/new', target: 'dist' },
+    {
+      name: '/new?legacy=1 has no special meaning — the query is not the path',
+      path: '/new',
+      target: 'dist',
+    },
 
     // Never shadow the API: an unknown /api path must 404 as JSON, not as HTML.
     { name: '/api/runs → passthrough', path: '/api/runs', target: 'passthrough' },
@@ -57,17 +61,37 @@ describe('resolveGetRequest', () => {
     { name: '/assets/index-abc123.js → passthrough', path: '/assets/index-abc123.js', target: 'passthrough' },
     { name: '/open-mercato.svg (favicon) → passthrough', path: '/open-mercato.svg', target: 'passthrough' },
     // Passthrough is about ownership, not about the build being there.
-    { name: '/assets/x.js with no build → still passthrough', path: '/assets/x.js', distExists: false, target: 'passthrough' },
+    {
+      name: '/assets/x.js with no build → still passthrough',
+      path: '/assets/x.js',
+      distExists: false,
+      target: 'passthrough',
+    },
     // R7: the legacy asset routes are gone — these are SPA paths like any other.
     { name: '/app.js → the shell (legacy route retired in R7)', path: '/app.js', target: 'dist' },
     { name: '/style.css → the shell (legacy route retired in R7)', path: '/style.css', target: 'dist' },
 
     // No build → the hint page, never a 404: the URL still answers with help.
-    { name: '/tasks/x with no build → the build-hint page', path: '/tasks/x', distExists: false, target: 'build-hint' },
+    {
+      name: '/tasks/x with no build → the build-hint page',
+      path: '/tasks/x',
+      distExists: false,
+      target: 'build-hint',
+    },
     { name: '/ with no build → the build-hint page', path: '/', distExists: false, target: 'build-hint' },
-    { name: '/new with no build → the build-hint page', path: '/new', distExists: false, target: 'build-hint' },
+    {
+      name: '/new with no build → the build-hint page',
+      path: '/new',
+      distExists: false,
+      target: 'build-hint',
+    },
     // An /api or asset caller is not a person who could run `npm run build:web`.
-    { name: '/api/runs with no build → passthrough, not the hint', path: '/api/runs', distExists: false, target: 'passthrough' },
+    {
+      name: '/api/runs with no build → passthrough, not the hint',
+      path: '/api/runs',
+      distExists: false,
+      target: 'passthrough',
+    },
   ];
 
   for (const c of cases) {

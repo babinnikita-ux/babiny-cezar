@@ -443,11 +443,7 @@ class OpencodeSession implements AgentSession {
 
   // ---- http ---------------------------------------------------------------
 
-  private async http(
-    method: string,
-    path: string,
-    body: unknown,
-  ): Promise<Record<string, unknown>> {
+  private async http(method: string, path: string, body: unknown): Promise<Record<string, unknown>> {
     if (!this.baseUrl) throw new Error('opencode server not ready');
     const res = await fetch(`${this.baseUrl}${path}`, {
       method,

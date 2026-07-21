@@ -1,5 +1,5 @@
-import type { DiffStat } from '@/api/types'
-import { cn } from '@/lib/utils'
+import type { DiffStat } from '@/api/types';
+import { cn } from '@/lib/utils';
 
 /**
  * `+128 −14` — a run's aggregate diff numbers, the mockup's `.adds`/`.dels` pair
@@ -20,5 +20,5 @@ export function DiffStatLabel({ stat, className }: { stat: DiffStat; className?:
     >
       <span className="text-success">+{stat.adds}</span> <span className="text-danger">−{stat.dels}</span>
     </span>
-  )
+  );
 }

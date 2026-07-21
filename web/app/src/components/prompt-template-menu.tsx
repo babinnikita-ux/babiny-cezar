@@ -1,6 +1,6 @@
-import { ChevronDownIcon, NotebookPenIcon, SparklesIcon } from 'lucide-react'
-import { useRef, useState } from 'react'
-import { useNavigate } from '@/lib/project-router'
+import { ChevronDownIcon, NotebookPenIcon, SparklesIcon } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { useNavigate } from '@/lib/project-router';
 
 import {
   Command,
@@ -10,11 +10,11 @@ import {
   CommandItem,
   CommandList,
   CommandSeparator,
-} from '@/components/ui/command'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import type { PromptTemplate } from '@/lib/prompt-templates'
-import { multiWordFilter } from '@/lib/skills'
-import { cn } from '@/lib/utils'
+} from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import type { PromptTemplate } from '@/lib/prompt-templates';
+import { multiWordFilter } from '@/lib/skills';
+import { cn } from '@/lib/utils';
 
 /**
  * "Insert a template" — the trigger shared by all three follow-up composers: the GitHub
@@ -40,19 +40,19 @@ export function PromptTemplateMenu({
    *  pill row is already full and every one of these competes with the send button for space. */
   iconOnly = false,
 }: {
-  templates: readonly PromptTemplate[]
-  onInsert: (text: string) => void
-  triggerClassName?: string
-  disabled?: boolean
-  iconOnly?: boolean
+  templates: readonly PromptTemplate[];
+  onInsert: (text: string) => void;
+  triggerClassName?: string;
+  disabled?: boolean;
+  iconOnly?: boolean;
 }) {
-  const [open, setOpen] = useState(false)
-  const listRef = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
   // Navigated imperatively rather than rendered as a <Link>: a link inside a CommandItem gets
   // its navigation swallowed by cmdk's own onSelect handling of the row.
-  const navigate = useNavigate()
+  const navigate = useNavigate();
 
-  if (templates.length === 0) return null
+  if (templates.length === 0) return null;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -89,10 +89,7 @@ export function PromptTemplateMenu({
         onCloseAutoFocus={(event) => event.preventDefault()}
       >
         <Command filter={multiWordFilter}>
-          <CommandInput
-            placeholder="search templates…"
-            onInput={() => listRef.current?.scrollTo(0, 0)}
-          />
+          <CommandInput placeholder="search templates…" onInput={() => listRef.current?.scrollTo(0, 0)} />
           <CommandList
             ref={listRef}
             data-slot="prompt-template-list-menu"
@@ -113,8 +110,8 @@ export function PromptTemplateMenu({
                   title={template.text}
                   className="flex-col items-start gap-0.5"
                   onSelect={() => {
-                    onInsert(template.text)
-                    setOpen(false)
+                    onInsert(template.text);
+                    setOpen(false);
                   }}
                 >
                   <span className="flex w-full items-center gap-1.5">
@@ -132,9 +129,7 @@ export function PromptTemplateMenu({
                       </span>
                     ) : null}
                   </span>
-                  <span className="line-clamp-1 text-[11px] text-soft-foreground">
-                    {template.text}
-                  </span>
+                  <span className="line-clamp-1 text-[11px] text-soft-foreground">{template.text}</span>
                 </CommandItem>
               ))}
             </CommandGroup>
@@ -145,8 +140,8 @@ export function PromptTemplateMenu({
                 data-slot="prompt-template-settings"
                 className="text-[12px] text-muted-foreground"
                 onSelect={() => {
-                  setOpen(false)
-                  void navigate('/settings/prompt-templates')
+                  setOpen(false);
+                  void navigate('/settings/prompt-templates');
                 }}
               >
                 Edit templates…
@@ -156,5 +151,5 @@ export function PromptTemplateMenu({
         </Command>
       </PopoverContent>
     </Popover>
-  )
+  );
 }

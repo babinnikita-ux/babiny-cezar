@@ -1,9 +1,9 @@
-import { ChevronRightIcon, FileIcon, FolderIcon } from 'lucide-react'
-import { useState } from 'react'
+import { ChevronRightIcon, FileIcon, FolderIcon } from 'lucide-react';
+import { useState } from 'react';
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/utils';
 
-import type { TreeDir, TreeFile } from './file-tree'
+import type { TreeDir, TreeFile } from './file-tree';
 
 /**
  * The Changes tab's file tree (spec #390: "file tree (left, folders collapsible, per-file ±)").
@@ -15,9 +15,9 @@ export function ChangesTree({
   selected,
   onSelect,
 }: {
-  root: TreeDir
-  selected: string | null
-  onSelect: (path: string) => void
+  root: TreeDir;
+  selected: string | null;
+  onSelect: (path: string) => void;
 }) {
   return (
     <nav data-slot="changes-tree" aria-label="Changed files" className="min-w-0 text-[13px]">
@@ -30,7 +30,7 @@ export function ChangesTree({
         ))}
       </ul>
     </nav>
-  )
+  );
 }
 
 /** ±12/−3 in miniature — the tree's per-row counts (the aggregate label lives in the toolbar). */
@@ -41,7 +41,7 @@ function Counts({ adds, dels }: { adds: number; dels: number }) {
       {adds > 0 && dels > 0 ? ' ' : null}
       {dels > 0 ? <span className="text-danger">−{dels}</span> : null}
     </span>
-  )
+  );
 }
 
 function DirNode({
@@ -50,12 +50,12 @@ function DirNode({
   selected,
   onSelect,
 }: {
-  dir: TreeDir
-  depth: number
-  selected: string | null
-  onSelect: (path: string) => void
+  dir: TreeDir;
+  depth: number;
+  selected: string | null;
+  onSelect: (path: string) => void;
 }) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(true);
   return (
     <li>
       <button
@@ -87,14 +87,14 @@ function DirNode({
         </ul>
       ) : null}
     </li>
-  )
+  );
 }
 
 /** The status tint mirrors the diff cards' badges: added grows, deleted shrinks. */
 const statusTone: Partial<Record<TreeFile['status'], string>> = {
   added: 'text-success',
   deleted: 'text-danger',
-}
+};
 
 function FileNode({
   file,
@@ -102,12 +102,12 @@ function FileNode({
   selected,
   onSelect,
 }: {
-  file: TreeFile
-  depth: number
-  selected: string | null
-  onSelect: (path: string) => void
+  file: TreeFile;
+  depth: number;
+  selected: string | null;
+  onSelect: (path: string) => void;
 }) {
-  const active = selected === file.path
+  const active = selected === file.path;
   return (
     <li>
       <button
@@ -127,5 +127,5 @@ function FileNode({
         <Counts adds={file.adds} dels={file.dels} />
       </button>
     </li>
-  )
+  );
 }

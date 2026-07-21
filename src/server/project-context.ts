@@ -188,9 +188,7 @@ export class ProjectContexts {
         await pruneOrphans(project.root, new Set(store.listRuns().map((r) => r.id))).catch(
           () => [] as string[],
         );
-        const keep = await resolveWorktreeRetention(project.root).catch(
-          () => DEFAULT_WORKTREE_RETENTION,
-        );
+        const keep = await resolveWorktreeRetention(project.root).catch(() => DEFAULT_WORKTREE_RETENTION);
         await reclaimWorktrees(project.root, store, keep).catch(() => [] as string[]);
       }
       await manager.recover();

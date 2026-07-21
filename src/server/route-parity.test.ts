@@ -340,7 +340,9 @@ describe('project-route alias parity (unprefixed vs /api/p/<boot> vs /api/p/defa
     });
     expect(updated.status).toBe(200);
     expect(
-      (await (await apiRequest(app, '/api/agent-config/claude.project.settings')).json()) as { content: string },
+      (await (await apiRequest(app, '/api/agent-config/claude.project.settings')).json()) as {
+        content: string;
+      },
     ).toMatchObject({ content: '{"project":"boot"}' });
   });
 });
