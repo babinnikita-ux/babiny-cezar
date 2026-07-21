@@ -30,7 +30,7 @@ async function waitFor(predicate: () => boolean, what: string): Promise<void> {
   throw new Error(`timed out waiting for ${what}`);
 }
 
-const settled = ['done', 'failed', 'cancelled', 'review'];
+const settled = new Set(['done', 'failed', 'cancelled', 'review']);
 
 /** Occupies the repo-root lease long enough to observe what queues behind it. */
 const SLOW_ROOT: WorkflowDef = {
@@ -62,7 +62,7 @@ describe('RunManager repository-root lease scheduling', () => {
     const isolated = manager.startRun(INSTANT, { task: 'isolated' });
 
     await waitFor(
-      () => settled.includes(store.getRun(isolated.id)?.status ?? ''),
+      () => settled.has(store.getRun(isolated.id)?.status ?? ''),
       'the isolated worktree run to finish',
     );
     // The point of the assertion: it got through while the root lease holder
@@ -70,7 +70,7 @@ describe('RunManager repository-root lease scheduling', () => {
     expect(store.getRun(holder.id)?.status).toBe('running');
 
     await waitFor(
-      () => [holder.id, blocked.id].every((id) => settled.includes(store.getRun(id)?.status ?? '')),
+      () => [holder.id, blocked.id].every((id) => settled.has(store.getRun(id)?.status ?? '')),
       'the root runs to finish',
     );
     expect(store.getRun(holder.id)?.status).toBe('done');
@@ -104,7 +104,7 @@ describe('RunManager repository-root lease scheduling', () => {
 
     // The lease chain survives the cancel: a later root run still gets it.
     const after = manager.startRun(INSTANT, { task: 'after', worktree: false });
-    await waitFor(() => settled.includes(store.getRun(after.id)?.status ?? ''), 'the later run to finish');
+    await waitFor(() => settled.has(store.getRun(after.id)?.status ?? ''), 'the later run to finish');
     expect(store.getRun(after.id)?.status).toBe('done');
   });
 });

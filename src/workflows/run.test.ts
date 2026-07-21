@@ -1196,7 +1196,8 @@ describe('queued stacking reaches the backend (#472)', () => {
   });
 
   it('delivers the task plus every stacked message, with the edit applied', async () => {
-    const first = manager.startRun(WORKFLOW, { task: 'mock:done occupy the slot', worktree: false });
+    // Started for its side effect only — it fills the single slot so `second` queues.
+    manager.startRun(WORKFLOW, { task: 'mock:done occupy the slot', worktree: false });
     const second = manager.startRun(WORKFLOW, { task: 'mock:done original prompt', worktree: false });
 
     // The second run is holding in the queue — amend it there.

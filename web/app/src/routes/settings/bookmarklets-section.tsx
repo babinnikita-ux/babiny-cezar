@@ -169,13 +169,32 @@ function BookmarkletRow({ label, url, hint }: { label: string; url: string; hint
   return (
     <div data-slot="bm-row" className="flex min-w-0 items-center gap-2.5">
       {/* A drag SOURCE only — the cockpit page never executes the javascript: URL itself
-          (spec 011 §5), so a plain click just explains the gesture. */}
+          (spec 011 §5), so a plain click just explains the gesture.
+
+          This one stays an <a> on purpose: a bookmarklet IS a javascript: href, and browsers only
+          accept a drag onto the bookmarks bar from a real anchor carrying that href — a <button>
+          cannot be dropped there, which is the entire feature. Keyboard parity is provided
+          instead: tabIndex makes it focusable and Enter/Space run the same handler as a click
+          (the toast explaining the gesture), while the neighbouring Copy button is the
+          keyboard/touch path to actually obtain the URL. */}
+      {/* All three suppressions have ONE cause: the `href` is attached imperatively above (React
+          strips javascript: hrefs at render), so the linter sees a bare <a> and calls it static
+          and unfocusable. In the DOM it is a real anchor with a real href — a genuine link and
+          a genuine drag source — and the onKeyDown below is its keyboard affordance. */}
+      {/* eslint-disable-next-line jsx-a11y/anchor-is-valid, jsx-a11y/no-static-element-interactions, jsx-a11y/no-noninteractive-tabindex */}
       <a
         ref={anchor}
         draggable
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+        tabIndex={0}
         data-slot="bm-link"
         title="Drag me to your bookmarks bar"
         onClick={(event) => {
+          event.preventDefault()
+          toast('Drag me to your bookmarks bar')
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter' && event.key !== ' ') return
           event.preventDefault()
           toast('Drag me to your bookmarks bar')
         }}

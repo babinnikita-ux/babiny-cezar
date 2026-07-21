@@ -1,0 +1,9 @@
+# Revisions to skip in `git blame` — bulk, mechanical, no-behaviour-change commits.
+#
+# Enable locally (one time, per clone):
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# GitHub honours this file automatically in its blame view.
+# Only add commits that provably changed no behaviour: formatter runs, mass renames.
+
+# oxfmt: format the whole tree on adopting the Oxc toolchain (ADR 0002).

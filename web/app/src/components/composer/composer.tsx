@@ -155,9 +155,12 @@ export function Composer({
   const dictation = useDictation((message) => toast(message, { tone: 'danger' }))
 
   // On-mount only, by design: re-focusing on a later `autoFocus` flip would steal focus mid-visit.
+  // The ref pins the MOUNT-TIME value so the effect can stay dep-free and still be honest about
+  // what it reads — depending on the prop itself is exactly the refocus bug we're avoiding.
+  const autoFocusOnMountRef = useRef(autoFocus)
   useEffect(() => {
-    if (autoFocus) textareaRef.current?.focus()
-  }, []) // deliberately not [autoFocus]
+    if (autoFocusOnMountRef.current) textareaRef.current?.focus()
+  }, [])
 
   // Rides the same `pendingCaretRef` + layout-effect restore the `/` autocomplete uses, rather
   // than a rAF: the caret is set in the same paint as the text, so there is no window in which a
@@ -325,7 +328,7 @@ export function Composer({
         setBusy(false)
       }
     },
-    [busy, disabled, onSubmit],
+    [busy, disabled, onSubmit, setText],
   )
 
   const submitDraft = useCallback(() => {
@@ -337,7 +340,7 @@ export function Composer({
     setImages([])
     setTrigger(null)
     void send(draftText, draftImages, true)
-  }, [images, send, text])
+  }, [images, send, setText, text])
 
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (menuOpen) {

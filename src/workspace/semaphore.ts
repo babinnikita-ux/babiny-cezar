@@ -114,6 +114,6 @@ export class WorkspaceSemaphore {
     } catch {
       // keep the last good snapshot
     }
-    for (const participant of [...this.participants]) participant.pump();
+    for (const participant of this.participants) participant.pump();
   }
 }

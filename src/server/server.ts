@@ -1,6 +1,5 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { access, constants as fsConstants, mkdir, readFile, realpath, stat, unlink, writeFile } from 'node:fs/promises';
-import { homedir } from 'node:os';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Hono, type Context } from 'hono';
@@ -274,7 +273,7 @@ export class WorkspaceEventBus {
   private readonly listeners = new Set<(event: WorkspaceEventName, data: unknown) => void>();
 
   emit(event: WorkspaceEventName, data: unknown): void {
-    for (const listener of [...this.listeners]) listener(event, data);
+    for (const listener of this.listeners) listener(event, data);
   }
 
   /** Subscribe; returns an unsubscribe. */
@@ -619,16 +618,6 @@ const archiveSchema = z.object({
 // it only ever carries small GUI prefs.
 const GLOBAL_BODY_LIMIT = 32 * 1024 * 1024; // 32 MiB
 const UI_STATE_BODY_LIMIT = 128 * 1024; // 128 KiB
-
-/** The name half of a Host header — `localhost:4321` → `localhost`,
- *  `[::1]:4321` → `[::1]`. A bracketed IPv6 literal keeps its brackets
- *  (`isLoopbackHost` strips them itself); an unbracketed IPv6 spelling is
- *  nonstandard in a Host header and simply fails the loopback test closed. */
-function stripHostPort(host: string): string {
-  const bracketed = /^(\[[^\]]+\])(?::\d+)?$/.exec(host);
-  if (bracketed?.[1]) return bracketed[1];
-  return host.replace(/:\d+$/, '');
-}
 
 /** The shared write-side half of BOTH ui-state routes (per-repo `/api/ui-state`
  *  and workspace `/api/workspace/ui-state`) — the factored split the
@@ -993,7 +982,7 @@ export function createApp(deps: ServerDeps): Hono {
       defaultRunner: config.defaultRunner,
       // Non-blocking: cached availability or null-until-warm — health must never pay a `gh`
       // shell-out (the bookmarklet aborts its port probe at 800 ms). See detectGithubCached.
-      forge: forge ? { kind: forge.kind, ...(forge.detectCached() ?? {}) } : null,
+      forge: forge ? { kind: forge.kind, ...forge.detectCached() } : null,
       capabilities: caps,
       // Workspace enumeration (multi-project spec) — additive, id+name ONLY.
       // NEVER `projects[].root` here: health is the one CORS-open route, and

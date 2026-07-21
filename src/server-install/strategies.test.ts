@@ -3,11 +3,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { availablePlatformIds, getStrategy } from './strategies.js';
-import { runInstall, runUninstall } from './engine.js';
+import { runInstall } from './engine.js';
 import { loadServerState } from './state.js';
 import { createAutoUi } from './ui.js';
 import { nginxVhost } from './platforms/ubuntu-vps.js';
-import type { BackendCheck } from '../core/backend-detect.js';
 import type { Runner } from './types.js';
 
 const noRunner: Runner = { capture: async () => ({ code: 0, stdout: '', stderr: '' }), interactive: async () => 0 };

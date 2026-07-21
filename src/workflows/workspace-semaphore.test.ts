@@ -45,7 +45,7 @@ async function waitFor(predicate: () => boolean, what: string, ms = 15_000): Pro
   throw new Error(`timed out waiting for ${what}`);
 }
 
-const settled = ['done', 'failed', 'cancelled', 'review'];
+const settled = new Set(['done', 'failed', 'cancelled', 'review']);
 
 /** Holds a workspace slot (status `running`, never `waiting`) long enough to
  *  observe scheduling — a check step, so no agent process is involved. */
@@ -94,12 +94,12 @@ describe('workspace semaphore across RunManagers (step 2.5)', () => {
     for (const store of stores) {
       for (const run of store.listRuns()) {
         const m = managers[stores.indexOf(store)];
-        if (!settled.includes(store.getRun(run.id)?.status ?? '')) m?.cancel(run.id);
+        if (!settled.has(store.getRun(run.id)?.status ?? '')) m?.cancel(run.id);
       }
     }
     for (const store of stores) {
       await waitFor(
-        () => store.listRuns().every((r) => settled.includes(r.status)),
+        () => store.listRuns().every((r) => settled.has(r.status)),
         'all runs to settle before teardown',
       ).catch(() => undefined);
       store.flush();
@@ -133,7 +133,7 @@ describe('workspace semaphore across RunManagers (step 2.5)', () => {
 
     // Capacity returns as the holders settle — the queued run then completes.
     await waitFor(
-      () => settled.includes(a.store.getRun(third.id)?.status ?? ''),
+      () => settled.has(a.store.getRun(third.id)?.status ?? ''),
       'the queued run to complete once a slot frees',
       30_000,
     );
@@ -204,7 +204,7 @@ describe('workspace semaphore across RunManagers (step 2.5)', () => {
     limits = { maxParallel: 2, memoryLimitMb: null };
     await semaphore.refresh();
     await waitFor(
-      () => settled.includes(a.store.getRun(queued.id)?.status ?? ''),
+      () => settled.has(a.store.getRun(queued.id)?.status ?? ''),
       'the queued run to start and finish after the cap was raised',
     );
     expect(a.store.getRun(queued.id)?.status).toBe('done');

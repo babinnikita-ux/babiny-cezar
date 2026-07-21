@@ -5,7 +5,7 @@ import { useParams } from 'react-router'
 
 import { ApiError, createRunPr, getRunFile, openRunFileInApp, openRunInCli, pushRun, runFileRawUrl } from '@/api/client'
 import { queryKeys, useHealth, useRun, useRunChanges } from '@/api/queries'
-import type { ApiRun } from '@/api/types'
+import type { ApiRun, ChangedFile } from '@/api/types'
 import { CenteredState } from '@/components/centered-state'
 import { Diff, type DiffHandle, type DiffMode } from '@/components/diff'
 import { toast } from '@/components/ui/toaster'
@@ -30,6 +30,11 @@ import { GitToolbar } from './git-toolbar'
  * tree — the per-file sticky headers carry the file names, and a 360px phone has no honest
  * room for a second column.
  */
+/** One shared empty array for the not-yet-loaded case: a fresh `[]` per render would make
+ *  `files` a new reference every time and re-run the tree memo on every render (this view
+ *  re-renders on every poll tick while the run is active). Read-only by convention. */
+const NO_FILES: ChangedFile[] = []
+
 export function TaskChangesRoute() {
   const { id } = useParams<{ id: string }>()
   const run = useRun(id)
@@ -129,7 +134,7 @@ function ChangesView({ run }: { run: ApiRun }) {
     }
   }
 
-  const files = changes.data?.files ?? []
+  const files = changes.data?.files ?? NO_FILES
   const tree = useMemo(() => buildFileTree(files), [files])
 
   // Phones force the readable combination; the toggles only exist ≥md (toolbar hides them).

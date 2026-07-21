@@ -3,6 +3,7 @@ import { useMemo, useRef, useState } from 'react'
 
 import { ApiError } from '@/api/client'
 import { useRepoChanges } from '@/api/queries'
+import type { ChangedFile } from '@/api/types'
 import { CenteredState } from '@/components/centered-state'
 import { Diff, type DiffHandle, type DiffMode } from '@/components/diff'
 import { useIsDesktop } from '@/lib/use-desktop'
@@ -22,6 +23,11 @@ import { AnimatedDiffStat } from '../task-git/git-toolbar'
  * Below `md` the same rule as the task tab applies: unified+wrap forced, tree hidden — the
  * per-file sticky headers carry the names.
  */
+/** One shared empty array for the not-yet-loaded case: a fresh `[]` per render would make
+ *  `files` a new reference every time and re-run the tree memo on every render. Read-only by
+ *  convention — nothing here mutates the list. */
+const NO_FILES: ChangedFile[] = []
+
 export function RepoChangesSection() {
   const changes = useRepoChanges()
   const desktop = useIsDesktop()
@@ -34,7 +40,7 @@ export function RepoChangesSection() {
   // A 409 is the server's answer ("not a git repository"), not an outage.
   const refused = changes.isError && changes.error instanceof ApiError && changes.error.status === 409
 
-  const files = changes.data?.files ?? []
+  const files = changes.data?.files ?? NO_FILES
   const tree = useMemo(() => buildFileTree(files), [files])
 
   const effectiveMode: DiffMode = desktop ? mode : 'unified'

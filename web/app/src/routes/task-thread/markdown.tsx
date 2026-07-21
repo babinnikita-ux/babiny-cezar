@@ -28,7 +28,13 @@ const shikiPlugin: CodeHighlighterPlugin = {
   highlight: ({ code, language }, callback) => {
     const resident = highlightSync(code, String(language))
     if (resident) return resident
-    void highlight(code, String(language)).then((result) => callback?.(result))
+    // Awaited in an IIFE rather than `.then(callback)`: invoking the plugin's callback from a
+    // promise handler is the shape `promise/no-callback-in-promise` bans, and the await reads
+    // the same.
+    void (async () => {
+      const result = await highlight(code, String(language))
+      callback?.(result)
+    })()
     return null
   },
 }

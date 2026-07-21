@@ -129,7 +129,7 @@ export class ProjectContexts {
 
   /** A listener throwing must never fail the build (its context is fine). */
   private notifyBuilt(ctx: ProjectContext): void {
-    for (const listener of [...this.builtListeners]) {
+    for (const listener of this.builtListeners) {
       try {
         listener(ctx);
       } catch {

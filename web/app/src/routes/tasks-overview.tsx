@@ -473,11 +473,23 @@ function TaskCard({
   const reference = taskReference(run)
 
   return (
+    // The whole card is a pointer target for convenience; role/tabIndex/onKeyDown give it the
+    // same activation from the keyboard. The key handler ignores events that bubbled up from
+    // the inner links (title, PR) so Enter there still follows the link, exactly as the click
+    // handler bows out for anchors.
     <div
       data-slot="task-card"
       data-run-id={run.id}
+      role="button"
+      tabIndex={0}
       onClick={(event) => {
         if ((event.target as Element).closest('a')) return
+        navigate(to)
+      }}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return
+        if (event.key !== 'Enter' && event.key !== ' ') return
+        event.preventDefault()
         navigate(to)
       }}
       className="cursor-pointer rounded-lg border border-border bg-card px-3.5 py-3 shadow-xs"

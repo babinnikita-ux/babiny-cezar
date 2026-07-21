@@ -1,14 +1,13 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   CheckIcon,
-  ChevronDownIcon,
   EyeIcon,
   FolderOpenIcon,
   SparklesIcon,
   SquareIcon,
   WorkflowIcon,
 } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router'
 
 import { useNavigate } from '@/lib/project-router'
@@ -30,7 +29,6 @@ import type {
   ImageInput,
   ProjectListEntry,
   RepoResponse,
-  Runner,
   Skill,
   WorkflowDef,
 } from '@/api/types'

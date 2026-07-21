@@ -238,7 +238,7 @@ export function useGlobalEvents(usage: UsageStore, url: string = SSE_URL): void 
           if (name !== 'checkout-progress') {
             void queryClient.invalidateQueries({ queryKey: workspaceQueryKeys.projects })
           }
-          for (const listener of [...workspaceListeners]) listener(name, payload)
+          for (const listener of workspaceListeners) listener(name, payload)
         })
       }
 

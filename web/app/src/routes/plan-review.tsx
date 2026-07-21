@@ -124,96 +124,100 @@ export function PlanReview({ plan, starting, onStepsChange, onStart, onDiscard }
             </li>
           ) : (
             plan.steps.map((step, index) => (
-              <li
-                key={step.id}
-                data-slot="plan-step"
-                data-step-id={step.id}
-                draggable
-                onDragStart={() => setDragIndex(index)}
-                onDragOver={(event) => {
-                  event.preventDefault()
-                  setOverIndex(index)
-                }}
-                onDragLeave={() => setOverIndex((current) => (current === index ? null : current))}
-                onDrop={(event) => drop(event, index)}
-                onDragEnd={endDrag}
-                className={cn(
-                  'flex items-center gap-2.5 rounded-lg border border-border bg-card-2 px-3 py-2.5',
-                  dragIndex === index && 'opacity-50',
-                  overIndex === index && dragIndex !== null && dragIndex !== index && 'border-ring',
-                )}
-              >
-                <GripVerticalIcon
-                  aria-hidden="true"
-                  className="size-3.5 shrink-0 cursor-grab text-soft-foreground"
-                />
-                <span className="w-5 shrink-0 font-mono text-[11px] text-soft-foreground tabular-nums">
-                  {String(index + 1).padStart(2, '0')}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="truncate text-[13px] font-semibold">
-                      {step.name ?? step.id}
-                    </span>
-                    {step.skill ? (
-                      <span
-                        data-slot="plan-badge-skill"
-                        title="skill"
-                        className="shrink-0 rounded-full bg-violet/15 px-1.5 py-px font-mono text-[10.5px] font-medium text-violet"
-                      >
-                        {step.skill}
+              <li key={step.id} data-slot="plan-step" data-step-id={step.id}>
+                {/* The drag wiring lives on this inner box, not on the <li>: pointer drag is a
+                    mouse-only ENHANCEMENT here (HTML5 DnD never fires on touch or from the
+                    keyboard), and the accessible reorder path is the labelled ↑/↓ buttons
+                    below, which every non-mouse user — and the e2e — drives. Keeping the list
+                    item itself free of the handlers keeps its list semantics honest. */}
+                <div
+                  draggable
+                  onDragStart={() => setDragIndex(index)}
+                  onDragOver={(event) => {
+                    event.preventDefault()
+                    setOverIndex(index)
+                  }}
+                  onDragLeave={() => setOverIndex((current) => (current === index ? null : current))}
+                  onDrop={(event) => drop(event, index)}
+                  onDragEnd={endDrag}
+                  className={cn(
+                    'flex items-center gap-2.5 rounded-lg border border-border bg-card-2 px-3 py-2.5',
+                    dragIndex === index && 'opacity-50',
+                    overIndex === index && dragIndex !== null && dragIndex !== index && 'border-ring',
+                  )}
+                >
+                  <GripVerticalIcon
+                    aria-hidden="true"
+                    className="size-3.5 shrink-0 cursor-grab text-soft-foreground"
+                  />
+                  <span className="w-5 shrink-0 font-mono text-[11px] text-soft-foreground tabular-nums">
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate text-[13px] font-semibold">
+                        {step.name ?? step.id}
                       </span>
-                    ) : null}
-                    {step.command ? (
-                      <span
-                        data-slot="plan-badge-check"
-                        className="shrink-0 rounded-full bg-muted px-1.5 py-px text-[10.5px] font-medium text-muted-foreground"
-                      >
-                        check
-                      </span>
-                    ) : null}
+                      {step.skill ? (
+                        <span
+                          data-slot="plan-badge-skill"
+                          title="skill"
+                          className="shrink-0 rounded-full bg-violet/15 px-1.5 py-px font-mono text-[10.5px] font-medium text-violet"
+                        >
+                          {step.skill}
+                        </span>
+                      ) : null}
+                      {step.command ? (
+                        <span
+                          data-slot="plan-badge-check"
+                          className="shrink-0 rounded-full bg-muted px-1.5 py-px text-[10.5px] font-medium text-muted-foreground"
+                        >
+                          check
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="truncate font-mono text-[11.5px] text-muted-foreground">
+                      {stepHint(step)}
+                    </p>
                   </div>
-                  <p className="truncate font-mono text-[11.5px] text-muted-foreground">
-                    {stepHint(step)}
-                  </p>
+                  <span className="flex shrink-0 items-center">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      data-slot="plan-step-up"
+                      aria-label={`Move step ${index + 1} up`}
+                      disabled={index === 0}
+                      className="size-7 text-muted-foreground"
+                      onClick={() => onStepsChange(moveStep(plan.steps, index, index - 1))}
+                    >
+                      <ArrowUpIcon aria-hidden="true" className="size-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      data-slot="plan-step-down"
+                      aria-label={`Move step ${index + 1} down`}
+                      disabled={index === plan.steps.length - 1}
+                      className="size-7 text-muted-foreground"
+                      onClick={() => onStepsChange(moveStep(plan.steps, index, index + 1))}
+                    >
+                      <ArrowDownIcon aria-hidden="true" className="size-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      data-slot="plan-step-remove"
+                      aria-label={`Remove step ${index + 1}`}
+                      className="size-7 text-muted-foreground hover:text-danger"
+                      onClick={() => onStepsChange(removeStep(plan.steps, index))}
+                    >
+                      <XIcon aria-hidden="true" className="size-3.5" />
+                    </Button>
+                  </span>
                 </div>
-                <span className="flex shrink-0 items-center">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    data-slot="plan-step-up"
-                    aria-label={`Move step ${index + 1} up`}
-                    disabled={index === 0}
-                    className="size-7 text-muted-foreground"
-                    onClick={() => onStepsChange(moveStep(plan.steps, index, index - 1))}
-                  >
-                    <ArrowUpIcon aria-hidden="true" className="size-3.5" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    data-slot="plan-step-down"
-                    aria-label={`Move step ${index + 1} down`}
-                    disabled={index === plan.steps.length - 1}
-                    className="size-7 text-muted-foreground"
-                    onClick={() => onStepsChange(moveStep(plan.steps, index, index + 1))}
-                  >
-                    <ArrowDownIcon aria-hidden="true" className="size-3.5" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    data-slot="plan-step-remove"
-                    aria-label={`Remove step ${index + 1}`}
-                    className="size-7 text-muted-foreground hover:text-danger"
-                    onClick={() => onStepsChange(removeStep(plan.steps, index))}
-                  >
-                    <XIcon aria-hidden="true" className="size-3.5" />
-                  </Button>
-                </span>
               </li>
             ))
           )}

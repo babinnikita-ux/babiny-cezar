@@ -155,6 +155,7 @@ export class UiEventSink {
 
   /** Flush every open coalescer now (turn end, session settle). */
   flushAll(): void {
+    // oxlint-disable-next-line unicorn/no-useless-spread -- deliberate snapshot: flushItem() deletes from this.buffers while we iterate
     for (const itemId of [...this.buffers.keys()]) this.flushItem(itemId);
   }
 

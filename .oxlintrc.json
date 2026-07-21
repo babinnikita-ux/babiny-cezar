@@ -1,0 +1,43 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "react", "promise", "import"],
+  "categories": {
+    "correctness": "error",
+    "perf": "warn"
+  },
+  "env": {
+    "builtin": true,
+    "es2024": true,
+    "node": true
+  },
+  "ignorePatterns": ["dist/**", "web/dist/**", "node_modules/**", "**/*.snap"],
+  "rules": {
+    "no-unused-vars": ["error", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    // React 19 + Vite use the automatic JSX runtime — `React` is never in scope by design.
+    "react/react-in-jsx-scope": "off",
+    // Sequential awaits are load-bearing here: git/worktree operations, ordered
+    // file writes and the runner event pipeline must not be parallelised.
+    "no-await-in-loop": "off"
+  },
+  "overrides": [
+    {
+      "files": ["web/app/**/*.{ts,tsx}"],
+      "env": { "browser": true },
+      "plugins": ["react", "react-hooks", "jsx-a11y"],
+      "rules": {
+        // Radix/shadcn primitives set `role` deliberately on non-semantic elements —
+        // swapping in the semantic tag would break their composition contract.
+        "jsx-a11y/prefer-tag-over-role": "off",
+        // Focus-on-open is intentional UX in the composer, dialogs and the task form;
+        // each one is a modal surface where the caret belongs in the field.
+        "jsx-a11y/no-autofocus": "off"
+      }
+    },
+    {
+      "files": ["**/*.test.{ts,tsx}", "test/**/*.{ts,tsx}", "web/app/e2e/**/*.{ts,tsx}"],
+      "rules": {
+        "no-unsafe-optional-chaining": "warn"
+      }
+    }
+  ]
+}

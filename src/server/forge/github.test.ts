@@ -770,7 +770,7 @@ describe('normalizeEvents (#525)', () => {
     expect(events).toHaveLength(200);
     expect(events[events.length - 1]!.id).toBe('evt-249'); // newest retained
     expect(events[0]!.id).toBe('evt-50'); // oldest 50 dropped
-    expect(events.map((e) => e.createdAt)).toEqual([...events.map((e) => e.createdAt)].sort());
+    expect(events.map((e) => e.createdAt)).toEqual(events.map((e) => e.createdAt).sort());
   });
 
   it('reports truncated=false at exactly the cap — the ambiguity the return shape exists for', () => {

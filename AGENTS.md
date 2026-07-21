@@ -40,12 +40,19 @@ Practical rules:
 Before any commit or PR, run in order:
 
 ```bash
+npm run lint        # oxlint — correctness rules, fails the build on errors
+npm run format:check # oxfmt — formatting is enforced, not suggested
 npm run typecheck   # tsc --noEmit (server + web)
 npm test            # vitest — server + cockpit unit suites
 npm run test:unit   # node:test — fast core-module coverage (test/unit/)
 npm run build       # tsc → dist/, vite → web/dist/, then the check:pack tarball gate
 npm run test:package # pack/install the release tarball and exercise the built CLI (test/e2e/)
 ```
+
+`npm run lint` and `npm run format:check` are the Oxc gate (see `docs/adr/0002-oxlint-and-oxfmt.md`).
+`npm run lint:fix` and `npm run format` apply fixes in place — run `npm run format` before committing.
+Lint fails on errors; warnings are reported but non-blocking, so new warnings are visible without
+gating unrelated work.
 
 `npm test` and `npm run test:unit` are the fast unit gate: no server, no browser. They must stay that way. `npm run test:package` needs a completed `npm run build` (it packs the tarball).
 
