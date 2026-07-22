@@ -50,7 +50,10 @@ export class PiRunner implements AgentRunner {
       opts.bin ??
       process.env.CEZ_PI_BIN ??
       (process.env.CEZ_DRY_RUN === '1' ? mockClaudePath() : 'pi');
-    this.inner = new ClaudeCliRunner({ bin, timeoutMs: opts.timeoutMs });
+    // `envBackend: 'pi'` — the delegate spawns PI's binary, and buildChildEnv is least-privilege
+    // per backend, so the child must be scoped to pi's credential allowlist (the multi-provider
+    // set a `provider/model` id can name), not to claude's Anthropic-only one.
+    this.inner = new ClaudeCliRunner({ bin, timeoutMs: opts.timeoutMs, envBackend: this.backend });
   }
 
   run(spec: AgentRunSpec, onEvent?: (event: AgentEvent) => void): Promise<AgentRunResult> {

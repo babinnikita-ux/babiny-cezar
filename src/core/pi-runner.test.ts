@@ -4,7 +4,9 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import type { AgentEvent } from './agent-runner.js';
+import { buildChildEnv } from './agent-env.js';
 import { detectEnvironment } from './backend-detect.js';
+import { ClaudeCliRunner } from './claude-cli-runner.js';
 import { createRunner } from './runner-factory.js';
 import { PiRunner } from './pi-runner.js';
 
@@ -78,5 +80,45 @@ describe('a dry-run pi session emits normalized AgentEvents', () => {
     // Every backend's stream is terminated by exactly one `done`.
     expect(types.filter((t) => t === 'done')).toHaveLength(1);
     expect(result.text.length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * Credential scoping across the delegation boundary. `buildChildEnv` is least-privilege PER
+ * BACKEND, and `PiRunner` spawns pi's binary through a `ClaudeCliRunner` — so if the delegate
+ * spawned under its own `backend` ('claude'), a pi run selecting `openai/gpt-5.1` would start
+ * with no OpenAI credential at all, and the `pi` entry in the allowlist table would be dead
+ * code. `envBackend` is what keeps the two apart; these pin both halves.
+ */
+describe('pi spawns under pi credentials, not claude ones', () => {
+  const source: NodeJS.ProcessEnv = {
+    PATH: '/usr/bin',
+    ANTHROPIC_API_KEY: 'ant',
+    OPENAI_API_KEY: 'oai',
+    OPENROUTER_API_KEY: 'orr',
+    SOME_UNRELATED_SECRET: 'nope',
+  };
+
+  it('gives pi the multi-provider set a provider/model id can name', () => {
+    const env = buildChildEnv({ backend: 'pi', source });
+    expect(env.ANTHROPIC_API_KEY).toBe('ant');
+    expect(env.OPENAI_API_KEY).toBe('oai');
+    expect(env.OPENROUTER_API_KEY).toBe('orr');
+  });
+
+  it('still withholds everything outside the allowlist — pi is not a full-env escape hatch', () => {
+    expect(buildChildEnv({ backend: 'pi', source }).SOME_UNRELATED_SECRET).toBeUndefined();
+  });
+
+  it('leaves claude Anthropic-only — widening pi must not widen claude', () => {
+    const env = buildChildEnv({ backend: 'claude', source });
+    expect(env.ANTHROPIC_API_KEY).toBe('ant');
+    expect(env.OPENAI_API_KEY).toBeUndefined();
+    expect(env.OPENROUTER_API_KEY).toBeUndefined();
+  });
+
+  it('keeps the seam identity claude-free: PiRunner reports pi, the delegate still reports claude', () => {
+    expect(new PiRunner().backend).toBe('pi');
+    expect(new ClaudeCliRunner().backend).toBe('claude');
   });
 });

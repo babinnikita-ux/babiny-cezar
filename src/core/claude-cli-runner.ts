@@ -2,6 +2,7 @@ import { spawn as nodeSpawn, type ChildProcessWithoutNullStreams } from 'node:ch
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve as resolvePath } from 'node:path';
 import type {
+  AgentBackend,
   AgentEvent,
   AgentRunResult,
   AgentRunSpec,
@@ -43,6 +44,15 @@ export interface ClaudeCliRunnerOptions {
   bin?: string;
   /** Wall-clock timeout for a run (ms); per-spec `timeoutMs` still wins. */
   timeoutMs?: number;
+  /**
+   * Which backend's credential allowlist the spawned process gets (#387). Defaults to `claude`.
+   * A runner that DELEGATES its transport to this class (`PiRunner`) still spawns its OWN binary,
+   * and `buildChildEnv` is least-privilege per backend — leaving this at `claude` would hand pi
+   * only `ANTHROPIC_`/`CLAUDE_`, so a pi run on `openai/gpt-5.1` would start with no OpenAI
+   * credential at all. Deliberately separate from the public `backend` field, which is the
+   * `AgentRunner` seam's identity and must stay `claude` for the drift guards.
+   */
+  envBackend?: AgentBackend;
 }
 
 /**
@@ -62,6 +72,8 @@ export class ClaudeCliRunner implements AgentRunner {
 
   private readonly bin: string;
   private readonly timeoutMs: number;
+  /** See `ClaudeCliRunnerOptions.envBackend` — the credential allowlist to spawn under. */
+  private readonly envBackend: AgentBackend;
   private lastSession: AgentSession | null = null;
 
   constructor(opts: ClaudeCliRunnerOptions = {}) {
@@ -72,6 +84,7 @@ export class ClaudeCliRunner implements AgentRunner {
       (process.env.CEZ_DRY_RUN === '1' ? mockClaudePath() : 'claude');
     this.bin = opts.bin ?? defaultBin;
     this.timeoutMs = opts.timeoutMs ?? DEFAULT_RUN_TIMEOUT_MS;
+    this.envBackend = opts.envBackend ?? this.backend;
   }
 
   /** One-shot run: start a session and auto-end it after the first turn. */
@@ -94,7 +107,7 @@ export class ClaudeCliRunner implements AgentRunner {
     try {
       child = nodeSpawn(this.bin, args, {
         cwd: spec.cwd,
-        env: buildChildEnv({ backend: this.backend, extraEnv: spec.env }),
+        env: buildChildEnv({ backend: this.envBackend, extraEnv: spec.env }),
       });
     } catch (err) {
       throw wrapSpawnError(err, this.bin);
