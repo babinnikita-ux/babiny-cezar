@@ -68,6 +68,7 @@ const GOLDEN_FIXTURES = [
   'todowrite-plan',
   'patch-and-step-finish',
   'subtask-nested',
+  'subtask-overlapping',
   'session-error',
 ] as const;
 
@@ -297,7 +298,7 @@ describe('mapOpencodeEvent edge cases', () => {
         tool: 'todowrite',
         state: {
           status: 'completed',
-          input: { todos: [{ content: 'ok', status: 'pending' }, { status: 'pending' }, 'junk', { content: 'bad status', status: 'later' }] },
+          input: { todos: [{ content: 'ok', status: 'pending' }, { status: 'pending' }, 'junk'] },
         },
       }),
       state,
@@ -308,6 +309,58 @@ describe('mapOpencodeEvent edge cases', () => {
       state,
     );
     expect(noPlan.events.filter((e) => e.type === 'plan.updated')).toHaveLength(0);
+  });
+
+  // opencode types `status` as a free-form string (`Schema.String`), not an enum;
+  // its documented vocabulary is pending|in_progress|completed|cancelled.
+  it('keeps cancelled todos — an abandoned row stays visible instead of vanishing', () => {
+    const mapped = mapOpencodeEvent(
+      part({
+        id: 'prt_td',
+        type: 'tool',
+        tool: 'todowrite',
+        state: {
+          status: 'completed',
+          input: {
+            todos: [
+              { content: 'Ship the fix', status: 'completed', priority: 'high' },
+              { content: 'Rework the parser', status: 'cancelled', priority: 'low' },
+            ],
+          },
+        },
+      }),
+      startedState(),
+    );
+    expect(mapped.events).toContainEqual({
+      type: 'plan.updated',
+      entries: [
+        { content: 'Ship the fix', status: 'completed', priority: 'high' },
+        { content: 'Rework the parser', status: 'cancelled', priority: 'low' },
+      ],
+    });
+  });
+
+  it('falls back to pending for a status outside the documented vocabulary', () => {
+    const mapped = mapOpencodeEvent(
+      part({
+        id: 'prt_td',
+        type: 'tool',
+        tool: 'todowrite',
+        state: { status: 'completed', input: { todos: [{ content: 'Odd one', status: 'later' }] } },
+      }),
+      startedState(),
+    );
+    expect(mapped.events).toContainEqual({ type: 'plan.updated', entries: [{ content: 'Odd one', status: 'pending' }] });
+  });
+
+  // opencode publishes the tool part BEFORE the arguments finish parsing, with
+  // `input: {}` — that must not wipe the plan the previous snapshot established.
+  it('a pending part with unparsed input emits no plan', () => {
+    const mapped = mapOpencodeEvent(
+      part({ id: 'prt_td', type: 'tool', tool: 'todowrite', state: { status: 'pending', input: {}, raw: '' } }),
+      startedState(),
+    );
+    expect(mapped.events.filter((e) => e.type === 'plan.updated')).toHaveLength(0);
   });
 
   it('patch parts accept the paths-only wire shape too (diff entries without unified content)', () => {
@@ -450,6 +503,38 @@ describe('mapOpencodeEvent edge cases', () => {
       mapOpencodeEvent(part({ id: 'prt_f2', messageID: 'msg_child', sessionID: 'ses_child', type: 'text', text: 'late' }), childIdle.state)
         .events,
     ).toEqual([]);
+  });
+
+  it('main-session idle settles and clears child sessions that never went idle', () => {
+    let state = startedState();
+    state = mapOpencodeEvent(
+      part({ id: 'prt_st', type: 'subtask', prompt: 'dig in', description: 'Investigate', agent: 'general' }),
+      state,
+    ).state;
+    state = mapOpencodeEvent(
+      { type: 'message.updated', properties: { info: { id: 'msg_child', sessionID: 'ses_child', role: 'assistant' } } },
+      state,
+    ).state;
+    state = mapOpencodeEvent(
+      part({ id: 'prt_child', messageID: 'msg_child', sessionID: 'ses_child', type: 'text', text: 'working' }),
+      state,
+    ).state;
+
+    const mainIdle = mapOpencodeEvent({ type: 'session.idle', properties: { sessionID: SESSION_ID } }, state);
+    expect(mainIdle.events).toContainEqual({
+      type: 'item.completed',
+      item: {
+        kind: 'tool',
+        id: 'prt_st',
+        name: 'subtask',
+        toolKind: 'task',
+        title: 'Task: Investigate',
+        status: 'completed',
+        input: { prompt: 'dig in', description: 'Investigate', agent: 'general' },
+      },
+    });
+    expect(mainIdle.events.at(-1)).toEqual({ type: 'turn.completed', turnId: 'turn_1', stopReason: 'end_turn' });
+    expect(mapOpencodeEvent({ type: 'session.idle', properties: { sessionID: 'ses_child' } }, mainIdle.state).events).toEqual([]);
   });
 
   it('session.started is emitted once and requires an id', () => {

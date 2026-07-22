@@ -4,6 +4,7 @@ import type {
   CreateRunResponse,
   ImageInput,
   Runner,
+  RunnerModelCatalogResponse,
   Skill,
   UiState,
   WorkflowDef,
@@ -31,12 +32,6 @@ export function pushRecentSource(
   return [source, ...rest].slice(0, cap)
 }
 
-/** The recent SKILL names, newest first — the recency key the composer's skill picker sorts by
- *  (workflow entries are ignored; only skills share a namespace with `Skill.name`). */
-export function recentSkillNames(recent: readonly TaskSource[] | undefined): string[] {
-  return (recent ?? []).filter((s) => s.source === 'skill').map((s) => s.ref)
-}
-
 export interface RunnerOption {
   id: Runner
   label: string
@@ -58,9 +53,9 @@ export interface ModelPreset {
   desc: string
 }
 
-/** Model presets per runner (legacy `MODELS_BY_RUNNER`, verbatim). `id: ''` is always "auto" —
+/** Static model presets per runner. `id: ''` is always "auto" —
  *  no model flag, the runner decides. Claude takes tier aliases + pinned versions; Codex takes
- *  gpt-*-codex ids; OpenCode takes `provider/model` ids. */
+ *  Codex entries are supplied by host discovery; OpenCode takes `provider/model` ids. */
 export const MODELS_BY_RUNNER: Record<Runner, readonly ModelPreset[]> = {
   claude: [
     { id: '', label: 'auto', desc: 'Pick the best model per step' },
@@ -74,9 +69,6 @@ export const MODELS_BY_RUNNER: Record<Runner, readonly ModelPreset[]> = {
   ],
   codex: [
     { id: '', label: 'auto', desc: 'Use your Codex default model' },
-    { id: 'gpt-5.1-codex', label: 'gpt-5.1-codex', desc: 'Codex-tuned, latest' },
-    { id: 'gpt-5.1-codex-mini', label: 'gpt-5.1-codex-mini', desc: 'Faster, cheaper' },
-    { id: 'gpt-5-codex', label: 'gpt-5-codex', desc: 'Previous generation' },
   ],
   opencode: [
     { id: '', label: 'auto', desc: 'Use your OpenCode default model' },
@@ -94,8 +86,36 @@ export const MODELS_BY_RUNNER: Record<Runner, readonly ModelPreset[]> = {
   ],
 }
 
-export function modelsForRunner(runner: Runner): readonly ModelPreset[] {
-  return MODELS_BY_RUNNER[runner] ?? MODELS_BY_RUNNER.claude
+export function modelsForRunner(
+  runner: Runner,
+  catalog?: RunnerModelCatalogResponse,
+  customIds: readonly (string | null | undefined)[] = [],
+): readonly ModelPreset[] {
+  const base = [...(MODELS_BY_RUNNER[runner] ?? MODELS_BY_RUNNER.claude)]
+  if (runner !== 'codex') return base
+  const seen = new Set(base.map((model) => model.id))
+  for (const model of catalog?.models ?? []) {
+    if (!model.id || seen.has(model.id)) continue
+    seen.add(model.id)
+    base.push({ id: model.id, label: model.label || model.id, desc: model.description })
+  }
+  for (const id of customIds) {
+    if (!id || seen.has(id)) continue
+    seen.add(id)
+    base.push({ id, label: id, desc: 'Custom or legacy model' })
+  }
+  return base
+}
+
+export function modelCatalogStatus(
+  runner: Runner,
+  catalog: RunnerModelCatalogResponse | undefined,
+  failed = false,
+): string | undefined {
+  if (runner !== 'codex') return undefined
+  if (catalog?.stale) return 'Using cached Codex model list'
+  if (failed || catalog?.source === 'unavailable') return 'Latest Codex models unavailable'
+  return undefined
 }
 
 /** Which runners the pill offers, from the health checks (legacy `renderChrome`). The `claude`
@@ -130,8 +150,9 @@ export function resolveModel(
   picked: string | null,
   runner: Runner,
   defaults?: Partial<Record<Runner, string>>,
+  catalog?: RunnerModelCatalogResponse,
 ): string {
-  const models = modelsForRunner(runner)
+  const models = modelsForRunner(runner, catalog, [picked, defaults?.[runner]])
   if (picked !== null && models.some((m) => m.id === picked)) return picked
   const preset = defaults?.[runner]
   if (preset !== undefined && models.some((m) => m.id === preset)) return preset
@@ -187,8 +208,27 @@ export function buildCreateRunBody(opts: {
   worktree?: boolean
   /** true → autonomous run (never pauses for the user). Sent only when on. */
   autonomous?: boolean
+  /** false → do not ask the agent for follow-up todos. Sent only when off. */
+  generateFollowups?: boolean
+  /** The inbox entry this composer was prefilled from (`/new?…&todo=`, #374) — sent back so
+   *  the server records the started run on it. Empty/absent for every other launch.
+   *  Independent of `generateFollowups`: starting a task FROM a follow-up still marks that
+   *  entry started, even when the new task itself won't generate follow-ups of its own. */
+  todoId?: string
 }): CreateRunInput {
-  const { task, source, model, runner, runnerCount, variants, images, worktree, autonomous } = opts
+  const {
+    task,
+    source,
+    model,
+    runner,
+    runnerCount,
+    variants,
+    images,
+    worktree,
+    autonomous,
+    generateFollowups,
+    todoId,
+  } = opts
   return {
     task,
     ...(source.source === 'skill'
@@ -201,6 +241,8 @@ export function buildCreateRunBody(opts: {
     // Off only matters for a single run — variants always isolate.
     worktree: worktree === false && variants <= 1 ? false : undefined,
     autonomous: autonomous === true ? true : undefined,
+    generateFollowups: generateFollowups === false ? false : undefined,
+    todoId: todoId || undefined,
   }
 }
 

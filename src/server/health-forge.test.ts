@@ -1,11 +1,12 @@
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join, sep } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RunStore } from '../runs/store.js';
 import type { RunManager } from '../workflows/run.js';
 import { createApp, type ServerDeps } from './server.js';
+import { apiRequest } from './loopback-request.testkit.js';
 
 /**
  * Deployment modes + forge seam (cockpit-ui redesign spec): `/api/health`
@@ -21,19 +22,23 @@ interface HealthBody {
   checks: unknown[];
   defaultRunner?: string;
   forge: { kind: string; available: boolean; reason?: string } | null;
-  capabilities: { localHandoff: boolean };
+  capabilities: { localHandoff: boolean; followups: boolean };
 }
 
 describe('GET /api/health — forge + capabilities', () => {
   let repoRoot: string;
   let store: RunStore;
   const savedRemote = process.env.CEZ_REMOTE;
+  const savedFollowups = process.env.CEZ_FOLLOWUPS;
   const savedDryRun = process.env.CEZ_DRY_RUN;
 
   beforeEach(() => {
     repoRoot = mkdtempSync(join(tmpdir(), 'cez-health-'));
     store = RunStore.open(join(repoRoot, '.ai/cezar'));
     delete process.env.CEZ_REMOTE;
+    // #471: the inbox is opt-in, so an ambient CEZ_FOLLOWUPS on the dev box
+    // must not decide what these assertions see.
+    delete process.env.CEZ_FOLLOWUPS;
     // Dry-run keeps the forge probe (and the claude check) off the network,
     // so the assertions are deterministic on any machine.
     process.env.CEZ_DRY_RUN = '1';
@@ -44,6 +49,8 @@ describe('GET /api/health — forge + capabilities', () => {
     rmSync(repoRoot, { recursive: true, force: true });
     if (savedRemote === undefined) delete process.env.CEZ_REMOTE;
     else process.env.CEZ_REMOTE = savedRemote;
+    if (savedFollowups === undefined) delete process.env.CEZ_FOLLOWUPS;
+    else process.env.CEZ_FOLLOWUPS = savedFollowups;
     if (savedDryRun === undefined) delete process.env.CEZ_DRY_RUN;
     else process.env.CEZ_DRY_RUN = savedDryRun;
   });
@@ -52,7 +59,7 @@ describe('GET /api/health — forge + capabilities', () => {
     createApp({ repoRoot, store, manager: {} as RunManager, version: '0.0.0-test', ...over });
 
   const health = async (over: Partial<ServerDeps> = {}): Promise<HealthBody> => {
-    const res = await makeApp(over).request('/api/health');
+    const res = await apiRequest(makeApp(over), '/api/health');
     expect(res.status).toBe(200);
     return (await res.json()) as HealthBody;
   };
@@ -67,7 +74,7 @@ describe('GET /api/health — forge + capabilities', () => {
     expect(body).toHaveProperty('defaultRunner');
     // New additive fields.
     expect(body.forge).toBeNull(); // tmp dir — not a git repo, no remote
-    expect(body.capabilities).toEqual({ localHandoff: true });
+    expect(body.capabilities).toEqual({ localHandoff: true, followups: false });
   });
 
   // getRepoInfo needs a resolvable HEAD — an empty commit is enough.
@@ -108,17 +115,42 @@ describe('GET /api/health — forge + capabilities', () => {
   it('hosted mode via CEZ_REMOTE=1: localHandoff:false', async () => {
     process.env.CEZ_REMOTE = '1';
     const body = await health();
-    expect(body.capabilities).toEqual({ localHandoff: false });
+    expect(body.capabilities).toEqual({ localHandoff: false, followups: false });
+  });
+
+  it('hosted mode trims repoRoot to a basename — no absolute path/username leak (#431)', async () => {
+    process.env.CEZ_REMOTE = '1';
+    const body = await health();
+    // The absolute checkout path (with the developer's username) must not be exposed to a
+    // site/host that reads the CORS-open health endpoint in hosted mode.
+    expect(body.repoRoot).toBe(basename(repoRoot));
+    expect(body.repoRoot).not.toContain(sep);
+    expect(body.repoRoot).not.toBe(repoRoot);
+  });
+
+  it('hosted mode via a non-loopback bind host also trims repoRoot (#431)', async () => {
+    const body = await health({ bindHost: '0.0.0.0' });
+    expect(body.repoRoot).toBe(basename(repoRoot));
   });
 
   it('hosted mode via a non-loopback bind host: localHandoff:false', async () => {
     const body = await health({ bindHost: '0.0.0.0' });
-    expect(body.capabilities).toEqual({ localHandoff: false });
+    expect(body.capabilities).toEqual({ localHandoff: false, followups: false });
   });
 
   it('a loopback bind host stays local', async () => {
     const body = await health({ bindHost: '127.0.0.1' });
-    expect(body.capabilities).toEqual({ localHandoff: true });
+    expect(body.capabilities).toEqual({ localHandoff: true, followups: false });
+  });
+
+  // #471 — the inbox capability rides the same payload the UI already reads.
+  it('reports followups:false by default — the global inbox is opt-in', async () => {
+    expect((await health()).capabilities.followups).toBe(false);
+  });
+
+  it('reports followups:true with CEZ_FOLLOWUPS=1', async () => {
+    process.env.CEZ_FOLLOWUPS = '1';
+    expect((await health()).capabilities).toEqual({ localHandoff: true, followups: true });
   });
 });
 
@@ -143,7 +175,8 @@ describe('POST /api/runs/:id/open-in-cli — hosted-mode defense in depth', () =
   });
 
   const post = (over: Partial<ServerDeps> = {}) =>
-    createApp({ repoRoot, store, manager: {} as RunManager, version: '0.0.0-test', ...over }).request(
+    apiRequest(
+      createApp({ repoRoot, store, manager: {} as RunManager, version: '0.0.0-test', ...over }),
       `/api/runs/${runId}/open-in-cli`,
       { method: 'POST' },
     );
@@ -172,7 +205,7 @@ describe('POST /api/runs/:id/open-in-cli — hosted-mode defense in depth', () =
   it('unknown runs still 404 first', async () => {
     process.env.CEZ_REMOTE = '1';
     const app = createApp({ repoRoot, store, manager: {} as RunManager, version: '0.0.0-test' });
-    const res = await app.request('/api/runs/nope/open-in-cli', { method: 'POST' });
+    const res = await apiRequest(app, '/api/runs/nope/open-in-cli', { method: 'POST' });
     expect(res.status).toBe(404);
   });
 });

@@ -3,11 +3,17 @@
  *
  * The spec (`.ai/specs/2026-07-14-cockpit-ui-redesign.md` §"Backend parity
  * requirement") demands that every capability in the parity matrix is
- * emitted by ALL THREE backends, so the GUI degrades per-capability, never
+ * emitted by EVERY backend, so the GUI degrades per-capability, never
  * per-backend. This table test asserts it over the golden fixtures' expected
  * outputs (the hand-verified wire-faithful contract for each mapper): if a
  * future mapper change drops a capability — or a new fixture set forgets to
  * cover one — a named row fails here.
+ *
+ * `BACKENDS` lists the backends that own a WIRE MAPPER, which is why `pi` (#387)
+ * is absent and not simply forgotten: `PiRunner` delegates to `ClaudeCliRunner`,
+ * so it emits claude's stream-json through claude's mapper and its parity holds
+ * by construction — a pi fixture set would be a byte-for-byte copy of claude's.
+ * A future runner with its own wire format DOES belong here.
  */
 import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -53,7 +59,12 @@ const CAPABILITIES: ReadonlyArray<[name: string, produced: (events: UiEvent[]) =
   ['tool status: running', (events) => hasToolStatus(events, 'running')],
   ['tool status: completed', (events) => hasToolStatus(events, 'completed')],
   ['tool status: failed', (events) => hasToolStatus(events, 'failed')],
-  ['reasoning items (thinking / reasoning items / reasoning parts)', (events) => items(events).some((item) => item.kind === 'reasoning')],
+  // Non-empty is the point: a reasoning item with no text renders as a dead
+  // "Thinking —" row, so presence alone is not parity (#528).
+  [
+    'reasoning items (thinking / reasoning items / reasoning parts)',
+    (events) => items(events).some((item) => item.kind === 'reasoning' && item.text.trim() !== ''),
+  ],
   [
     'structured diffs (Edit input / fileChange.changes / patch parts)',
     (events) => items(events).some((item) => item.kind === 'tool' && (item.diffs?.length ?? 0) > 0),

@@ -4,7 +4,7 @@
  * no token-budget circuit breaker, no zod response schemas — one run is one
  * agent-CLI session streaming normalized events.
  *
- * Three interchangeable backends implement this seam, each as a persistent
+ * Four interchangeable backends implement this seam, each as a persistent
  * process so multi-turn follow-ups, `waiting`, interrupt and resume all work:
  *  - `claude`   — Claude Code CLI, stream-json over stdin/stdout;
  *  - `codex`    — `codex app-server`, JSON-RPC 2.0 (JSONL) over stdin/stdout;
@@ -15,12 +15,24 @@
 
 import type { UiEvent } from './ui-events.js';
 
-/** `claude-cli` is the legacy id kept so old run records still parse. */
-export type AgentBackend = 'claude' | 'codex' | 'opencode' | 'pi' | 'claude-cli';
+/**
+ * The user-selectable runners (what config/GUI expose), in display order — the SINGLE source of
+ * truth for the set. Every runtime enumeration derives from this tuple (zod schemas, the
+ * server-install "at least one agent CLI" gate, the CLI-handoff registry) rather than repeating
+ * the literals, so adding runner #5 is a one-line change here and typecheck finds the rest.
+ */
+export const RUNNER_IDS = ['claude', 'codex', 'opencode', 'pi'] as const;
 
 /** The user-selectable runners (what config/GUI expose). */
-export type RunnerId = 'claude' | 'codex' | 'opencode' | 'pi';
-export const RUNNER_IDS: readonly RunnerId[] = ['claude', 'codex', 'opencode', 'pi'];
+export type RunnerId = (typeof RUNNER_IDS)[number];
+
+/** `claude-cli` is the legacy id kept so old run records still parse. */
+export type AgentBackend = RunnerId | 'claude-cli';
+
+/** Narrow an arbitrary string (a config value, a check name) to a runner id. */
+export function isRunnerId(value: string): value is RunnerId {
+  return (RUNNER_IDS as readonly string[]).includes(value);
+}
 
 export interface AgentRunSpec {
   /** Appended to the CLI's default system prompt (`--append-system-prompt`). */
@@ -31,7 +43,10 @@ export interface AgentRunSpec {
   images?: ContentBlock[];
   /** The directory the agent runs in — also the only writable root. */
   cwd: string;
-  /** Tool allowlist; the CLI is default-deny for anything not listed. */
+  /** Tool allowlist; the CLI is default-deny for anything not listed — but
+   *  the zero-config default (`DEFAULT_ALLOWED_TOOLS`) includes `Bash`
+   *  unrestricted unless `bashAllowlist` is set, so treat the default as
+   *  full shell access in `cwd`, not a sandboxed allowlist (#430). */
   allowedTools?: string[];
   /** When `Bash` is allowed, restrict it to commands starting with one of these. */
   bashAllowlist?: string[];

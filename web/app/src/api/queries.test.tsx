@@ -1,11 +1,22 @@
 import { QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, renderHook, waitFor } from '@testing-library/react'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from './client'
 import { createQueryClient } from './query-client'
-import { queryKeys, useHealth, usePatchRun, useRun, useRuns } from './queries'
+import { setApiScope } from './project-scope'
+import {
+  queryKeys,
+  useHealth,
+  useRunnerModels,
+  usePatchRun,
+  usePutAgentConfigFile,
+  useRun,
+  useRunChanges,
+  useRuns,
+  useSkills,
+} from './queries'
 
 const fetchMock = vi.fn<typeof fetch>()
 
@@ -43,27 +54,96 @@ const HEALTH = {
   defaultRunner: 'claude',
 }
 
+describe('useRunnerModels', () => {
+  it('loads the workspace Codex catalog', async () => {
+    fetchMock.mockResolvedValue(json({ runner: 'codex', models: [{ id: 'gpt-future', label: 'Future', description: '' }], source: 'live', stale: false }))
+    const { result } = renderHook(() => useRunnerModels(), { wrapper: wrapper() })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.data?.models[0]?.id).toBe('gpt-future')
+    expect(fetchMock.mock.calls.at(-1)?.[0]).toBe('/api/models?runner=codex')
+  })
+})
+
 describe('queryKeys', () => {
   // Step 3.2 invalidates by these. Keeping them stable and hierarchical is the whole contract:
-  // `['runs']` has to be a prefix of both the list and every detail key, or one invalidate call
-  // cannot reach them.
+  // the runs root has to be a prefix of both the list and every detail key, or one invalidate
+  // call cannot reach them. Since step 3.1 every key leads with the project scope — the
+  // `'default'` sentinel unscoped — so caches never bleed across projects.
   it('nests every run key under the list root', () => {
-    expect(queryKeys.runs.all).toEqual(['runs'])
-    expect(queryKeys.runs.list()).toEqual(['runs', 'list'])
-    expect(queryKeys.runs.detail('a')).toEqual(['runs', 'detail', 'a'])
-    expect(queryKeys.runs.diff('a')).toEqual(['runs', 'diff', 'a'])
+    expect(queryKeys.runs.all).toEqual(['default', 'runs'])
+    expect(queryKeys.runs.list()).toEqual(['default', 'runs', 'list'])
+    expect(queryKeys.runs.detail('a')).toEqual(['default', 'runs', 'detail', 'a'])
+    expect(queryKeys.runs.diff('a')).toEqual(['default', 'runs', 'diff', 'a'])
     for (const key of [queryKeys.runs.list(), queryKeys.runs.detail('a'), queryKeys.runs.diff('a')]) {
-      expect(key[0]).toBe(queryKeys.runs.all[0])
+      expect(key.slice(0, 2)).toEqual([...queryKeys.runs.all])
     }
   })
 
   it('keys github by limit so two page sizes are two caches', () => {
-    expect(queryKeys.github()).toEqual(['github', null])
+    expect(queryKeys.github()).toEqual(['default', 'github', null])
     expect(queryKeys.github({ limit: 5 })).not.toEqual(queryKeys.github({ limit: 50 }))
   })
 
   it('is stable across calls — an unstable key refetches forever', () => {
     expect(queryKeys.runs.detail('a')).toEqual(queryKeys.runs.detail('a'))
+  })
+
+  it('leads every key with the active project scope, so two projects are two caches', () => {
+    setApiScope('proj-a')
+    try {
+      expect(queryKeys.runs.list()).toEqual(['proj-a', 'runs', 'list'])
+      expect(queryKeys.health).toEqual(['proj-a', 'health'])
+      expect(queryKeys.todos).toEqual(['proj-a', 'todos'])
+      expect(queryKeys.skills).toEqual(['proj-a', 'skills'])
+      expect(queryKeys.skillsReady).toEqual(['proj-a', 'skills', 'ready'])
+      expect(queryKeys.agentConfig).toEqual(['proj-a', 'agent-config'])
+      expect(queryKeys.agentConfigFile('claude.project.settings')).toEqual([
+        'proj-a',
+        'agent-config',
+        'file',
+        'claude.project.settings',
+      ])
+      expect(queryKeys.github({ limit: 5 })).toEqual(['proj-a', 'github', 5])
+      const scoped = queryKeys.runs.detail('a')
+      setApiScope('proj-b')
+      // The same call under another scope is a DIFFERENT cache entry — the whole point.
+      expect(queryKeys.runs.detail('a')).not.toEqual(scoped)
+    } finally {
+      setApiScope(null)
+    }
+  })
+})
+
+describe('useSkills', () => {
+  it('renders the fast catalog, then converges when the cold team cache is ready', async () => {
+    let resolveReady!: (response: Response) => void
+    fetchMock.mockImplementation(async (input) => {
+      if (String(input) === '/api/skills') {
+        return json([{ name: 'local', source: 'ai', body: '', path: '/repo/local.md' }])
+      }
+      if (String(input) === '/api/skills?wait=1') {
+        return new Promise<Response>((resolve) => {
+          resolveReady = resolve
+        })
+      }
+      return new Response(null, { status: 404 })
+    })
+
+    const { result } = renderHook(() => useSkills(), { wrapper: wrapper() })
+    await waitFor(() => expect(result.current.data?.map((skill) => skill.name)).toEqual(['local']))
+    await waitFor(() => expect(resolveReady).toBeTypeOf('function'))
+
+    resolveReady(
+      json([
+        { name: 'local', source: 'ai', body: '', path: '/repo/local.md' },
+        { name: 'om-fix', source: 'team', body: '', path: 'skills/om-fix/SKILL.md' },
+      ]),
+    )
+
+    await waitFor(() =>
+      expect(result.current.data?.map((skill) => skill.name)).toEqual(['local', 'om-fix']),
+    )
+    expect(fetchMock.mock.calls.map(([path]) => path)).toEqual(['/api/skills', '/api/skills?wait=1'])
   })
 })
 
@@ -93,6 +173,61 @@ describe('useHealth', () => {
     expect(result.current.data).toBeUndefined()
     expect(result.current.error).toBeInstanceOf(ApiError)
     expect((result.current.error as ApiError).message).toBe('boom')
+  })
+
+  // #369: a `git checkout` in a foreground, connected tab fires none of reconnect/visibility/
+  // pageshow, so the branch chip needs its own poll rather than relying solely on those.
+  it('polls, so a branch switched outside the cockpit is caught without a reconnect', async () => {
+    vi.useFakeTimers()
+    try {
+      fetchMock.mockResolvedValue(json(HEALTH))
+      const { result } = renderHook(() => useHealth(), { wrapper: wrapper() })
+
+      await act(() => vi.advanceTimersByTimeAsync(0))
+      expect(result.current.isSuccess).toBe(true)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+
+      await act(() => vi.advanceTimersByTimeAsync(5000))
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('usePutAgentConfigFile', () => {
+  it('updates the project cache where the save started when the active project changes in flight', async () => {
+    let resolveFetch!: (response: Response) => void
+    fetchMock.mockImplementation(
+      () => new Promise<Response>((resolve) => {
+        resolveFetch = resolve
+      }),
+    )
+    const client = createQueryClient()
+    const scopedWrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    )
+    const file = {
+      id: 'claude.project.settings',
+      path: '/repo-a/.claude/settings.json',
+      exists: true,
+      content: '{"project":"a"}',
+      version: 'next',
+    }
+
+    setApiScope('proj-a')
+    const { result } = renderHook(() => usePutAgentConfigFile(file.id), { wrapper: scopedWrapper })
+    act(() => result.current.mutate({ content: file.content, version: 'previous' }))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce())
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/p/proj-a/agent-config/claude.project.settings')
+
+    setApiScope('proj-b')
+    resolveFetch(json(file))
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    expect(client.getQueryData(['proj-a', 'agent-config', 'file', file.id])).toEqual(file)
+    expect(client.getQueryData(['proj-b', 'agent-config', 'file', file.id])).toBeUndefined()
+    setApiScope(null)
   })
 })
 
@@ -165,6 +300,30 @@ describe('usePatchRun', () => {
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(result.current.error).toBeInstanceOf(ApiError)
     expect(invalidate).not.toHaveBeenCalled()
+  })
+})
+
+describe('useRunChanges', () => {
+  it('opts out of the no-poll defaults so a finished run’s tab refetches on focus (#488)', async () => {
+    fetchMock.mockResolvedValue(json({ files: [], stat: { adds: 0, dels: 0, files: 0 } }))
+    const client = createQueryClient()
+    // live=false: the run is not active, so polling is off — exactly when the global defaults would
+    // otherwise leave a stale, possibly-empty snapshot on screen until the 5-min staleTime lapses.
+    const { result } = renderHook(() => useRunChanges('run-1', false), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+
+    // Read the resolved options off the live observer: this query overrides the client-wide
+    // refetchOnWindowFocus:false / long staleTime (asserted in 'query defaults'), scoped to itself.
+    const options = client.getQueryCache().find({ queryKey: queryKeys.runs.changes('run-1') })?.observers[0]
+      ?.options
+    expect(options?.refetchOnWindowFocus).toBe(true)
+    expect(options?.staleTime).toBe(0)
+    // …but an inactive run still must not poll.
+    expect(options?.refetchInterval).toBe(false)
   })
 })
 

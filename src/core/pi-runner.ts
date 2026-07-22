@@ -37,6 +37,12 @@ export interface PiRunnerOptions {
 export class PiRunner implements AgentRunner {
   readonly backend = 'pi' as const;
 
+  /**
+   * The delegate. Its own `backend` reads `'claude'` and is deliberately never consulted —
+   * `PiRunner.backend` is the seam's identity, and the inner instance exists only for its
+   * stream-json transport. Nothing reads `inner.backend`; a `backend` that reached the store
+   * or the UI would come from this class, so the contradiction stays contained here.
+   */
   private readonly inner: ClaudeCliRunner;
 
   constructor(opts: PiRunnerOptions = {}) {

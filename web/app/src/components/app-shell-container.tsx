@@ -1,12 +1,18 @@
 import type { ReactNode } from 'react'
+import { useLocation } from 'react-router'
 
-import { useHealth, useTodos } from '@/api/queries'
+import { useHealth, useProjectRuns, useProjects, useTodos } from '@/api/queries'
 import type { HealthResponse } from '@/api/types'
 import { AppShell, type RepoChip } from '@/components/app-shell'
 import { CommandPalette } from '@/components/command-palette'
 import { ListViewProvider } from '@/components/list-view'
+import { ProjectGroups } from '@/components/project-groups'
 import { TaskQuickListContainer } from '@/components/task-quick-list'
 import { ToolsMenu } from '@/components/tools-menu'
+import { useDocumentTitle } from '@/lib/use-document-title'
+import { useActiveProjectId } from '@/lib/project-router'
+import { runTitle } from '@/lib/task-groups'
+import { pageTitleContext } from '@/routes'
 
 /**
  * Derive the sidebar's repo chip from `/api/health`.
@@ -36,11 +42,52 @@ export function repoChipOf(health: HealthResponse | undefined): RepoChip | null 
  *
  * Nothing here caches boot-time values (#369: the legacy UI read the branch once at startup and
  * then showed a stale branch forever). The chips read whatever is currently in the health query,
- * so making them live is Step 3.2's job of invalidating that query — not a change here.
+ * so keeping them live is `useHealth`'s job — its poll plus Step 3.2's reconnect/visibility
+ * reconcile — not a change here.
  */
 export function AppShellContainer({ children }: { children: ReactNode }) {
+  const { pathname } = useLocation()
+  const projectId = useActiveProjectId()
   const health = useHealth()
-  const todos = useTodos()
+  // The global inbox is opt-in (#471). With the capability off there is no Inbox nav item to
+  // badge and the endpoint can only answer [], so the query parks rather than polls.
+  const inboxAvailable = health.data?.capabilities.followups === true
+  const todos = useTodos(inboxAvailable)
+  const registry = useProjects().data
+  const titleContext = pageTitleContext(pathname)
+  const bootProjectId = registry?.bootProject ?? health.data?.bootProject ?? null
+  const isBootProject = projectId !== null && projectId === bootProjectId
+  const activeProject = registry?.projects.find((project) => project.id === projectId)
+  const titleRuns = useProjectRuns(
+    projectId ?? '',
+    // Wait for the registry to identify the project before choosing the boot/non-boot cache
+    // key. Health can arrive first; fetching then would briefly populate a project-scoped key
+    // for the boot project before switching to the authoritative `default` key.
+    activeProject !== undefined && titleContext.taskId !== null,
+    registry?.bootProject === projectId,
+  ).data
+
+  // Global settings intentionally has no selected project. Everywhere else the URL id selects
+  // the authoritative registry entry; health may name only the CONFIRMED boot project while
+  // the registry is unavailable, never a non-boot project whose root health does not describe.
+  const globalSettings = pathname === '/settings/global' || pathname.startsWith('/settings/global/')
+  const projectName = globalSettings
+    ? null
+    : (activeProject?.name ??
+      (isBootProject ? (repoChipOf(health.data)?.name ?? null) : null))
+  const titleRun = titleContext.taskId
+    ? titleRuns?.find((run) => run.id === titleContext.taskId)
+    : undefined
+  const pageLabel = titleRun ? runTitle(titleRun) : titleContext.pageLabel
+
+  useDocumentTitle({ projectName, pageLabel })
+
+  // Multi-project sidebar only from the SECOND project on (multi-project spec, "Sidebar").
+  // With one registered project — or with the registry still loading, or unreachable — the
+  // group header would say nothing the repo chip does not already say, so the shell keeps the
+  // flat nav + single quick-list it has always had. That degenerate case is the upgrade path:
+  // an existing user boots the new version in their usual repo and sees no difference.
+  const projects = registry && registry.projects.length > 1 ? registry : null
 
   return (
     // The Active/Archived filter is shared by the quick-list below and the Tasks table (Step 3.4),
@@ -58,7 +105,27 @@ export function AppShellContainer({ children }: { children: ReactNode }) {
         // the chips: the nav must not claim a GitHub tab it cannot back. The Tools menu's
         // forge note says why it is absent.
         forgeAvailable={health.data?.forge?.available === true}
+        // Hidden unless health reports the opt-in inbox (#471) — same honesty rule as above:
+        // the nav must not offer an Inbox this server will never fill.
+        inboxAvailable={inboxAvailable}
         taskQuickList={<TaskQuickListContainer />}
+        // Present only in a multi-project workspace; `AppShell` renders the flat nav and the
+        // quick-list above whenever this slot is absent.
+        projectGroups={
+          projects ? (
+            <ProjectGroups
+              projects={projects.projects}
+              bootProjectId={projects.bootProject}
+              // The workspace's forge answer, applied to every group. `GET /api/projects`
+              // carries no per-project forge field, and probing one health endpoint per group
+              // would be exactly the N-shells-per-render cost the registry's cached probes
+              // exist to avoid. Per-project gating waits for the registry to carry the fact.
+              forgeAvailable={health.data?.forge?.available === true}
+              inboxAvailable={inboxAvailable}
+              inboxCount={todos.data?.length ?? null}
+            />
+          ) : undefined
+        }
         toolsMenu={<ToolsMenu health={health.data} />}
       >
         {children}

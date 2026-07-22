@@ -44,7 +44,7 @@ const HEALTH: HealthResponse = {
   checks: [],
   defaultRunner: 'claude',
   forge: { kind: 'github', available: true },
-  capabilities: { localHandoff: true },
+  capabilities: { localHandoff: true, followups: false },
 }
 
 const CHANGES: ChangesPayload = {
@@ -173,6 +173,23 @@ describe('the Changes tab route', () => {
     // Commit has nothing to do — disabled, and it says why.
     expect(toolbarAction('commit')?.disabled).toBe(true)
     expect(toolbarAction('commit')?.title).toContain('no changes to commit')
+  })
+
+  it('explains when a repointed review worktree shows only uncommitted changes', async () => {
+    stubFetch({
+      'GET /api/runs/r1/changes': () =>
+        jsonResponse({
+          files: [],
+          stat: { adds: 0, dels: 0, files: 0 },
+          repointedHead: { headBranch: 'review/pr-42', taskBranch: 'cez/abc12345' },
+        }),
+    })
+    renderChangesRoute()
+
+    await waitFor(() => expect(document.querySelector('[data-slot="repointed-head-note"]')).not.toBeNull())
+    expect(document.querySelector('[data-slot="repointed-head-note"]')?.textContent).toContain(
+      "HEAD is on review/pr-42, not this task's branch cez/abc12345 — showing uncommitted changes only.",
+    )
   })
 
   it('a 409 ("no worktree") renders the server reason and disables the git actions', async () => {
@@ -336,6 +353,31 @@ describe('GitToolbar renders policy fixtures verbatim', () => {
     const link = document.querySelector('a[data-action="view-pr"]')!
     expect(link.getAttribute('href')).toBe('https://github.com/acme/demo/pull/7')
     expect(link.getAttribute('target')).toBe('_blank')
+  })
+
+  it('view-pr with a non-http href renders disabled, not as a clickable no-op (#431)', () => {
+    const onAction = vi.fn()
+    render(
+      <GitToolbar
+        bar={{
+          primary: { id: 'view-pr', label: 'View PR', enabled: true, href: 'javascript:void(0)' },
+          secondary: [],
+          menu: [],
+        }}
+        mode="unified"
+        wrap={false}
+        onModeChange={noop}
+        onWrapChange={noop}
+        onAction={onAction}
+      />,
+    )
+    // No link at all — and the fallback button is inert, with the reason as its tooltip.
+    expect(document.querySelector('a[data-action="view-pr"]')).toBeNull()
+    const button = toolbarAction('view-pr')!
+    expect(button.disabled).toBe(true)
+    expect(button.title).toContain('View PR unavailable')
+    fireEvent.click(button)
+    expect(onAction).not.toHaveBeenCalled()
   })
 
   it('shows the branch chip and the aggregate ± stat', () => {

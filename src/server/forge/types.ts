@@ -38,6 +38,95 @@ export interface ForgeItem {
   checks?: 'passing' | 'failing' | 'pending' | null;
 }
 
+/** One comment (or PR review summary) in an issue/PR conversation thread (#499). Served by the
+ *  new `GET /api/github/comments/:kind/:number` endpoint; additive, no impact on `ForgeItem`. */
+export interface ForgeComment {
+  id: number;
+  /** Author login, `'?'` fallback when gh omits the user. */
+  author: string;
+  /** https://avatars.githubusercontent.com/…, when known. */
+  avatarUrl?: string;
+  /** ISO timestamp. */
+  createdAt: string;
+  /** Markdown body, sliced to the same 8 000-char cap as item bodies. */
+  body: string;
+  /** `review` = a submitted PR review summary; `comment` = a conversation comment. */
+  kind: 'comment' | 'review';
+  /** For reviews only — drives the state chip. */
+  reviewState?: 'approved' | 'changes_requested' | 'commented' | 'dismissed';
+  /** html_url deep link back to the comment/review on GitHub. */
+  url: string;
+}
+
+/** The timeline event kinds the thread renders (#525). An allowlist, not a denylist: a new
+ *  GitHub event type is dropped rather than rendered, so it can never crash or clutter the
+ *  thread. `reviewed` is deliberately absent — reviews stay sourced from `/pulls/{n}/reviews`,
+ *  which is already normalized and chipped; sourcing both would render each review twice. */
+export type ForgeTimelineEventKind =
+  | 'committed'
+  | 'labeled'
+  | 'unlabeled'
+  | 'assigned'
+  | 'unassigned'
+  | 'merged'
+  | 'closed'
+  | 'reopened'
+  | 'head_ref_force_pushed'
+  | 'cross-referenced'
+  | 'renamed';
+
+/** One non-comment row in an issue/PR timeline (#525) — a commit, label change, assignment,
+ *  merge, force-push, cross-reference or rename. Additive: `ForgeComment` is untouched and its
+ *  `kind` deliberately does NOT widen to cover these (widening breaks client narrowing). */
+export interface ForgeTimelineEvent {
+  /** `evt-${id ?? sha ?? node_id ?? index}`. Prefixed so it cannot collide with the thread's
+   *  `${kind}-${id}` comment keys. `sha` sits ahead of `node_id` because `committed` rows carry
+   *  both and the SHA is the natural, debuggable identifier — it is also the rollup key. */
+  id: string;
+  kind: ForgeTimelineEventKind;
+  /** Login — or the git author name for `committed`, which carries no GitHub actor. */
+  actor: string;
+  /** Absent for `committed` (a git author has no avatar). */
+  avatarUrl?: string;
+  /** ISO-8601. Resolved per kind: `committed` reads `author.date`, everything else
+   *  `created_at` — `committed` rows return `created_at: null`, and mapping it naively
+   *  string-sorts every commit to the top of the thread. */
+  createdAt: string;
+  url?: string;
+  /** `committed` — full 40-char SHA (the rollup query rejects abbreviated ones). */
+  sha?: string;
+  /** `committed` — first line of the message, capped at 120 chars. */
+  message?: string;
+  /** `committed` — rolled-up CI state. **Absent** (query failed or skipped) and **`null`** (no CI
+   *  configured) both render no glyph but stay distinct values for diagnosis. */
+  checks?: 'passing' | 'failing' | 'pending' | null;
+  /** `labeled` / `unlabeled`. */
+  label?: { name: string; color?: string };
+  /** `assigned`/`unassigned` login, or the new title for `renamed`. */
+  subject?: string;
+  /** `cross-referenced`. */
+  refNumber?: number;
+  refTitle?: string;
+  refIsPr?: boolean;
+}
+
+/** The `GET /api/github/comments/:kind/:number` payload — mirrors the tab's quiet-degrade
+ *  contract (`available: false` + a hint, never a 5xx). */
+export interface ForgeCommentsData {
+  available: boolean;
+  /** Human-readable hint when unavailable. */
+  reason?: string;
+  /** Chronological, oldest first. */
+  comments: ForgeComment[];
+  /** True when either stream hit its cap, or the timeline fetch stopped short. Means "not
+   *  showing you everything" — not specifically "comments were cut". */
+  truncated?: boolean;
+  /** Timeline events (#525) — additive and optional; absent when the timeline fetch degraded to
+   *  the legacy comments-only call. Capped independently of `comments`, which keeps its exact
+   *  pre-#525 shape, contents and cap (BACKWARD_COMPATIBILITY.md §2). */
+  events?: ForgeTimelineEvent[];
+}
+
 export interface ForgeListOptions {
   /** Bypass the driver's short cache. */
   refresh?: boolean;

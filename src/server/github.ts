@@ -4,5 +4,11 @@
  * seam"). Kept so existing imports and the protected `/api/github` response
  * shape (BACKWARD_COMPATIBILITY.md §2) stay exactly as they were.
  */
-export { fetchGithub, GH_MAX_LIMIT } from './forge/github.js';
+export { fetchGithub, fetchGithubComments, GH_MAX_LIMIT } from './forge/github.js';
 export type { GithubData, GithubItem } from './forge/github.js';
+export type {
+  ForgeComment,
+  ForgeCommentsData,
+  ForgeTimelineEvent,
+  ForgeTimelineEventKind,
+} from './forge/types.js';

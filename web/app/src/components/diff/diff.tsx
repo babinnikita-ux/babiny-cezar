@@ -1,9 +1,10 @@
-import { useEffect, useState, type ComponentType } from 'react'
+import { useEffect, useImperativeHandle, useRef, useState, type ComponentType } from 'react'
 
 import type { DiffStat } from '@/api/types'
 import { DiffStatLabel } from '@/components/diff-stat'
 import { cn } from '@/lib/utils'
 
+import { ImagePreview, shouldPreviewImage } from './image-preview'
 import type { DiffFileChange, DiffProps } from './types'
 
 /**
@@ -67,14 +68,31 @@ export function Diff(props: DiffProps) {
  * the engine chunk can. Split mode degrades to unified; that is documented degradation, not
  * a bug.
  */
-export function DiffFallback({ files, wrap = false, className }: DiffProps) {
+export function DiffFallback({ files, wrap = false, imageSrc, onOpenInApp, viewRef, className }: DiffProps) {
   const stat: DiffStat = {
     adds: files.reduce((sum, file) => sum + file.adds, 0),
     dels: files.reduce((sum, file) => sum + file.dels, 0),
     files: files.length,
   }
+  // The fallback never virtualizes, so every file IS in the DOM — the handle a consumer's
+  // file tree calls resolves straight to the element. Without this the tree would silently
+  // stop scrolling whenever the engine chunk failed to load. Matched on `dataset` rather than
+  // an attribute selector, for the reasons `diff-view.tsx`'s `findFileElement` spells out
+  // (this stays inline rather than importing that helper: it lives in the lazy engine chunk,
+  // and the fallback exists precisely for when that chunk is unreachable).
+  const root = useRef<HTMLDivElement | null>(null)
+  useImperativeHandle(viewRef, () => ({
+    scrollToPath: (path: string) => {
+      for (const element of root.current?.querySelectorAll<HTMLElement>('[data-slot="diff-file"]') ?? []) {
+        if (element.dataset.path === path) {
+          element.scrollIntoView({ block: 'start', behavior: 'smooth' })
+          return
+        }
+      }
+    },
+  }))
   return (
-    <div data-slot="diff" data-fallback="true" className={cn('flex min-w-0 flex-col gap-3', className)}>
+    <div ref={root} data-slot="diff" data-fallback="true" className={cn('flex min-w-0 flex-col gap-3', className)}>
       <p data-slot="diff-totals" className="flex items-center gap-2 px-1 text-xs text-muted-foreground">
         <span>
           {stat.files} {stat.files === 1 ? 'file' : 'files'} changed
@@ -82,13 +100,29 @@ export function DiffFallback({ files, wrap = false, className }: DiffProps) {
         <DiffStatLabel stat={stat} />
       </p>
       {files.map((file) => (
-        <FallbackFile key={`${file.oldPath ?? ''}→${file.path}`} file={file} wrap={wrap} />
+        <FallbackFile
+          key={`${file.oldPath ?? ''}→${file.path}`}
+          file={file}
+          wrap={wrap}
+          imageSrc={imageSrc}
+          onOpenInApp={onOpenInApp}
+        />
       ))}
     </div>
   )
 }
 
-function FallbackFile({ file, wrap }: { file: DiffFileChange; wrap: boolean }) {
+function FallbackFile({
+  file,
+  wrap,
+  imageSrc,
+  onOpenInApp,
+}: {
+  file: DiffFileChange
+  wrap: boolean
+  imageSrc?: (path: string) => string
+  onOpenInApp?: (path: string) => void
+}) {
   return (
     <section data-slot="diff-file" data-path={file.path} className="min-w-0 overflow-clip rounded-md border border-border bg-card">
       <header className="flex items-center gap-2 border-b border-border/50 px-3 py-2">
@@ -99,7 +133,9 @@ function FallbackFile({ file, wrap }: { file: DiffFileChange; wrap: boolean }) {
           <DiffStatLabel stat={{ adds: file.adds, dels: file.dels, files: 1 }} className="text-[11px]" />
         </span>
       </header>
-      {file.binary ? (
+      {shouldPreviewImage(file) ? (
+        <ImagePreview file={file} imageSrc={imageSrc} onOpenInApp={onOpenInApp} />
+      ) : file.binary ? (
         <p className="px-4 py-2.5 text-xs text-soft-foreground">Binary file — no text diff.</p>
       ) : file.patch === '' ? (
         <p className="px-4 py-2.5 text-xs text-soft-foreground">No content changes (metadata only).</p>

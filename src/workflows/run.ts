@@ -1,19 +1,23 @@
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { parseAskMarker, stripAskMarker, type AskRequest } from '../core/ask.js';
 import { type AgentSession } from '../core/claude-cli-runner.js';
 import { onUsage, registerRunProcess, unregisterRunProcess, type ProcessUsage } from '../core/process-usage.js';
 import { createRunner } from '../core/runner-factory.js';
 import type { RunnerId } from '../core/agent-runner.js';
+import { modelConflictsWithRunner } from '../core/model-presets.js';
 import {
   ModelIdentityError,
   formatModelIdentity,
   normalizeModelForBackend,
 } from '../core/model-identity.js';
 import {
+  HANDOFF_ONLY_INSTRUCTIONS,
   HANDOFF_INSTRUCTIONS,
   appendHandoffHeartbeat,
+  followupsEnabled,
   handoffPath,
   seedHandoffFile,
 } from '../handoff.js';
@@ -21,14 +25,21 @@ import { todosPath } from '../todos.js';
 import type { AgentEvent, ContentBlock } from '../core/agent-runner.js';
 import { discoverSkills, type Skill } from '../skills.js';
 import { materializeSkillDir } from '../skills-remote.js';
-import { loadConfig } from '../config.js';
+import { seedAgentConfigLocalLayer } from '../agent-config/seed.js';
+import { loadConfig, resolveWorktreeRetention } from '../config.js';
 import { autosaveCommit, createWorktree, resolveBaseRef, worktreeDiff, worktreeShortstat } from '../git-worktree.js';
 import { getRepoInfo } from '../server/git.js';
 import { loadWorkflows } from './load.js';
-import type { RunRecord, RunStore } from '../runs/store.js';
-import { deriveTitleSummary } from '../runs/title-summary.js';
+import type { QueuedMessage, RunRecord, RunStore } from '../runs/store.js';
+import { reclaimWorktrees, rematerializeReclaimedWorktree } from '../runs/retention.js';
+import { extractTaskRefs, refineTaskRefs, titleRefNumber } from '../runs/task-refs.js';
+import { parseTaskMarkers, stripTaskMarkers } from '../runs/task-markers.js';
+import { autoNamingActive, generateRunName, liveTitleUpdatesEnabled, postValidateTitle } from '../runs/auto-name.js';
+import { reviewGateEnabled } from '../runs/review-gate.js';
+import { WorkspaceSemaphore } from '../workspace/semaphore.js';
 import { UiEventSink } from '../runs/ui-event-sink.js';
-import { DEFAULT_ALLOWED_TOOLS, stepKind, type WorkflowDef, type WorkflowStepDef } from './types.js';
+import type { UiEvent } from '../core/ui-events.js';
+import { chainStepNote, DEFAULT_ALLOWED_TOOLS, stepKind, type WorkflowDef, type WorkflowStepDef } from './types.js';
 
 const CHECK_OUTPUT_CAP = 20_000;
 /** An interactive session that hears nothing from the user closes itself. */
@@ -41,14 +52,45 @@ export const IDLE_TIMEOUT_MS = 15 * 60_000;
  * (codex, opencode) can't split the marker across text events.
  */
 const DONE_MARKER_RE = /CEZ:DONE\s*$/;
+/**
+ * Still-working marker from the agent contract (spec
+ * 2026-07-18-subagent-monitoring-status, #490): a turn whose text ends with
+ * `CEZ:MONITORING` means "I ended this turn but I'm still working on my own
+ * downstream work (a sub-agent / a command I'm monitoring), not waiting on the
+ * user" — cezar parks it as `running`/`activity:'monitoring'` instead of
+ * `waiting`, so the cockpit shows a non-attention state. `CEZ:DONE` wins if both
+ * appear. Detected on accumulated turn text (like `CEZ:DONE`) so delta-streaming
+ * backends can't split the marker across text events.
+ */
+const MONITORING_MARKER_RE = /CEZ:MONITORING\s*$/;
 /** Strip a trailing marker from one text event so transcripts stay free of
  *  protocol noise. Delta backends may split the marker across events — then
  *  it stays visible; detection above is unaffected. */
 function stripDoneMarker(text: string): string {
   return text.replace(/\s*CEZ:DONE\s*$/, '');
 }
+/** Strip a trailing `CEZ:MONITORING` marker from one text event (see
+ *  `stripDoneMarker`; same delta-backend caveat). */
+function stripMonitoringMarker(text: string): string {
+  return text.replace(/\s*CEZ:MONITORING\s*$/, '');
+}
+/** Emit the v2 `ask.requested` event for a parsed marker (the cockpit renders
+ *  it as an ask card, #473). Returns the minted request id. */
+function emitAskRequested(sink: UiEventSink, ask: AskRequest): string {
+  const requestId = randomUUID();
+  sink.handle({ type: 'ask.requested', requestId, questions: ask.questions });
+  return requestId;
+}
 /** Periodic "cezar autosave" commit in the task worktree (spec 006). */
 export const AUTOSAVE_INTERVAL_MS = 90_000;
+
+/** The periodic autosave timer is opt-in (#471): off, a task branch carries only the
+ *  agent's own commits plus the turn-end/pre-PR flushes — no mid-run "cezar autosave"
+ *  noise interleaving PR history. The flushes (`autosaveCommit` at turn end and before
+ *  a draft PR) are NOT gated: the branch must still end holding the finished state. */
+export function periodicAutosaveEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.CEZ_AUTOSAVE === '1';
+}
 
 interface ActiveRun {
   cancelled: boolean;
@@ -60,12 +102,20 @@ interface ActiveRun {
   currentStepId?: string;
   idleTimer?: NodeJS.Timeout;
   autosaveTimer?: NodeJS.Timeout;
-  /** Running counter for persisted agent screenshots (`screenshot-<n>.png`). */
-  imageSeq?: number;
+  /* The screenshot counter lives on `RunManager.queuedImageSeq` (#472), keyed by
+   * run id — a queued run persists attachments with no `ActiveRun` at all. */
+  /** Has a session EVER opened on this run (#472)? `session` alone cannot answer
+   *  it — teardown sets it back to `undefined`, so a closed session and one that
+   *  never opened look identical. This distinguishes "still starting up, buffer
+   *  the message" from "genuinely closed, 409". */
+  sessionEverOpened?: boolean;
   /** Autonomous mode (#autonomous): never park at `waiting` — auto-nudge the agent to keep
    *  going until it signals done or the safety cap is hit. */
   autonomous?: boolean;
   autoContinues?: number;
+  /** Release for exclusive execution in the user's repository working tree.
+   *  Worktree-backed runs never need it; every degradation/opt-out path does. */
+  releaseRepoRoot?: () => void;
 }
 
 /** Safety cap on autonomous auto-continues per run — stops a stuck agent from nudging forever. */
@@ -94,6 +144,16 @@ export interface StartRunInput {
    *  user — turn-ends auto-continue until the agent signals done or the safety
    *  cap is hit. No "needs you" is ever raised. */
   autonomous?: boolean;
+  /** Follow-up inbox generation (spec 007, #444). Omitted means enabled for
+   *  compatibility; the handoff journal runs either way. */
+  generateFollowups?: boolean;
+  /** Attachments from the queued prompt stack (#472), re-encoded from disk by
+   *  `hydrateQueuedInput` at dequeue. Kept separate from `images` because those
+   *  are persisted into `taskImages` on the way through `execute()` — folding
+   *  the stack's (already-persisted) files in there would write duplicate files
+   *  and make the task bubble render the stack's images as its own. In-memory
+   *  only: rebuilt from the record on every hydration, never persisted. */
+  stackedImages?: ContentBlock[];
 }
 
 /**
@@ -125,6 +185,67 @@ export function composeSystemPrompt(...parts: Array<string | undefined>): string
     .join('\n\n---\n\n');
 }
 
+/**
+ * Materialized pasted attachment: the on-disk name/serving-URL pair the
+ * transcript already used, plus the absolute path that lets the agent
+ * operate on the file itself — save it, `cp` it, attach it to a GitHub
+ * issue/PR (#357). `path` is only ever an absolute path under
+ * `.ai/cezar/runs/<runId>-images/` (see `RunManager.persistImage`).
+ */
+/** Inverse of `persistImage`'s extension mapping (#472) — a persisted attachment
+ *  is re-encoded from disk at dequeue and needs its media type back. */
+export function mediaTypeFor(name: string): string {
+  const ext = name.split('.').pop()?.toLowerCase();
+  return ext === 'jpg' ? 'image/jpeg'
+    : ext === 'webp' ? 'image/webp'
+    : ext === 'gif' ? 'image/gif'
+    : 'image/png';
+}
+
+/** Highest `<prefix>-<n>.<ext>` suffix already present in a run's image dir (#472).
+ *  `screenshot-*` and `pasted-*` share one numbering space, so this scans both and
+ *  returns 0 for a missing/empty directory. */
+export function highestImageSeq(dir: string): number {
+  try {
+    return readdirSync(dir).reduce((max, name) => {
+      const m = /^(?:screenshot|pasted)-(\d+)\./.exec(name);
+      return m ? Math.max(max, Number(m[1])) : max;
+    }, 0);
+  } catch {
+    return 0;
+  }
+}
+
+export interface PersistedAttachment {
+  name: string;
+  url: string;
+  path: string;
+}
+
+/**
+ * Plain-text note listing the absolute paths of pasted attachments, appended
+ * to the message that carries them (#357). The base64 image blocks stay in
+ * the message for the model to *view*; this note is what lets it *use* the
+ * files as files — and the only usable reference on backends (codex,
+ * opencode) whose `textOf()` drops image blocks before reaching the model.
+ */
+export function pastedAttachmentsText(attachments: PersistedAttachment[]): string {
+  const list = attachments.map((a) => `- ${a.path}`).join('\n');
+  return (
+    `The user attached ${attachments.length} pasted file${attachments.length > 1 ? 's' : ''}, ` +
+    `also saved on disk at:\n${list}\n` +
+    `When the task involves saving, uploading, attaching, or transforming the pasted content ` +
+    `(e.g. attaching to a GitHub issue/PR, copying into the repo), operate on these files — do ` +
+    `not attempt to reconstruct them from the conversation.`
+  );
+}
+
+/** Same note as `pastedAttachmentsText`, wrapped as a trailing `ContentBlock`
+ *  ready to append to a message's content array. */
+export function pastedAttachmentsNote(attachments: PersistedAttachment[]): ContentBlock {
+  return { type: 'text', text: pastedAttachmentsText(attachments) };
+}
+
 /** Variant letters + the fixed diversification hints (spec 010). A runs the
  *  task verbatim; B/C get one constant sentence each — zero configuration. */
 export const VARIANT_LETTERS = ['A', 'B', 'C'] as const;
@@ -140,9 +261,13 @@ const VARIANT_HINTS: Record<string, string | undefined> = {
  * relay live to the GUI). No GitHub choreography — agent steps and shell
  * checks with bounded retry loops, plus live sessions: the last agent step
  * stays open for follow-ups (`waiting`) until "finish", idle timeout, or
- * cancel. Runs queue behind `maxParallel` slots and each run executes in its
- * own git worktree on a `cez/<id8>` branch (spec 006), autosave-committed
- * every 90 s — the user's working tree is never touched.
+ * cancel. Runs queue behind the workspace-wide `maxParallel` slots (the shared
+ * `WorkspaceSemaphore`, spec 2026-07-20 step 2.5) and each run executes in its
+ * own git worktree on a `cez/<id8>` branch (spec 006), autosave-committed at
+ * turn end and before a draft PR — plus every 90 s when opted in via
+ * CEZ_AUTOSAVE=1 (#471). Each autosave records its trigger in the commit
+ * subject, so the always-on flushes are not mistaken for the opt-in timer.
+ * The user's working tree is never touched.
  */
 export class RunManager {
   private readonly active = new Map<string, ActiveRun>();
@@ -158,7 +283,20 @@ export class RunManager {
   // `waiting ⊆ active` — always cleared together via dropActive().
   private readonly waiting = new Set<string>();
   private readonly pendingJobs = new Map<string, { workflow: WorkflowDef; input: StartRunInput }>();
+  /** Per-run image counter behind `pasted-<n>` / `screenshot-<n>` (#472). Lives on
+   *  the manager rather than the `ActiveRun` so a *queued* run — which has no
+   *  `ActiveRun` at all — can persist attachments. Seeded lazily from disk. */
+  private readonly queuedImageSeq = new Map<string, number>();
+  /** Messages that landed in the dequeue → session-open gap (#472), flushed as
+   *  ordinary follow-up turns the moment the session opens. In-memory only. */
+  private readonly deferredMessages = new Map<string, ContentBlock[][]>();
   private pumping = false;
+  /**
+   * Runs normally isolate in worktrees and may execute in parallel. When that
+   * isolation is unavailable (or explicitly disabled), serialize access to
+   * `repoRoot` so two agents can never edit/revert the same files (#438).
+   */
+  private repoRootTail: Promise<void> = Promise.resolve();
 
   /** `.ai/cezar` — where the per-task handoff files and todos.json live. */
   private readonly dataDir: string;
@@ -167,26 +305,81 @@ export class RunManager {
    *  triggers one pause, not a burst. Cleared in dropActive when the run leaves the registry. */
   private readonly memoryPausing = new Set<string>();
 
+  /** Unsubscribe handle for the constructor's `onUsage` subscription — released
+   *  by dispose() so a torn-down manager stops receiving sampler ticks. */
+  private readonly offUsage: () => void;
+
+  /** The workspace-wide parallel-cap semaphore + cached resource config
+   *  (spec 2026-07-20, step 2.5). Boot constructs ONE and every manager shares
+   *  it; the private fallback keeps single-manager callers and tests working. */
+  private readonly semaphore: WorkspaceSemaphore;
+
+  /** Unregister handle for this manager's semaphore membership — released by
+   *  dispose() so a torn-down project stops counting against the cap. */
+  private readonly offSemaphore: () => void;
+
   constructor(
     private readonly store: RunStore,
     private readonly repoRoot: string,
+    options: { semaphore?: WorkspaceSemaphore } = {},
   ) {
     this.dataDir = join(repoRoot, '.ai/cezar');
+    this.semaphore = options.semaphore ?? new WorkspaceSemaphore();
+    this.offSemaphore = this.semaphore.register({
+      busySlots: () => this.busySlots(),
+      pump: () => void this.pump(),
+    });
     // Memory guard (#memory-guard): the shared process-tree sampler already ticks ~every 2 s for
     // the runs table; piggyback on it to enforce the per-task memory ceiling.
-    onUsage((snapshot) => void this.enforceMemoryLimit(snapshot));
+    this.offUsage = onUsage((snapshot) => void this.enforceMemoryLimit(snapshot));
   }
 
   /**
-   * Pause any active run whose whole process tree exceeds `config.memoryLimitMb`, freeing its
-   * slot so the queue advances (#memory-guard). "Pause" closes the session — freeing the tree's
+   * Release everything this manager owns without touching run records
+   * (multi-project workspace, spec 2026-07-20: a removed project's context is
+   * torn down while the process lives on). Unsubscribes the shared usage
+   * sampler — before dispose() existed that subscription lived for the whole
+   * process — clears every per-run idle/autosave timer, releases any held
+   * repo-root locks, and empties the queued state so nothing fires later.
+   * Live sessions are NOT ended here: run lifecycle stays the caller's policy;
+   * dispose only guarantees the manager makes no further moves on its own.
+   */
+  dispose(): void {
+    this.offUsage();
+    this.offSemaphore();
+    for (const state of this.active.values()) {
+      this.clearIdleTimer(state);
+      this.clearAutosaveTimer(state);
+      state.releaseRepoRoot?.();
+      state.releaseRepoRoot = undefined;
+    }
+    this.active.clear();
+    this.waiting.clear();
+    this.starting.clear();
+    this.queue.length = 0;
+    this.pendingJobs.clear();
+    this.memoryPausing.clear();
+    this.lastNamerKey.clear();
+  }
+
+  /**
+   * Pause any active run whose whole process tree exceeds the WORKSPACE
+   * `resources.memoryLimitMb`, freeing its slot so the queue advances
+   * (#memory-guard). "Pause" closes the session — freeing the tree's
    * memory — and leaves the run resumable via Continue; a loud warning explains why. No-op when
    * no limit is set or the sampler has no data (e.g. `ps`/PowerShell unavailable).
    */
   private async enforceMemoryLimit(snapshot: Record<string, ProcessUsage>): Promise<void> {
-    const runIds = Object.keys(snapshot);
+    // The sampler is module-global (one `ps` for the whole process), so with
+    // multiple projects a snapshot carries EVERY project's runs. Act only on
+    // rows this manager owns (multi-project spec, step 2.4).
+    const runIds = Object.keys(snapshot).filter((runId) => this.active.has(runId));
     if (runIds.length === 0) return;
-    const limitMb = (await loadConfig(this.repoRoot)).memoryLimitMb;
+    // Workspace limit from the shared semaphore's in-memory cache (step 2.5:
+    // refreshed at boot and on PUT /api/workspace/config — never N per-tick
+    // file reads across N projects). Legacy per-repo `memoryLimitMb` keys are
+    // ignored post-migration.
+    const limitMb = this.semaphore.memoryLimitMb();
     if (!limitMb || limitMb <= 0) return;
     const limitBytes = limitMb * 1024 * 1024;
     for (const runId of runIds) {
@@ -214,12 +407,19 @@ export class RunManager {
   }
 
   /** Env the spawned claude gets so the agent can find its handoff file and
-   *  the global inbox (spec 007). */
-  private agentEnv(runId: string): Record<string, string> {
+   *  the global inbox (spec 007; the inbox only when the run opted in).
+   *
+   *  `CEZ_TODOS_FILE` is set to `''` rather than omitted when follow-ups are
+   *  off: runners spawn with `{ ...process.env, ...spec.env }`, so omitting the
+   *  key would let a value inherited from *this* process through — a nested
+   *  cezar (an agent running `cez serve`/`cez run`/the test suite) would then
+   *  write follow-ups into the parent's inbox despite the opt-out. Empty is the
+   *  established "absent" spelling — consumers guard with `if (todosFile)`. */
+  private agentEnv(runId: string, generateFollowups = true): Record<string, string> {
     return {
       CEZ_HANDOFF_FILE: handoffPath(this.dataDir, runId),
-      CEZ_TODOS_FILE: todosPath(this.dataDir),
       CEZ_TASK_ID: runId,
+      CEZ_TODOS_FILE: generateFollowups ? todosPath(this.dataDir) : '',
     };
   }
 
@@ -229,11 +429,20 @@ export class RunManager {
     group?: { groupId: string; variant: string },
   ): RunRecord {
     const run = this.store.createRun({
-      title: makeTitle(input.task) + (group ? ` (${group.variant})` : ''),
+      title: makeRunTitle(input.task, workflow) + (group ? ` (${group.variant})` : ''),
       workflow: workflow.name,
       task: input.task,
       model: input.model,
       runner: input.runner,
+      // The global inbox is the ceiling on the per-run flag (#471). Enforced here rather than
+      // at the HTTP route because `cezar run`, the inbox's own "▶ Run" and variants all reach
+      // startRun directly — a route-level gate would leave those writing todos.json.
+      generateFollowups: followupsEnabled() ? input.generateFollowups : false,
+      // Persist autonomy on the record (#489) so the terminal review gate
+      // (`settleSuccess`) and the group-pick winner-park can honor it — mid-run
+      // auto-nudge reads `input.autonomous` (`execute`), but the record is the
+      // only source those after-the-fact consumers have.
+      autonomous: input.autonomous === true,
       groupId: group?.groupId,
       variant: group?.variant,
       steps: workflow.steps.map((s) => ({ id: s.id, name: s.name ?? s.id, kind: stepKind(s) })),
@@ -241,6 +450,20 @@ export class RunManager {
     // Persist the full definition so a queued run survives a restart (#367) —
     // ad-hoc "(planned)" chains exist nowhere else to re-resolve from.
     this.store.updateRun(run.id, { workflowDef: workflow as unknown as Record<string, unknown> });
+    // Step-0 reference extraction (task auto-naming spec): the regex layer's
+    // numbers persist immediately; the namer may add the kind it verified later.
+    const skillHint = workflow.steps.find((s) => stepKind(s) === 'agent' && s.skill)?.skill?.trim();
+    const refs = refineTaskRefs(extractTaskRefs(input.task), skillHint);
+    if (refs.prNumber !== undefined || refs.issueNumber !== undefined) {
+      this.store.updateRun(run.id, {
+        ...(refs.prNumber !== undefined ? { prNumber: refs.prNumber } : {}),
+        ...(refs.issueNumber !== undefined ? { issueNumber: refs.issueNumber } : {}),
+      });
+    }
+    // Fire-and-forget LLM naming (task auto-naming spec): the heuristic title
+    // above shows instantly; the namer's short title replaces it when (and if)
+    // the model answers. Never awaited, never fails the run.
+    void this.autoNameRun(run.id, skillHint, input.task);
     this.pendingJobs.set(run.id, { workflow, input });
     this.queue.push(run.id);
     void this.pump();
@@ -266,8 +489,23 @@ export class RunManager {
   }
 
   /**
-   * Start queued runs while parallel slots are free. `maxParallel` comes from
-   * `.ai/cezar/config.json` (default 2); a non-git directory degrades to 1
+   * Slots this manager holds against the workspace-wide cap. `waiting` runs
+   * don't hold a slot (#347): an idle claude process costs memory but no
+   * tokens, queued work progressing matters more, and the idle timeout already
+   * bounds how long a session can sit open. Because the exemption lives HERE —
+   * in the count, not in any acquire path — a message into a `waiting` run
+   * (sendMessage) resumes it immediately even when that momentarily exceeds
+   * `maxParallel`, including when other projects saturate the cap.
+   */
+  private busySlots(): number {
+    return this.active.size + this.starting.size - this.waiting.size;
+  }
+
+  /**
+   * Start queued runs while parallel slots are free. The cap is the WORKSPACE
+   * `resources.maxParallel` (default 2), cached in the shared semaphore and
+   * counted across every manager (spec 2026-07-20, step 2.5) — legacy per-repo
+   * `maxParallel` keys are ignored. A non-git directory degrades to 1
    * sequential run in the repo root (spec 006 degradation rule).
    */
   private async pump(): Promise<void> {
@@ -275,19 +513,24 @@ export class RunManager {
     this.pumping = true;
     try {
       const repo = await getRepoInfo(this.repoRoot);
-      const maxParallel = repo ? (await loadConfig(this.repoRoot)).maxParallel : 1;
-      // `waiting` runs don't hold a slot (#347). A message into a waiting run
-      // resumes it even when that momentarily exceeds maxParallel — resumed
-      // conversations must never be blocked by the queue.
-      const busy = () => this.active.size + this.starting.size - this.waiting.size;
-      while (this.queue.length > 0 && busy() < maxParallel) {
+      const maxParallel = this.semaphore.maxParallel();
+      // `waiting` runs don't hold a slot (#347) — see busySlots(). The check
+      // below is the only slot gate: resumes never pass through it.
+      const capacity = () =>
+        this.semaphore.busy() < maxParallel && (repo !== null || this.busySlots() < 1);
+      while (this.queue.length > 0 && capacity()) {
         const runId = this.queue.shift();
         if (!runId) break;
         const job = this.pendingJobs.get(runId);
         this.pendingJobs.delete(runId);
         if (!job) continue;
         this.starting.add(runId);
-        void this.execute(runId, job.workflow, job.input).catch((err: unknown) => {
+        // Rebuild the prompt from the store at the last instant (#472), so an edit
+        // or a stacked message that landed while the run waited is honored. Entered
+        // in the same synchronous tick as the `pendingJobs.delete` above, so no
+        // handler can observe a half-dequeued run.
+        const input = this.hydrateQueuedInput(runId, job.input);
+        void this.execute(runId, job.workflow, input).catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err);
           this.store.updateRun(runId, {
             status: 'failed',
@@ -329,9 +572,32 @@ export class RunManager {
       if (run.status === 'queued') {
         const workflow = await this.reviveWorkflow(run);
         if (workflow) {
+          // Re-apply the inbox ceiling (#471). `execute()` gates again at spawn time, so the
+          // agent is safe either way — but a run queued while the inbox was on and recovered
+          // after it was switched off would otherwise keep echoing `generateFollowups: true`
+          // on a run that demonstrably produced none. Normalize the record, the way startRun
+          // does, so the stored answer matches what actually happens.
+          const generateFollowups = followupsEnabled() ? run.generateFollowups : false;
+          if (generateFollowups !== run.generateFollowups) {
+            this.store.updateRun(run.id, { generateFollowups });
+          }
           this.pendingJobs.set(run.id, {
             workflow,
-            input: { task: run.task, model: run.model, runner: run.runner },
+            // Folded through the same helper `pump()` uses (#472) so a restart
+            // carries the stack. Idempotent: hydration always composes from
+            // `run.task` + the stack, never from an already-folded `input.task`,
+            // so re-hydrating at dequeue yields the same string, not a doubled one.
+            input: this.hydrateQueuedInput(run.id, {
+              task: run.task,
+              model: run.model,
+              runner: run.runner,
+              generateFollowups,
+              // Re-thread autonomy (#489): the rebuilt input feeds `execute`,
+              // whose mid-run auto-nudge reads `input.autonomous`. Without this a
+              // recovered queued autonomous run would run non-autonomously (no
+              // auto-nudge) and later wrongly park at `review`.
+              autonomous: run.autonomous,
+            }),
           });
           this.queue.push(run.id);
           this.store.appendEvent(run.id, { type: 'lifecycle', message: 'cezar restarted — task re-queued' });
@@ -375,10 +641,9 @@ export class RunManager {
         finishedAt,
         currentStepId: undefined,
       });
-      const resumed = this.continueRun(
-        run.id,
-        'The cezar process restarted while you were working on this task. Read the handoff file (CEZ_HANDOFF_FILE) to recover context, then continue the task from where you left off.',
-      );
+      const resumed = this.continueRun(run.id, {
+        text: 'The cezar process restarted while you were working on this task. Read the handoff file (CEZ_HANDOFF_FILE) to recover context, then continue the task from where you left off.',
+      });
       this.store.appendEvent(run.id, {
         type: 'lifecycle',
         message: resumed.ok
@@ -401,9 +666,89 @@ export class RunManager {
 
   /** Remove a run from the live registries — keeps `waiting ⊆ active`. */
   private dropActive(runId: string): void {
+    const state = this.active.get(runId);
+    state?.releaseRepoRoot?.();
+    if (state) state.releaseRepoRoot = undefined;
     this.waiting.delete(runId);
     this.active.delete(runId);
     this.memoryPausing.delete(runId);
+    this.lastNamerKey.delete(runId);
+    // A run leaving the active registry is a terminal transition (done/review/
+    // failed/cancelled) — the one moment the finished-worktree count can grow.
+    // Enforce count-based retention (#483) here so a single hook covers every
+    // terminal path. Fire-and-forget: retention must never delay or throw into
+    // the lifecycle.
+    void this.enforceRetention();
+  }
+
+  /** Reclaim finished worktrees beyond the keep-limit (#483) — directory only,
+   *  `cez/<id8>` branch kept. Best-effort; a failure never affects run
+   *  lifecycle. `review`/live runs are excluded by the selector. */
+  private async enforceRetention(): Promise<void> {
+    try {
+      const keep = await resolveWorktreeRetention(this.repoRoot);
+      await reclaimWorktrees(this.repoRoot, this.store, keep);
+    } catch {
+      // retention is best-effort; swallow so terminal transitions never break.
+    }
+  }
+
+  /** Last live-refresh namer inputs per run — unchanged inputs skip the call. */
+  private lastNamerKey = new Map<string, string>();
+
+  /**
+   * Acquire the one-at-a-time lease for runs executing in `repoRoot`.
+   *
+   * A lease waiter is idle, so it parks in `waiting` and gives its
+   * `maxParallel` slot back (the #347 rule): isolated worktrees keep using
+   * every configured slot while root runs line up. The store status stays
+   * `running` — only the queue's busy count changes, so the GUI never shows a
+   * lease-blocked run as awaiting user input.
+   *
+   * The lease is held for the run's whole lifetime, including the idle
+   * `waiting` parks between agent turns. A parked session is still live and
+   * writes to the working tree the moment it resumes, so handing the tree to
+   * another run there would reintroduce the concurrent-edit bug (#438) this
+   * lease exists to prevent.
+   *
+   * Returns false when the run was cancelled while waiting: the lease was
+   * never granted and the caller must not touch the working tree.
+   */
+  private async acquireRepoRoot(runId: string, state: ActiveRun): Promise<boolean> {
+    // `cancel()` can land between the run going `running` and reaching here,
+    // while `interrupt` is still the default no-op — never enter the chain.
+    if (state.cancelled) return false;
+    const previous = this.repoRootTail;
+    let release: () => void = () => undefined;
+    this.repoRootTail = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    // Until `previous` resolves this run does not own the tree yet, so a drop
+    // during the wait must not hand the tree to the next waiter — chain our
+    // release behind `previous` instead of resolving the tail early.
+    state.releaseRepoRoot = () => {
+      void previous.then(release);
+    };
+    let abort: () => void = () => undefined;
+    const cancelled = new Promise<void>((resolve) => {
+      abort = resolve;
+    });
+    const parked = state.interrupt;
+    state.interrupt = () => {
+      parked();
+      abort();
+    };
+    this.waiting.add(runId);
+    void this.pump();
+    try {
+      await Promise.race([previous, cancelled]);
+    } finally {
+      state.interrupt = parked;
+      this.waiting.delete(runId);
+    }
+    if (state.cancelled) return false;
+    state.releaseRepoRoot = release;
+    return true;
   }
 
   cancel(runId: string): boolean {
@@ -429,6 +774,233 @@ export class RunManager {
   }
 
   /**
+   * Fold a queued run's persisted prompt — `run.task` plus everything stacked
+   * onto it (#472) — into the job input that is about to execute.
+   *
+   * Called from `pump()` immediately before `execute()`, which makes the RECORD
+   * the single source of truth for a queued run's prompt. Before this, the
+   * executing copy lived in `pendingJobs` (memory) while the record held a
+   * second one, so an edit that PATCHed the record silently did nothing until a
+   * restart. `recover()` rebuilds through the same helper, so both paths agree.
+   *
+   * **Read-only, and that is load-bearing.** It composes into the in-memory
+   * `input` and never writes the folded string back to `RunRecord.task`; the
+   * task and its stack stay separate on disk for the life of the run. Writing
+   * back would re-append the whole stack on every recovery and compound without
+   * bound — asserted directly by a test.
+   */
+  private hydrateQueuedInput(runId: string, input: StartRunInput): StartRunInput {
+    const run = this.store.getRun(runId);
+    if (!run) return input;
+    const stack = run.queuedMessages ?? [];
+    if (!stack.length) return { ...input, task: run.task };
+
+    const task = [run.task, ...stack.map((m) => m.text)]
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0)
+      .join('\n\n');
+
+    const stackedImages: ContentBlock[] = [];
+    for (const url of stack.flatMap((m) => m.images ?? [])) {
+      const name = url.split('/').pop();
+      if (!name || name.includes('..') || name.includes('/') || name.includes('\\')) continue;
+      try {
+        const data = readFileSync(join(this.dataDir, 'runs', `${runId}-images`, name));
+        stackedImages.push({
+          type: 'image',
+          source: { type: 'base64', media_type: mediaTypeFor(name), data: data.toString('base64') },
+        });
+      } catch {
+        // Degrade, never fail the boot (AGENTS.md): the user deleted `.ai/cezar/`
+        // or the file is unreadable — start with the text and say which image went.
+        this.store.appendEvent(runId, {
+          type: 'note',
+          message: `queued attachment ${name} could not be read — starting without it`,
+        });
+      }
+    }
+
+    return { ...input, task, ...(stackedImages.length ? { stackedImages } : {}) };
+  }
+
+  /**
+   * Still waiting for a slot? Checked against the engine's own queue rather than
+   * the record's `status` (#472): the record is written by `execute()` a tick
+   * after `pump()` dequeues, so a status read can see `queued` for a run that has
+   * already started. `pendingJobs` is deleted synchronously at dequeue, so it is
+   * the authoritative answer for "can this prompt still be amended".
+   */
+  private isQueued(runId: string): boolean {
+    return this.pendingJobs.has(runId);
+  }
+
+  /** Split `ContentBlock[]` into the persisted shape a stacked message holds. */
+  private toQueuedMessage(runId: string, content: ContentBlock[]): QueuedMessage {
+    const text = content
+      .filter((b): b is Extract<ContentBlock, { type: 'text' }> => b.type === 'text')
+      .map((b) => b.text)
+      .join('\n');
+    const images = content
+      .filter((b): b is Extract<ContentBlock, { type: 'image' }> => b.type === 'image')
+      .map((b) => this.persistImage(runId, b.source.media_type, b.source.data, 'pasted'))
+      .filter((saved): saved is PersistedAttachment => saved !== null)
+      .map((saved) => saved.url);
+    return {
+      id: randomUUID(),
+      text,
+      ...(images.length ? { images } : {}),
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Append a prompt message onto a still-queued run (#472). Returns the stored
+   * entry, or null when the run has already started — the caller then falls
+   * through to `deferMessage`.
+   */
+  enqueueMessage(runId: string, content: ContentBlock[]): QueuedMessage | null {
+    if (!this.isQueued(runId)) return null;
+    const run = this.store.getRun(runId);
+    if (!run) return null;
+    const message = this.toQueuedMessage(runId, content);
+    this.store.updateRun(runId, { queuedMessages: [...(run.queuedMessages ?? []), message] });
+    return message;
+  }
+
+  /** Edit a stacked message in place. Omitted fields retain their current value. */
+  editQueuedMessage(
+    runId: string,
+    msgId: string,
+    edit: { text?: string; images?: ContentBlock[] },
+  ): QueuedMessage | null {
+    if (!this.isQueued(runId)) return null;
+    const run = this.store.getRun(runId);
+    const stack = run?.queuedMessages;
+    if (!stack) return null;
+    const at = stack.findIndex((m) => m.id === msgId);
+    if (at < 0) return null;
+    const current = stack[at]!;
+    const replacementImages = edit.images === undefined
+      ? current.images
+      : this.toQueuedMessage(runId, edit.images).images;
+    const replacement: QueuedMessage = {
+      id: msgId,
+      text: edit.text ?? current.text,
+      ...(replacementImages?.length ? { images: replacementImages } : {}),
+      createdAt: current.createdAt,
+    };
+    const next = [...stack];
+    next[at] = replacement;
+    this.store.updateRun(runId, { queuedMessages: next });
+    // Images the edit dropped are now orphans.
+    this.dropOrphanImages(runId, stack[at]!.images ?? [], next);
+    return replacement;
+  }
+
+  /** Remove a stacked message and its now-orphaned attachments. */
+  removeQueuedMessage(runId: string, msgId: string): boolean {
+    if (!this.isQueued(runId)) return false;
+    const run = this.store.getRun(runId);
+    const stack = run?.queuedMessages;
+    if (!stack) return false;
+    const target = stack.find((m) => m.id === msgId);
+    if (!target) return false;
+    const next = stack.filter((m) => m.id !== msgId);
+    this.store.updateRun(runId, { queuedMessages: next });
+    this.dropOrphanImages(runId, target.images ?? [], next);
+    return true;
+  }
+
+  /**
+   * Delete image files no longer referenced by anything (#472). Best effort — a
+   * leftover file is harmless and goes with the run. Never touches a URL still
+   * referenced by another stacked entry or by the initial prompt's `taskImages`.
+   */
+  private dropOrphanImages(runId: string, candidates: string[], stack: QueuedMessage[]): void {
+    if (!candidates.length) return;
+    const run = this.store.getRun(runId);
+    const referenced = new Set([
+      ...(run?.taskImages ?? []),
+      ...stack.flatMap((m) => m.images ?? []),
+    ]);
+    for (const url of candidates) {
+      if (referenced.has(url)) continue;
+      const name = url.split('/').pop();
+      // Defend the join against a crafted URL: only a bare file name may be deleted.
+      if (!name || name.includes('..') || name.includes('/') || name.includes('\\')) continue;
+      try {
+        rmSync(join(this.dataDir, 'runs', `${runId}-images`, name), { force: true });
+      } catch {
+        /* best effort */
+      }
+    }
+  }
+
+  /**
+   * Edit the initial prompt of a still-queued run (#472). Re-derives the
+   * heuristic title and the PR/issue chips, but never re-runs the LLM namer —
+   * it already fired at creation and a second model call per edit is unjustified.
+   */
+  editTask(runId: string, task: string): boolean {
+    if (!this.isQueued(runId)) return false;
+    const run = this.store.getRun(runId);
+    if (!run) return false;
+    const workflow = this.pendingJobs.get(runId)?.workflow;
+    const skillHint = workflow?.steps.find((s) => stepKind(s) === 'agent' && s.skill)?.skill?.trim();
+    const refs = refineTaskRefs(extractTaskRefs(task), skillHint);
+    // Hand-edited titles always win (#389): `user` beats the heuristic, and a
+    // `marker` title the agent declared beats it too.
+    const keepTitle = run.titleOrigin === 'user' || run.titleOrigin === 'marker';
+    this.store.updateRun(runId, {
+      task,
+      ...(keepTitle || !workflow ? {} : { title: makeRunTitle(task, workflow) }),
+      ...(refs.prNumber !== undefined ? { prNumber: refs.prNumber } : {}),
+      ...(refs.issueNumber !== undefined ? { issueNumber: refs.issueNumber } : {}),
+    });
+    return true;
+  }
+
+  /**
+   * Buffer a message that arrived in the gap between dequeue and session-open
+   * (#472). `pump()` has already folded the stack and `execute()` is spawning the
+   * backend, so there is nothing left to amend and no session to deliver into —
+   * without this rung the message would 409, a genuinely dropped message in the
+   * feature built to stop dropping them. Flushed as an ordinary follow-up turn
+   * the instant the session opens; dropped if the run never starts, which the
+   * existing error path already surfaces.
+   *
+   * The buffer lives on the manager rather than the `ActiveRun` because the
+   * `ActiveRun` does not exist yet for part of this window.
+   */
+  deferMessage(runId: string, content: ContentBlock[]): boolean {
+    // The window spans two sub-states: `starting` (no `ActiveRun` yet) and the
+    // longer stretch where the `ActiveRun` exists but the backend is still being
+    // spawned. `execute()` deletes the run from `starting` as soon as it builds
+    // the state — seconds before the session opens — so checking `starting`
+    // alone would reopen exactly the drop this rung exists to close.
+    const state = this.active.get(runId);
+    const startingUp = this.starting.has(runId) || (state !== undefined && !state.sessionEverOpened && !state.cancelled);
+    if (!startingUp) return false;
+    const pending = this.deferredMessages.get(runId) ?? [];
+    pending.push(content);
+    this.deferredMessages.set(runId, pending);
+    return true;
+  }
+
+  /** Deliver anything `deferMessage` buffered, once the session is live. */
+  private flushDeferred(runId: string): void {
+    const pending = this.deferredMessages.get(runId);
+    if (!pending?.length) return;
+    // Re-buffer whatever the session refused rather than dropping it. `sendMessage`
+    // answers false when the session is not open yet — and silently losing a message
+    // here would be precisely the failure `deferMessage` exists to prevent. Anything
+    // left over is retried by the next session that opens on this run.
+    const unsent = pending.filter((content) => !this.sendMessage(runId, content));
+    if (unsent.length) this.deferredMessages.set(runId, unsent);
+    else this.deferredMessages.delete(runId);
+  }
+
+  /**
    * Deliver a user message into the run's live claude session (mid-turn or
    * while `waiting`). Returns false when there is no open session — the GUI
    * then offers "Continue" instead.
@@ -442,12 +1014,13 @@ export class RunManager {
       .map((b) => b.text)
       .join('\n');
     // Persist the attached images so the thread can render them (not just count them) — the same
-    // on-disk store + `/images/` route the agent's own screenshots use.
-    const images = content
+    // on-disk store + `/images/` route the agent's own screenshots use. `pasted` prefix marks
+    // these as user attachments (vs. agent tool screenshots) on disk (#357).
+    const persisted = content
       .filter((b): b is Extract<ContentBlock, { type: 'image' }> => b.type === 'image')
-      .map((b) => this.persistImage(runId, state, b.source.media_type, b.source.data))
-      .filter((saved): saved is { name: string; url: string } => saved !== null)
-      .map((saved) => saved.url);
+      .map((b) => this.persistImage(runId, b.source.media_type, b.source.data, 'pasted'))
+      .filter((saved): saved is PersistedAttachment => saved !== null);
+    const images = persisted.map((saved) => saved.url);
     this.store.appendEvent(runId, {
       type: 'user-message',
       stepId: state.currentStepId,
@@ -456,11 +1029,18 @@ export class RunManager {
       images,
     });
 
-    const delivered = state.session.sendMessage(content);
+    // Tell the agent where the pasted files live on disk (#357): the base64 blocks below still
+    // ride along so the model can *view* them, but a real path is what lets it *operate* on them
+    // (save, `cp`, attach to a GitHub issue/PR) — and it's the only usable reference on backends
+    // (codex, opencode) that drop image blocks entirely before reaching the model.
+    const deliverable = persisted.length ? [...content, pastedAttachmentsNote(persisted)] : content;
+    const delivered = state.session.sendMessage(deliverable);
     if (delivered) {
       this.clearIdleTimer(state);
       this.waiting.delete(runId); // resumed — the run counts against slots again
-      this.store.updateRun(runId, { status: 'running' });
+      // Clear any `monitoring` activity — the agent is actively working again
+      // (spec 2026-07-18-subagent-monitoring-status, #490).
+      this.store.updateRun(runId, { status: 'running', activity: undefined });
       if (state.currentStepId) {
         this.store.updateStep(runId, state.currentStepId, { status: 'running' });
       }
@@ -496,7 +1076,10 @@ export class RunManager {
    * behaves exactly like an interactive step: `waiting` after each turn,
    * messages via sendMessage, closed by finish/idle/cancel.
    */
-  continueRun(runId: string, text?: string): { ok: boolean; error?: string } {
+  continueRun(
+    runId: string,
+    opts: { text?: string; runner?: RunnerId; model?: string } = {},
+  ): { ok: boolean; error?: string } {
     if (this.active.has(runId)) return { ok: false, error: 'run is still active' };
     const run = this.store.getRun(runId);
     if (!run) return { ok: false, error: 'not found' };
@@ -504,13 +1087,59 @@ export class RunManager {
     if (!['done', 'failed', 'cancelled', 'review'].includes(run.status)) {
       return { ok: false, error: `cannot continue a ${run.status} run` };
     }
-    const sessionId = [...run.steps].reverse().find((s) => s.sessionId)?.sessionId;
-    if (!sessionId) return { ok: false, error: 'no agent session to resume' };
+    const sessionStep = [...run.steps].reverse().find((s) => s.sessionId);
+    if (!sessionStep?.sessionId) return { ok: false, error: 'no agent session to resume' };
+    const targetRunner = opts.runner ?? run.runner ?? 'claude';
+    // Session ids are provider-owned opaque values. New records carry explicit
+    // affinity; for legacy records, the run's current runner is the conservative
+    // owner until a continuation emits a new, attributed session id (#562).
+    const sessionBackend = sessionStep.backend ?? run.runner ?? 'claude';
+    const resume = sessionBackend === targetRunner;
+
+    // Follow-up runner/model override (#401): the composer lets the user pick which backend and
+    // model handle this continuation. Omitted → the run's current backend/model is kept
+    // (backward compat). A provided choice is persisted BEFORE scheduling, so it becomes the
+    // run's current backend — `runContinuation` reads it off the record, later continuations
+    // default to it, and the header reflects the active engine. An empty model ('') clears the
+    // pin, letting the runner pick the model (auto).
+    if (opts.runner !== undefined || opts.model !== undefined) {
+      // Guard the pairing before persisting anything: the model override applies to the runner
+      // this continuation will actually use (`opts.runner ?? record.runner ?? 'claude'` — the
+      // same resolution `runContinuation` reads off the record). A model that is recognizably
+      // another runner's preset would corrupt the run; free-form/custom ids pass untouched.
+      if (opts.model && modelConflictsWithRunner(opts.model, targetRunner)) {
+        return { ok: false, error: `model '${opts.model}' is not a ${targetRunner} model` };
+      }
+      // A runner switch that carries NO explicit model must not leave the previous backend's pin
+      // on the record: the guard above only sees `opts.model`, so without this an inherited
+      // `opus` would survive a switch to codex and `runContinuation` would hand it to the codex
+      // runner. Clearing (not rejecting) is right — the pin belonged to the old backend and is
+      // meaningless for the new one, which is exactly what the composer already displays (auto).
+      // Only a recognizably foreign preset is cleared; a free-form/custom id is left alone.
+      const inheritedPinIsForeign =
+        opts.model === undefined &&
+        run.model !== undefined &&
+        modelConflictsWithRunner(run.model, targetRunner);
+      this.store.updateRun(runId, {
+        ...(opts.runner !== undefined ? { runner: opts.runner } : {}),
+        ...(opts.model !== undefined
+          ? { model: opts.model === '' ? undefined : opts.model }
+          : inheritedPinIsForeign
+            ? { model: undefined }
+            : {}),
+      });
+    }
 
     const continuations = run.steps.filter((s) => s.id.startsWith('continue-')).length;
     const stepId = `continue-${continuations + 1}`;
     this.store.addStep(runId, { id: stepId, name: 'Continue', kind: 'agent' });
-    void this.runContinuation(runId, stepId, sessionId, text?.trim() || 'Continue.').catch(
+    void this.runContinuation(
+      runId,
+      stepId,
+      resume ? sessionStep.sessionId : undefined,
+      targetRunner,
+      opts.text?.trim() || 'Continue.',
+    ).catch(
       (err: unknown) => {
         const message = err instanceof Error ? err.message : String(err);
         this.store.updateRun(runId, {
@@ -528,18 +1157,45 @@ export class RunManager {
   private async runContinuation(
     runId: string,
     stepId: string,
-    sessionId: string,
+    sessionId: string | undefined,
+    backend: RunnerId,
     prompt: string,
   ): Promise<void> {
     // Continuation runs in the task's worktree when it still exists (spec
     // 006) — the resumed session sees exactly what the original run left.
+    // Retention (#483) may have reclaimed this run's worktree directory while
+    // keeping its branch and worktreePath. Re-materialize it on resume and clear
+    // the stamp so the session regains its isolated tree and the run is eligible
+    // for retention again — otherwise it keeps a dir on disk while staying
+    // invisible to the enforcer forever. Best-effort; falls back to repoRoot.
+    await rematerializeReclaimedWorktree(this.repoRoot, this.store, runId);
     const record = this.store.getRun(runId);
+    // The env is a live ceiling: a run created while the inbox was on must not keep writing
+    // follow-ups after it is switched off.
+    const generateFollowups = followupsEnabled() && record?.generateFollowups !== false;
     const cwd =
       record?.worktreePath && existsSync(record.worktreePath)
         ? record.worktreePath
         : this.repoRoot;
     const state: ActiveRun = { cancelled: false, interrupt: () => undefined, cwd };
     this.active.set(runId, state);
+    if (state.cwd === this.repoRoot) {
+      this.store.appendEvent(runId, {
+        type: 'note',
+        message: 'waiting for exclusive access to the repository working tree',
+      });
+      if (!(await this.acquireRepoRoot(runId, state))) {
+        this.store.updateRun(runId, {
+          status: 'cancelled',
+          finishedAt: new Date().toISOString(),
+          currentStepId: undefined,
+        });
+        this.store.appendEvent(runId, { type: 'lifecycle', message: 'run cancelled' });
+        this.dropActive(runId);
+        void this.pump();
+        return;
+      }
+    }
     this.armAutosave(state);
     if (record) seedHandoffFile(this.dataDir, record); // idempotent — normally already there
 
@@ -548,12 +1204,14 @@ export class RunManager {
       error: undefined,
       finishedAt: undefined,
       currentStepId: stepId,
+      activity: undefined, // resuming a monitoring run — it's actively working again (#490)
     });
     this.store.updateStep(runId, stepId, {
       status: 'running',
       iterations: 1,
       startedAt: new Date().toISOString(),
       sessionId,
+      backend,
     });
     this.store.appendEvent(runId, { type: 'step-start', stepId, name: 'Continue', kind: 'agent', iteration: 1 });
     this.store.appendEvent(runId, { type: 'user-message', stepId, text: prompt, imageCount: 0 });
@@ -563,19 +1221,19 @@ export class RunManager {
     const sink = this.makeUiSink(runId, stepId);
     const onEvent = (event: AgentEvent) => {
       if (event.type === 'image') {
-        const saved = this.persistImage(runId, state, event.mediaType, event.data);
+        const saved = this.persistImage(runId, event.mediaType, event.data);
         if (saved) this.store.appendEvent(runId, { type: 'image', stepId, ...saved });
         return;
       }
       if (event.type === 'text') {
         turnText += event.text;
-        const text = stripDoneMarker(event.text);
+        const text = stripAskMarker(stripTaskMarkers(stripMonitoringMarker(stripDoneMarker(event.text))));
         if (text) this.store.appendEvent(runId, { type: 'text', text, stepId });
         return;
       }
       this.store.appendEvent(runId, { ...event, stepId });
       if (event.type === 'session') {
-        this.store.updateStep(runId, stepId, { sessionId: event.sessionId });
+        this.store.updateStep(runId, stepId, { sessionId: event.sessionId, backend });
       }
       if (event.type === 'token-usage') {
         this.store.updateStep(runId, stepId, { tokensUsed: event.tokensUsed });
@@ -592,6 +1250,11 @@ export class RunManager {
         void this.recordTurnEnd(runId, turnText); // titleSummary + diffStat (#389)
         const sessionOpen = !state.cancelled && state.session?.open;
         const done = sessionOpen && DONE_MARKER_RE.test(turnText.trimEnd());
+        // `CEZ:ASK` → the user is genuinely blocked; wins over `CEZ:MONITORING`
+        // (a pending question is always attention), loses to `CEZ:DONE` (#473).
+        const ask = sessionOpen && !done ? parseAskMarker(turnText) : null;
+        const monitoring =
+          sessionOpen && !done && !ask && MONITORING_MARKER_RE.test(turnText.trimEnd());
         turnText = '';
         if (done) {
           // Goal achieved (agent contract, #347) — same as in runAgentStep.
@@ -618,37 +1281,97 @@ export class RunManager {
               return true;
             })();
           if (!autoContinued) {
-            this.store.updateRun(runId, { status: 'waiting' });
-            this.store.updateStep(runId, stepId, { status: 'waiting' });
+            // `CEZ:ASK` → park `waiting` (attention) AND surface the structured
+            // question as an ask card (#473). `CEZ:MONITORING` → non-attention
+            // `running`/`activity:'monitoring'` (#490). Both share the waiting
+            // lifecycle (free the slot, keep the idle timer); the autonomous
+            // nudge above still wins over either.
+            if (ask) emitAskRequested(sink, ask);
+            if (monitoring) {
+              this.store.updateRun(runId, { status: 'running', activity: 'monitoring' });
+              this.store.updateStep(runId, stepId, { status: 'running' });
+            } else {
+              this.store.updateRun(runId, { status: 'waiting', activity: undefined });
+              this.store.updateStep(runId, stepId, { status: 'waiting' });
+            }
             this.waiting.add(runId);
             this.armIdleTimer(runId, state);
             void this.pump();
           }
         }
-        appendHandoffHeartbeat(this.dataDir, runId, `turn complete — status=${sessionOpen ? 'waiting' : 'running'}`);
+        appendHandoffHeartbeat(
+          this.dataDir,
+          runId,
+          `turn complete — status=${monitoring ? 'monitoring' : sessionOpen ? 'waiting' : 'running'}`,
+        );
       }
     };
 
-    const runner = createRunner(record?.runner ?? 'claude');
+    // Backend + model come off the record: the run's current backend by default, or the
+    // follow-up override that `continueRun` persisted before scheduling (#401).
+    const continueBackend = backend;
+    // Apply the SAME canonical-identity gate the first spawn applies (#405, review M1).
+    // A follow-up may switch both runner and model (#401), so without this the record keeps
+    // asserting the identity the run STARTED with while a different model serves the turn —
+    // the exact defect this PR exists to remove — and the raw record string reaches the CLI
+    // in the un-normalised wire form the first step already converted away (`anthropic/opus`
+    // instead of `opus`). Fail loud here too rather than let the backend pick a default.
+    let continueModel: string | undefined;
+    try {
+      const normalized = normalizeModelForBackend(continueBackend, record?.model);
+      continueModel = normalized?.backendModel;
+      this.store.updateRun(runId, {
+        modelIdentity: normalized ? formatModelIdentity(normalized.identity) : undefined,
+      });
+    } catch (err) {
+      if (!(err instanceof ModelIdentityError)) throw err;
+      const failedAt = new Date().toISOString();
+      sink.sessionEnded('error', err.message);
+      this.store.updateStep(runId, stepId, {
+        status: 'failed',
+        error: err.message,
+        finishedAt: failedAt,
+      });
+      this.store.updateRun(runId, {
+        status: 'failed',
+        error: `continue failed: ${err.message}`,
+        finishedAt: failedAt,
+        currentStepId: undefined,
+      });
+      this.store.appendEvent(runId, {
+        type: 'lifecycle',
+        message: `continue failed — ${err.message}`,
+      });
+      this.dropActive(runId);
+      void this.pump();
+      return;
+    }
+    const runner = createRunner(continueBackend);
     const session = runner.startSession(
       {
         // The Continue step is a fresh agent session on the same run — the
         // run's extra system prompt (already resolved at execute time and
         // echoed on the record) rides along with the handoff contract.
-        systemPrompt: composeSystemPrompt(record?.systemPrompt, HANDOFF_INSTRUCTIONS),
+        systemPrompt: composeSystemPrompt(
+          record?.systemPrompt,
+          generateFollowups ? HANDOFF_INSTRUCTIONS : HANDOFF_ONLY_INSTRUCTIONS,
+        ),
         userPrompt: prompt,
         cwd: state.cwd,
         allowedTools: DEFAULT_ALLOWED_TOOLS,
         additionalDirectories: [join(this.dataDir, 'runs')],
-        env: this.agentEnv(runId),
+        env: this.agentEnv(runId, generateFollowups),
+        model: continueModel,
         sessionId,
-        resume: true,
+        resume: sessionId !== undefined,
         timeoutMs: 0,
       },
       onEvent,
-      { onUiEvent: (event) => sink.handle(event) },
+      { onUiEvent: (event) => this.handleRunnerUiEvent(runId, state, sink, event) },
     );
     state.session = session;
+    state.sessionEverOpened = true;
+    this.flushDeferred(runId);
     state.currentStepId = stepId;
     state.interrupt = () => session.interrupt();
     if (session.pid !== undefined) registerRunProcess(runId, session.pid);
@@ -684,7 +1407,7 @@ export class RunManager {
       this.recordUsagePeaks(runId);
       this.clearIdleTimer(state);
       this.clearAutosaveTimer(state);
-      if (state.cwd !== this.repoRoot) await autosaveCommit(state.cwd);
+      if (state.cwd !== this.repoRoot) await autosaveCommit(state.cwd, 'turn end');
       this.dropActive(runId);
       void this.pump();
     }
@@ -734,8 +1457,9 @@ export class RunManager {
     emit({ type: 'lifecycle', message: `run started — workflow "${workflow.name}" (runner: ${taskBackend})` });
 
     // Worktree per task (spec 006): the agent works on its own branch in
-    // `.ai/cezar/worktrees/<id>`, never in the user's working tree. Not a git
-    // repo, or worktree creation failed → degrade to running in place.
+    // `.ai/cezar/worktrees/<id>`, never in the user's working tree. A Git task
+    // that requests isolation fails closed if the worktree cannot be
+    // established; only explicit opt-out and non-Git modes run in place.
     const repo = await getRepoInfo(this.repoRoot);
     if (repo && input.worktree === false) {
       // Composer opt-out: run in the repo working tree, no branch/worktree
@@ -745,8 +1469,14 @@ export class RunManager {
       // Fork from the configured base branch (config.json `baseBranch`, e.g.
       // `develop`) — also the target of the eventual draft PR. Unresolvable
       // (typo, not fetched) → note + the currently checked-out branch.
-      let base = repo.branch;
-      const configured = config.baseBranch;
+      //
+      // A task that already recorded a fork point keeps it: its worktree is
+      // reused as-is, and re-resolving against a since-changed config would
+      // silently re-anchor the `merge-base` every diff/shortstat is measured
+      // from, shifting "what did this task change" under an existing task.
+      const recorded = this.store.getRun(runId)?.baseBranch;
+      let base = recorded ?? repo.branch;
+      const configured = recorded ? undefined : config.baseBranch;
       if (configured) {
         const resolved = await resolveBaseRef(this.repoRoot, configured);
         if (resolved) {
@@ -767,13 +1497,41 @@ export class RunManager {
           baseBranch: wt.baseBranch,
         });
         emit({ type: 'note', message: `worktree ready — branch ${wt.branch} (base ${wt.baseBranch})` });
+        // Seed from this manager's project root: each multi-project context has
+        // its own manager/repoRoot and must never copy another project's layer.
+        const seededConfig = await seedAgentConfigLocalLayer(this.repoRoot, state.cwd).catch(() => []);
+        if (seededConfig.length > 0) {
+          emit({ type: 'note', message: `seeded personal agent config: ${seededConfig.join(', ')}` });
+        }
         this.armAutosave(state);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        emit({ type: 'note', message: `worktree creation failed (${message}) — running in the repo working tree` });
+        const error = `worktree creation failed: ${message}`;
+        emit({ type: 'note', message: `${error} — task stopped before workflow execution` });
+        this.store.updateRun(runId, {
+          status: 'failed',
+          error,
+          finishedAt: new Date().toISOString(),
+          currentStepId: undefined,
+        });
+        emit({ type: 'lifecycle', message: `run failed — ${error}` });
+        this.dropActive(runId);
+        void this.pump();
+        return;
       }
     } else {
       emit({ type: 'note', message: 'not a git repository — running in place, one task at a time' });
+    }
+
+    if (state.cwd === this.repoRoot) {
+      emit({
+        type: 'note',
+        message: 'waiting for exclusive access to the repository working tree',
+      });
+      // A cancel during the wait leaves the lease ungranted; the step loop
+      // below breaks on `cancelled` before touching the tree and settles the
+      // run through the usual path.
+      await this.acquireRepoRoot(runId, state);
     }
 
     // Handoff journal (spec 007) — seeded after the worktree exists so the
@@ -787,17 +1545,26 @@ export class RunManager {
     let runError: string | null = null;
     // Persist the task's attached images so the thread's initial bubble can render them
     // (#image-display); they still ride the first agent step's opening message below.
+    // `pasted` prefix (#357) marks these as user attachments on disk and keeps their
+    // absolute paths so runAgentStep can tell the agent where to find the real files.
+    let startAttachments: PersistedAttachment[] = [];
     if (input.images?.length) {
-      const urls = input.images
+      const persisted = input.images
         .filter((b): b is Extract<ContentBlock, { type: 'image' }> => b.type === 'image')
-        .map((b) => this.persistImage(runId, state, b.source.media_type, b.source.data))
-        .filter((saved): saved is { name: string; url: string } => saved !== null)
-        .map((saved) => saved.url);
-      if (urls.length) this.store.updateRun(runId, { taskImages: urls });
+        .map((b) => this.persistImage(runId, b.source.media_type, b.source.data, 'pasted'))
+        .filter((saved): saved is PersistedAttachment => saved !== null);
+      if (persisted.length) {
+        this.store.updateRun(runId, { taskImages: persisted.map((p) => p.url) });
+        startAttachments = persisted;
+      }
     }
     // Task screenshots go with the FIRST agent step's opening message only —
-    // later steps and retry loops run in fresh sessions without them.
-    let startImages = input.images;
+    // later steps and retry loops run in fresh sessions without them. Stacked
+    // attachments (#472) ride along too, but are NOT re-persisted above: they
+    // already live on disk, and adding them to `taskImages` would both duplicate
+    // the files and make the task bubble claim the stack's images as its own.
+    let startImages =
+      input.stackedImages?.length ? [...(input.images ?? []), ...input.stackedImages] : input.images;
 
     const lastAgentIdx = findLastAgentStepIndex(workflow);
 
@@ -834,8 +1601,11 @@ export class RunManager {
           startImages,
           taskBackend,
           extraSystemPrompt,
+          chainStepNote(workflow.steps, i),
+          startAttachments,
         );
         startImages = undefined;
+        startAttachments = [];
         checkFailure = null;
         if (state.cancelled) break;
         if (failure) {
@@ -883,7 +1653,7 @@ export class RunManager {
 
     // Final autosave: the branch always ends holding the finished state.
     this.clearAutosaveTimer(state);
-    if (state.cwd !== this.repoRoot) await autosaveCommit(state.cwd);
+    if (state.cwd !== this.repoRoot) await autosaveCommit(state.cwd, 'run finalize');
 
     const finishedAt = new Date().toISOString();
     if (state.cancelled) {
@@ -919,12 +1689,23 @@ export class RunManager {
     images: ContentBlock[] | undefined,
     taskBackend: RunnerId,
     extraSystemPrompt: string | undefined,
+    /** The chain-boundary note for this step (#410), or undefined when the
+     *  workflow has a single agent step and there is no boundary to explain. */
+    chainNote: string | undefined,
+    /** Pasted attachments already materialized to disk (#357) — their absolute
+     *  paths are appended to `userPrompt` so the agent can operate on the
+     *  real files, not just view the inline image blocks. */
+    attachments: PersistedAttachment[] = [],
   ): Promise<string | null> {
     let systemPrompt: string | undefined;
     if (step.skill) {
       const skill = skills.find((s) => s.name === step.skill);
       if (skill) {
-        systemPrompt = skill.body.trim();
+        // The body alone often does not identify the selected skill. Keep its
+        // name and catalog description in the normalized runner payload so a
+        // numeric task such as "432" still gives the model enough context to
+        // describe the work — and therefore derive a useful title (#432).
+        systemPrompt = skillSystemPrompt(skill);
         // Directory team skills (SKILL.md + references/) get materialized
         // into <cwd>/.claude/skills/<name>/ — the run's worktree when there
         // is one — so claude sees the companion files on disk; the shared
@@ -949,6 +1730,7 @@ export class RunManager {
     }
 
     let userPrompt = applyTemplate(step.prompt ?? '{{task}}', input.task);
+    if (chainNote) userPrompt = `${chainNote}\n\n---\n\n${userPrompt}`;
     if (checkFailure) {
       userPrompt += `\n\nA verification command failed after the previous attempt. Fix the cause. Failing output:\n\n${checkFailure}`;
     }
@@ -958,10 +1740,15 @@ export class RunManager {
         stepId: step.id,
         message: `${images.length} screenshot${images.length > 1 ? 's' : ''} attached to the task`,
       });
+      // Point the agent at the on-disk files for the pasted subset (#357) — the
+      // base64 blocks above still let it *view* the images; this is what lets it
+      // *use* them as files (save, attach to an issue/PR, copy into the repo).
+      if (attachments.length) userPrompt += `\n\n${pastedAttachmentsText(attachments)}`;
     }
 
     const sessionId = randomUUID();
-    this.store.updateStep(runId, step.id, { sessionId });
+    const backend = step.runner ?? taskBackend;
+    this.store.updateStep(runId, step.id, { sessionId, backend });
 
     const stepRecord = this.store.getRun(runId)?.steps.find((s) => s.id === step.id);
     const startTokens = stepRecord?.tokensUsed ?? 0;
@@ -970,20 +1757,20 @@ export class RunManager {
     const sink = this.makeUiSink(runId, step.id);
     const onEvent = (event: AgentEvent) => {
       if (event.type === 'image') {
-        const saved = this.persistImage(runId, state, event.mediaType, event.data);
+        const saved = this.persistImage(runId, event.mediaType, event.data);
         if (saved) emit({ type: 'image', stepId: step.id, ...saved });
         return;
       }
       if (event.type === 'text') {
         turnText += event.text;
-        const text = stripDoneMarker(event.text);
+        const text = stripAskMarker(stripTaskMarkers(stripMonitoringMarker(stripDoneMarker(event.text))));
         if (text) emit({ type: 'text', text, stepId: step.id });
         return;
       }
       emit({ ...event, stepId: step.id });
       if (event.type === 'session') {
         // Codex/OpenCode mint their own session id — persist it so resume works.
-        this.store.updateStep(runId, step.id, { sessionId: event.sessionId });
+        this.store.updateStep(runId, step.id, { sessionId: event.sessionId, backend });
       }
       if (event.type === 'token-usage') {
         this.store.updateStep(runId, step.id, { tokensUsed: startTokens + event.tokensUsed });
@@ -999,6 +1786,15 @@ export class RunManager {
         void this.recordTurnEnd(runId, turnText); // titleSummary + diffStat (#389)
         const sessionOpen = !state.cancelled && state.session?.open;
         const done = interactive && sessionOpen && DONE_MARKER_RE.test(turnText.trimEnd());
+        // `CEZ:ASK` → the user is blocked; wins over `CEZ:MONITORING`, loses to
+        // `CEZ:DONE` (#473).
+        const ask = interactive && sessionOpen && !done ? parseAskMarker(turnText) : null;
+        const monitoring =
+          interactive &&
+          sessionOpen &&
+          !done &&
+          !ask &&
+          MONITORING_MARKER_RE.test(turnText.trimEnd());
         turnText = '';
         if (done) {
           // Goal achieved (agent contract, #347): close the session instead
@@ -1010,16 +1806,32 @@ export class RunManager {
         }
         const waiting = interactive && sessionOpen;
         if (waiting) {
-          // Turn over, session open: the ball is in the user's court.
-          this.store.updateRun(runId, { status: 'waiting' });
-          this.store.updateStep(runId, step.id, { status: 'waiting' });
+          // Turn over, session open. Either the ball is in the user's court
+          // (`waiting`) — optionally with a structured `CEZ:ASK` question the
+          // cockpit renders as an ask card (#473) — or the agent declared it is
+          // still working on its own downstream work with `CEZ:MONITORING`, which
+          // parks as `running`/`activity:'monitoring'`, a non-attention state,
+          // instead of raising "needs you" (#490). Lifecycle is identical: the
+          // run frees its slot and keeps the idle timer.
+          if (ask) emitAskRequested(sink, ask);
+          if (monitoring) {
+            this.store.updateRun(runId, { status: 'running', activity: 'monitoring' });
+            this.store.updateStep(runId, step.id, { status: 'running' });
+          } else {
+            this.store.updateRun(runId, { status: 'waiting', activity: undefined });
+            this.store.updateStep(runId, step.id, { status: 'waiting' });
+          }
           this.waiting.add(runId);
           this.armIdleTimer(runId, state);
           void this.pump(); // the freed slot can start a queued run right away
         }
         // Cez's own heartbeat — the handoff stays current even when the
         // agent forgets to write (spec 007).
-        appendHandoffHeartbeat(this.dataDir, runId, `turn complete — status=${waiting ? 'waiting' : 'running'}`);
+        appendHandoffHeartbeat(
+          this.dataDir,
+          runId,
+          `turn complete — status=${monitoring ? 'monitoring' : waiting ? 'waiting' : 'running'}`,
+        );
       }
     };
 
@@ -1030,7 +1842,15 @@ export class RunManager {
     // instead of letting the backend silently substitute its default.
     let backendModel: string | undefined;
     try {
-      backendModel = normalizeModelForBackend(stepBackend, step.model ?? input.model)?.backendModel;
+      const normalized = normalizeModelForBackend(stepBackend, step.model ?? input.model);
+      backendModel = normalized?.backendModel;
+      // Persist the identity of what ACTUALLY runs (#405, review M1). The run-start echo
+      // (line ~993) is best-effort from `taskBackend`/`input.model`; a per-step `runner`/`model`
+      // override makes it assert a model that never ran. Re-write it here, from the resolved
+      // step identity, so the record — the product of this PR — is always one that ran.
+      this.store.updateRun(runId, {
+        modelIdentity: normalized ? formatModelIdentity(normalized.identity) : undefined,
+      });
     } catch (err) {
       if (err instanceof ModelIdentityError) return err.message;
       throw err;
@@ -1042,7 +1862,13 @@ export class RunManager {
         {
           // Skill body, then the run's extra prompt (POST override or config
           // default), then the handoff/todos contract — every agent step.
-          systemPrompt: composeSystemPrompt(systemPrompt, extraSystemPrompt, HANDOFF_INSTRUCTIONS),
+          systemPrompt: composeSystemPrompt(
+            systemPrompt,
+            extraSystemPrompt,
+            followupsEnabled() && input.generateFollowups !== false
+              ? HANDOFF_INSTRUCTIONS
+              : HANDOFF_ONLY_INSTRUCTIONS,
+          ),
           userPrompt,
           images,
           cwd: state.cwd,
@@ -1050,19 +1876,24 @@ export class RunManager {
           bashAllowlist: step.bashAllowlist,
           // The handoff file lives outside the worktree — grant access.
           additionalDirectories: [join(this.dataDir, 'runs')],
-          env: this.agentEnv(runId),
+          env: this.agentEnv(runId, followupsEnabled() && input.generateFollowups !== false),
           model: backendModel,
           sessionId,
           // Interactive sessions have no wall clock — the idle timer rules.
           timeoutMs: interactive ? 0 : undefined,
         },
         onEvent,
-        { autoEndAfterFirstTurn: !interactive, onUiEvent: (event) => sink.handle(event) },
+        {
+          autoEndAfterFirstTurn: !interactive,
+          onUiEvent: (event) => this.handleRunnerUiEvent(runId, state, sink, event),
+        },
       );
     } catch (err) {
       return err instanceof Error ? err.message : String(err);
     }
     state.session = session;
+    state.sessionEverOpened = true;
+    this.flushDeferred(runId);
     state.currentStepId = step.id;
     state.interrupt = () => session.interrupt();
     if (session.pid !== undefined) registerRunProcess(runId, session.pid);
@@ -1103,6 +1934,18 @@ export class RunManager {
     });
   }
 
+  /** Native backend asks arrive before turn-end. Persist and park immediately
+   * so the cockpit shows attention and the run releases its workspace slot. */
+  private handleRunnerUiEvent(runId: string, state: ActiveRun, sink: UiEventSink, event: UiEvent): void {
+    sink.handle(event);
+    if (event.type !== 'ask.requested' || state.cancelled) return;
+    this.clearIdleTimer(state);
+    this.waiting.add(runId);
+    this.store.updateRun(runId, { status: 'waiting', activity: undefined });
+    if (state.currentStepId) this.store.updateStep(runId, state.currentStepId, { status: 'waiting' });
+    void this.pump();
+  }
+
   /**
    * Turn-end bookkeeping (#389), shared by `runAgentStep` and
    * `runContinuation` — called (fire-and-forget) from every `turn-end` event:
@@ -1118,21 +1961,115 @@ export class RunManager {
    * Not `private` so the integration tests can drive a turn-end directly —
    * a real agent session is the only other way to reach this path.
    */
+  /**
+   * The namer's apply path (task auto-naming spec). Fire-and-forget: called
+   * without await from `startRun` (creation) and `recordTurnEnd` (live
+   * refresh). A user-owned title (`titleOrigin: 'user'`) is never overwritten;
+   * namer-owned titles may be replaced by fresher namer results.
+   */
+  private async autoNameRun(
+    runId: string,
+    skillName: string | undefined,
+    task: string,
+    live?: { turnText?: string; diffStat?: string },
+  ): Promise<void> {
+    // CEZ_AUTONAME=0 kills all LLM naming; dry-run skips it too unless
+    // CEZ_AUTONAME=1 forces the mock path — see autoNamingActive.
+    if (!autoNamingActive()) return;
+    try {
+      let skillDescription: string | undefined;
+      if (skillName) {
+        const skills = await discoverSkills(this.repoRoot).catch(() => [] as Skill[]);
+        skillDescription = skills.find((s) => s.name === skillName)?.description;
+      }
+      const result = await generateRunName(this.repoRoot, { task, skillName, skillDescription, ...live });
+      if (!result) return;
+      const run = this.store.getRun(runId);
+      // Marker-owned state outranks the namer (spec 2026-07-18-task-ref-markers):
+      // a declared title blocks the whole apply (this call raced the marker),
+      // and a declared pr/issue kind blocks that kind field-by-field.
+      if (!run || run.titleOrigin === 'user' || run.titleOrigin === 'marker') return;
+      this.store.updateRun(runId, {
+        titleSummary: result.titleSummary,
+        titleOrigin: 'auto',
+        ...(result.prNumber !== undefined && run.markerRefs?.pr === undefined
+          ? { prNumber: result.prNumber }
+          : {}),
+        ...(result.issueNumber !== undefined && run.markerRefs?.issue === undefined
+          ? { issueNumber: result.issueNumber }
+          : {}),
+      });
+    } catch {
+      // Naming is best-effort — nothing here may disturb the run.
+    }
+  }
+
   async recordTurnEnd(runId: string, turnText: string): Promise<void> {
     try {
       const run = this.store.getRun(runId);
       if (!run) return;
-      if (run.titleSummary === undefined) {
-        const summary = deriveTitleSummary(turnText, run.task);
-        if (summary) this.store.updateRun(runId, { titleSummary: summary });
+      this.applyTurnMarkers(runId, run, turnText);
+      // Titles are the namer's job (task auto-naming spec) — turn text is
+      // deliberately NEVER a title source; see maybeRefreshTitle below. The
+      // one exception is an explicit CEZ:TITLE declaration (applied above).
+      if (run.worktreePath && existsSync(run.worktreePath)) {
+        const stat = await worktreeShortstat(run.worktreePath, run.baseBranch ?? 'HEAD');
+        if (stat) this.store.updateRun(runId, { diffStat: stat });
+        else this.store.appendEvent(runId, { type: 'note', message: 'diff stat unavailable — git diff --shortstat failed in the worktree' });
       }
-      if (!run.worktreePath || !existsSync(run.worktreePath)) return;
-      const stat = await worktreeShortstat(run.worktreePath, run.baseBranch ?? 'HEAD');
-      if (stat) this.store.updateRun(runId, { diffStat: stat });
-      else this.store.appendEvent(runId, { type: 'note', message: 'diff stat unavailable — git diff --shortstat failed in the worktree' });
+      await this.maybeRefreshTitle(runId, turnText);
     } catch {
       // Bookkeeping only — nothing here may disturb the run.
     }
+  }
+
+  /**
+   * In-band declarations from the finished turn (spec
+   * 2026-07-18-task-ref-markers): the main thread's own `CEZ:PR=` /
+   * `CEZ:ISSUE=` / `CEZ:TITLE=` lines, parsed from the accumulated turn text
+   * like `CEZ:DONE` — never from tool output. Declared numbers overwrite the
+   * regex/namer display tier (the store re-resolves the referenced-PR chip);
+   * a declared title takes `titleOrigin: 'marker'`, which beats the namer but
+   * never a user rename, and silences the live refresh below.
+   */
+  private applyTurnMarkers(runId: string, run: RunRecord, turnText: string): void {
+    const markers = parseTaskMarkers(turnText);
+    if (markers.pr !== undefined || markers.issue !== undefined) {
+      this.store.applyMarkerRefs(runId, { pr: markers.pr, issue: markers.issue });
+    }
+    if (markers.title && run.titleOrigin !== 'user') {
+      const current = this.store.getRun(runId);
+      const refNumber = current?.prNumber ?? current?.issueNumber;
+      const validated = postValidateTitle(markers.title, refNumber);
+      // Same junk guard as composeNameResult: a declaration that validates to
+      // nothing (or to a bare number prefix) must not blank the title.
+      if (validated && validated !== `${refNumber}:`) {
+        this.store.updateRun(runId, { titleSummary: validated, titleOrigin: 'marker' });
+      }
+    }
+  }
+
+  /**
+   * Live title refresh (task auto-naming spec, step 3): re-run the namer with
+   * the turn's context. Skips: toggle off (`liveTitleUpdates` config over
+   * `CEZ_TITLE_UPDATES` env, default ON), user-owned title, marker-owned title
+   * (the agent declares via `CEZ:TITLE` — the token-saving fast path), dry-run
+   * mocks (canned answers add nothing), empty turn text, unchanged namer inputs.
+   */
+  private async maybeRefreshTitle(runId: string, turnText: string): Promise<void> {
+    if (!autoNamingActive()) return;
+    if (!turnText.trim()) return;
+    const config = await loadConfig(this.repoRoot);
+    if (!liveTitleUpdatesEnabled(config)) return;
+    const run = this.store.getRun(runId);
+    if (!run || run.titleOrigin === 'user' || run.titleOrigin === 'marker') return;
+    const statText = run.diffStat ? `${run.diffStat.files} files, +${run.diffStat.adds} -${run.diffStat.dels}` : undefined;
+    const key = `${turnText.slice(0, 200)}|${statText ?? ''}`;
+    if (this.lastNamerKey.get(runId) === key) return;
+    this.lastNamerKey.set(runId, key);
+    const workflow = await this.reviveWorkflow(run);
+    const skillName = workflow?.steps.find((s) => stepKind(s) === 'agent' && s.skill)?.skill?.trim();
+    void this.autoNameRun(runId, skillName, run.task, { turnText, diffStat: statText });
   }
 
   /**
@@ -1157,13 +2094,20 @@ export class RunManager {
    * at `review` instead of `done` — the user inspects the diff first, then
    * sends feedback back, opens a draft PR, or just finishes. Failed/cancelled
    * runs never enter review; no worktree or an empty diff means plain `done`.
+   *
+   * The gate is opt-in (#489): the review park happens only when it is enabled
+   * (`reviewGateEnabled` — config toggle over the `CEZ_REVIEW_GATE` env, default
+   * OFF) AND the run is not autonomous. Autonomous runs — and runs with the gate
+   * off — settle straight to `done`, leaving the diff in the worktree untouched.
    */
   private async settleSuccess(runId: string): Promise<void> {
     const run = this.store.getRun(runId);
     let review = false;
     if (run?.worktreePath && existsSync(run.worktreePath)) {
       const diff = await worktreeDiff(run.worktreePath, run.baseBranch ?? 'HEAD');
-      review = diff.trim().length > 0 && !diff.startsWith('(diff failed');
+      const hasDiff = diff.trim().length > 0 && !diff.startsWith('(diff failed');
+      const config = await loadConfig(this.repoRoot);
+      review = hasDiff && reviewGateEnabled(config) && run.autonomous !== true;
     }
     this.store.updateRun(runId, {
       status: review ? 'review' : 'done',
@@ -1179,18 +2123,22 @@ export class RunManager {
   }
 
   /**
-   * Agent screenshot (an image block inside a tool result): the base64 data
-   * never enters the NDJSON event log — it lands as a file under
-   * `.ai/cezar/runs/<id>-images/` and the transcript event carries only the
-   * name + serving URL. Best effort: on failure the screenshot is dropped,
-   * the transcript still shows the tool result's `[screenshot]` placeholder.
+   * Agent screenshot (an image block inside a tool result) or a user-pasted
+   * attachment: the base64 data never enters the NDJSON event log — it lands
+   * as a file under `.ai/cezar/runs/<id>-images/` and the transcript event
+   * carries only the name + serving URL. `namePrefix` distinguishes the two
+   * origins on disk (`screenshot-<n>.<ext>` for agent tool screenshots,
+   * `pasted-<n>.<ext>` for user-pasted attachments, #357) and the absolute
+   * `path` lets the agent operate on the file directly (save/attach/upload).
+   * Best effort: on failure the attachment is dropped, the transcript still
+   * shows the tool result's `[screenshot]` placeholder (or the image count).
    */
   private persistImage(
     runId: string,
-    state: ActiveRun,
     mediaType: string,
     data: string,
-  ): { name: string; url: string } | null {
+    namePrefix: string = 'screenshot',
+  ): { name: string; url: string; path: string } | null {
     try {
       const ext =
         /png/.test(mediaType) ? 'png'
@@ -1198,12 +2146,32 @@ export class RunManager {
         : /webp/.test(mediaType) ? 'webp'
         : /gif/.test(mediaType) ? 'gif'
         : 'img';
-      state.imageSeq = (state.imageSeq ?? 0) + 1;
-      const name = `screenshot-${state.imageSeq}.${ext}`;
       const dir = join(this.dataDir, 'runs', `${runId}-images`);
       mkdirSync(dir, { recursive: true });
-      writeFileSync(join(dir, name), Buffer.from(data, 'base64'));
-      return { name, url: `/api/runs/${runId}/images/${name}` };
+      // Seed from the highest numeric suffix already on disk, NOT the file count:
+      // `screenshot-*` and `pasted-*` share one numbering space, so counting would
+      // re-issue a live number after any deletion. Only matters on the first write
+      // of a process (restart case) — afterwards the map is authoritative.
+      let seq = this.queuedImageSeq.get(runId);
+      if (seq === undefined) seq = highestImageSeq(dir);
+      // `persistImage` is fully synchronous, so two pastes cannot interleave between
+      // the read of the counter and the write. The exclusive-create flag is the
+      // belt-and-braces guard for a stale seed: it degrades to a renamed file rather
+      // than a silent overwrite.
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        seq += 1;
+        const name = `${namePrefix}-${seq}.${ext}`;
+        const path = join(dir, name);
+        try {
+          writeFileSync(path, Buffer.from(data, 'base64'), { flag: 'wx' });
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code === 'EEXIST') continue;
+          throw err;
+        }
+        this.queuedImageSeq.set(runId, seq);
+        return { name, url: `/api/runs/${runId}/images/${name}`, path };
+      }
+      return null;
     } catch {
       return null;
     }
@@ -1230,11 +2198,13 @@ export class RunManager {
     }
   }
 
-  /** Autosave-commit the worktree every 90 s while the run lives (spec 006). */
+  /** Autosave-commit the worktree every 90 s while the run lives (spec 006).
+   *  Opt-in via CEZ_AUTOSAVE=1 (#471) — see periodicAutosaveEnabled. */
   private armAutosave(state: ActiveRun): void {
+    if (!periodicAutosaveEnabled()) return;
     if (state.cwd === this.repoRoot || state.autosaveTimer) return;
     state.autosaveTimer = setInterval(() => {
-      void autosaveCommit(state.cwd);
+      void autosaveCommit(state.cwd, 'periodic');
     }, AUTOSAVE_INTERVAL_MS);
     state.autosaveTimer.unref?.();
   }
@@ -1311,7 +2281,40 @@ function applyTemplate(template: string, task: string): string {
   return template.replaceAll('{{task}}', task);
 }
 
-function makeTitle(task: string): string {
+/**
+ * Immediate title shown while a run is queued. The namer's `titleSummary`
+ * replaces it once the model answers; this is the honest, permanent fallback
+ * when no model is available (#432, spec 2026-07-17-task-auto-naming). When
+ * the task references a PR/issue, the number leads: `469: /om-auto-review-pr`.
+ */
+export function makeRunTitle(task: string, workflow: WorkflowDef): string {
   const firstLine = task.trim().split('\n')[0] ?? '';
-  return firstLine.length > 80 ? `${firstLine.slice(0, 77)}…` : firstLine || '(untitled task)';
+  const skill = workflow.steps.find((step) => stepKind(step) === 'agent' && step.skill)?.skill?.trim();
+  const contextual = skill && !firstLine.startsWith(`/${skill}`)
+    ? `/${skill}${firstLine ? ` ${firstLine}` : ''}`
+    : firstLine;
+  const refNumber = titleRefNumber(refineTaskRefs(extractTaskRefs(task), skill));
+  // `469` or `/om-auto-review-pr 469` reads as `469: /om-auto-review-pr` — the
+  // number leads so it survives the tasks table's narrow truncation.
+  const skillArg = skill && contextual.startsWith(`/${skill}`) ? contextual.slice(skill.length + 1).trim() : null;
+  const body = refNumber !== undefined && skill && (skillArg === '' || /^#?\d+$/.test(skillArg ?? ''))
+    ? `/${skill}`
+    : contextual;
+  const prefixed =
+    refNumber !== undefined && !body.trimStart().replace(/^#/, '').startsWith(String(refNumber))
+      ? `${refNumber}: ${body}`
+      : body;
+  const chars = [...(prefixed || '(untitled task)')];
+  return chars.length > 80 ? `${chars.slice(0, 79).join('').trimEnd()}…` : chars.join('');
+}
+
+/** Skill identity is context, while the Markdown body remains instructions. */
+export function skillSystemPrompt(skill: Pick<Skill, 'name' | 'description' | 'body'>): string {
+  return [
+    `Selected skill: /${skill.name}`,
+    ...(skill.description ? [`Description: ${skill.description}`] : []),
+    '',
+    'Skill instructions:',
+    skill.body.trim(),
+  ].join('\n');
 }

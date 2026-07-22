@@ -80,6 +80,57 @@ describe('reduceThread — golden v2 fixtures', () => {
   })
 })
 
+describe('reduceThread — item ids across workflow steps', () => {
+  it('keeps earlier reasoning when a resumed step restarts its item ids', () => {
+    const { turns } = reduceThread([
+      line(1, 'turn.started', { turnId: 'turn_1', stepId: 'initial' }),
+      line(2, 'item.started', {
+        item: { kind: 'reasoning', id: 'item_1', text: 'Earlier thinking survives.' },
+        stepId: 'initial',
+      }),
+      line(3, 'item.completed', {
+        item: { kind: 'reasoning', id: 'item_1', text: 'Earlier thinking survives.' },
+        stepId: 'initial',
+      }),
+      line(4, 'turn.completed', { turnId: 'turn_1', stopReason: 'end_turn', stepId: 'initial' }),
+      line(5, 'turn.started', { turnId: 'turn_1', stepId: 'resume' }),
+      line(6, 'item.started', {
+        item: { kind: 'message', id: 'item_1', role: 'assistant', text: 'Resumed response.' },
+        stepId: 'resume',
+      }),
+      line(7, 'item.completed', {
+        item: { kind: 'message', id: 'item_1', role: 'assistant', text: 'Resumed response.' },
+        stepId: 'resume',
+      }),
+    ])
+
+    expect(turns).toHaveLength(2)
+    expect(turns[0]!.items).toEqual([
+      { kind: 'reasoning', id: 'item_1', text: 'Earlier thinking survives.' },
+    ])
+    expect(turns[1]!.items).toEqual([
+      { kind: 'message', id: 'item_1', role: 'assistant', text: 'Resumed response.' },
+    ])
+  })
+
+  it('retains bare-id lifecycle updates for legacy events without stepId', () => {
+    const { turns } = reduceThread([
+      line(1, 'turn.started', { turnId: 'turn_1' }),
+      line(2, 'item.started', {
+        item: { kind: 'message', id: 'item_1', role: 'assistant', text: '' },
+      }),
+      line(3, 'item.delta', { itemId: 'item_1', field: 'text', delta: 'Legacy response.' }),
+      line(4, 'item.completed', {
+        item: { kind: 'message', id: 'item_1', role: 'assistant', text: 'Legacy response.' },
+      }),
+    ])
+
+    expect(turns[0]!.items).toEqual([
+      { kind: 'message', id: 'item_1', role: 'assistant', text: 'Legacy response.' },
+    ])
+  })
+})
+
 describe('reduceThread — v1-only fallback (pre-v2 transcripts)', () => {
   // Verbatim shapes from a real pre-R2 transcript (.ai/cezar/runs/2d012907….ndjson), trimmed.
   const v1Only: RunEvent[] = [
@@ -196,6 +247,44 @@ describe('reduceThread — mixed v1+v2 files (the dedup rule)', () => {
     expect(kinds(turns[0]!.items)).toEqual(['tool'])
     expect((turns[0]!.items[0] as UiToolItem).status).toBe('completed')
   })
+
+  // The vanishing-message regression: a turn can be v2-covered for TOOLS while its prose exists
+  // only as a v1 `text` line (claude's `msg.result` fallback — see claude-ui-mapper's mapResult).
+  // The old blanket "drop every v1 item once the latch flips" deleted that message a moment
+  // after it rendered, leaving tool cards with no prose. Membership in v2 is now decided by
+  // text, so an untwinned line survives.
+  it('keeps a v1 text that has NO v2 message twin, even in a v2-covered turn', () => {
+    const resultFallback: RunEvent[] = [
+      line(1, 'turn.started', { turnId: 'turn_1' }),
+      line(2, 'text', { text: 'Prose that only v1 ever described.' }),
+      line(3, 'item.started', {
+        item: { kind: 'tool', id: 'toolu_A', name: 'Bash', toolKind: 'execute', title: 'Ran npm test', status: 'running' },
+      }),
+      line(4, 'item.completed', {
+        item: { kind: 'tool', id: 'toolu_A', name: 'Bash', toolKind: 'execute', title: 'Ran npm test', status: 'completed' },
+      }),
+    ]
+    const { turns } = reduceThread(resultFallback)
+    expect(kinds(turns[0]!.items)).toEqual(['message', 'tool'])
+    expect((turns[0]!.items[0] as UiMessageItem).text).toBe('Prose that only v1 ever described.')
+  })
+
+  // The two vocabularies normalize markers differently — the server strips `CEZ:` from v1 `text`
+  // before persisting, v2 items carry it raw — so the twin match has to strip both sides or
+  // every final message in a run would render twice.
+  it('matches a v1 twin against a v2 message whose text still carries its CEZ marker', () => {
+    const finalTurn: RunEvent[] = [
+      line(1, 'turn.started', { turnId: 'turn_1' }),
+      line(2, 'item.started', {
+        item: { kind: 'tool', id: 'toolu_A', name: 'Bash', toolKind: 'execute', title: 'Ran x', status: 'completed' },
+      }),
+      line(3, 'item.completed', { item: { kind: 'message', id: 'item_1', role: 'assistant', text: 'All done.\n\nCEZ:DONE' } }),
+      line(4, 'text', { text: 'All done.' }), // the server-stripped v1 twin
+    ]
+    const { turns } = reduceThread(finalTurn)
+    expect(kinds(turns[0]!.items)).toEqual(['tool', 'message'])
+    expect((turns[0]!.items[1] as UiMessageItem).text).toBe('All done.')
+  })
 })
 
 describe('reduceThread — live-stream mechanics', () => {
@@ -230,6 +319,33 @@ describe('reduceThread — live-stream mechanics', () => {
     ]
     const { turns } = reduceThread(events)
     expect((turns[0]!.items[0] as UiMessageItem).text).toBe('All done.')
+  })
+
+  it('strips a trailing CEZ:MONITORING from assistant messages too (#490)', () => {
+    const events: RunEvent[] = [
+      line(1, 'turn.started', { turnId: 'turn_1' }),
+      line(2, 'item.completed', {
+        item: { kind: 'message', id: 'm1', role: 'assistant', text: 'Spawned the reviewer, waiting on it.\n\nCEZ:MONITORING' },
+      }),
+    ]
+    const { turns } = reduceThread(events)
+    expect((turns[0]!.items[0] as UiMessageItem).text).toBe('Spawned the reviewer, waiting on it.')
+  })
+
+  it('strips CEZ:PR/CEZ:ISSUE/CEZ:TITLE marker lines but keeps prose mentions (spec 2026-07-18-task-ref-markers)', () => {
+    const events: RunEvent[] = [
+      line(1, 'turn.started', { turnId: 'turn_1' }),
+      line(2, 'item.completed', {
+        item: {
+          kind: 'message',
+          id: 'm1',
+          role: 'assistant',
+          text: 'Opened the PR.\nCEZ:PR=442\nCEZ:ISSUE=433\nCEZ:TITLE=implementing marker refs\nI will keep CEZ:PR=442 updated.',
+        },
+      }),
+    ]
+    const { turns } = reduceThread(events)
+    expect((turns[0]!.items[0] as UiMessageItem).text).toBe('Opened the PR.\nI will keep CEZ:PR=442 updated.')
   })
 
   it('a malformed line costs itself, not the fold', () => {
@@ -507,5 +623,51 @@ describe('the v1 vocabulary sweep (cezar-code-map §3.2) — every persisted typ
 
   it('unknown future types → nothing, never a guessed rendering (divergence from the legacy raw-JSON note, on purpose)', () => {
     expect(allItems([line(1, 'telemetry.fancy', { whatever: true })])).toEqual([])
+  })
+})
+
+describe('reduceThread — AskUser cards (#473)', () => {
+  const allItems = (events: RunEvent[]): ThreadEntry[] =>
+    reduceThread(events).turns.flatMap((turn) => turn.items)
+
+  const ASK = {
+    requestId: 'ask_1',
+    questions: [
+      { header: 'Library', question: 'Which?', options: [{ label: 'date-fns' }, { label: 'Luxon' }] },
+    ],
+  }
+
+  it('ask.requested → an unresolved ask entry in the current turn', () => {
+    const ask = allItems([
+      line(1, 'text', { text: 'Here are the options.' }),
+      line(2, 'ask.requested', ASK),
+    ]).find((i) => i.kind === 'ask')
+    expect(ask).toMatchObject({ kind: 'ask', id: 'ask_1', resolved: false })
+  })
+
+  it('the next user-message resolves the ask and records the answer', () => {
+    const ask = allItems([
+      line(1, 'text', { text: 'options' }),
+      line(2, 'ask.requested', ASK),
+      line(3, 'user-message', { text: 'Library: date-fns', imageCount: 0 }),
+    ]).find((i) => i.kind === 'ask')
+    expect(ask).toMatchObject({ resolved: true, answer: 'Library: date-fns' })
+  })
+
+  it('drops an ask.requested with no valid questions', () => {
+    expect(
+      allItems([line(1, 'ask.requested', { requestId: 'x', questions: [] })]).some(
+        (i) => i.kind === 'ask',
+      ),
+    ).toBe(false)
+  })
+
+  it('strips a CEZ:ASK marker from a v2 assistant message on display', () => {
+    const msg = allItems([
+      line(1, 'item.completed', {
+        item: { kind: 'message', id: 'm1', role: 'assistant', text: 'Pick one.\n\nCEZ:ASK {"questions":[]}' },
+      }),
+    ]).find((i) => i.kind === 'message') as { text: string } | undefined
+    expect(msg?.text).toBe('Pick one.')
   })
 })
