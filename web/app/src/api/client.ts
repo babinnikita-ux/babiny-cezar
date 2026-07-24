@@ -24,6 +24,7 @@ import type {
   GithubData,
   GroupResponse,
   HealthResponse,
+  ImageInput,
   LaunchKeyResponse,
   MessageInput,
   EditQueuedMessageResponse,
@@ -38,6 +39,8 @@ import type {
   ProjectsResponse,
   RegisterProjectResponse,
   RemoveProjectResponse,
+  UpdateProjectInput,
+  UpdateProjectResponse,
   RemoveTodoResponse,
   RepoBranchResponse,
   RepoCommitPayload,
@@ -455,6 +458,17 @@ export function removeProject(projectId: string): Promise<RemoveProjectResponse>
   return mutate<RemoveProjectResponse>('DELETE', `/api/projects/${encodeURIComponent(projectId)}`)
 }
 
+/**
+ * Set or clear a project's per-project concurrency ceiling
+ * (`PATCH /api/projects/:projectId`, spec 2026-07-22). `maxParallel: null`
+ * clears the override back to "inherit the workspace cap"; an integer pins it.
+ * The server applies the new ceiling live (semaphore refresh), so the answer is
+ * the updated entry the pane swaps into its list.
+ */
+export function updateProject(projectId: string, input: UpdateProjectInput): Promise<UpdateProjectResponse> {
+  return mutate<UpdateProjectResponse>('PATCH', `/api/projects/${encodeURIComponent(projectId)}`, input)
+}
+
 // ---- run mutations ------------------------------------------------------------------------
 
 /** ×1 answers the run record; ×2/×3 answers `{ runs }` — narrow on `'runs' in result`. */
@@ -483,9 +497,12 @@ export function finishRun(id: string): Promise<FinishResponse> {
 }
 
 /** The follow-up composer's optional overrides for a Continue (#401): pick which backend and
- *  model handle the reopened session. Omitted fields keep the run's current backend/model. */
+ *  model handle the reopened session. Omitted fields keep the run's current backend/model.
+ *  `text`/`images` are the prompt the reopened session starts on — omitted, the engine opens
+ *  with its plain "Continue.". */
 export interface ContinueOptions {
   text?: string
+  images?: ImageInput[]
   runner?: Runner
   model?: string
 }
@@ -496,6 +513,7 @@ export interface ContinueOptions {
 export function continueRun(id: string, opts: ContinueOptions = {}): Promise<ContinueResponse> {
   const body: Record<string, unknown> = {}
   if (opts.text !== undefined) body.text = opts.text
+  if (opts.images !== undefined) body.images = opts.images
   if (opts.runner !== undefined) body.runner = opts.runner
   if (opts.model !== undefined) body.model = opts.model
   return mutate<ContinueResponse>('POST', runPath(id, '/continue'), body)

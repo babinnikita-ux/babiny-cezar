@@ -875,7 +875,7 @@ const health = (backends: readonly Runner[]): HealthResponse => ({
   checks: backends.map((name) => ({ name, available: true })),
   defaultRunner: backends[0] ?? 'claude',
   forge: null,
-  capabilities: { localHandoff: true, followups: true },
+  capabilities: { localHandoff: true, followups: true, singleProject: false },
 })
 
 /** More than one installed backend — the only state that shows the runner pill. */
@@ -1129,6 +1129,16 @@ describe('the hand-to-agent run (legacy three-way body)', () => {
     expect(document.querySelector('[data-slot="gh-view-run"]')?.getAttribute('href')).toBe('/tasks/run-1')
     // The list row grows the queued flag.
     expect(document.querySelector('[data-slot="gh-queued-flag"]')).not.toBeNull()
+  })
+
+  it('confirms the hand-off with a toast — the inline affordance is off-screen on a phone', async () => {
+    stubFetch()
+    await openDetail()
+
+    fireEvent.click(screen.getByRole('button', { name: /Run agent on this issue/ }))
+
+    await waitFor(() => expect(screen.getByText('Added to the queue — issue #142')).toBeTruthy())
+    expect(document.querySelector('[data-slot="toast"]')?.getAttribute('data-tone')).toBe('default')
   })
 
   it('a custom prompt is handed over WITH the item reference, not instead of it (#524)', async () => {
