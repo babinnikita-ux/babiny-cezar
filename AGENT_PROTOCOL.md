@@ -65,9 +65,8 @@ interface AgentRunner {
 - Each backend runs as a **persistent process** so multi-turn follow-ups,
   `waiting`, interrupt and resume all work: claude = stream-json over
   stdin/stdout; codex = `codex app-server` JSON-RPC 2.0 (JSONL) over
-  stdin/stdout; opencode = `opencode serve` over HTTP + SSE; pi = claude's
-  stream-json, driven by delegating to `ClaudeCliRunner` bound to pi's binary
-  (§9 "Two shapes of new runner").
+  stdin/stdout; opencode = `opencode serve` over HTTP + SSE; pi =
+  `pi --mode rpc` over JSONL stdin/stdout.
 
 ### `AgentSession`
 
@@ -294,8 +293,8 @@ heuristic subtitle. `mcp__server__tool` names collapse to `server.tool`.
 
 ## 6. Backend parity — the hard rule (`src/core/ui-parity.test.ts`)
 
-> Every capability in the parity matrix MUST be emitted by **all three**
-> backends, so the GUI degrades **per-capability, never per-backend**.
+> Every capability in the parity matrix MUST be emitted by **every**
+> backend, so the GUI degrades **per-capability, never per-backend**.
 
 This is made executable: `ui-parity.test.ts` asserts each capability over each
 backend's golden-fixture expected output. If a mapper change drops a capability —
@@ -312,8 +311,8 @@ or a new fixture set forgets one — a named row fails. The matrix:
   `.ai/specs/2026-07-20-grouped-subagent-display.md`, #474)
 - `usage.updated` with raw token counts
 - `turn.completed` with a `stopReason`
-- sub-agent **nesting** via `parentItemId` (all three backends; Codex uses
-  collaboration receiver thread ids when child notifications are subscribed)
+- sub-agent **nesting** via `parentItemId` where the upstream wire attributes
+  child work to a parent
 
 A new backend is not "done" until it produces every row.
 
@@ -359,17 +358,6 @@ added `pi` and enumerated every place the runner union was duplicated; that list
 is the concrete map, and the union now derives from one `RUNNER_IDS` tuple in
 `agent-runner.ts` so most of it is typecheck-enforced rather than hand-tracked.
 
-**Two shapes of new runner.** A backend with its OWN wire format needs every step
-below. A backend that speaks a wire format cezar already drives — pi speaks
-Claude's headless stream-json — instead **delegates** to that runner (pi holds a
-`ClaudeCliRunner` bound to pi's binary) and steps 4, 6 and 7 are satisfied by
-construction: it reuses the existing mapper, so fixtures would be a byte-for-byte
-copy and the parity row would test the same code twice. Delegation is not a way
-to skip parity; it is a way to inherit it, and it must be stated in the code so
-the absence never reads as an oversight. Delegating still means owning your own
-identity: `backend`, the credential allowlist (`envBackend`), detection, model
-mapping and every plumbing site in step 8 are yours, not the delegate's.
-
 To be first-class:
 
 1. **Runner** — `src/core/pi-runner.ts` implementing `AgentRunner` /
@@ -386,19 +374,16 @@ To be first-class:
    rule, document any new `CEZ_*` var in `.env.example` in the same commit.
 4. **Mapper** — `src/core/<runner>-ui-mapper.ts` emitting the full v2 `UiEvent`
    stream **alongside** v1. Never throw on malformed input; explicit immutable
-   state. *(Delegating runner: none — you emit through the delegate's mapper.)*
+   state.
 5. **v1 alongside v2** — wire `SessionOptions.onUiEvent`; keep the v1
    `AgentEvent` stream flowing unchanged.
 6. **Golden fixtures** — `src/core/__fixtures__/<runner>/*.ndjson` +
    `*.expected.json`, wire-faithful and citing their upstream source, covering
    **every** parity matrix capability (§6), and a `<runner>-ui-mapper.test.ts`
-   replaying them. *(Delegating runner: none — the delegate's fixtures are the
-   contract, and a copy would pin the same mapper twice.)*
+   replaying them.
 7. **Parity** — add the id to `BACKENDS` in `ui-parity.test.ts`; every capability
    row must pass. (If the backend has no wire parent attribution, document the
    nesting cell's substitute the way codex's review-mode items are handled.)
-   *(Delegating runner: stay out of `BACKENDS`, and say WHY in the test's header
-   comment — an unexplained absence is indistinguishable from a forgotten one.)*
 8. **Plumbing** — the run-store `runner` enum, workflow step schema, the
    `POST /api/runs` / `PUT /api/config` bodies, `resumeCommand()`, the web
    `Runner` type, composer pills/presets, and Settings → Agents. Keep additive
@@ -410,9 +395,8 @@ To be first-class:
    `BACKEND_MODEL_MAP`'s default column, so a bare id fails loud.
 10. **Credentials** — one entry in `BACKEND_ALLOW_PREFIXES` (`agent-env.ts`):
    `buildChildEnv` is least-privilege per backend, so a multi-provider runner
-   that only gets its delegate's prefixes starts with no credential for the
-   providers its own model ids can name. A delegating runner must pass its id
-   down (`ClaudeCliRunnerOptions.envBackend`) — the child runs YOUR binary.
+   must receive credentials for every provider its own model ids can name
+   without widening other backends.
 
 ## 10. The plan channel (PR #443)
 

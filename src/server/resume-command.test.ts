@@ -15,7 +15,7 @@ describe('resumeCommand — session id validation', () => {
     expect(resumeCommand(undefined, id)).toBe(`claude --resume ${id}`);
     expect(resumeCommand('codex', id)).toBe(`codex resume ${id}`);
     expect(resumeCommand('opencode', id)).toBe(`opencode --session ${id}`);
-    expect(resumeCommand('pi', id)).toBe(`pi --resume ${id}`);
+    expect(resumeCommand('pi', id)).toBe(`pi --session ${id}`);
   });
 
   // Every runner id must map to a command — an id that fell through to the `claude` default

@@ -9,8 +9,8 @@
  *  - `claude`   — Claude Code CLI, stream-json over stdin/stdout;
  *  - `codex`    — `codex app-server`, JSON-RPC 2.0 (JSONL) over stdin/stdout;
  *  - `opencode` — `opencode serve`, HTTP + SSE;
- *  - `pi`       — pi coding CLI, Claude-compatible stream-json over
- *                 stdin/stdout, selecting its model with `provider/model`.
+ *  - `pi`       — pi coding CLI, RPC over JSONL stdin/stdout, selecting its
+ *                 model with `provider/model`.
  */
 
 import type { UiEvent } from './ui-events.js';

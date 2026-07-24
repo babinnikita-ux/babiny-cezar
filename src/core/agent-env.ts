@@ -222,8 +222,8 @@ const BACKEND_ALLOW_PREFIXES: Record<AgentBackend, readonly string[]> = {
   'claude-cli': ['ANTHROPIC_', 'CLAUDE_'],
   codex: ['OPENAI_', 'CODEX_', 'AZURE_OPENAI_'],
   opencode: MULTI_PROVIDER_PREFIXES,
-  // pi drives a Claude-compatible CLI but selects models as `provider/model` (#387), so it
-  // needs both the Claude-side config and any provider a `provider/model` id can name.
+  // pi selects models as `provider/model` (#387), so it needs both its own config and any
+  // provider a configured model id can name.
   pi: ['PI_', 'CLAUDE_', ...MULTI_PROVIDER_PREFIXES],
 };
 

@@ -3499,12 +3499,8 @@ export function resumeCommand(runner: string | undefined, sessionId: string): st
       return `codex resume ${sessionId}`;
     case 'opencode':
       return `opencode --session ${sessionId}`;
-    // Same flag as claude, and not a guess: `PiRunner` delegates to `ClaudeCliRunner`, so cezar
-    // itself already spawns `pi --resume <id>` to reopen a pi session (claude-cli-runner.ts's
-    // arg builder). A `pi` that did not take `--resume` would break the runner's own resume
-    // path first — this handoff cannot drift from it independently (#387 review).
     case 'pi':
-      return `pi --resume ${sessionId}`;
+      return `pi --session ${sessionId}`;
     default:
       return `claude --resume ${sessionId}`;
   }

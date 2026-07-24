@@ -6,16 +6,15 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { AgentEvent } from './agent-runner.js';
 import { buildChildEnv } from './agent-env.js';
 import { detectEnvironment } from './backend-detect.js';
-import { ClaudeCliRunner } from './claude-cli-runner.js';
 import { createRunner } from './runner-factory.js';
-import { PiRunner } from './pi-runner.js';
+import { buildPiArgs, PiRunner } from './pi-runner.js';
 
 /**
  * The `pi` runner (#387): a new AgentBackend slotted into the runner seam as
  * ONE class. These lock the three seam-level guarantees the issue asks for —
  * the factory hands back a pi runner, detection degrades gracefully when the
- * pi CLI is absent, and a dry-run session emits the normalized `AgentEvent`
- * stream every backend shares (no pi-specific wire type leaks past the seam).
+ * pi CLI is absent, and the documented RPC protocol emits the normalized
+ * streams every backend shares.
  */
 
 describe('createRunner returns the pi runner', () => {
@@ -83,14 +82,54 @@ describe('a dry-run pi session emits normalized AgentEvents', () => {
   });
 });
 
-/**
- * Credential scoping across the delegation boundary. `buildChildEnv` is least-privilege PER
- * BACKEND, and `PiRunner` spawns pi's binary through a `ClaudeCliRunner` — so if the delegate
- * spawned under its own `backend` ('claude'), a pi run selecting `openai/gpt-5.1` would start
- * with no OpenAI credential at all, and the `pi` entry in the allowlist table would be dead
- * code. `envBackend` is what keeps the two apart; these pin both halves.
- */
-describe('pi spawns under pi credentials, not claude ones', () => {
+describe('pi RPC argv', () => {
+  it('uses pi RPC mode, exact session selection, provider/model, and pi tool names', () => {
+    expect(
+      buildPiArgs({
+        cwd: '/repo',
+        userPrompt: 'task',
+        sessionId: 'session-1',
+        resume: true,
+        model: 'openai/gpt-5.1',
+        systemPrompt: 'Keep changes focused.',
+        allowedTools: ['Read', 'Bash', 'Edit', 'Write', 'Grep', 'Glob'],
+      }),
+    ).toEqual([
+      '--mode',
+      'rpc',
+      '--session',
+      'session-1',
+      '--append-system-prompt',
+      'Keep changes focused.',
+      '--model',
+      'openai/gpt-5.1',
+      '--tools',
+      'read,bash,edit,write,grep,find',
+    ]);
+  });
+
+  it('creates a new exact session id instead of invoking the interactive resume picker', () => {
+    expect(buildPiArgs({ cwd: '/repo', userPrompt: 'task', sessionId: 'session-1' })).toEqual([
+      '--mode',
+      'rpc',
+      '--session-id',
+      'session-1',
+    ]);
+  });
+
+  it('fails closed by disabling bash when a command-prefix allowlist cannot be represented', () => {
+    expect(
+      buildPiArgs({
+        cwd: '/repo',
+        userPrompt: 'task',
+        allowedTools: ['Read', 'Bash'],
+        bashAllowlist: ['npm test'],
+      }),
+    ).toEqual(['--mode', 'rpc', '--tools', 'read']);
+  });
+});
+
+describe('pi spawns under pi credentials, not another runner', () => {
   const source: NodeJS.ProcessEnv = {
     PATH: '/usr/bin',
     ANTHROPIC_API_KEY: 'ant',
@@ -117,8 +156,7 @@ describe('pi spawns under pi credentials, not claude ones', () => {
     expect(env.OPENROUTER_API_KEY).toBeUndefined();
   });
 
-  it('keeps the seam identity claude-free: PiRunner reports pi, the delegate still reports claude', () => {
+  it('keeps the seam identity pi-specific', () => {
     expect(new PiRunner().backend).toBe('pi');
-    expect(new ClaudeCliRunner().backend).toBe('claude');
   });
 });
