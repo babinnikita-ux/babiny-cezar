@@ -3,6 +3,7 @@ import { chmodSync, mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { z } from 'zod';
+import { PROVIDER_IDS, type ProviderId } from '../core/provider-auth.js';
 import { workspaceConfigPath } from '../paths.js';
 
 /**
@@ -69,6 +70,21 @@ const workspacePathSchema = (envName: 'CEZ_BROWSE_ROOT' | 'CEZ_PROJECTS_DIR', fa
   return z.string().min(1).max(4096).default(defaultValue).catch(defaultValue);
 };
 
+const providerIdSet = new Set<string>(PROVIDER_IDS);
+
+const disabledProvidersSchema = z
+  .array(z.unknown())
+  .default(() => [])
+  .catch(() => [])
+  .transform((values): ProviderId[] => {
+    const seen = new Set<ProviderId>();
+    for (const value of values) {
+      if (typeof value !== 'string' || !providerIdSet.has(value)) continue;
+      seen.add(value as ProviderId);
+    }
+    return PROVIDER_IDS.filter((provider) => seen.has(provider));
+  });
+
 const workspaceConfigSchema = z
   .object({
     /** Migration cursor (src/workspace/migrations.ts). Absent/bad → 0, which
@@ -81,9 +97,14 @@ const workspaceConfigSchema = z
      *  `~` is expanded by the checkout flow, not here); validated writable
      *  when *changed*, never at load. */
     projectsDir: workspacePathSchema('CEZ_PROJECTS_DIR', '~/cezar/projects'),
+    /** Optional auto-update override. Absence inherits the environment/default
+     *  and must stay absent on unrelated merge-writes. */
+    skillsAutoUpdate: z.boolean().optional().catch(undefined),
     // Function-form default/catch: mutators (step 1.3's registerProject) edit
     // these objects in place, so parses must never share one reference.
     resources: resourcesSchema.default(() => ({})).catch(() => resourcesSchema.parse({})),
+    /** Host-wide provider preferences; absent means every provider is enabled. */
+    disabledProviders: disabledProvidersSchema,
     /** Per-entry salvage: a corrupt entry is dropped, the rest of the registry
      *  survives (a whole-array `.catch([])` would evict every project over one
      *  bad row). */
@@ -101,6 +122,17 @@ const workspaceConfigSchema = z
   .passthrough();
 
 export type WorkspaceConfig = z.infer<typeof workspaceConfigSchema>;
+
+/** Resolve the auto-update preference without mutating or materializing it. */
+export function effectiveSkillsAutoUpdate(
+  config: Pick<WorkspaceConfig, 'skillsAutoUpdate'>,
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  if (config.skillsAutoUpdate !== undefined) return config.skillsAutoUpdate;
+  if (env.CEZ_SKILLS_AUTO_UPDATE === '0') return false;
+  if (env.CEZ_SKILLS_AUTO_UPDATE === '1') return true;
+  return true;
+}
 
 /** The in-memory default — what a missing/corrupt file behaves like. */
 export function defaultWorkspaceConfig(): WorkspaceConfig {

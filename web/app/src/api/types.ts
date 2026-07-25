@@ -38,6 +38,31 @@ export type StepStatus =
  *  choice and are Claude by definition (see `resumeCommand` in the server). */
 export type Runner = 'claude' | 'codex' | 'opencode' | 'pi'
 
+/** Coarse host authentication state from `/api/providers/status`. Credentials, account
+ *  identity, and raw CLI output never cross this boundary. */
+export type ProviderId = Runner
+export type ProviderConnectionState =
+  | 'connected'
+  | 'disconnected'
+  | 'not-installed'
+  | 'unknown'
+
+export interface ProviderStatus {
+  provider: ProviderId
+  status: ProviderConnectionState
+  enabled: boolean
+  hint?: string
+  authFailureId?: string
+}
+
+export interface ProviderStatusResponse {
+  providers: ProviderStatus[]
+}
+
+export type ProviderConnectResponse =
+  | { opened: true; command: string }
+  | { opened: false; connected: true; command: string }
+
 export interface RunnerModelOption {
   id: string
   label: string
@@ -384,6 +409,10 @@ export interface FsBrowseResponse {
  *  the top level server-side, so a writer must send the whole `sidebar` object, not a leaf. */
 export interface WorkspaceUiState {
   sidebar?: { collapsed?: Record<string, boolean> } & Record<string, unknown>
+  /** Dismissed runtime-auth incident IDs, keyed by provider. An ID is only dismissed until
+   *  the provider reports a different incident, so this stays workspace-global with the
+   *  browser rather than one project checkout. */
+  dismissedProviderAuthFailures?: Partial<Record<ProviderId, string>>
   /** Settings → Appearance, GLOBAL since step 3.5: accent + density describe the person at
    *  the keyboard, not a repo, so they live in `~/.cezar/ui-state.json` and follow the user
    *  across every project. Same shape as the per-repo `UiState.appearance` it superseded
@@ -410,6 +439,8 @@ export interface WorkspaceUiState {
 export interface WorkspaceConfigResponse {
   browseRoot: string
   projectsDir: string
+  skillsAutoUpdate: boolean | null
+  effectiveSkillsAutoUpdate: boolean
   resources: {
     maxParallel: number
     memoryLimitMb: number | null
@@ -423,6 +454,7 @@ export interface WorkspaceConfigResponse {
 export interface SetWorkspaceConfigInput {
   browseRoot?: string
   projectsDir?: string
+  skillsAutoUpdate?: boolean | null
   resources?: {
     maxParallel?: number
     memoryLimitMb?: number | null
@@ -1023,6 +1055,27 @@ export interface OpenTarget {
 /** `GET /api/open-targets` — the detected local apps; empty in hosted mode (CEZ_REMOTE). */
 export interface OpenTargetsResponse {
   targets: OpenTarget[]
+}
+
+export type SkillsUpdateStatus = 'idle' | 'checking' | 'available' | 'updating' | 'current' | 'unavailable' | 'error'
+export interface SkillsUpdateScopeState {
+  scope: 'project' | 'global'
+  status: SkillsUpdateStatus
+  available: boolean
+  skills: string[]
+  checkedAt: string | null
+  updatedAt: string | null
+  reason?: string
+}
+export interface SkillsUpdateState {
+  status: SkillsUpdateStatus
+  available: boolean
+  autoUpdateEnabled: boolean
+  inherited: boolean
+  checkedAt: string | null
+  updatedAt: string | null
+  scopes: SkillsUpdateScopeState[]
+  needsUpgradeNotes: boolean
 }
 
 // ---- mutation responses ---------------------------------------------------------------------------

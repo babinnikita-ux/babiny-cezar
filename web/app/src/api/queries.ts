@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 
+import { mergeProviderStatusResponse } from '@/lib/provider-status'
+
 import {
   browseFs,
   checkoutProject,
@@ -13,6 +15,7 @@ import {
   getHealth,
   getLaunchKey,
   getOpenTargets,
+  getProviderStatus,
   getProjectRuns,
   getProjects,
   getRunnerModels,
@@ -36,6 +39,9 @@ import {
   getWorkflows,
   getWorkspaceConfig,
   getWorkspaceUiState,
+  getSkillsUpdate,
+  checkSkillsUpdate,
+  applySkillsUpdate,
   getWorktrees,
   editQueuedMessage,
   patchRun,
@@ -45,6 +51,7 @@ import {
   updateProject,
   sendMessage,
   putAgentConfigFile,
+  retryProviderAuth,
 } from './client'
 import { queryScope } from './project-scope'
 import type {
@@ -52,6 +59,8 @@ import type {
   HealthResponse,
   MessageInput,
   PatchRunInput,
+  ProviderId,
+  ProviderStatusResponse,
   SetAgentConfigInput,
   UpdateProjectInput,
 } from './types'
@@ -156,6 +165,7 @@ export const queryKeys = {
  */
 export const workspaceQueryKeys = {
   models: (runner: string) => ['workspace', 'models', runner] as const,
+  providerStatus: ['workspace', 'providers', 'status'] as const,
   projects: ['workspace', 'projects'] as const,
   /** `~/.cezar/ui-state.json` via `GET/PUT /api/workspace/ui-state` (step 2.7) — cross-project
    *  GUI prefs, e.g. the sidebar's per-project collapse map (step 3.3), and — since step 3.5 —
@@ -164,6 +174,7 @@ export const workspaceQueryKeys = {
   /** `~/.cezar/config.json`'s settings slice via `GET/PUT /api/workspace/config` (step 2.7):
    *  the global Resources knobs and the checkout root. */
   config: ['workspace', 'config'] as const,
+  skillsUpdate: (projectId: string) => ['workspace', 'skills-update', projectId] as const,
   /** One directory listing from `GET /api/fs/browse` (step 4.2's folder picker). Keyed by the
    *  browsed path — `null` is the browse root, whose absolute location only the server knows.
    *  Not scope-led: there is one filesystem behind the workspace, not one per project. */
@@ -179,6 +190,56 @@ export function useRunnerModels(enabled = true) {
     queryFn: ({ signal }) => getRunnerModels({ signal }),
     staleTime: 5 * 60 * 1_000,
     enabled,
+  })
+}
+
+export function useProviderStatus() {
+  const queryClient = useQueryClient()
+  return useQuery({
+    queryKey: workspaceQueryKeys.providerStatus,
+    queryFn: async ({ signal }) => {
+      const requestStart = queryClient.getQueryData<ProviderStatusResponse>(
+        workspaceQueryKeys.providerStatus,
+      )
+      const response = await getProviderStatus(false, { signal })
+      return mergeProviderStatusResponse(
+        requestStart,
+        queryClient.getQueryData(workspaceQueryKeys.providerStatus),
+        response,
+      )
+    },
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  })
+}
+
+export function useRefreshProviderStatus() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => getProviderStatus(true),
+    onMutate: () => queryClient.getQueryData<ProviderStatusResponse>(workspaceQueryKeys.providerStatus),
+    onSuccess: (result, _variables, requestStart) => queryClient.setQueryData<ProviderStatusResponse>(
+      workspaceQueryKeys.providerStatus,
+      (cached) => mergeProviderStatusResponse(requestStart, cached, result),
+    ),
+  })
+}
+
+export function useRetryProviderAuth() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({
+      provider,
+      authFailureId,
+    }: {
+      provider: ProviderId
+      authFailureId: string
+    }) => retryProviderAuth(provider, authFailureId),
+    onMutate: () => queryClient.getQueryData<ProviderStatusResponse>(workspaceQueryKeys.providerStatus),
+    onSuccess: (result, variables, requestStart) => {
+      queryClient.setQueryData<ProviderStatusResponse>(workspaceQueryKeys.providerStatus, (cached) =>
+        mergeProviderStatusResponse(requestStart, cached, result, variables.authFailureId))
+    },
   })
 }
 
@@ -650,6 +711,38 @@ export function useWorkspaceConfig() {
     queryKey: workspaceQueryKeys.config,
     queryFn: ({ signal }) => getWorkspaceConfig({ signal }),
   })
+}
+
+export function useSkillsUpdate(projectId: string, enabled = true) {
+  return useQuery({
+    queryKey: workspaceQueryKeys.skillsUpdate(projectId),
+    queryFn: ({ signal }) => getSkillsUpdate(projectId, { signal }),
+    enabled,
+    // GET deliberately answers the current snapshot and starts a stale check in the
+    // background. Poll only while that snapshot is transient so an initial `idle`
+    // response converges without turning every open cockpit into a permanent poller.
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      return status === undefined || status === 'idle' || status === 'checking' || status === 'updating'
+        ? 1_000
+        : false
+    },
+  })
+}
+
+export function useCheckSkillsUpdate(projectId: string) {
+  const queryClient = useQueryClient()
+  const key = workspaceQueryKeys.skillsUpdate(projectId)
+  return useMutation({
+    mutationFn: () => checkSkillsUpdate(projectId),
+    onSuccess: (state) => queryClient.setQueryData(key, state),
+  })
+}
+
+export function useApplySkillsUpdate(projectId: string) {
+  const queryClient = useQueryClient()
+  const key = workspaceQueryKeys.skillsUpdate(projectId)
+  return useMutation({ mutationFn: () => applySkillsUpdate(projectId), onSuccess: (state) => queryClient.setQueryData(key, state) })
 }
 
 /** Rename a run (#389): `PATCH /api/runs/:id`. Invalidates `runs.*` so the list and the detail

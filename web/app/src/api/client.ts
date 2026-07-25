@@ -36,6 +36,9 @@ import type {
   PatchRunInput,
   PickVariantResponse,
   PlanResponse,
+  ProviderConnectResponse,
+  ProviderId,
+  ProviderStatusResponse,
   ProjectsResponse,
   RegisterProjectResponse,
   RemoveProjectResponse,
@@ -64,7 +67,9 @@ import type {
   WorkflowsResponse,
   WorkspaceConfigResponse,
   WorkspaceUiState,
+  SkillsUpdateState,
 } from './types'
+import { parseProviderStatusResponse } from '@/lib/provider-status'
 import { scopeApiPath } from './project-scope'
 
 /**
@@ -209,6 +214,17 @@ export function getHealth(opts?: ReadOptions): Promise<HealthResponse> {
 /** Host-local Codex catalog. Workspace-level: one CLI/account serves every project. */
 export function getRunnerModels(opts?: ReadOptions): Promise<RunnerModelCatalogResponse> {
   return get<RunnerModelCatalogResponse>('/api/models?runner=codex', opts)
+}
+
+/** Host-local authentication state shared by every project. */
+export function getProviderStatus(
+  refresh = false,
+  opts?: ReadOptions,
+): Promise<ProviderStatusResponse> {
+  return get<unknown>(
+    `/api/providers/status${refresh ? '?refresh=1' : ''}`,
+    opts,
+  ).then(parseProviderStatusResponse)
 }
 
 /** The bookmarklet auto-start secret (spec 011). Fetched to compare against `/new?key=` —
@@ -403,6 +419,32 @@ export function getGroup(groupId: string, opts?: ReadOptions): Promise<GroupResp
 }
 
 // ---- workspace mutations ------------------------------------------------------------------
+
+export function connectProvider(provider: ProviderId): Promise<ProviderConnectResponse> {
+  return mutate<ProviderConnectResponse>('POST', '/api/providers/connect', { provider })
+}
+
+export function setProviderEnabled(
+  provider: ProviderId,
+  enabled: boolean,
+): Promise<ProviderStatusResponse> {
+  return mutate<unknown>(
+    'PUT',
+    `/api/providers/${encodeURIComponent(provider)}/enabled`,
+    { enabled },
+  ).then(parseProviderStatusResponse)
+}
+
+export function retryProviderAuth(
+  provider: ProviderId,
+  authFailureId: string,
+): Promise<ProviderStatusResponse> {
+  return mutate<unknown>(
+    'POST',
+    `/api/providers/${encodeURIComponent(provider)}/retry`,
+    { authFailureId },
+  ).then(parseProviderStatusResponse)
+}
 
 /**
  * Register an existing folder (`POST /api/projects`, step 4.2).
@@ -699,6 +741,22 @@ export function putWorkspaceUiState(patch: WorkspaceUiState): Promise<WorkspaceU
  *  (step 4.4) the checkout-root field. Workspace-level, so never scope-prefixed. */
 export function getWorkspaceConfig(opts?: ReadOptions): Promise<WorkspaceConfigResponse> {
   return get<WorkspaceConfigResponse>('/api/workspace/config', opts)
+}
+
+/** Cached Open Mercato update state for one registered project. The GET is immediate; the
+ * server may start a stale detection-only refresh after taking its snapshot. */
+export function getSkillsUpdate(projectId: string, opts?: ReadOptions): Promise<SkillsUpdateState> {
+  return get<SkillsUpdateState>(`/api/workspace/skills-update?projectId=${encodeURIComponent(projectId)}`, opts)
+}
+
+/** Force a bounded detection pass. The browser supplies identity only, never executable input. */
+export function checkSkillsUpdate(projectId: string): Promise<SkillsUpdateState> {
+  return mutate<SkillsUpdateState>('POST', '/api/workspace/skills-update/check', { projectId })
+}
+
+/** Apply the server-owned, lock-authorized update set. Identity is the only browser input. */
+export function applySkillsUpdate(projectId: string): Promise<SkillsUpdateState> {
+  return mutate<SkillsUpdateState>('POST', '/api/workspace/skills-update/apply', { projectId })
 }
 
 /** Partial update — absent keys stay untouched; answers the merged config. A `projectsDir`

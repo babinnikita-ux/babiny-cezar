@@ -62,8 +62,8 @@ export function resumeHint(run: RunRecord): string | undefined {
 /** The runner a `cli:<runner>` Open-in target hands off to, or undefined for every other
  *  target (editors, Finder, terminal) — mirrors the server's `agentCliRunner` (open-in-app.ts)
  *  without importing server code into the bundle. */
-function cliTargetRunner(targetId: string): Runner | undefined {
-  const match = /^cli:(claude|codex|opencode)$/.exec(targetId)
+export function cliTargetRunner(targetId: string): Runner | undefined {
+  const match = /^cli:(claude|codex|opencode|pi)$/.exec(targetId)
   return match ? (match[1] as Runner) : undefined
 }
 
