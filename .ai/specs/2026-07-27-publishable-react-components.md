@@ -1,8 +1,10 @@
 # Publishable Cezar React components for composable embedding
 
-> Companion to `.ai/specs/2026-07-23-independent-server-web-packages.md`.
-> That spec deliberately excluded the reusable-React-components half of #557; this spec owns
-> that half. It also consumes the shared transcript boundary designed in
+> Dependent follow-on to `.ai/specs/2026-07-23-independent-server-web-packages.md`.
+> The independent-server spec is the normative foundation for the API client, package layout,
+> versioned HTTP contract, remote-access model, and release ordering used here. It deliberately
+> excluded the reusable-React-components half of #557; this spec adds that half without
+> redefining the client or service boundary. It also consumes the shared transcript boundary in
 > `.ai/specs/2026-07-21-shared-session-renderer.md`.
 
 ## TLDR
@@ -35,6 +37,68 @@ The API client must be stabilized and published before, or in the same release a
 package. The component package never imports private SPA modules, assumes a root URL, creates a
 global client, or changes the host application's document styles.
 
+## Foundation: the independent-server and API-client spec
+
+This design starts from the amended, current state of
+`.ai/specs/2026-07-23-independent-server-web-packages.md`, not from the layout that its
+superseded decisions originally proposed. That spec remains authoritative for everything below
+the React integration layer. If the two documents appear to conflict:
+
+- the independent-server spec governs service packaging, API routes, Hono `AppType`, DTO
+  ownership, transport behavior, auth, OpenAPI, and backward compatibility;
+- this spec governs React providers, connected and presentation components, host composition,
+  navigation adapters, styling isolation, and the reference cockpit's use of those components.
+
+The React package inherits these decisions unchanged:
+
+1. **The root is private and packages live under `packages/*`.** The completed
+   `packages/{cezar,api-client,web}` layout is extended additively with `packages/react`.
+   The CLI remains inside `@open-mercato/cezar`.
+2. **The API client is the only service-contract boundary used by a UI.** React components
+   import DTOs, protocol types, project-scope helpers, and transport operations from
+   `@open-mercato/cezar-api-client`; they never import the server module graph or mirror its
+   contract.
+3. **The typed public API uses `/api/v1`.** Existing unversioned `/api` routes and project
+   aliases remain frozen compatibility surfaces. New React consumers are not invited to build
+   directly on those legacy spellings.
+4. **Hono RPC remains the TypeScript contract mechanism.** Route families become inferable
+   through chained builders and exported `AppType`; the client wraps `hc<AppType>`. The stable
+   domain methods required by connected components are the rich-client layer already committed
+   by the independent-server spec, not a competing client design.
+5. **The API-client package remains Node-free.** Its server edge is type-only. React may depend
+   on it at runtime without pulling `node:*` modules or the published CLI into a browser bundle.
+6. **Same-origin remains the zero-config default and base URL is configurable.** The bundled
+   cockpit continues to use `''`; another application supplies the service authority through
+   `createCezarClient`.
+7. **Project scope is part of the client contract.** Connected components use the same
+   `/api` versus `/api/p/:projectId` helpers and boot/default semantics rather than inventing a
+   React-only route prefix.
+8. **Remote auth is opt-in.** Local mode remains unauthenticated and loopback-only. The client
+   and React provider accept tokens/auth callbacks for the remote mode specified upstream, but
+   this spec does not replace its JWT, CORS, login, or SSE-auth decisions.
+9. **OpenAPI remains a later additive contract.** The React package consumes the TypeScript
+   client; it neither blocks Phase 6 nor substitutes a component schema for the language-neutral
+   OpenAPI work.
+10. **Release metadata stays in lockstep and publication follows dependencies.** The existing
+    release pipeline's manifest-driven `private` gate remains the mechanism for opening both
+    API-client and React packages.
+
+The upstream implementation status also determines this spec's starting point:
+
+| Independent-server phase | Current status | Dependency for this spec |
+| --- | --- | --- |
+| Phase 0–2 + Phase R: client scaffold, first chained families, web package, `packages/*` layout | complete | inherited; do not redo |
+| Phase 3: remaining chained families, single-source DTOs, delete mirror | partial | complete the React-consumed families before publishing either package |
+| Phase 4: configurable base URL | partial | complete the rich client and every HTTP/SSE/raw-file URL before external embedding |
+| Phase 5: remote auth | not started | preserve the client/provider extension points; default cockpit login joins the public React surface when this phase lands |
+| Phase 6: OpenAPI | not started | independent and non-blocking for the React package |
+
+The independent-server spec currently keeps `@open-mercato/cezar-api-client` private until
+Phase 3 makes it a runtime dependency of a published package. This spec adds another equivalent
+publication trigger: a public `@open-mercato/cezar-react` package is itself a published runtime
+consumer. Therefore API-client must lose `private` before, or atomically with, the first React
+publication even if the server's runtime DTO import has not yet landed.
+
 ## Resolved decisions (confirmed with owner 2026-07-27)
 
 1. **Create a separate public React package.**
@@ -64,9 +128,10 @@ global client, or changes the host application's document styles.
    `className`, semantic callbacks, action interception where useful, and a small set of
    documented slots such as header actions, empty state, or footer. Internal shadcn primitives,
    Radix wrappers, table rows, and private orchestration components are not public.
-8. **The API client is published first or atomically with React.** The React package depends at
-   runtime on `@open-mercato/cezar-api-client`; npm must never receive a React package whose
-   dependency remains private.
+8. **The API client is published first or atomically with React.** This is the additional
+   publication trigger described above, extending amended decision 7 of the independent-server
+   spec. The React package depends at runtime on `@open-mercato/cezar-api-client`; npm must
+   never receive a React package whose dependency remains private.
 9. **The shipped cockpit uses the public contract.** Every standard cockpit screen is composed
    from the same exports available to another application. A second private rendering path is
    not allowed.
@@ -185,7 +250,9 @@ independent value, as `Diff` and `SessionTranscript` do.
 
 #### `@open-mercato/cezar-api-client`
 
-The browser-safe transport and contract package. It owns:
+The browser-safe transport and contract package defined by the independent-server spec. This
+spec consumes and completes that package; it does not introduce another client package or
+contract source. It owns:
 
 - `createCezarClient`;
 - the stable `CezarClient` interface;
@@ -196,11 +263,13 @@ The browser-safe transport and contract package. It owns:
 - SSE parsing/subscriptions and reconnect primitives;
 - the ref-counted WebSocket topic bus;
 - project-scope path helpers;
-- optional raw typed Hono RPC access.
+- the raw typed Hono RPC access defined upstream.
 
 React components depend on stable domain operations, not directly on Hono's generated property
-chain. This prevents a route-registration refactor from leaking across every component. Raw RPC
-remains available for advanced consumers and contract work.
+chain. Those operations are the upstream spec's rich wrapper around `hc<AppType>`, including
+`ApiError`, project-scope prefixing, SSE helpers, and configurable base URL. They prevent a
+route-registration refactor from leaking across every component while raw RPC remains available
+for advanced consumers and contract work.
 
 The client package has no React, DOM-at-import-time, Node runtime, cache, theme, or navigation
 dependency. Browser transport constructors are resolved lazily or injected.
@@ -697,10 +766,15 @@ Implementation is incremental, while publication waits for complete major-featur
 
 ### Phase 0 — Stabilize and publish the API client
 
+- Resume the independent-server spec at its first incomplete work; do not create a React-local
+  transport or parallel DTO layer.
 - Move the rich request layer, `ApiError`, project-aware domain methods, run/workspace SSE, and
   the WebSocket topic bus from `packages/web/src/api` into `packages/api-client`.
-- Complete the relevant route typing/single-source work from Phase 3 of
-  `.ai/specs/2026-07-23-independent-server-web-packages.md`.
+- Complete Phase 3 route typing/single-source work for every family consumed by a public React
+  feature, using the upstream `AppType`, chained-family, `/api/v1`, DTO-removal, and parity-test
+  rules.
+- Complete Phase 4 base-URL handling across HTTP, EventSource, WebSocket, raw-file, and external
+  resource URLs used by the public components.
 - Preserve same-origin defaults and the current reference cockpit behavior.
 - Make the package public only when every operation required by the React package has a stable
   public type and packed-consumer coverage.
