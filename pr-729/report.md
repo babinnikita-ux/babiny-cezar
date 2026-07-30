@@ -2,7 +2,7 @@
 
 **Verdict:** ✅ PASS — every required startup-routing and persistence scenario behaved as specified.
 **Environment:** `http://127.0.0.1:60893` · role `local unauthenticated cockpit` · browser `agent-browser 0.32.1`
-**Verified:** `spec/restore-last-location` @ `a294e9d5`
+**Verified:** `spec/restore-last-location` @ `2b875231`
 
 ### Scenario (P1 — last project location)
 
