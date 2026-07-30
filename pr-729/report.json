@@ -1,0 +1,61 @@
+{
+  "runId": "42766454",
+  "mode": "pr",
+  "target": {
+    "prNumber": 729,
+    "title": "feat(web): restore the last project location",
+    "branch": "spec/restore-last-location",
+    "headSha": "2bf2781eb8919ed1f29cf91bf50491969119fcc1"
+  },
+  "verdict": "PASS",
+  "environment": {
+    "baseUrl": "http://127.0.0.1:60893",
+    "role": "local unauthenticated cockpit",
+    "startedByThisRepo": true,
+    "browserProvider": "agent-browser"
+  },
+  "scenario": [
+    {
+      "step": 1,
+      "priority": "P1",
+      "action": "Opened a registered project Git route with query and fragment and waited for the persistence debounce.",
+      "expected": "The exact project, pathname, query, and fragment are stored in workspace UI state.",
+      "observed": "The browser stayed at /p/cezar/git?qa=restore#changed and GET /api/v1/workspace/ui-state returned the same four location fields.",
+      "result": "PASS",
+      "screenshot": "01-explicit-project-location.png"
+    },
+    {
+      "step": 2,
+      "priority": "P1",
+      "action": "Cold-navigated the same browser session to the exact bare root and waited for startup queries.",
+      "expected": "Bare root is replaced with the saved project route, including query and fragment, and Back does not return to a transient root entry.",
+      "observed": "The URL became /p/cezar/git?qa=restore#changed; Back remained on that restored URL.",
+      "result": "PASS",
+      "screenshot": "02-bare-root-restored.png"
+    },
+    {
+      "step": 3,
+      "priority": "P1",
+      "action": "Opened an explicit project Settings deep link, visited global Settings, then reopened the bare root at a 390 x 844 viewport.",
+      "expected": "The explicit project URL remains authoritative, global Settings does not overwrite it, and bare-root restoration remains usable on a narrow viewport.",
+      "observed": "Workspace state retained /p/cezar/settings/agents?manual=1#config while global Settings was open; bare root restored that exact URL and rendered the Agents settings surface without browser errors.",
+      "result": "PASS",
+      "screenshot": "03-mobile-restored-settings.png"
+    },
+    {
+      "step": 4,
+      "priority": "P1",
+      "action": "Seeded a structurally valid saved route for a project absent from the registry and opened the exact bare root.",
+      "expected": "The stale saved route is ignored and startup falls back to the boot project's Tasks page.",
+      "observed": "The URL became /p/42766454-3ead-4ea4-8f05-aab273e5cf8b/ and the boot-project empty Tasks page rendered without browser errors.",
+      "result": "PASS",
+      "screenshot": "04-missing-project-fallback.png"
+    }
+  ],
+  "hasUiTest": false,
+  "notes": [
+    "The browser console and page-error collection were empty at the restored mobile route and at the missing-project fallback.",
+    "The repository test environment uses CEZ_DRY_RUN=1 and an isolated CEZ_HOME under .ai/qa; no real agent login or developer workspace state was used.",
+    "This change does not add a committed browser-level test; the PR has extensive unit/component coverage and this run supplies real-browser evidence."
+  ]
+}
