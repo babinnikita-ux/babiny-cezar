@@ -91,6 +91,11 @@ const cursorRequestCount = `performance.getEntriesByType('resource').filter((ent
   return url.pathname.endsWith('/runs/${RUN_ID}/history') && url.searchParams.has('cursor')
 }).length`
 
+function activateHistoryBoundary(): void {
+  browser.evaluate(`document.querySelector('[data-slot="history-boundary"] button').focus()`)
+  browser.press('Enter')
+}
+
 beforeAll(async () => {
   dataRoot = mkdtempSync(join(tmpdir(), 'cezar-e2e-progressive-history-'))
   mkdirSync(join(dataRoot, '.ai/cezar/runs'), { recursive: true })
@@ -116,6 +121,10 @@ beforeAll(async () => {
     `document.querySelector('[data-route="task-thread"]') !== null &&
      document.querySelector('[data-slot="thread-rows"]') !== null`,
   )
+  browser.waitForFunction(
+    `document.querySelector('[data-slot="history-boundary"]')?.dataset.retainedPages === '1' &&
+     document.querySelector('[data-slot="history-boundary"] button:not([disabled])') !== null`,
+  )
 }, 120_000)
 
 afterAll(() => {
@@ -138,7 +147,7 @@ describe('progressive long-session history', () => {
   })
 
   it('loads exactly one page from the accessible control and preserves a bounded page count', async () => {
-    browser.click('[data-slot="history-boundary"] button')
+    activateHistoryBoundary()
     browser.waitForFunction(`${cursorRequestCount} === 1`)
     browser.waitForFunction(
       `document.querySelector('[data-slot="history-boundary"]')?.dataset.retainedPages === '2'`,
@@ -167,7 +176,7 @@ describe('progressive long-session history', () => {
     ))
     while (page < 5) {
       page += 1
-      browser.click('[data-slot="history-boundary"] button')
+      activateHistoryBoundary()
       browser.waitForFunction(
         `document.querySelector('[data-slot="history-boundary"]')?.dataset.retainedPages === '${page}'`,
       )
