@@ -44,6 +44,26 @@ describe('canonicalSessionItems', () => {
       'standalone:6',
     ]);
   });
+
+  it('suppresses exact and fragmented v1 text twins using the reducer evidence', () => {
+    const events = [
+      { seq: 1, ts: 'x', type: 'turn.started', turnId: 't1' },
+      {
+        seq: 2,
+        ts: 'x',
+        type: 'item.completed',
+        item: { kind: 'message', id: 'message-1', role: 'assistant', text: 'hello world' },
+      },
+      { seq: 3, ts: 'x', type: 'text', text: 'hello ' },
+      { seq: 4, ts: 'x', type: 'text', text: 'world' },
+      { seq: 5, ts: 'x', type: 'text', text: 'v1-only fallback' },
+    ] satisfies RunEvent[];
+
+    expect(canonicalSessionItems(events).map(({ key }) => key)).toEqual([
+      'v2::message-1',
+      'v1-text:1:5',
+    ]);
+  });
 });
 
 describe('readRunHistoryPage', () => {
@@ -70,6 +90,31 @@ describe('readRunHistoryPage', () => {
     expect(older.hasOlder).toBe(false);
     expect(older.events.at(-1)?.seq).toBe(51);
     expect(older.newerCursor).toBeTypeOf('string');
+    expect(older.asOfSeq).toBe(151);
+
+    const newer = await readRunHistoryPage(file, older.newerCursor);
+    expect(newer.itemCount).toBe(100);
+    expect(newer.events.at(-1)?.seq).toBe(151);
+    expect(newer.newerCursor).toBeUndefined();
+  });
+
+  it('walks both directions through a single turn larger than five pages', async () => {
+    const events: Array<Partial<RunEvent> & Pick<RunEvent, 'seq' | 'type'>> = [
+      { seq: 1, type: 'turn.started', turnId: 'large-turn' },
+    ];
+    for (let seq = 2; seq <= 651; seq += 1) {
+      events.push({
+        seq,
+        type: 'item.completed',
+        item: { kind: 'message', id: `m-${seq}`, role: 'assistant', text: String(seq) },
+      });
+    }
+    const file = fixture(events);
+    const newest = await readRunHistoryPage(file);
+    const previous = await readRunHistoryPage(file, newest.olderCursor);
+    const forward = await readRunHistoryPage(file, previous.newerCursor);
+    expect(previous).toMatchObject({ itemCount: 100, hasOlder: true });
+    expect(forward.events.at(-1)?.seq).toBe(651);
   });
 
   it('degrades a missing transcript to an empty live page', async () => {
@@ -153,5 +198,73 @@ describe('live cursor replay and compact context', () => {
     const context = await deriveRunContextEvents(file);
     expect(context.asOfSeq).toBe(5);
     expect(context.contextEvents.map(({ seq }) => seq)).toEqual([2, 3, 4, 5]);
+  });
+
+  it('keeps an active root and its newest child after thousands of later context events', async () => {
+    const events: Array<Partial<RunEvent> & Pick<RunEvent, 'seq' | 'type'>> = [
+      { seq: 1, type: 'turn.started', turnId: 't1' },
+      {
+        seq: 2,
+        type: 'item.started',
+        item: { kind: 'tool', id: 'task-1', toolKind: 'task', status: 'running' },
+      },
+    ];
+    for (let index = 0; index < 2_100; index += 1) {
+      events.push({
+        seq: 3 + index,
+        type: 'item.updated',
+        item: {
+          kind: 'tool',
+          id: 'child-1',
+          parentItemId: 'task-1',
+          status: 'running',
+          title: `activity ${index}`,
+        },
+      });
+    }
+    const context = await deriveRunContextEvents(fixture(events));
+    expect(context.contextEvents.some(({ seq }) => seq === 2)).toBe(true);
+    expect(context.contextEvents.at(-1)?.seq).toBe(2_102);
+    expect(context.contextEvents.length).toBeLessThan(10);
+  });
+
+  it('preserves the current plan and lets a settled earlier fan-out bound carry-over', async () => {
+    const events = [
+      { seq: 1, type: 'turn.started', turnId: 't1' },
+      { seq: 2, type: 'plan.updated', entries: [{ content: 'old', status: 'pending' }] },
+      {
+        seq: 3,
+        type: 'item.started',
+        item: { kind: 'tool', id: 'task-1', toolKind: 'task', status: 'running', title: 'Task: one' },
+      },
+      { seq: 4, type: 'user-message', text: 'steer' },
+      { seq: 5, type: 'turn.started', turnId: 't2' },
+      {
+        seq: 6,
+        type: 'item.started',
+        item: { kind: 'tool', id: 'task-2', toolKind: 'task', status: 'running', title: 'Task: two' },
+      },
+      {
+        seq: 7,
+        type: 'item.updated',
+        item: { kind: 'tool', id: 'task-1', toolKind: 'task', status: 'completed', title: 'Task: one' },
+      },
+      {
+        seq: 8,
+        type: 'item.completed',
+        item: {
+          kind: 'tool',
+          id: 'child-2',
+          parentItemId: 'task-2',
+          status: 'completed',
+          title: 'Read a file',
+        },
+      },
+      { seq: 9, type: 'plan.updated', entries: [] },
+    ] satisfies Array<Partial<RunEvent> & Pick<RunEvent, 'seq' | 'type'>>;
+    const context = await deriveRunContextEvents(fixture(events));
+    const itemEvents = context.contextEvents.filter(({ type }) => type.startsWith('item.'));
+    expect(itemEvents.map(({ seq }) => seq)).toEqual([6, 8]);
+    expect(context.contextEvents.at(-1)).toMatchObject({ seq: 9, type: 'plan.updated', entries: [] });
   });
 });

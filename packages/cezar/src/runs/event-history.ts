@@ -17,7 +17,9 @@ const MAX_CURSOR_BYTES = 2_048;
 const pageCursorSchema = z.object({
   v: z.literal(1),
   kind: z.literal('page'),
-  beforeSeq: z.number().int().positive(),
+  direction: z.enum(['older', 'newer']),
+  fileSize: z.number().int().nonnegative(),
+  boundarySeq: z.number().int().nonnegative(),
 });
 
 const liveCursorSchema = z.object({
@@ -108,7 +110,9 @@ export function canonicalSessionItems(events: readonly RunEvent[]): CanonicalIte
   const items = new Map<string, CanonicalItem>();
   let turn = 0;
   let turnHasV2 = false;
-  const v1Tools: Array<{ key: string; event: RunEvent }> = [];
+  const v1Tools: Array<{ key: string; call: RunEvent; result?: RunEvent }> = [];
+  const v1Texts: RunEvent[] = [];
+  const v2Texts: string[] = [];
 
   const upsert = (key: string, event: RunEvent) => {
     const existing = items.get(key);
@@ -122,9 +126,52 @@ export function canonicalSessionItems(events: readonly RunEvent[]): CanonicalIte
 
   const flushTurn = () => {
     if (!turnHasV2) {
-      for (const { key, event } of v1Tools) upsert(key, event);
+      for (const { key, call, result } of v1Tools) {
+        upsert(key, call);
+        if (result) upsert(key, result);
+      }
+      for (const event of v1Texts) upsert(`v1-text:${turn}:${event.seq}`, event);
+    } else if (v2Texts.length > 0) {
+      const normalize = (text: string) =>
+        text
+          .replace(/\s*CEZ:DONE\s*$/, '')
+          .replace(/\s*CEZ:MONITORING\s*$/, '')
+          .replace(/\s*CEZ:ASK[ \t]+\{[\s\S]*\}\s*$/, '')
+          .split('\n')
+          .filter((line) => !/^CEZ:(?:PR=\d+|ISSUE=\d+|TITLE=.+)\s*$/.test(line))
+          .join('\n')
+          .replace(/\s+/g, '');
+      const v2Normalized = new Set(v2Texts.map(normalize));
+      v2Normalized.add(normalize(v2Texts.join('')));
+      for (let index = 0; index < v1Texts.length;) {
+        const event = v1Texts[index]!;
+        const text = stringField(event, 'text') ?? '';
+        if (v2Normalized.has(normalize(text))) {
+          index += 1;
+          continue;
+        }
+        let matchedEnd = -1;
+        let combined = text;
+        for (let end = index + 1; end < v1Texts.length; end += 1) {
+          combined += stringField(v1Texts[end]!, 'text') ?? '';
+          if (v2Normalized.has(normalize(combined))) {
+            matchedEnd = end;
+            break;
+          }
+        }
+        if (matchedEnd >= index + 1) {
+          index = matchedEnd + 1;
+          continue;
+        }
+        upsert(`v1-text:${turn}:${event.seq}`, event);
+        index += 1;
+      }
+    } else {
+      for (const event of v1Texts) upsert(`v1-text:${turn}:${event.seq}`, event);
     }
     v1Tools.length = 0;
+    v1Texts.length = 0;
+    v2Texts.length = 0;
     turnHasV2 = false;
   };
 
@@ -140,23 +187,29 @@ export function canonicalSessionItems(events: readonly RunEvent[]): CanonicalIte
         if (typeof id === 'string' && id !== '') {
           turnHasV2 = true;
           upsert(`v2:${event.stepId ?? ''}:${id}`, event);
+          const item = raw as { kind?: unknown; text?: unknown };
+          if (item.kind === 'message' && typeof item.text === 'string') v2Texts.push(item.text);
         }
       }
       continue;
     }
     if (event.type === 'tool-call') {
       const id = stringField(event, 'id') ?? `seq:${event.seq}`;
-      v1Tools.push({ key: `v1-tool:${turn}:${id}`, event });
+      v1Tools.push({ key: `v1-tool:${turn}:${id}`, call: event });
       continue;
     }
     if (event.type === 'tool-result') {
       const id = stringField(event, 'toolCallId');
-      const tool = id === undefined ? undefined : v1Tools.find(({ event: call }) => call.id === id);
-      if (tool) tool.event = { ...tool.event, seq: event.seq };
+      const tool = id === undefined ? undefined : v1Tools.find(({ call }) => call.id === id);
+      if (tool) tool.result = event;
       continue;
     }
     if (event.type === 'text') {
-      upsert(`v1-text:${turn}:${event.seq}`, event);
+      v1Texts.push(event);
+      continue;
+    }
+    if (event.type === 'step-end' && event.status === 'failed') {
+      upsert(`standalone:${event.seq}`, event);
       continue;
     }
     if (STANDALONE_TYPES.has(event.type)) upsert(`standalone:${event.seq}`, event);
@@ -169,14 +222,20 @@ async function reverseEventsUntil(
   filePath: string,
   beforeSeq: number,
   wantedItems: number,
-): Promise<{ events: RunHistoryEvent[]; fileSize: number; reachedStart: boolean; bytesRead: number }> {
+): Promise<{
+  events: RunHistoryEvent[];
+  fileSize: number;
+  fileHighWater: number;
+  reachedStart: boolean;
+  bytesRead: number;
+}> {
   let fileSize = 0;
   try {
     fileSize = (await stat(filePath)).size;
   } catch {
-    return { events: [], fileSize: 0, reachedStart: true, bytesRead: 0 };
+    return { events: [], fileSize: 0, fileHighWater: 0, reachedStart: true, bytesRead: 0 };
   }
-  if (fileSize === 0) return { events: [], fileSize, reachedStart: true, bytesRead: 0 };
+  if (fileSize === 0) return { events: [], fileSize, fileHighWater: 0, reachedStart: true, bytesRead: 0 };
 
   const handle = await open(filePath, 'r');
   let position = fileSize;
@@ -184,6 +243,7 @@ async function reverseEventsUntil(
   const reversed: RunHistoryEvent[] = [];
   let reachedStart = false;
   let totalBytesRead = 0;
+  let fileHighWater = 0;
   try {
     while (position > 0) {
       const length = Math.min(READ_CHUNK_BYTES, position);
@@ -196,7 +256,10 @@ async function reverseEventsUntil(
       suffix = lines.shift() ?? '';
       for (let index = lines.length - 1; index >= 0; index -= 1) {
         const event = parseLine(lines[index]!);
-        if (event && event.seq < beforeSeq) reversed.push(event);
+        if (event) {
+          fileHighWater = Math.max(fileHighWater, event.seq);
+          if (event.seq < beforeSeq) reversed.push(event);
+        }
       }
       const chronological = [...reversed].reverse();
       if (
@@ -209,12 +272,85 @@ async function reverseEventsUntil(
     if (position === 0) {
       reachedStart = true;
       const event = parseLine(suffix);
-      if (event && event.seq < beforeSeq) reversed.push(event);
+      if (event) {
+        fileHighWater = Math.max(fileHighWater, event.seq);
+        if (event.seq < beforeSeq) reversed.push(event);
+      }
     }
   } finally {
     await handle.close();
   }
-  return { events: reversed.reverse(), fileSize, reachedStart, bytesRead: totalBytesRead };
+  return { events: reversed.reverse(), fileSize, fileHighWater, reachedStart, bytesRead: totalBytesRead };
+}
+
+async function readFileTail(filePath: string): Promise<{ fileSize: number; fileHighWater: number; bytesRead: number }> {
+  let fileSize = 0;
+  try {
+    fileSize = (await stat(filePath)).size;
+  } catch {
+    return { fileSize: 0, fileHighWater: 0, bytesRead: 0 };
+  }
+  if (fileSize === 0) return { fileSize, fileHighWater: 0, bytesRead: 0 };
+  const handle = await open(filePath, 'r');
+  let position = fileSize;
+  let suffix = '';
+  let totalBytesRead = 0;
+  try {
+    while (position > 0) {
+      const length = Math.min(READ_CHUNK_BYTES, position);
+      position -= length;
+      const buffer = Buffer.allocUnsafe(length);
+      const { bytesRead } = await handle.read(buffer, 0, length, position);
+      totalBytesRead += bytesRead;
+      const lines = (buffer.subarray(0, bytesRead).toString('utf8') + suffix).split('\n');
+      suffix = lines.shift() ?? '';
+      for (let index = lines.length - 1; index >= 0; index -= 1) {
+        const event = parseLine(lines[index]!);
+        if (event) return { fileSize, fileHighWater: event.seq, bytesRead: totalBytesRead };
+      }
+    }
+    return {
+      fileSize,
+      fileHighWater: parseLine(suffix)?.seq ?? 0,
+      bytesRead: totalBytesRead,
+    };
+  } finally {
+    await handle.close();
+  }
+}
+
+async function forwardEventsUntil(
+  filePath: string,
+  afterSeq: number,
+  wantedItems: number,
+): Promise<{ events: RunHistoryEvent[]; reachedEnd: boolean; bytesRead: number }> {
+  const events: RunHistoryEvent[] = [];
+  let previousBoundary: RunHistoryEvent | undefined;
+  let reachedEnd = true;
+  let input: ReturnType<typeof createReadStream> | undefined;
+  try {
+    input = createReadStream(filePath, { encoding: 'utf8' });
+    const lines = createInterface({ input, crlfDelay: Infinity });
+    for await (const line of lines) {
+      const event = parseLine(line);
+      if (!event) continue;
+      if (event.seq <= afterSeq) {
+        if (event.type === 'user-message' || event.type === 'turn.started') previousBoundary = event;
+        continue;
+      }
+      if (events.length === 0 && previousBoundary) events.push(previousBoundary);
+      events.push(event);
+      if (canonicalSessionItems(events).length >= wantedItems + 1) {
+        reachedEnd = false;
+        break;
+      }
+    }
+  } catch {
+    return { events: [], reachedEnd: true, bytesRead: 0 };
+  } finally {
+    input?.destroy();
+  }
+  return { events, reachedEnd, bytesRead: input?.bytesRead ?? 0 };
 }
 
 function pageEventSlice(events: RunHistoryEvent[], selected: CanonicalItem[]): RunHistoryEvent[] {
@@ -231,6 +367,14 @@ function pageEventSlice(events: RunHistoryEvent[], selected: CanonicalItem[]): R
   return events.slice(Math.max(0, start));
 }
 
+function forwardPageEventSlice(events: RunHistoryEvent[], selected: CanonicalItem[]): RunHistoryEvent[] {
+  const lastSeq = selected.at(-1)?.lastSeq;
+  if (lastSeq === undefined) return [];
+  let end = events.length - 1;
+  while (end >= 0 && events[end]!.seq > lastSeq) end -= 1;
+  return events.slice(0, end + 1);
+}
+
 export interface HistoryReadInstrumentation {
   fileSize: number;
   bytesRead: number;
@@ -242,59 +386,134 @@ export async function readRunHistoryPage(
   cursor?: string,
   onRead?: (instrumentation: HistoryReadInstrumentation) => void,
 ): Promise<RunHistoryPage> {
-  const beforeSeq = cursor === undefined ? Number.MAX_SAFE_INTEGER : decodePageCursor(cursor).beforeSeq;
-  const scanned = await reverseEventsUntil(filePath, beforeSeq, RUN_HISTORY_PAGE_ITEMS);
-  const canonical = canonicalSessionItems(scanned.events);
-  const selected = canonical.slice(-RUN_HISTORY_PAGE_ITEMS);
-  const hasOlder = canonical.length > selected.length || !scanned.reachedStart;
-  const events = pageEventSlice(scanned.events, selected);
-  const asOfSeq = events.reduce((max, event) => Math.max(max, event.seq), 0);
+  const decoded = cursor === undefined ? undefined : decodePageCursor(cursor);
+  const currentSize = await stat(filePath).then(({ size }) => size).catch(() => 0);
+  if (decoded && decoded.fileSize > currentSize) {
+    throw new HistoryCursorError(409, 'history cursor is no longer valid — reload the newest page');
+  }
+  const highWaterRead = await readFileTail(filePath);
+  const forward = decoded?.direction === 'newer'
+    ? await forwardEventsUntil(filePath, decoded.boundarySeq, RUN_HISTORY_PAGE_ITEMS)
+    : undefined;
+  const reverse = forward === undefined
+    ? await reverseEventsUntil(
+        filePath,
+        decoded?.boundarySeq ?? Number.MAX_SAFE_INTEGER,
+        RUN_HISTORY_PAGE_ITEMS,
+      )
+    : undefined;
+  const scannedEvents = forward?.events ?? reverse?.events ?? [];
+  const canonical = canonicalSessionItems(scannedEvents);
+  const selected = forward
+    ? canonical.slice(0, RUN_HISTORY_PAGE_ITEMS)
+    : canonical.slice(-RUN_HISTORY_PAGE_ITEMS);
+  const hasOlder = forward
+    ? decoded!.boundarySeq > 0
+    : canonical.length > selected.length || !(reverse?.reachedStart ?? true);
+  const hasNewer = forward
+    ? canonical.length > selected.length || !forward.reachedEnd
+    : decoded !== undefined && selected.length > 0;
+  const events = forward
+    ? forwardPageEventSlice(scannedEvents, selected)
+    : pageEventSlice(scannedEvents, selected);
+  const asOfSeq = highWaterRead.fileHighWater;
   const oldest = selected[0];
+  const newest = selected.at(-1);
   onRead?.({
-    fileSize: scanned.fileSize,
-    bytesRead: scanned.bytesRead,
-    retainedEvents: scanned.events.length,
+    fileSize: highWaterRead.fileSize,
+    bytesRead: (reverse?.bytesRead ?? forward?.bytesRead ?? 0) + highWaterRead.bytesRead,
+    retainedEvents: scannedEvents.length,
   });
   return {
     events,
     itemCount: selected.length,
-    ...(hasOlder && oldest ? { olderCursor: encodeCursor({ v: 1, kind: 'page', beforeSeq: oldest.firstSeq }) } : {}),
-    ...(cursor !== undefined && events.length > 0
-      ? { newerCursor: encodeCursor({ v: 1, kind: 'page', beforeSeq: Math.max(...events.map(({ seq }) => seq)) + 1 }) }
+    ...(hasOlder && oldest
+      ? {
+          olderCursor: encodeCursor({
+            v: 1,
+            kind: 'page',
+            direction: 'older',
+            fileSize: highWaterRead.fileSize,
+            boundarySeq: oldest.firstSeq,
+          }),
+        }
       : {}),
-    liveCursor: encodeCursor({ v: 1, kind: 'live', offset: scanned.fileSize, boundarySeq: asOfSeq }),
+    ...(hasNewer && newest
+      ? {
+          newerCursor: encodeCursor({
+            v: 1,
+            kind: 'page',
+            direction: 'newer',
+            fileSize: highWaterRead.fileSize,
+            boundarySeq: newest.lastSeq,
+          }),
+        }
+      : {}),
+    liveCursor: encodeCursor({ v: 1, kind: 'live', offset: highWaterRead.fileSize, boundarySeq: asOfSeq }),
     asOfSeq,
     hasOlder,
   };
 }
 
-function isContextEvent(event: RunHistoryEvent): boolean {
-  if (
-    event.type === 'plan.updated' ||
-    event.type === 'turn.started' ||
-    event.type === 'turn.completed' ||
-    event.type === 'user-message' ||
-    event.type === 'session.ended' ||
-    event.type === 'session.error'
-  ) {
-    return true;
-  }
-  if (event.type === 'tool-call') return stringField(event, 'tool') === 'TodoWrite';
-  if (event.type === 'tool-result') return true;
-  if (event.type === 'item.started' || event.type === 'item.updated' || event.type === 'item.completed') {
-    const raw = event.item;
-    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return false;
-    const item = raw as { kind?: unknown; toolKind?: unknown; parentItemId?: unknown };
-    return item.kind === 'tool' && (item.toolKind === 'task' || typeof item.parentItemId === 'string');
-  }
-  return false;
+interface ContextItem {
+  id: string;
+  parentId?: string;
+  turn: number;
+  first: RunHistoryEvent;
+  latest: RunHistoryEvent;
+  status?: string;
 }
 
-/** One bounded forward pass retaining only selector-relevant Plan/Agents source events. */
+const isSettledContextStatus = (status: string | undefined) =>
+  status !== undefined && status !== 'pending' && status !== 'running';
+
+/** One forward pass retaining the latest Plan snapshot and only the selector-equivalent agent episode. */
 export async function deriveRunContextEvents(filePath: string): Promise<RunHistoryContext> {
-  const contextEvents: RunHistoryEvent[] = [];
   let latestPlan: RunHistoryEvent | undefined;
   let asOfSeq = 0;
+  let turn = 0;
+  const boundaries: RunHistoryEvent[] = [];
+  const roots = new Map<string, ContextItem>();
+  const children = new Map<string, ContextItem>();
+  const rootsByTurn = new Map<number, Set<string>>();
+
+  const itemIdentity = (event: RunHistoryEvent, id: string) => `${event.stepId ?? ''}:${id}`;
+  const pruneSettledHistory = () => {
+    const rootTurns = [...rootsByTurn.keys()].sort((a, b) => a - b);
+    const latestRootTurn = rootTurns.at(-1);
+    if (latestRootTurn === undefined) return;
+    let pruneThrough: number | undefined;
+    for (let index = rootTurns.length - 2; index >= 0; index -= 1) {
+      const candidate = rootTurns[index]!;
+      const ids = rootsByTurn.get(candidate)!;
+      if ([...ids].every((id) => isSettledContextStatus(roots.get(id)?.status))) {
+        pruneThrough = candidate;
+        break;
+      }
+    }
+    const latestIds = rootsByTurn.get(latestRootTurn)!;
+    if (
+      turn > latestRootTurn &&
+      [...latestIds].every((id) => isSettledContextStatus(roots.get(id)?.status))
+    ) {
+      pruneThrough = latestRootTurn;
+    }
+    if (pruneThrough === undefined) return;
+    for (const [candidateTurn, ids] of rootsByTurn) {
+      if (candidateTurn > pruneThrough) continue;
+      for (const id of ids) roots.delete(id);
+      rootsByTurn.delete(candidateTurn);
+    }
+    const retainedRootIds = new Set([...roots.values()].map(({ id }) => id));
+    for (const [key, item] of children) {
+      if (item.parentId === undefined || !retainedRootIds.has(item.parentId)) children.delete(key);
+    }
+    const earliest = Math.min(...[...roots.values()].map(({ first }) => first.seq), Number.MAX_SAFE_INTEGER);
+    const firstRetained = boundaries.findIndex(({ seq }) => seq >= earliest);
+    if (firstRetained === -1) boundaries.length = 0;
+    else if (firstRetained > 0) boundaries.splice(0, firstRetained);
+  };
+
   try {
     const input = createReadStream(filePath, { encoding: 'utf8' });
     const lines = createInterface({ input, crlfDelay: Infinity });
@@ -306,17 +525,72 @@ export async function deriveRunContextEvents(filePath: string): Promise<RunHisto
         latestPlan = event;
         continue;
       }
-      if (isContextEvent(event)) {
-        contextEvents.push(event);
-        // One current fan-out can be large, but unrelated structural history stays bounded.
-        if (contextEvents.length > 2_000) contextEvents.splice(0, contextEvents.length - 2_000);
+      if (event.type === 'user-message' || event.type === 'turn.started') {
+        turn += 1;
+        boundaries.push(event);
+        pruneSettledHistory();
+        continue;
+      }
+      if (
+        event.type === 'turn.completed' ||
+        event.type === 'session.ended' ||
+        event.type === 'session.error'
+      ) {
+        boundaries.push(event);
+        continue;
+      }
+      if (event.type === 'item.started' || event.type === 'item.updated' || event.type === 'item.completed') {
+        const raw = event.item;
+        if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) continue;
+        const item = raw as {
+          id?: unknown;
+          kind?: unknown;
+          toolKind?: unknown;
+          parentItemId?: unknown;
+          status?: unknown;
+        };
+        if (item.kind !== 'tool' || typeof item.id !== 'string' || item.id === '') continue;
+        const parentId = typeof item.parentItemId === 'string' ? item.parentItemId : undefined;
+        const isRoot = item.toolKind === 'task' && parentId === undefined;
+        if (!isRoot && parentId === undefined) continue;
+        const key = itemIdentity(event, item.id);
+        const collection = isRoot ? roots : children;
+        const existing = collection.get(key);
+        const next: ContextItem = existing
+          ? { ...existing, latest: event, status: typeof item.status === 'string' ? item.status : existing.status }
+          : {
+              id: item.id,
+              ...(parentId === undefined ? {} : { parentId }),
+              turn,
+              first: event,
+              latest: event,
+              ...(typeof item.status === 'string' ? { status: item.status } : {}),
+            };
+        collection.set(key, next);
+        if (isRoot && !existing) {
+          const ids = rootsByTurn.get(turn);
+          if (ids) ids.add(key);
+          else rootsByTurn.set(turn, new Set([key]));
+        }
+        pruneSettledHistory();
       }
     }
   } catch {
     return { contextEvents: [], asOfSeq: 0 };
   }
-  if (latestPlan && !contextEvents.some(({ seq }) => seq === latestPlan.seq)) contextEvents.unshift(latestPlan);
-  return { contextEvents: contextEvents.sort((a, b) => a.seq - b.seq), asOfSeq };
+  pruneSettledHistory();
+  const retainedRootIds = new Set([...roots.values()].map(({ id }) => id));
+  const relevantChildren = [...children.values()].filter(
+    ({ parentId }) => parentId !== undefined && retainedRootIds.has(parentId),
+  );
+  const contextEvents = new Map<number, RunHistoryEvent>();
+  if (latestPlan) contextEvents.set(latestPlan.seq, latestPlan);
+  for (const event of boundaries) contextEvents.set(event.seq, event);
+  for (const item of [...roots.values(), ...relevantChildren]) {
+    contextEvents.set(item.first.seq, item.first);
+    contextEvents.set(item.latest.seq, item.latest);
+  }
+  return { contextEvents: [...contextEvents.values()].sort((a, b) => a.seq - b.seq), asOfSeq };
 }
 
 export async function readEventsAfterLiveCursor(filePath: string, cursor: string): Promise<{

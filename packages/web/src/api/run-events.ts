@@ -56,11 +56,14 @@ export interface RunEventStreamOptions {
   afterSeq?: number
   /** Optimized history keeps a bounded live tail; full-replay fallback leaves this absent. */
   maxEvents?: number
+  /** Ask the history owner to fold the live prefix into a fresh persisted tail page. */
+  compactAt?: number
+  onCompact?: () => void
 }
 
 export function useRunEvents(runId: string | undefined, options: RunEventStreamOptions = {}): RunEvent[] {
   const [events, setEvents] = useState<RunEvent[]>([])
-  const { cursor, afterSeq = 0, maxEvents } = options
+  const { cursor, afterSeq = 0, maxEvents, compactAt, onCompact } = options
 
   useEffect(() => {
     // The reset also covers the runId-changed case: whatever accumulated belongs to the old id.
@@ -77,6 +80,7 @@ export function useRunEvents(runId: string | undefined, options: RunEventStreamO
     let source: EventSource | null = null
     let reopenTimer: ReturnType<typeof setTimeout> | undefined
     let disposed = false
+    let compactionRequested = false
     const CLOSED = 2 // EventSource.CLOSED, spelled literally like global-events.tsx
     const REOPEN_DELAY_MS = 1_500
 
@@ -100,6 +104,16 @@ export function useRunEvents(runId: string | undefined, options: RunEventStreamO
       maxSeq = parsed.seq
       setEvents((current) => {
         const next = [...current, parsed]
+        if (
+          !compactionRequested &&
+          compactAt !== undefined &&
+          next.length >= compactAt
+        ) {
+          compactionRequested = true
+          queueMicrotask(() => {
+            if (!disposed) onCompact?.()
+          })
+        }
         return maxEvents === undefined || next.length <= maxEvents ? next : next.slice(-maxEvents)
       })
     }
@@ -196,7 +210,7 @@ export function useRunEvents(runId: string | undefined, options: RunEventStreamO
       window.removeEventListener('pageshow', onPageShow)
       source?.close()
     }
-  }, [runId, cursor, afterSeq, maxEvents])
+  }, [runId, cursor, afterSeq, maxEvents, compactAt, onCompact])
 
   return events
 }

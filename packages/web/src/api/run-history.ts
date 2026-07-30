@@ -1,5 +1,5 @@
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useMemo } from 'react'
+import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
+import { useCallback, useMemo, useRef } from 'react'
 
 import type { RunEvent, RunHistoryPage } from '@open-mercato/cezar-api-client'
 import { queryScope } from '@open-mercato/cezar-api-client'
@@ -7,7 +7,8 @@ import { getRunHistory, getRunHistoryContext } from './client'
 import { useRunEvents } from './run-events'
 
 const MAX_HISTORY_PAGES = 5
-const MAX_LIVE_EVENTS = 200
+const COMPACT_LIVE_AT_EVENTS = 200
+const MAX_LIVE_EVENTS = 5_000
 
 function orderedUnique(...groups: readonly RunEvent[][]): RunEvent[] {
   const bySeq = new Map<number, RunEvent>()
@@ -63,13 +64,53 @@ export function useRunHistory(runId: string | undefined): RunHistoryState {
   const fallbackEvents = useRunEvents(fallback ? runId : undefined)
   const pages = history.data?.pages ?? []
   const newestPage = pages.reduce<RunHistoryPage | undefined>(
-    (latest, page) => latest === undefined || page.asOfSeq > latest.asOfSeq ? page : latest,
+    (latest, page) =>
+      page.newerCursor === undefined
+        ? page
+        : latest ?? page,
     undefined,
   )
+  const compactingLive = useRef(false)
+  const compactLive = useCallback(() => {
+    if (runId === undefined || compactingLive.current) return
+    compactingLive.current = true
+    void getRunHistory(runId, undefined)
+      .then((latestPage) => {
+        queryClient.setQueryData<InfiniteData<RunHistoryPage, string | undefined>>(
+          ['run-history', scope, runId],
+          (current) => {
+            if (!current) return { pages: [latestPage], pageParams: [undefined] }
+            const pages = [...current.pages]
+            const pageParams = [...current.pageParams]
+            let latestIndex = -1
+            for (let index = 0; index < pages.length; index += 1) {
+              if (latestIndex === -1 || pages[index]!.asOfSeq > pages[latestIndex]!.asOfSeq) latestIndex = index
+            }
+            if (latestIndex >= 0 && pages[latestIndex]!.newerCursor === undefined) {
+              pages[latestIndex] = latestPage
+              pageParams[latestIndex] = undefined
+            } else {
+              pages.push(latestPage)
+              pageParams.push(undefined)
+            }
+            while (pages.length > MAX_HISTORY_PAGES) {
+              pages.shift()
+              pageParams.shift()
+            }
+            return { pages, pageParams }
+          },
+        )
+      })
+      .finally(() => {
+        compactingLive.current = false
+      })
+  }, [queryClient, runId, scope])
   const liveEvents = useRunEvents(!fallback && newestPage ? runId : undefined, {
     cursor: newestPage?.liveCursor,
     afterSeq: newestPage?.asOfSeq,
     maxEvents: MAX_LIVE_EVENTS,
+    compactAt: COMPACT_LIVE_AT_EVENTS,
+    onCompact: compactLive,
   })
 
   const pagedEvents = useMemo(
@@ -88,9 +129,8 @@ export function useRunHistory(runId: string | undefined): RunHistoryState {
   }, [context.data, fallback, fallbackEvents, visibleEvents])
 
   const loadOlder = useCallback(async () => {
-    if (!history.hasPreviousPage || history.isFetchingPreviousPage) return
     await history.fetchPreviousPage()
-  }, [history])
+  }, [history.fetchPreviousPage])
 
   const jumpToLatest = useCallback(async () => {
     await queryClient.resetQueries({ queryKey: historyKey, exact: true })

@@ -15,6 +15,30 @@ vi.mock('./client', () => ({
 const mockHistory = vi.mocked(getRunHistory)
 const mockContext = vi.mocked(getRunHistoryContext)
 
+class FakeEventSource {
+  static instances: FakeEventSource[] = []
+  private readonly listeners = new Map<string, Set<(event: Event) => void>>()
+  readyState = 0
+
+  constructor(readonly url: string) {
+    FakeEventSource.instances.push(this)
+  }
+
+  addEventListener(name: string, listener: (event: Event) => void): void {
+    const listeners = this.listeners.get(name) ?? new Set()
+    listeners.add(listener)
+    this.listeners.set(name, listeners)
+  }
+
+  close(): void {
+    this.readyState = 2
+  }
+
+  emit(name: string, data: string): void {
+    for (const listener of this.listeners.get(name) ?? []) listener(new MessageEvent(name, { data }))
+  }
+}
+
 const page = (
   seq: number,
   extras: Partial<RunHistoryPage> = {},
@@ -100,5 +124,49 @@ describe('useRunHistory', () => {
     await act(() => result.current.jumpToLatest())
     await waitFor(() => expect(result.current.retainedPages).toBe(1))
     expect(mockHistory).toHaveBeenLastCalledWith('run-1', undefined, expect.any(Object))
+  })
+
+  it('compacts a long live prefix into a fresh persisted tail page', async () => {
+    FakeEventSource.instances = []
+    vi.stubGlobal('EventSource', FakeEventSource)
+    const compactedTail: RunHistoryPage = {
+      ...page(300),
+      events: Array.from({ length: 100 }, (_, index) => ({
+        seq: 201 + index,
+        ts: '2026-07-30T00:00:00.000Z',
+        type: 'note',
+        message: `event-${201 + index}`,
+      })),
+      itemCount: 100,
+    }
+    mockHistory
+      .mockResolvedValueOnce(page(100))
+      .mockResolvedValue(compactedTail)
+    mockContext.mockResolvedValue(context())
+    const { wrapper } = harness()
+    const { result } = renderHook(() => useRunHistory('run-1'), { wrapper })
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1))
+
+    act(() => {
+      for (let seq = 101; seq <= 300; seq += 1) {
+        FakeEventSource.instances[0]!.emit(
+          'run-event',
+          JSON.stringify({
+            seq,
+            ts: '2026-07-30T00:00:00.000Z',
+            type: 'note',
+            message: `event-${seq}`,
+          }),
+        )
+      }
+    })
+
+    await waitFor(() => expect(mockHistory).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(result.current.visibleEvents.at(-1)?.seq).toBe(300))
+    expect(result.current.visibleEvents).toHaveLength(100)
+    expect(result.current.visibleEvents[0]?.seq).toBe(201)
+    expect(result.current.retainedPages).toBe(1)
+    expect(FakeEventSource.instances.length).toBeGreaterThanOrEqual(2)
+    vi.unstubAllGlobals()
   })
 })

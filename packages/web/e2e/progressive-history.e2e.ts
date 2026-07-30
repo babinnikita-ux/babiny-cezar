@@ -137,7 +137,7 @@ describe('progressive long-session history', () => {
     browser.screenshot(join(artifactsDir, 'progressive-history-tail.png'), { viewport: true })
   })
 
-  it('loads exactly one page from the accessible control and preserves a bounded page count', () => {
+  it('loads exactly one page from the accessible control and preserves a bounded page count', async () => {
     browser.click('[data-slot="history-boundary"] button')
     browser.waitForFunction(`${cursorRequestCount} === 1`)
     browser.waitForFunction(
@@ -145,6 +145,9 @@ describe('progressive long-session history', () => {
     )
     expect(Number(browser.evaluate(cursorRequestCount))).toBe(1)
     browser.screenshot(join(artifactsDir, 'progressive-history-earlier-page.png'), { viewport: true })
+    // Let the prepend anchor's requestAnimationFrame settle before the next test supplies
+    // a genuinely fresh upward gesture.
+    await new Promise((resolveWait) => setTimeout(resolveWait, 50))
   })
 
   it('consumes one upward intent without cascading while the boundary remains near', async () => {
@@ -159,7 +162,11 @@ describe('progressive long-session history', () => {
   })
 
   it('caps retained pages at five and jumps directly back to a fresh tail', () => {
-    for (let page = 3; page <= 5; page += 1) {
+    let page = Number(browser.evaluate(
+      `document.querySelector('[data-slot="history-boundary"]')?.dataset.retainedPages`,
+    ))
+    while (page < 5) {
+      page += 1
       browser.click('[data-slot="history-boundary"] button')
       browser.waitForFunction(
         `document.querySelector('[data-slot="history-boundary"]')?.dataset.retainedPages === '${page}'`,
