@@ -1,0 +1,61 @@
+{
+  "runId": "pr729-7aec-143039",
+  "mode": "pr",
+  "target": {
+    "prNumber": 729,
+    "title": "feat(web): restore the last project location",
+    "branch": "spec/restore-last-location",
+    "headSha": "7aec1fbc74e83386308d9950dfcfa71c550735f8"
+  },
+  "verdict": "PASS",
+  "environment": {
+    "baseUrl": "http://127.0.0.1:36709",
+    "role": "local unauthenticated cockpit",
+    "startedByThisRepo": true,
+    "browserProvider": "agent-browser 0.32.1"
+  },
+  "scenario": [
+    {
+      "step": 1,
+      "priority": "P1",
+      "action": "Open /p/cezar/git?qa=fresh-7aec#changed and wait for persistence.",
+      "expected": "The exact project, pathname, query, and fragment are stored.",
+      "observed": "GET /api/v1/workspace/ui-state returned projectId cezar, pathname /p/cezar/git, search ?qa=fresh-7aec, and hash #changed.",
+      "result": "PASS",
+      "screenshot": "01-explicit-git-location.png"
+    },
+    {
+      "step": 2,
+      "priority": "P1",
+      "action": "Open the exact bare root and then use browser Back.",
+      "expected": "The bare root is replaced by the saved route without leaving a transient root entry in history.",
+      "observed": "The URL restored to /p/cezar/git?qa=fresh-7aec#changed; Back remained on that restored URL.",
+      "result": "PASS",
+      "screenshot": "02-bare-root-restored.png"
+    },
+    {
+      "step": 3,
+      "priority": "P1",
+      "action": "Open an explicit project Settings URL, visit global Settings, switch to a 390x844 viewport, and open the bare root.",
+      "expected": "The explicit project URL remains authoritative, global Settings does not overwrite it, and the mobile restoration is usable.",
+      "observed": "Workspace UI state remained /p/cezar/settings/agents?manual=fresh-7aec#config after visiting global Settings; the bare root restored that exact URL and the Agents pane rendered without page or console errors.",
+      "result": "PASS",
+      "screenshot": "03-mobile-restored-settings.png"
+    },
+    {
+      "step": 4,
+      "priority": "P1",
+      "action": "Seed a structurally valid saved route for a removed project and open the bare root.",
+      "expected": "The stale location is ignored and the boot project Tasks page is used.",
+      "observed": "The URL became /p/42766454-3ead-4ea4-8f05-aab273e5cf8b/ and the responsive Tasks empty state rendered without page or console errors.",
+      "result": "PASS",
+      "screenshot": "04-missing-project-fallback.png"
+    }
+  ],
+  "hasUiTest": false,
+  "notes": [
+    "The production build ran under CEZ_DRY_RUN=1 with an isolated CEZ_HOME, so no real agent credentials or developer workspace state were exercised.",
+    "The host /tmp quota was exhausted. The browser provider succeeded after its disposable Chrome profile was placed in /dev/shm; this was an environment workaround, not a product change.",
+    "This evidence-only run did not add qa-approved."
+  ]
+}
