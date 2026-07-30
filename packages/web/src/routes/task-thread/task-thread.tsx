@@ -312,6 +312,7 @@ export function ThreadView({
             loading={history.isFetchingOlder}
             error={history.olderError}
             fallback={history.fallback}
+            retainedPages={history.retainedPages}
             onLoad={scroll.loadOlder}
           />
         ) : null}
@@ -477,12 +478,14 @@ function HistoryBoundary({
   loading,
   error,
   fallback,
+  retainedPages,
   onLoad,
 }: {
   hasOlder: boolean
   loading: boolean
   error?: string
   fallback: boolean
+  retainedPages: number
   onLoad: () => void
 }) {
   if (fallback) {
@@ -504,6 +507,7 @@ function HistoryBoundary({
   return (
     <div
       data-slot="history-boundary"
+      data-retained-pages={retainedPages}
       aria-busy={loading}
       className="flex min-h-8 items-center justify-center text-xs text-muted-foreground"
     >

@@ -1,4 +1,4 @@
-import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -83,6 +83,30 @@ describe('readRunHistoryPage', () => {
       name: 'HistoryCursorError',
       status: 400,
     });
+  });
+
+  it('reads only the bounded tail of a deterministic 50,000-item transcript', async () => {
+    const events: Array<Partial<RunEvent> & Pick<RunEvent, 'seq' | 'type'>> = [];
+    for (let index = 0; index < 50_000; index += 1) {
+      const seq = index * 2 + 1;
+      events.push({ seq, type: 'turn.started', turnId: `t-${index}` });
+      events.push({
+        seq: seq + 1,
+        type: 'item.completed',
+        item: { kind: 'message', id: `m-${index}`, role: 'assistant', text: `message ${index}` },
+      });
+    }
+    const file = fixture(events);
+    let measured: { fileSize: number; bytesRead: number; retainedEvents: number } | undefined;
+    const result = await readRunHistoryPage(file, undefined, (value) => {
+      measured = value;
+    });
+    expect(result.itemCount).toBe(100);
+    expect(result.events.length).toBeLessThanOrEqual(202);
+    expect(measured).toBeDefined();
+    expect(measured!.fileSize).toBe(statSync(file).size);
+    expect(measured!.bytesRead).toBeLessThan(measured!.fileSize / 10);
+    expect(measured!.retainedEvents).toBeLessThan(1_000);
   });
 });
 

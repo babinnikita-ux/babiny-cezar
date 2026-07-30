@@ -169,26 +169,28 @@ async function reverseEventsUntil(
   filePath: string,
   beforeSeq: number,
   wantedItems: number,
-): Promise<{ events: RunHistoryEvent[]; fileSize: number; reachedStart: boolean }> {
+): Promise<{ events: RunHistoryEvent[]; fileSize: number; reachedStart: boolean; bytesRead: number }> {
   let fileSize = 0;
   try {
     fileSize = (await stat(filePath)).size;
   } catch {
-    return { events: [], fileSize: 0, reachedStart: true };
+    return { events: [], fileSize: 0, reachedStart: true, bytesRead: 0 };
   }
-  if (fileSize === 0) return { events: [], fileSize, reachedStart: true };
+  if (fileSize === 0) return { events: [], fileSize, reachedStart: true, bytesRead: 0 };
 
   const handle = await open(filePath, 'r');
   let position = fileSize;
   let suffix = '';
   const reversed: RunHistoryEvent[] = [];
   let reachedStart = false;
+  let totalBytesRead = 0;
   try {
     while (position > 0) {
       const length = Math.min(READ_CHUNK_BYTES, position);
       position -= length;
       const buffer = Buffer.allocUnsafe(length);
       const { bytesRead } = await handle.read(buffer, 0, length, position);
+      totalBytesRead += bytesRead;
       const text = buffer.subarray(0, bytesRead).toString('utf8') + suffix;
       const lines = text.split('\n');
       suffix = lines.shift() ?? '';
@@ -212,7 +214,7 @@ async function reverseEventsUntil(
   } finally {
     await handle.close();
   }
-  return { events: reversed.reverse(), fileSize, reachedStart };
+  return { events: reversed.reverse(), fileSize, reachedStart, bytesRead: totalBytesRead };
 }
 
 function pageEventSlice(events: RunHistoryEvent[], selected: CanonicalItem[]): RunHistoryEvent[] {
@@ -229,7 +231,17 @@ function pageEventSlice(events: RunHistoryEvent[], selected: CanonicalItem[]): R
   return events.slice(Math.max(0, start));
 }
 
-export async function readRunHistoryPage(filePath: string, cursor?: string): Promise<RunHistoryPage> {
+export interface HistoryReadInstrumentation {
+  fileSize: number;
+  bytesRead: number;
+  retainedEvents: number;
+}
+
+export async function readRunHistoryPage(
+  filePath: string,
+  cursor?: string,
+  onRead?: (instrumentation: HistoryReadInstrumentation) => void,
+): Promise<RunHistoryPage> {
   const beforeSeq = cursor === undefined ? Number.MAX_SAFE_INTEGER : decodePageCursor(cursor).beforeSeq;
   const scanned = await reverseEventsUntil(filePath, beforeSeq, RUN_HISTORY_PAGE_ITEMS);
   const canonical = canonicalSessionItems(scanned.events);
@@ -238,6 +250,11 @@ export async function readRunHistoryPage(filePath: string, cursor?: string): Pro
   const events = pageEventSlice(scanned.events, selected);
   const asOfSeq = events.reduce((max, event) => Math.max(max, event.seq), 0);
   const oldest = selected[0];
+  onRead?.({
+    fileSize: scanned.fileSize,
+    bytesRead: scanned.bytesRead,
+    retainedEvents: scanned.events.length,
+  });
   return {
     events,
     itemCount: selected.length,

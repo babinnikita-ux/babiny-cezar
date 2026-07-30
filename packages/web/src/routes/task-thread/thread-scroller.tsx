@@ -311,6 +311,7 @@ export function ThreadRows({
         <div
           key={row.key}
           data-slot="thread-row"
+          data-row-key={row.key}
           className="flex w-full flex-col pb-2.5 [contain-intrinsic-block-size:auto_3rem] [content-visibility:auto]"
         >
           {row.node}
@@ -393,7 +394,7 @@ function VirtualRows({
         {...(measurements !== undefined ? { cache: measurements } : {})}
       >
         {rows.map((row) => (
-          <div key={row.key} data-slot="thread-row" className="flex w-full flex-col pb-2.5">
+          <div key={row.key} data-slot="thread-row" data-row-key={row.key} className="flex w-full flex-col pb-2.5">
             {row.node}
           </div>
         ))}
