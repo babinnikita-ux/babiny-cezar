@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { CacheSnapshot } from 'virtua'
 
 import {
+  HISTORY_BOUNDARY_SLACK_PX,
   NEAR_BOTTOM_SLACK_PX,
   VIRTUALIZE_THRESHOLD,
   clearThreadScrollCaches,
   isNearBottom,
+  isNearHistoryStart,
   readThreadMeasurements,
   readThreadScroll,
   saveThreadMeasurements,
@@ -30,6 +32,15 @@ describe('isNearBottom — the shared stick rule', () => {
     [0, NEAR_BOTTOM_SLACK_PX, false],
   ])('scrollTop %d, slack %s → %s', (scrollTop, slack, expected) => {
     expect(isNearBottom(box(scrollTop), slack)).toBe(expected)
+  })
+})
+
+describe('isNearHistoryStart — intent is consumed only near the retained boundary', () => {
+  it('uses the larger of one viewport and the fixed history slack', () => {
+    expect(isNearHistoryStart({ scrollTop: HISTORY_BOUNDARY_SLACK_PX - 1, clientHeight: 400 })).toBe(true)
+    expect(isNearHistoryStart({ scrollTop: HISTORY_BOUNDARY_SLACK_PX, clientHeight: 400 })).toBe(false)
+    expect(isNearHistoryStart({ scrollTop: 899, clientHeight: 900 })).toBe(true)
+    expect(isNearHistoryStart({ scrollTop: 900, clientHeight: 900 })).toBe(false)
   })
 })
 

@@ -19,6 +19,12 @@ export const VIRTUALIZE_THRESHOLD = 300
 
 /** ~80px per the research: pin-to-bottom while streaming only when the reader is this close. */
 export const NEAR_BOTTOM_SLACK_PX = 80
+export const HISTORY_BOUNDARY_SLACK_PX = 600
+
+/** Intent handlers only consume an older-page arm while the reader is near the retained start. */
+export function isNearHistoryStart(box: { scrollTop: number; clientHeight: number }): boolean {
+  return box.scrollTop < Math.max(HISTORY_BOUNDARY_SLACK_PX, box.clientHeight)
+}
 
 /**
  * The stick rule shared by the thread scroller and the tool-output live tail: the viewport

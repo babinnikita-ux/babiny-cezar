@@ -76,9 +76,8 @@ export interface ThreadProviderAuthRequired {
 export type ThreadEntry = UiItem | ThreadNote | ThreadImage | ThreadAsk | ThreadProviderAuthRequired
 
 export interface ThreadTurn {
-  /** Stable render key, assigned in arrival order (`turn-1`, `turn-2`, …). Not the protocol
-   *  turnId: a v1-opened turn gets its v2 id later, and a key that changes mid-stream would
-   *  remount everything under it. */
+  /** Stable source-derived render key. The opening event sequence survives prepended pages;
+   *  ordinal fallback exists only for malformed legacy content with no boundary event. */
   id: string
   /** The protocol-v2 turnId, once known. */
   turnId?: string
@@ -317,9 +316,13 @@ export function reduceThread(events: RunEvent[]): ThreadState {
    *  parks `waiting` until the user answers). */
   let pendingAsk: ThreadAsk | undefined
 
-  const newTurn = (): DraftTurn => {
+  const newTurn = (sourceSeq?: number): DraftTurn => {
     turnSeq += 1
-    const turn: DraftTurn = { id: `turn-${turnSeq}`, entries: [], v2Items: false }
+    const turn: DraftTurn = {
+      id: sourceSeq === undefined ? `turn-fallback-${turnSeq}` : `turn-seq-${sourceSeq}`,
+      entries: [],
+      v2Items: false,
+    }
     turns.push(turn)
     return turn
   }
@@ -373,7 +376,7 @@ export function reduceThread(events: RunEvent[]): ThreadState {
           if (text !== '') pendingAsk.answer = text
           pendingAsk = undefined
         }
-        const turn = newTurn()
+        const turn = newTurn(event.seq)
         turn.userMessage = {
           text,
           imageCount: typeof event.imageCount === 'number' ? event.imageCount : 0,
@@ -390,7 +393,7 @@ export function reduceThread(events: RunEvent[]): ThreadState {
         if (current && current.turnId === undefined && !current.v2Items) {
           current.turnId = turnId
         } else {
-          newTurn().turnId = turnId
+          newTurn(event.seq).turnId = turnId
         }
         break
       }

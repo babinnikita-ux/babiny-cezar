@@ -13,7 +13,7 @@ import {
   useRuns,
   useSendMessage,
 } from '@/api/queries'
-import { useRunEvents } from '@/api/run-events'
+import { useRunHistory, type RunHistoryState } from '@/api/run-history'
 import type { ApiRun } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
 import { Composer } from '@/components/composer/composer'
@@ -66,20 +66,21 @@ import {
  * dim lifecycle lines, the closed footer, and the docked composer (plan dock · paused hint ·
  * reply box).
  *
- * Data doctrine: `useRun` (fetch) is authoritative for the record — status, title, error;
- * `useRunEvents` (SSE replay + live) is the transcript. The reducer folds the full event list
- * on each change; the rendered rows go through the threshold-switched scroller
+ * Data doctrine: `useRun` is authoritative for the record; `useRunHistory` hydrates a bounded
+ * visible transcript plus compact current-state context and falls back to `useRunEvents` when
+ * the optimized route is unavailable. The rendered rows go through the threshold-switched scroller
  * (thread-scroller.tsx — flat + content-visibility below ~300 rows, virtua above).
  */
 export function TaskThreadRoute() {
   const { id } = useParams<{ id: string }>()
   const run = useRun(id)
-  const events = useRunEvents(id)
-  const thread = useMemo(() => reduceThread(events), [events])
+  const history = useRunHistory(id)
+  const thread = useMemo(() => reduceThread(history.visibleEvents), [history.visibleEvents])
+  const currentThread = useMemo(() => reduceThread(history.currentEvents), [history.currentEvents])
   // The two feeds can drift: a record update lost on the workspace stream leaves the thread
   // showing Working… over a "run finished" transcript. The transcript is live here, so it
   // arbitrates — a session end with no session after it refetches a record still claiming one.
-  useRunRecordReconcile(run.data, events)
+  useRunRecordReconcile(run.data, history.visibleEvents)
 
   if (run.isPending) return <ThreadLoading />
 
@@ -106,7 +107,9 @@ export function TaskThreadRoute() {
     )
   }
 
-  return <ThreadView run={run.data} thread={thread} />
+  if (history.isPending) return <ThreadLoading />
+
+  return <ThreadView run={run.data} thread={thread} currentThread={currentThread} history={history} />
 }
 
 /**
@@ -184,11 +187,21 @@ export function buildThreadRows(
 
 /** The loaded thread. The header owns its own data hooks (mutations, the runs list); the
  *  thread body stays presentational — tests drive it with reduced fixture states directly. */
-export function ThreadView({ run, thread }: { run: ApiRun; thread: ThreadState }) {
+export function ThreadView({
+  run,
+  thread,
+  currentThread = thread,
+  history,
+}: {
+  run: ApiRun
+  thread: ThreadState
+  currentThread?: ThreadState
+  history?: RunHistoryState
+}) {
   const footer = threadFooter(run.status, run.error)
   // The dock's data: the latest plan snapshot across turns (full replacement — an emptied
   // plan hides the dock and the header mirror alike).
-  const plan = latestPlanEntries(thread)
+  const plan = latestPlanEntries(currentThread)
   const planTally = plan !== undefined && plan.length > 0 ? planCounts(plan) : undefined
   // The Agents dock's data: the current fan-out's sub-agents, or [] when there is none to
   // show (#474). Derived from the same reduced turns the thread renders — no new subscription.
@@ -218,7 +231,10 @@ export function ThreadView({ run, thread }: { run: ApiRun; thread: ThreadState }
   // added: anything that is neither live nor still queued is closed. `review` matters most —
   // it is where this pipeline's runs normally END, and `threadFooter` already calls it closed.
   const runIsTerminal = !sessionOpen && run.status !== 'queued'
-  const agents = useMemo(() => collectSubagents(thread.turns, runIsTerminal), [thread.turns, runIsTerminal])
+  const agents = useMemo(
+    () => collectSubagents(currentThread.turns, runIsTerminal),
+    [currentThread.turns, runIsTerminal],
+  )
   // The drill-down's whole state: which agent is open. Ephemeral by design (spec Q2/Q5) —
   // sub-agents have no stable identity outside their run, so there is nothing to persist.
   const [openAgentId, setOpenAgentId] = useState<string | undefined>(undefined)
@@ -232,12 +248,12 @@ export function ThreadView({ run, thread }: { run: ApiRun; thread: ThreadState }
   // Resolved from the turns, NOT from `agents`: the dock can yield to the transcript (Q6)
   // while a sheet is open, and that must not slam the panel shut mid-read.
   const openAgent = useMemo(
-    () => (openAgentId === undefined ? undefined : findSubagent(thread.turns, openAgentId, runIsTerminal)),
-    [thread.turns, openAgentId, runIsTerminal],
+    () => (openAgentId === undefined ? undefined : findSubagent(currentThread.turns, openAgentId, runIsTerminal)),
+    [currentThread.turns, openAgentId, runIsTerminal],
   )
   const openAgentChildren = useMemo(
-    () => (openAgentId === undefined ? [] : subagentChildren(thread.turns, openAgentId)),
-    [thread.turns, openAgentId],
+    () => (openAgentId === undefined ? [] : subagentChildren(currentThread.turns, openAgentId)),
+    [currentThread.turns, openAgentId],
   )
   const sendMessage = useSendMessage(run.id)
   const activeProvider = useActiveProviderAvailability(run)
@@ -275,7 +291,10 @@ export function ThreadView({ run, thread }: { run: ApiRun; thread: ThreadState }
   const rows = useMemo(() => buildThreadRows(run, thread, edit), [run, thread, edit])
   const { search } = useLocation()
   const mode = threadRenderMode(search, rows.length)
-  const scroll = useThreadScroll(run.id)
+  const scroll = useThreadScroll(run.id, {
+    onLoadOlder: history?.hasOlder ? history.loadOlder : undefined,
+    onJumpToLatest: history?.jumpToLatest,
+  })
   // The iOS keyboard lifts the dock via `--kb`; once it settles, a pinned reader re-pins
   // (research §7: re-run scrollToEnd after the viewport settles).
   useKeyboardInsetVar(scroll.restickIfStuck)
@@ -287,6 +306,15 @@ export function ThreadView({ run, thread }: { run: ApiRun; thread: ThreadState }
       {/* Row spacing lives on each thread row (pb-2.5, both render modes measure alike);
           this gap only separates the sections — rows, empty state, footer, review panel. */}
       <div className="mx-auto flex w-full max-w-[var(--measure)] flex-1 flex-col gap-3.5 px-4 py-5 md:px-6">
+        {history ? (
+          <HistoryBoundary
+            hasOlder={history.hasOlder}
+            loading={history.isFetchingOlder}
+            error={history.olderError}
+            fallback={history.fallback}
+            onLoad={scroll.loadOlder}
+          />
+        ) : null}
         <ThreadCardCache runId={run.id}>
           <ThreadRows runId={run.id} rows={rows} mode={mode} controls={scroll} />
         </ThreadCardCache>
@@ -368,6 +396,11 @@ export function ThreadView({ run, thread }: { run: ApiRun; thread: ThreadState }
           </div>
         ) : null}
         <div className="mx-auto flex w-full max-w-[var(--measure)] flex-col gap-2.5">
+          {history?.contextPending ? (
+            <p data-slot="history-context-loading" className="px-1 text-xs text-soft-foreground" aria-live="polite">
+              Loading current Plan and Agents…
+            </p>
+          ) : null}
           {/* Agents above the plan: the fan-out is the more urgent "what is happening now",
               and it is transient — the plan outlives it. Keyed by run id like the plan dock. */}
           <AgentsDock key={`agents:${run.id}`} runId={run.id} agents={agents} onSelect={setOpenAgentId} />
@@ -435,6 +468,56 @@ export function ThreadView({ run, thread }: { run: ApiRun; thread: ThreadState }
           />
         </div>
       </div>
+    </div>
+  )
+}
+
+function HistoryBoundary({
+  hasOlder,
+  loading,
+  error,
+  fallback,
+  onLoad,
+}: {
+  hasOlder: boolean
+  loading: boolean
+  error?: string
+  fallback: boolean
+  onLoad: () => void
+}) {
+  if (fallback) {
+    return (
+      <p data-slot="history-fallback" className="text-center text-xs text-soft-foreground" role="status">
+        Progressive history is unavailable; showing the complete session.
+      </p>
+    )
+  }
+  if (!hasOlder && !error) {
+    return (
+      <div data-slot="history-start" className="flex items-center gap-3 text-[11px] text-soft-foreground">
+        <span aria-hidden className="h-px flex-1 bg-border" />
+        Start of session
+        <span aria-hidden className="h-px flex-1 bg-border" />
+      </div>
+    )
+  }
+  return (
+    <div
+      data-slot="history-boundary"
+      aria-busy={loading}
+      className="flex min-h-8 items-center justify-center text-xs text-muted-foreground"
+    >
+      <button
+        type="button"
+        onClick={onLoad}
+        disabled={loading}
+        className="rounded-md px-3 py-1.5 font-medium hover:bg-muted disabled:cursor-wait"
+      >
+        {loading ? 'Loading 100 earlier items…' : error ? 'Couldn’t load earlier items · Retry' : 'Load 100 earlier items'}
+      </button>
+      <span className="sr-only" aria-live="polite">
+        {loading ? 'Loading 100 earlier session items' : error ?? (hasOlder ? 'Earlier history available' : '')}
+      </span>
     </div>
   )
 }

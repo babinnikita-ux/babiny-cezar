@@ -12,6 +12,7 @@ import { Virtualizer, type VirtualizerHandle } from 'virtua'
 
 import {
   NEAR_BOTTOM_SLACK_PX,
+  isNearHistoryStart,
   isNearBottom,
   readThreadMeasurements,
   readThreadScroll,
@@ -47,6 +48,8 @@ export interface ThreadScrollControls {
   pillVisible: boolean
   /** The pill's action: smooth-scroll to the tail and stick again. */
   jumpToLatest: () => void
+  /** Load one older page while preserving the current pixel anchor. */
+  loadOlder: () => void
   /** Re-pin if stuck — the keyboard-settled hook (content height didn't change, but the
    *  visual viewport did, so the RO won't fire). */
   restickIfStuck: () => void
@@ -62,7 +65,14 @@ export interface ThreadScrollControls {
  *    including through the SSE replay, which re-grows the content after mount: the desired
  *    offset is re-applied on every growth until it is reachable or the user scrolls.
  */
-export function useThreadScroll(runId: string): ThreadScrollControls {
+export function useThreadScroll(
+  runId: string,
+  options: {
+    onLoadOlder?: () => Promise<void>
+    onJumpToLatest?: () => Promise<void>
+  } = {},
+): ThreadScrollControls {
+  const { onLoadOlder, onJumpToLatest } = options
   const scrollElRef = useRef<HTMLElement | null>(null)
   // State, not a ref: crossing the virtualization threshold mid-replay REPLACES the rows
   // container, and the observers below must re-subscribe to the new element.
@@ -103,13 +113,35 @@ export function useThreadScroll(runId: string): ThreadScrollControls {
     if (stuckRef.current) toBottom()
   }, [toBottom])
 
+  const loadingOlderRef = useRef(false)
+
+  const loadOlder = useCallback(() => {
+    const scroller = scrollElRef.current
+    if (!scroller || !onLoadOlder || loadingOlderRef.current) return
+    loadingOlderRef.current = true
+    const beforeHeight = scroller.scrollHeight
+    const beforeTop = scroller.scrollTop
+    void onLoadOlder().finally(() => {
+      requestAnimationFrame(() => {
+        const current = scrollElRef.current
+        if (current) setOffset(beforeTop + Math.max(0, current.scrollHeight - beforeHeight))
+        loadingOlderRef.current = false
+      })
+    })
+  }, [onLoadOlder, setOffset])
+
   const jumpToLatest = useCallback(() => {
     const scroller = scrollElRef.current
     if (!scroller) return
     pendingRestoreRef.current = null
     stuckRef.current = true
-    scroller.scrollTo({ top: scroller.scrollHeight - scroller.clientHeight, behavior: 'smooth' })
-  }, [])
+    void (onJumpToLatest?.() ?? Promise.resolve()).finally(() => {
+      requestAnimationFrame(() => {
+        const current = scrollElRef.current
+        current?.scrollTo({ top: current.scrollHeight - current.clientHeight, behavior: 'smooth' })
+      })
+    })
+  }, [onJumpToLatest])
 
   useEffect(() => {
     const scroller = scrollElRef.current
@@ -146,6 +178,8 @@ export function useThreadScroll(runId: string): ThreadScrollControls {
     const RESTICK_INTENT_MS = 2000
     let downIntentAt = 0
     let lastTouchY: number | null = null
+    let pointerScrolling = false
+    let previousScrollTop = scroller.scrollTop
     const unstick = () => {
       pendingRestoreRef.current = null
       stuckRef.current = false
@@ -155,18 +189,29 @@ export function useThreadScroll(runId: string): ThreadScrollControls {
       downIntentAt = Date.now()
     }
     const onWheel = (event: WheelEvent) => {
-      if (event.deltaY < 0) unstick()
+      if (event.deltaY < 0) {
+        unstick()
+        if (isNearHistoryStart(scroller)) loadOlder()
+      }
       else markDown()
     }
     const onKey = (event: KeyboardEvent) => {
-      if (['ArrowUp', 'PageUp', 'Home'].includes(event.key)) unstick()
+      if (['ArrowUp', 'PageUp', 'Home'].includes(event.key)) {
+        unstick()
+        if (isNearHistoryStart(scroller)) loadOlder()
+      }
       else if (['ArrowDown', 'PageDown', 'End'].includes(event.key)) markDown()
     }
     const onPointerDown = () => {
+      pointerScrolling = true
+      previousScrollTop = scroller.scrollTop
       if (!isNearBottom(scroller, NEAR_BOTTOM_SLACK_PX)) {
         unstick()
         markDown() // a scrollbar grab can go either way — let a drag to the tail re-pin
       }
+    }
+    const onPointerUp = () => {
+      pointerScrolling = false
     }
     const onTouchStart = (event: TouchEvent) => {
       lastTouchY = event.touches[0]?.clientY ?? null
@@ -175,11 +220,16 @@ export function useThreadScroll(runId: string): ThreadScrollControls {
       const y = event.touches[0]?.clientY
       if (y === undefined) return
       // Finger moving down pans the content up (away from the tail), and vice versa.
-      if (lastTouchY !== null && y > lastTouchY + 1) unstick()
+      if (lastTouchY !== null && y > lastTouchY + 1) {
+        unstick()
+        if (isNearHistoryStart(scroller)) loadOlder()
+      }
       else if (lastTouchY !== null && y < lastTouchY - 1) markDown()
       lastTouchY = y
     }
     const onScroll = () => {
+      if (pointerScrolling && scroller.scrollTop < previousScrollTop && isNearHistoryStart(scroller)) loadOlder()
+      previousScrollTop = scroller.scrollTop
       const near = isNearBottom(scroller, NEAR_BOTTOM_SLACK_PX)
       // No re-pinning while a restore is in flight: the clamped position rides the (still
       // growing) bottom on its way to the cached offset, and near-bottom moments there are
@@ -199,6 +249,7 @@ export function useThreadScroll(runId: string): ThreadScrollControls {
     scroller.addEventListener('touchstart', onTouchStart, { passive: true })
     scroller.addEventListener('touchmove', onTouchMove, { passive: true })
     scroller.addEventListener('pointerdown', onPointerDown, { passive: true })
+    window.addEventListener('pointerup', onPointerUp, { passive: true })
     scroller.addEventListener('keydown', onKey)
 
     // Content growth (streamed items, replay, virtua's total-size updates) re-applies the
@@ -225,12 +276,13 @@ export function useThreadScroll(runId: string): ThreadScrollControls {
       scroller.removeEventListener('touchstart', onTouchStart)
       scroller.removeEventListener('touchmove', onTouchMove)
       scroller.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('pointerup', onPointerUp)
       scroller.removeEventListener('keydown', onKey)
       observer?.disconnect()
     }
-  }, [runId, contentEl, setOffset, toBottom])
+  }, [runId, contentEl, loadOlder, setOffset, toBottom])
 
-  return { attachContent, scrollElRef, virtualizerRef, pillVisible, jumpToLatest, restickIfStuck }
+  return { attachContent, scrollElRef, virtualizerRef, pillVisible, jumpToLatest, loadOlder, restickIfStuck }
 }
 
 /**
