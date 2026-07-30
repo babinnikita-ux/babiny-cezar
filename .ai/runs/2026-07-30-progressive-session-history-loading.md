@@ -58,10 +58,10 @@ Render the newest 100 protocol-level session items quickly, page older history o
 
 ### Phase 1: Server and contracts
 
-- [ ] 1.1 Add bounded event-history projection, cursor codecs, compact context, and focused tests
-- [ ] 1.2 Add Node-free DTOs, local zod schemas, and shared type/fixture parity tests
-- [ ] 1.3 Register validated history routes with alias parity, error/concurrency tests, and compatibility inventory
-- [ ] 1.4 Add SSE cursor resume, `afterSeq`, `Last-Event-ID`, frame ids, and race tests
+- [x] 1.1 Add bounded event-history projection, cursor codecs, compact context, and focused tests — cf3fa935
+- [x] 1.2 Add Node-free DTOs, local zod schemas, and shared type/fixture parity tests — cf3fa935
+- [x] 1.3 Register validated history routes with alias parity, error/concurrency tests, and compatibility inventory — cf3fa935
+- [x] 1.4 Add SSE cursor resume, `afterSeq`, `Last-Event-ID`, frame ids, and race tests — cf3fa935
 
 ### Phase 2: Client hydration and state correctness
 
