@@ -65,10 +65,10 @@ Render the newest 100 protocol-level session items quickly, page older history o
 
 ### Phase 2: Client hydration and state correctness
 
-- [ ] 2.1 Add bounded `useRunHistory()` transport, live merge, project scoping, and fallback tests
-- [ ] 2.2 Add stable row identities and separate visible/current-state reduction with equivalence tests
-- [ ] 2.3 Wire thread and docks to history state with accessible boundary states
-- [ ] 2.4 Add intent-gated paging, prepend anchoring, eviction navigation, and jump-to-latest reset
+- [x] 2.1 Add bounded `useRunHistory()` transport, live merge, project scoping, and fallback tests — a43e214d
+- [x] 2.2 Add stable row identities and separate visible/current-state reduction with equivalence tests — a43e214d
+- [x] 2.3 Wire thread and docks to history state with accessible boundary states — a43e214d
+- [x] 2.4 Add intent-gated paging, prepend anchoring, eviction navigation, and jump-to-latest reset — a43e214d
 
 ### Phase 3: Performance and browser proof
 
