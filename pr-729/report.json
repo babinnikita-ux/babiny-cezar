@@ -5,7 +5,7 @@
     "prNumber": 729,
     "title": "feat(web): restore the last project location",
     "branch": "spec/restore-last-location",
-    "headSha": "2bf2781eb8919ed1f29cf91bf50491969119fcc1"
+    "headSha": "a294e9d5937a76a98fa940442a8486095a368cf5"
   },
   "verdict": "PASS",
   "environment": {
