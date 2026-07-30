@@ -54,6 +54,8 @@ Render the newest 100 protocol-level session items quickly, page older history o
 
 ## Progress
 
+PR: #739
+
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
 
 ### Phase 1: Server and contracts
@@ -74,4 +76,4 @@ Render the newest 100 protocol-level session items quickly, page older history o
 
 - [x] 3.1 Add long-session fixtures and deterministic bounded-reader/context instrumentation — 36197190
 - [x] 3.2 Add real-browser progressive-history coverage and screenshot scenarios — 36197190
-- [ ] 3.3 Run the full validation/browser gates and verify package/runtime boundaries
+- [x] 3.3 Run the full validation/browser gates and verify package/runtime boundaries — 36197190
