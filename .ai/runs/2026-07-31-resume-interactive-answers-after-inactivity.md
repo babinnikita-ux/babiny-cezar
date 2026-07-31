@@ -37,12 +37,14 @@ Make a structured question's option chips reliably resume an agent session after
 
 ## Progress
 
+PR: #758
+
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
 
 ### Phase 1: Reliable answer delivery
 
-- [x] 1.1 Synchronize with idle-session teardown. — bc25262c
-- [x] 1.2 Lock in the race behavior. — bc25262c
+- [x] 1.1 Synchronize with idle-session teardown. — bc25262c, ed987425
+- [x] 1.2 Lock in the race behavior. — bc25262c, ed987425
 
 ### Phase 2: Behavioral documentation
 
