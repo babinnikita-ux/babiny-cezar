@@ -46,4 +46,4 @@ Make a structured question's option chips reliably resume an agent session after
 
 ### Phase 2: Behavioral documentation
 
-- [ ] 2.1 Document the teardown transition.
+- [x] 2.1 Document the teardown transition. — 29d4b2fa
