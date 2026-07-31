@@ -241,6 +241,26 @@ describe('AskCard — answering after the session has ended', () => {
     expect(screen.queryByRole('alert')).toBeNull()
   })
 
+  it('waits for idle teardown before retrying the continuation, without accepting a duplicate tap', async () => {
+    mutateAsync.mockRejectedValueOnce(new ApiError(409, 'session closed'))
+    continueAsync
+      .mockRejectedValueOnce(new ApiError(409, 'run is still active'))
+      .mockResolvedValueOnce({ continued: true })
+    renderAsk(singleAsk, { ...activeRun, steps: [step({ sessionId: 'sess-1' })] })
+
+    const option = screen.getByRole('button', { name: /date-fns/ })
+    fireEvent.click(option)
+    await waitFor(() => expect(continueAsync).toHaveBeenCalledTimes(1))
+    expect((option as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(option)
+
+    await waitFor(() => expect(continueAsync).toHaveBeenCalledTimes(2))
+    expect(continueAsync).toHaveBeenNthCalledWith(1, { text: 'Library: date-fns' })
+    expect(continueAsync).toHaveBeenNthCalledWith(2, { text: 'Library: date-fns' })
+    expect(mutateAsync).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
   it('does not silently switch to another connected provider when the run provider is unavailable', () => {
     providerStatus = {
       providers: [
