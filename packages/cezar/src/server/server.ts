@@ -25,6 +25,11 @@ import { streamSSE } from 'hono/streaming';
 import { jsonZodValidator, paramZodValidator, queryZodValidator } from './validators.ts';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { z } from 'zod';
+import type {
+  GroupResponse,
+  GroupVariant,
+  PickVariantResponse,
+} from '@open-mercato/cezar-contract';
 import { detectEnvironment } from '../core/backend-detect.ts';
 import type { ContentBlock } from '../core/agent-runner.ts';
 import { discoverCodexModels } from '../core/codex-model-catalog.ts';
@@ -322,28 +327,6 @@ const FOLLOWUPS_OFF = 'the follow-up inbox is disabled — set CEZ_FOLLOWUPS=1 t
 
 /** One column of `GET /api/groups/:groupId`. NOTE: `diffStat` here is the raw
  *  `git diff --stat` text (worktreeDiffStat), NOT the numeric `RunRecord.diffStat`. */
-export interface GroupVariant {
-  id: string;
-  variant: string;
-  title: string;
-  status: RunStatus;
-  archived: boolean;
-  tokensUsed: number;
-  costUsd?: number;
-  diffStat: string;
-  handoffExcerpt: string;
-}
-
-export interface GroupResponse {
-  groupId: string;
-  runs: GroupVariant[];
-}
-
-/** `POST /api/groups/:groupId/pick` — the winner, parked at `review` when it has a diff. */
-export interface PickVariantResponse {
-  winner?: RunRecord;
-}
-
 /** `GET /api/projects` (multi-project spec) — the workspace registry with
  *  per-root status probes. Absolute `root`s belong HERE (same-origin, behind
  *  the cockpit) and are deliberately never mirrored into the CORS-open
@@ -601,6 +584,15 @@ const workspaceUiStateSchema = z
     appearance: appearanceSchema.optional(),
     notifications: z.object({ enabled: z.boolean().optional() }).passthrough().optional(),
     dismissedProviderAuthFailures: providerAuthDismissalsSchema.optional(),
+    lastLocation: z
+      .object({
+        projectId: z.string().min(1).max(64),
+        pathname: z.string().min(1).max(2048).startsWith('/p/'),
+        search: z.string().max(4096).startsWith('?').optional(),
+        hash: z.string().max(2048).startsWith('#').optional(),
+      })
+      .strict()
+      .optional(),
     // Sidebar per-project collapse map, keyed by project id (slug ≤ 64 chars).
     // Entry-capped like `skillUsage`: the map is written straight to a file the
     // cockpit GETs on every load, so it must stay bounded on every axis.
@@ -3199,36 +3191,40 @@ export function createApp(deps: ServerDeps) {
     })
 
     .get('/runs/:id/changes', async (c) => {
-      const { store } = c.get('project');
+      const { root: repoRoot, store } = c.get('project');
       const run = store.getRun(c.req.param('id'));
       if (!run) return c.json({ error: 'not found' }, 404);
-      const worktree = worktreeOf(run);
-      if (!worktree) return c.json({ error: NO_WORKTREE }, 409);
-      const result = await collectChanges(worktree, run.baseBranch ?? 'HEAD', { taskBranch: run.branch });
+      const workingDirectory = workingDirectoryOf(run, repoRoot);
+      if (!workingDirectory) return c.json({ error: NO_WORKTREE }, 409);
+      const result = await collectChanges(workingDirectory, run.baseBranch ?? 'HEAD', {
+        taskBranch: run.branch,
+        // A read-only GET against the user's real checkout must never modify its index.
+        intentToAdd: run.worktreePath ? undefined : false,
+      });
       if (!result.ok) return c.json({ error: result.error }, 409);
       return c.json(result.changes);
     })
 
     // The run's own commits (<base>..HEAD on the worktree branch) — the Commits tab.
     .get('/runs/:id/commits', async (c) => {
-      const { store } = c.get('project');
+      const { root: repoRoot, store } = c.get('project');
       const run = store.getRun(c.req.param('id'));
       if (!run) return c.json({ error: 'not found' }, 404);
-      const worktree = worktreeOf(run);
-      if (!worktree) return c.json({ error: NO_WORKTREE }, 409);
-      const result = await collectRunCommits(worktree, run.baseBranch ?? 'HEAD');
+      const workingDirectory = workingDirectoryOf(run, repoRoot);
+      if (!workingDirectory) return c.json({ error: NO_WORKTREE }, 409);
+      const result = await collectRunCommits(workingDirectory, run.baseBranch ?? 'HEAD');
       if (!result.ok) return c.json({ error: result.error }, 409);
       return c.json({ commits: result.commits });
     })
 
     // One of the run's commits, structured like the Changes tab (reuses collectCommitChanges).
     .get('/runs/:id/commit/:sha', async (c) => {
-      const { store } = c.get('project');
+      const { root: repoRoot, store } = c.get('project');
       const run = store.getRun(c.req.param('id'));
       if (!run) return c.json({ error: 'not found' }, 404);
-      const worktree = worktreeOf(run);
-      if (!worktree) return c.json({ error: NO_WORKTREE }, 409);
-      const result = await collectCommitChanges(worktree, c.req.param('sha'));
+      const workingDirectory = workingDirectoryOf(run, repoRoot);
+      if (!workingDirectory) return c.json({ error: NO_WORKTREE }, 409);
+      const result = await collectCommitChanges(workingDirectory, c.req.param('sha'));
       if (!result.ok) return c.json({ error: result.error }, 409);
       return c.json(result.commit);
     })
@@ -3244,7 +3240,7 @@ export function createApp(deps: ServerDeps) {
     // what an `<img>` sends — while the flag still wins whenever it is present and `*<slash>*`
     // (every `fetch`) still gets the JSON listing. See `negotiate`.
     .get('/runs/:id/files', queryZodValidator(z.object({ path: queryValue, raw: queryValue })), async (c) => {
-      const { store } = c.get('project');
+      const { root: repoRoot, store } = c.get('project');
       const query = c.req.valid('query');
       c.header('vary', 'Accept');
       const wantsRaw =
@@ -3253,9 +3249,9 @@ export function createApp(deps: ServerDeps) {
           : negotiate(c.req.header('accept'), FILE_FORMATS) === 'image/*';
       const run = store.getRun(c.req.param('id'));
       if (!run) return c.json({ error: 'not found' }, 404);
-      const worktree = worktreeOf(run);
-      if (!worktree) return c.json({ error: NO_WORKTREE }, 409);
-      const result = await readWorktreePath(worktree, query.path ?? '');
+      const workingDirectory = workingDirectoryOf(run, repoRoot);
+      if (!workingDirectory) return c.json({ error: NO_WORKTREE }, 409);
+      const result = await readWorktreePath(workingDirectory, query.path ?? '');
       if (result.kind === 'invalid' || result.kind === 'missing') {
         return c.json({ error: result.error }, 409);
       }
@@ -3284,7 +3280,7 @@ export function createApp(deps: ServerDeps) {
             return c.json({ error }, 409);
           }
         } else {
-          const bytes = await readFile(join(worktree, result.path));
+          const bytes = await readFile(join(workingDirectory, result.path));
           return c.body(new Uint8Array(bytes).buffer as ArrayBuffer, 200, {
             'content-type': mime,
             'x-content-type-options': 'nosniff',
@@ -3414,7 +3410,9 @@ export function createApp(deps: ServerDeps) {
           status: r.status,
           archived: r.archived,
           tokensUsed: r.tokensUsed,
-          costUsd: r.costUsd,
+          ...(r.inputTokens !== undefined ? { inputTokens: r.inputTokens } : {}),
+          ...(r.outputTokens !== undefined ? { outputTokens: r.outputTokens } : {}),
+          ...(r.costUsd !== undefined ? { costUsd: r.costUsd } : {}),
           diffStat:
             r.worktreePath && existsSync(r.worktreePath)
               ? await worktreeDiffStat(r.worktreePath, r.baseBranch ?? 'HEAD')
@@ -3497,10 +3495,15 @@ export function createApp(deps: ServerDeps) {
   };
   // ---- session git view (redesign R5 Step 1.2 — §"Git/session API additions").
   // Structured sibling of the text-blob /diff above (which stays untouched —
-  // protected surface). Same worktree/base resolution; every predictable git
-  // failure degrades to 409 + human-readable reason, 404 only for unknown ids.
+  // protected surface). Isolated runs read their worktree; worktree-off runs
+  // read the repo checkout they executed in. Every predictable git failure
+  // degrades to 409 + human-readable reason, 404 only for unknown ids.
   const worktreeOf = (run: RunRecord): string | null =>
     run.worktreePath && existsSync(run.worktreePath) ? run.worktreePath : null;
+  const workingDirectoryOf = (run: RunRecord, repoRoot: string): string | null =>
+    run.worktree === false
+      ? repoRoot
+      : worktreeOf(run);
   const NO_WORKTREE = 'no worktree — this task ran directly in the repo working tree';
 
   // ---- chained family: worktrees (project-scoped) ----

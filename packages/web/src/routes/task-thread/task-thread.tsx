@@ -10,6 +10,7 @@ import {
   usePatchRun,
   useRemoveQueuedMessage,
   useRun,
+  useProjectRepoBase,
   useRuns,
   useSendMessage,
 } from '@/api/queries'
@@ -20,7 +21,7 @@ import { Composer } from '@/components/composer/composer'
 import { StatusDot } from '@/components/status-dot'
 import { Button } from '@/components/ui/button'
 import { useKeyboardInsetVar } from '@/lib/keyboard-inset'
-import { taskPrUrl } from '@/lib/tasks-table'
+import { taskIssueUrl, taskPrUrl } from '@/lib/tasks-table'
 import { cn, isHttpUrl } from '@/lib/utils'
 
 import {
@@ -289,6 +290,9 @@ export function ThreadView({
   )
 
   const rows = useMemo(() => buildThreadRows(run, thread, edit), [run, thread, edit])
+  // #526: the footer's issue link may be synthesized from the CEZ:ISSUE marker, and the only
+  // repository it may ever name is the one on screen — never the transcript's.
+  const issueUrl = taskIssueUrl(run, useProjectRepoBase())
   const { search } = useLocation()
   const mode = threadRenderMode(search, rows.length)
   const scroll = useThreadScroll(run.id, {
@@ -359,6 +363,19 @@ export function ThreadView({
                 className="font-medium text-foreground underline-offset-2 hover:underline"
               >
                 PR ↗
+              </a>
+            ) : null}
+            {/* #526: an issue-subject run (om-prepare-issue) links the issue it created — it
+                declares no PR, so without this the created issue was unreachable from the UI. */}
+            {isHttpUrl(issueUrl) ? (
+              <a
+                data-slot="issue-link"
+                href={issueUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-foreground underline-offset-2 hover:underline"
+              >
+                Issue ↗
               </a>
             ) : null}
           </div>

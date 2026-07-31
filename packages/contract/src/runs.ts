@@ -56,6 +56,8 @@ export const stepStatusSchema = z.enum([
 ]);
 export type StepStatus = z.infer<typeof stepStatusSchema>;
 
+const usageCounterSchema = z.number().finite().nonnegative();
+
 /** One step of a run's chain. */
 export const stepStateSchema = z.object({
   id: z.string(),
@@ -64,6 +66,13 @@ export const stepStateSchema = z.object({
   status: stepStatusSchema,
   iterations: z.number(),
   tokensUsed: z.number(),
+  inputTokens: usageCounterSchema.optional(),
+  outputTokens: usageCounterSchema.optional(),
+  usageInvocationsStarted: usageCounterSchema.optional(),
+  usageInvocationsObserved: usageCounterSchema.optional(),
+  usageTurnsStarted: usageCounterSchema.optional(),
+  usageTurnsRecorded: usageCounterSchema.optional(),
+  usageInvocationEpoch: usageCounterSchema.optional(),
   startedAt: z.string().optional(),
   finishedAt: z.string().optional(),
   error: z.string().optional(),
@@ -165,6 +174,8 @@ export const runRecordSchema = z.object({
   startedAt: z.string().optional(),
   finishedAt: z.string().optional(),
   tokensUsed: z.number(),
+  inputTokens: usageCounterSchema.optional(),
+  outputTokens: usageCounterSchema.optional(),
   costUsd: z.number().optional(),
   pullRequestUrl: z.string().optional(),
   /** The PR this task is ABOUT (#407) — auto-discovered from conversation references. Display
@@ -187,9 +198,13 @@ export const runRecordSchema = z.object({
   referencedIssueUrl: z.string().optional(),
   /** The referenced-issue working set, persisted like `referencedPrCandidates`. Capped. */
   referencedIssueCandidates: z.array(z.string()).optional(),
-  /** Absent when the run executed in the repo working tree rather than its own worktree. */
+  /** Explicit execution policy. `false` means the run intentionally uses the repo root;
+   *  absent on older runs and for the default isolated-worktree mode. */
+  worktree: z.literal(false).optional(),
+  /** Absent for in-place runs and after an isolated worktree is removed. */
   worktreePath: z.string().optional(),
   branch: z.string().optional(),
+  /** Stable baseline for session git views: a worktree's fork ref, or an in-place run's starting commit. */
   baseBranch: z.string().optional(),
   /** Set when count-based retention (#483) reclaimed the worktree DIRECTORY (the branch is
    *  kept): the dir is gone but recoverable. */
@@ -369,6 +384,8 @@ export const groupVariantSchema = z.object({
   status: runStatusSchema,
   archived: z.boolean(),
   tokensUsed: z.number(),
+  inputTokens: usageCounterSchema.optional(),
+  outputTokens: usageCounterSchema.optional(),
   costUsd: z.number().optional(),
   diffStat: z.string(),
   /** First lines of the handoff journal's "## Progress log" section, as markdown. */

@@ -58,6 +58,8 @@ import {
   retryProviderAuth,
 } from './client'
 import { queryScope } from '@open-mercato/cezar-api-client'
+import { useProjectScope } from './project-scope-context'
+import { githubRepoBase } from '@/lib/tasks-table'
 import type { ContinueOptions } from './client'
 import type {
   CheckoutProjectInput,
@@ -420,6 +422,25 @@ export function useHealth() {
   })
 }
 
+/**
+ * The GitHub web root (`https://github.com/owner/repo`) of the project currently on screen, or
+ * undefined when it cannot be proven — the only authority `taskIssueUrl` may synthesize a link
+ * against (#526).
+ *
+ * The boot-project guard is the load-bearing part. `/health` is WORKSPACE-level (project-scope.ts
+ * `WORKSPACE_LEVEL`): the server always builds it from `bootRoot`, so its `repo.remote` names the
+ * project cezar launched in, whichever project the URL is scoped to. Handing a non-boot project's
+ * task a link built from the boot project's repo would point at a completely different repository
+ * — the same wrong-link defect #526 exists to kill. Until a per-project remote is served, a
+ * scoped view synthesizes nothing.
+ */
+export function useProjectRepoBase(): string | undefined {
+  const health = useHealth().data
+  const { projectId } = useProjectScope()
+  const isBootProject = projectId === null || projectId === health?.bootProject
+  return isBootProject ? githubRepoBase(health?.repo?.remote) : undefined
+}
+
 /** The local "Open in…" targets (#open-in). Machine-level and stable, so it caches broadly;
  *  empty in hosted mode. */
 export function useOpenTargets() {
@@ -480,9 +501,9 @@ export function useRunDiff(id: string | undefined) {
   })
 }
 
-/** The structured worktree diff behind the Changes tab (R5). A 409 ("no worktree — …") is a
- *  real answer here, not a network hiccup — retrying cannot change it, so retries are off and
- *  the view renders the server's own reason. */
+/** The structured session diff behind the Changes tab (R5). A 409 (for example, a reclaimed
+ *  worktree whose directory is unavailable) is a real answer, not a network hiccup — retrying
+ *  cannot change it, so retries are off and the view renders the server's own reason. */
 export function useRunChanges(id: string | undefined, live = false) {
   return useQuery({
     queryKey: queryKeys.runs.changes(id ?? ''),
@@ -528,7 +549,7 @@ export function useGroup(groupId: string | undefined) {
 }
 
 /** A run's commit list (Commits tab). Polls while active so new commits appear as the agent
- *  autosaves. A 409 ("no worktree") is a real answer retries can't change. */
+ *  works. A 409 from an unavailable backing directory is a real answer retries can't change. */
 export function useRunCommits(id: string | undefined, live = false) {
   return useQuery({
     queryKey: queryKeys.runs.commits(id ?? ''),

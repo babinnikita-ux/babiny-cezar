@@ -26,6 +26,8 @@ export type StepStatus =
   | 'cancelled'
   | 'skipped';
 
+const usageCounterSchema = z.number().finite().nonnegative();
+
 const stepStateSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -33,6 +35,13 @@ const stepStateSchema = z.object({
   status: z.enum(['pending', 'running', 'waiting', 'review', 'done', 'failed', 'cancelled', 'skipped']),
   iterations: z.number(),
   tokensUsed: z.number(),
+  inputTokens: usageCounterSchema.optional(),
+  outputTokens: usageCounterSchema.optional(),
+  usageInvocationsStarted: usageCounterSchema.optional(),
+  usageInvocationsObserved: usageCounterSchema.optional(),
+  usageTurnsStarted: usageCounterSchema.optional(),
+  usageTurnsRecorded: usageCounterSchema.optional(),
+  usageInvocationEpoch: usageCounterSchema.optional(),
   startedAt: z.string().optional(),
   finishedAt: z.string().optional(),
   error: z.string().optional(),
@@ -126,6 +135,8 @@ const runRecordSchema = z.object({
   startedAt: z.string().optional(),
   finishedAt: z.string().optional(),
   tokensUsed: z.number(),
+  inputTokens: usageCounterSchema.optional(),
+  outputTokens: usageCounterSchema.optional(),
   costUsd: z.number().optional(),
   /** First GitHub PR URL spotted in the transcript (the janitor trick). */
   pullRequestUrl: z.string().optional(),
@@ -165,11 +176,14 @@ const runRecordSchema = z.object({
   /** Distinct issue URLs spotted so far — the referenced-issue working set,
    *  persisted like `referencedPrCandidates`. Capped. */
   referencedIssueCandidates: z.array(z.string()).optional(),
-  /** Task worktree (spec 006) — absent when the run executed in the repo root. */
+  /** Explicit execution policy. `false` means the run intentionally uses the repo root;
+   *  absent on older runs and for the default isolated-worktree mode. */
+  worktree: z.literal(false).optional(),
+  /** Task worktree (spec 006) — absent for in-place runs and after explicit cleanup. */
   worktreePath: z.string().optional(),
   /** The task's own branch (`cez/<id8>`), created off `baseBranch`. */
   branch: z.string().optional(),
-  /** Branch (or commit, when HEAD was detached) the worktree was forked from. */
+  /** Stable baseline for session git views: a worktree's fork ref, or an in-place run's starting commit. */
   baseBranch: z.string().optional(),
   /** Set when count-based retention (#483) reclaimed this run's worktree
    *  *directory* (the `cez/<id8>` branch is kept). Presence means "materialized
@@ -415,6 +429,7 @@ export class RunStore extends EventEmitter {
     runner?: 'claude' | 'codex' | 'opencode';
     generateFollowups?: boolean;
     autonomous?: boolean;
+    worktree?: false;
     groupId?: string;
     variant?: string;
     steps: Array<Pick<StepState, 'id' | 'name' | 'kind'>>;
@@ -434,6 +449,7 @@ export class RunStore extends EventEmitter {
       runner: input.runner,
       generateFollowups: input.generateFollowups,
       autonomous: input.autonomous,
+      worktree: input.worktree,
       groupId: input.groupId,
       variant: input.variant,
       status: 'queued',
@@ -528,6 +544,28 @@ export class RunStore extends EventEmitter {
     if (!run || !step) return;
     Object.assign(step, this.redactStepPatch(patch));
     run.tokensUsed = run.steps.reduce((sum, s) => sum + s.tokensUsed, 0);
+    const startedAgentSteps = run.steps.filter((candidate) => candidate.kind === 'agent' && candidate.iterations > 0);
+    const directionalComplete =
+      startedAgentSteps.length > 0 &&
+      startedAgentSteps.every(
+        (candidate) =>
+          candidate.usageInvocationsStarted !== undefined &&
+          candidate.usageInvocationsObserved !== undefined &&
+          candidate.usageInvocationsObserved > 0 &&
+          candidate.usageInvocationsStarted === candidate.usageInvocationsObserved &&
+          candidate.usageTurnsStarted !== undefined &&
+          candidate.usageTurnsRecorded !== undefined &&
+          candidate.usageTurnsStarted > 0 &&
+          candidate.usageTurnsStarted === candidate.usageTurnsRecorded &&
+          candidate.inputTokens !== undefined &&
+          candidate.outputTokens !== undefined,
+      );
+    run.inputTokens = directionalComplete
+      ? startedAgentSteps.reduce((sum, candidate) => sum + (candidate.inputTokens ?? 0), 0)
+      : undefined;
+    run.outputTokens = directionalComplete
+      ? startedAgentSteps.reduce((sum, candidate) => sum + (candidate.outputTokens ?? 0), 0)
+      : undefined;
     const cost = run.steps.reduce((sum, s) => sum + (s.costUsd ?? 0), 0);
     run.costUsd = cost > 0 ? cost : undefined;
     this.touch(run);
