@@ -14,10 +14,13 @@ import {
   NEAR_BOTTOM_SLACK_PX,
   isNearHistoryStart,
   isNearBottom,
+  firstVisibleThreadAnchor,
   readThreadMeasurements,
   readThreadScroll,
   saveThreadMeasurements,
   saveThreadScroll,
+  threadAnchorScrollTop,
+  type ThreadRowPosition,
 } from './thread-scroll'
 
 /**
@@ -70,9 +73,10 @@ export function useThreadScroll(
   options: {
     onLoadOlder?: () => Promise<void>
     onJumpToLatest?: () => Promise<void>
+    rowKeys?: readonly string[]
   } = {},
 ): ThreadScrollControls {
-  const { onLoadOlder, onJumpToLatest } = options
+  const { onLoadOlder, onJumpToLatest, rowKeys = [] } = options
   const scrollElRef = useRef<HTMLElement | null>(null)
   // State, not a ref: crossing the virtualization threshold mid-replay REPLACES the rows
   // container, and the observers below must re-subscribe to the new element.
@@ -114,6 +118,18 @@ export function useThreadScroll(
   }, [toBottom])
 
   const loadingOlderRef = useRef(false)
+  const wheelGestureActiveRef = useRef(false)
+  const wheelGestureTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const touchHistoryConsumedRef = useRef(false)
+  const pointerHistoryConsumedRef = useRef(false)
+  const rowKeysRef = useRef(rowKeys)
+  rowKeysRef.current = rowKeys
+
+  const measuredRows = useCallback((scroller: HTMLElement): ThreadRowPosition[] =>
+    [...scroller.querySelectorAll<HTMLElement>('[data-slot="thread-row"][data-row-key]')].map((row) => {
+      const rect = row.getBoundingClientRect()
+      return { key: row.dataset.rowKey!, top: rect.top, bottom: rect.bottom }
+    }), [])
 
   const loadOlder = useCallback(() => {
     const scroller = scrollElRef.current
@@ -121,14 +137,34 @@ export function useThreadScroll(
     loadingOlderRef.current = true
     const beforeHeight = scroller.scrollHeight
     const beforeTop = scroller.scrollTop
+    const beforeViewportTop = scroller.getBoundingClientRect().top
+    const anchor = firstVisibleThreadAnchor(beforeViewportTop, measuredRows(scroller))
     void onLoadOlder().finally(() => {
       requestAnimationFrame(() => {
         const current = scrollElRef.current
-        if (current) setOffset(beforeTop + Math.max(0, current.scrollHeight - beforeHeight))
+        if (current) {
+          const fallbackTop = beforeTop + Math.max(0, current.scrollHeight - beforeHeight)
+          const viewportTop = current.getBoundingClientRect().top
+          const anchorIndex = anchor === undefined ? -1 : rowKeysRef.current.indexOf(anchor.key)
+          const handle = virtualizerRef.current
+          if (handle && anchorIndex >= 0) {
+            handle.scrollToIndex(anchorIndex, { align: 'start', offset: -anchor!.offset })
+          } else {
+            setOffset(threadAnchorScrollTop(
+              current.scrollTop,
+              viewportTop,
+              anchor,
+              measuredRows(current),
+              fallbackTop,
+            ))
+          }
+        }
         loadingOlderRef.current = false
       })
     })
-  }, [onLoadOlder, setOffset])
+  }, [measuredRows, onLoadOlder, setOffset])
+
+  useEffect(() => () => clearTimeout(wheelGestureTimerRef.current), [])
 
   const jumpToLatest = useCallback(() => {
     const scroller = scrollElRef.current
@@ -191,19 +227,26 @@ export function useThreadScroll(
     const onWheel = (event: WheelEvent) => {
       if (event.deltaY < 0) {
         unstick()
-        if (isNearHistoryStart(scroller)) loadOlder()
+        const freshGesture = !wheelGestureActiveRef.current
+        wheelGestureActiveRef.current = true
+        clearTimeout(wheelGestureTimerRef.current)
+        wheelGestureTimerRef.current = setTimeout(() => {
+          wheelGestureActiveRef.current = false
+        }, 180)
+        if (freshGesture && isNearHistoryStart(scroller)) loadOlder()
       }
       else markDown()
     }
     const onKey = (event: KeyboardEvent) => {
       if (['ArrowUp', 'PageUp', 'Home'].includes(event.key)) {
         unstick()
-        if (isNearHistoryStart(scroller)) loadOlder()
+        if (!event.repeat && isNearHistoryStart(scroller)) loadOlder()
       }
       else if (['ArrowDown', 'PageDown', 'End'].includes(event.key)) markDown()
     }
     const onPointerDown = () => {
       pointerScrolling = true
+      pointerHistoryConsumedRef.current = false
       previousScrollTop = scroller.scrollTop
       if (!isNearBottom(scroller, NEAR_BOTTOM_SLACK_PX)) {
         unstick()
@@ -214,6 +257,7 @@ export function useThreadScroll(
       pointerScrolling = false
     }
     const onTouchStart = (event: TouchEvent) => {
+      touchHistoryConsumedRef.current = false
       lastTouchY = event.touches[0]?.clientY ?? null
     }
     const onTouchMove = (event: TouchEvent) => {
@@ -222,13 +266,24 @@ export function useThreadScroll(
       // Finger moving down pans the content up (away from the tail), and vice versa.
       if (lastTouchY !== null && y > lastTouchY + 1) {
         unstick()
-        if (isNearHistoryStart(scroller)) loadOlder()
+        if (!touchHistoryConsumedRef.current && isNearHistoryStart(scroller)) {
+          touchHistoryConsumedRef.current = true
+          loadOlder()
+        }
       }
       else if (lastTouchY !== null && y < lastTouchY - 1) markDown()
       lastTouchY = y
     }
     const onScroll = () => {
-      if (pointerScrolling && scroller.scrollTop < previousScrollTop && isNearHistoryStart(scroller)) loadOlder()
+      if (
+        pointerScrolling &&
+        !pointerHistoryConsumedRef.current &&
+        scroller.scrollTop < previousScrollTop &&
+        isNearHistoryStart(scroller)
+      ) {
+        pointerHistoryConsumedRef.current = true
+        loadOlder()
+      }
       previousScrollTop = scroller.scrollTop
       const near = isNearBottom(scroller, NEAR_BOTTOM_SLACK_PX)
       // No re-pinning while a restore is in flight: the clamped position rides the (still

@@ -81,12 +81,16 @@ describe('readRunHistoryPage', () => {
     const file = fixture(events);
     const newest = await readRunHistoryPage(file);
     expect(newest.itemCount).toBe(100);
+    expect(canonicalSessionItems(newest.events)).toHaveLength(100);
+    expect(newest.events).toHaveLength(101);
     expect(newest.hasOlder).toBe(true);
     expect(newest.events.at(-1)?.seq).toBe(151);
     expect(newest.olderCursor).toBeTypeOf('string');
 
     const older = await readRunHistoryPage(file, newest.olderCursor);
     expect(older.itemCount).toBe(50);
+    expect(canonicalSessionItems(older.events)).toHaveLength(50);
+    expect(older.events).toHaveLength(51);
     expect(older.hasOlder).toBe(false);
     expect(older.events.at(-1)?.seq).toBe(51);
     expect(older.newerCursor).toBeTypeOf('string');
@@ -94,6 +98,8 @@ describe('readRunHistoryPage', () => {
 
     const newer = await readRunHistoryPage(file, older.newerCursor);
     expect(newer.itemCount).toBe(100);
+    expect(canonicalSessionItems(newer.events)).toHaveLength(100);
+    expect(newer.events).toHaveLength(101);
     expect(newer.events.at(-1)?.seq).toBe(151);
     expect(newer.newerCursor).toBeUndefined();
   });
@@ -113,8 +119,44 @@ describe('readRunHistoryPage', () => {
     const newest = await readRunHistoryPage(file);
     const previous = await readRunHistoryPage(file, newest.olderCursor);
     const forward = await readRunHistoryPage(file, previous.newerCursor);
+    expect(canonicalSessionItems(newest.events)).toHaveLength(100);
+    expect(newest.events).toHaveLength(101);
     expect(previous).toMatchObject({ itemCount: 100, hasOlder: true });
+    expect(canonicalSessionItems(previous.events)).toHaveLength(100);
+    expect(previous.events).toHaveLength(101);
+    expect(canonicalSessionItems(forward.events)).toHaveLength(100);
+    expect(forward.events).toHaveLength(101);
     expect(forward.events.at(-1)?.seq).toBe(651);
+  });
+
+  it('preserves UTF-8 when a multibyte code point crosses a reverse-read chunk boundary', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cez-history-utf8-'));
+    dirs.push(dir);
+    const file = join(dir, 'run.ndjson');
+    const build = (padding: number) => {
+      const text = `before 🧪${'x'.repeat(padding)}`;
+      const content = [
+        JSON.stringify({
+          seq: 1,
+          ts: '2026-07-30T00:00:00.000Z',
+          type: 'item.completed',
+          item: { kind: 'message', id: 'unicode', role: 'assistant', text },
+        }),
+        JSON.stringify({ seq: 2, ts: '2026-07-30T00:00:01.000Z', type: 'note', message: 'tail' }),
+      ].join('\n') + '\n';
+      return { content, text };
+    };
+    const base = build(0);
+    const emojiOffset = Buffer.byteLength(base.content.slice(0, base.content.indexOf('🧪')));
+    const padding = emojiOffset + 1 + 64 * 1024 - Buffer.byteLength(base.content);
+    expect(padding).toBeGreaterThan(0);
+    const { content, text } = build(padding);
+    expect(Buffer.byteLength(content) - 64 * 1024).toBe(emojiOffset + 1);
+    writeFileSync(file, content);
+
+    const page = await readRunHistoryPage(file);
+    const unicode = page.events.find(({ seq }) => seq === 1);
+    expect((unicode?.item as { text?: string } | undefined)?.text).toBe(text);
   });
 
   it('degrades a missing transcript to an empty live page', async () => {

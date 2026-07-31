@@ -1,4 +1,4 @@
-import { act, cleanup, render, renderHook } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { clearThreadScrollCaches } from './thread-scroll'
@@ -14,9 +14,14 @@ beforeEach(() => {
       disconnect() {}
     },
   )
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    callback(0)
+    return 1
+  })
 })
 
 afterEach(() => {
+  vi.useRealTimers()
   cleanup()
   vi.unstubAllGlobals()
   clearThreadScrollCaches()
@@ -72,5 +77,38 @@ describe('useThreadScroll — outside a shell scroller (jsdom, tests, storybook-
     result.current.jumpToLatest()
     result.current.restickIfStuck()
     expect(result.current.pillVisible).toBe(false)
+  })
+
+  it('consumes one multi-event wheel gesture even when the page request settles quickly', async () => {
+    vi.useFakeTimers()
+    const onLoadOlder = vi.fn().mockResolvedValue(undefined)
+    const Harness = () => {
+      const controls = useThreadScroll('r1', { onLoadOlder })
+      return <main data-slot="main"><div ref={controls.attachContent} /></main>
+    }
+    render(<Harness />)
+    const scroller = document.querySelector<HTMLElement>('[data-slot="main"]')!
+    Object.defineProperties(scroller, {
+      scrollTop: { value: 0, writable: true },
+      clientHeight: { value: 400 },
+      scrollHeight: { value: 1_000 },
+    })
+
+    await act(async () => {
+      fireEvent.wheel(scroller, { deltaY: -120 })
+      await Promise.resolve()
+    })
+    await act(async () => {
+      fireEvent.wheel(scroller, { deltaY: -80 })
+      await Promise.resolve()
+    })
+    expect(onLoadOlder).toHaveBeenCalledTimes(1)
+
+    act(() => vi.advanceTimersByTime(181))
+    await act(async () => {
+      fireEvent.wheel(scroller, { deltaY: -120 })
+      await Promise.resolve()
+    })
+    expect(onLoadOlder).toHaveBeenCalledTimes(2)
   })
 })

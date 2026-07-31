@@ -77,6 +77,21 @@ function parseLine(line: string): RunHistoryEvent | null {
   }
 }
 
+/**
+ * Split a chunk read from right to left without decoding the unfinished record at its left edge.
+ * NDJSON separators are single-byte ASCII, so complete records can be decoded safely after the
+ * first LF while the raw prefix waits for the preceding byte chunk.
+ */
+function completeReverseLines(chunk: Buffer, suffix: Buffer): { prefix: Buffer; lines: string[] } {
+  const combined = suffix.length === 0 ? chunk : Buffer.concat([chunk, suffix]);
+  const firstNewline = combined.indexOf(0x0a);
+  if (firstNewline === -1) return { prefix: Buffer.from(combined), lines: [] };
+  return {
+    prefix: Buffer.from(combined.subarray(0, firstNewline)),
+    lines: combined.subarray(firstNewline + 1).toString('utf8').split('\n'),
+  };
+}
+
 interface CanonicalItem {
   key: string;
   firstSeq: number;
@@ -239,7 +254,7 @@ async function reverseEventsUntil(
 
   const handle = await open(filePath, 'r');
   let position = fileSize;
-  let suffix = '';
+  let suffix: Buffer<ArrayBufferLike> = Buffer.alloc(0);
   const reversed: RunHistoryEvent[] = [];
   let reachedStart = false;
   let totalBytesRead = 0;
@@ -251,9 +266,9 @@ async function reverseEventsUntil(
       const buffer = Buffer.allocUnsafe(length);
       const { bytesRead } = await handle.read(buffer, 0, length, position);
       totalBytesRead += bytesRead;
-      const text = buffer.subarray(0, bytesRead).toString('utf8') + suffix;
-      const lines = text.split('\n');
-      suffix = lines.shift() ?? '';
+      const split = completeReverseLines(buffer.subarray(0, bytesRead), suffix);
+      suffix = split.prefix;
+      const { lines } = split;
       for (let index = lines.length - 1; index >= 0; index -= 1) {
         const event = parseLine(lines[index]!);
         if (event) {
@@ -271,7 +286,7 @@ async function reverseEventsUntil(
     }
     if (position === 0) {
       reachedStart = true;
-      const event = parseLine(suffix);
+      const event = parseLine(suffix.toString('utf8'));
       if (event) {
         fileHighWater = Math.max(fileHighWater, event.seq);
         if (event.seq < beforeSeq) reversed.push(event);
@@ -293,7 +308,7 @@ async function readFileTail(filePath: string): Promise<{ fileSize: number; fileH
   if (fileSize === 0) return { fileSize, fileHighWater: 0, bytesRead: 0 };
   const handle = await open(filePath, 'r');
   let position = fileSize;
-  let suffix = '';
+  let suffix: Buffer<ArrayBufferLike> = Buffer.alloc(0);
   let totalBytesRead = 0;
   try {
     while (position > 0) {
@@ -302,8 +317,9 @@ async function readFileTail(filePath: string): Promise<{ fileSize: number; fileH
       const buffer = Buffer.allocUnsafe(length);
       const { bytesRead } = await handle.read(buffer, 0, length, position);
       totalBytesRead += bytesRead;
-      const lines = (buffer.subarray(0, bytesRead).toString('utf8') + suffix).split('\n');
-      suffix = lines.shift() ?? '';
+      const split = completeReverseLines(buffer.subarray(0, bytesRead), suffix);
+      suffix = split.prefix;
+      const { lines } = split;
       for (let index = lines.length - 1; index >= 0; index -= 1) {
         const event = parseLine(lines[index]!);
         if (event) return { fileSize, fileHighWater: event.seq, bytesRead: totalBytesRead };
@@ -311,7 +327,7 @@ async function readFileTail(filePath: string): Promise<{ fileSize: number; fileH
     }
     return {
       fileSize,
-      fileHighWater: parseLine(suffix)?.seq ?? 0,
+      fileHighWater: parseLine(suffix.toString('utf8'))?.seq ?? 0,
       bytesRead: totalBytesRead,
     };
   } finally {
@@ -356,15 +372,18 @@ async function forwardEventsUntil(
 function pageEventSlice(events: RunHistoryEvent[], selected: CanonicalItem[]): RunHistoryEvent[] {
   const firstSeq = selected[0]?.firstSeq;
   if (firstSeq === undefined) return [];
-  let start = events.findIndex((event) => event.seq >= firstSeq);
+  const start = events.findIndex((event) => event.seq >= firstSeq);
+  if (start < 0) return [];
+  let boundary: RunHistoryEvent | undefined;
   for (let index = start - 1; index >= 0; index -= 1) {
     const event = events[index]!;
     if (event.type === 'user-message' || event.type === 'turn.started') {
-      start = index;
+      boundary = event;
       break;
     }
   }
-  return events.slice(Math.max(0, start));
+  const pageEvents = events.slice(start);
+  return boundary === undefined ? pageEvents : [boundary, ...pageEvents];
 }
 
 function forwardPageEventSlice(events: RunHistoryEvent[], selected: CanonicalItem[]): RunHistoryEvent[] {

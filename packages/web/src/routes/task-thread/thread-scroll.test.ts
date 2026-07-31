@@ -6,12 +6,14 @@ import {
   NEAR_BOTTOM_SLACK_PX,
   VIRTUALIZE_THRESHOLD,
   clearThreadScrollCaches,
+  firstVisibleThreadAnchor,
   isNearBottom,
   isNearHistoryStart,
   readThreadMeasurements,
   readThreadScroll,
   saveThreadMeasurements,
   saveThreadScroll,
+  threadAnchorScrollTop,
   threadRenderMode,
 } from './thread-scroll'
 
@@ -41,6 +43,30 @@ describe('isNearHistoryStart — intent is consumed only near the retained bound
     expect(isNearHistoryStart({ scrollTop: HISTORY_BOUNDARY_SLACK_PX, clientHeight: 400 })).toBe(false)
     expect(isNearHistoryStart({ scrollTop: 899, clientHeight: 900 })).toBe(true)
     expect(isNearHistoryStart({ scrollTop: 900, clientHeight: 900 })).toBe(false)
+  })
+})
+
+describe('stable history anchors', () => {
+  const before = [
+    { key: 'row-a', top: 80, bottom: 120 },
+    { key: 'row-b', top: 120, bottom: 180 },
+  ]
+
+  it('captures the first partially visible row and its pixel offset', () => {
+    expect(firstVisibleThreadAnchor(100, before)).toEqual({ key: 'row-a', offset: -20 })
+  })
+
+  it('restores row identity when tail eviction cancels the total-height delta', () => {
+    const anchor = firstVisibleThreadAnchor(100, before)
+    const after = [
+      { key: 'new-row', top: 60, bottom: 120 },
+      { key: 'row-a', top: 200, bottom: 240 },
+    ]
+    expect(threadAnchorScrollTop(500, 100, anchor, after, 500)).toBe(620)
+  })
+
+  it('falls back to height-delta restoration when the anchor row was evicted', () => {
+    expect(threadAnchorScrollTop(500, 100, { key: 'gone', offset: 0 }, before, 740)).toBe(740)
   })
 })
 
