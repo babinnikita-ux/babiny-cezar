@@ -41,8 +41,8 @@ Make a structured question's option chips reliably resume an agent session after
 
 ### Phase 1: Reliable answer delivery
 
-- [ ] 1.1 Synchronize with idle-session teardown.
-- [ ] 1.2 Lock in the race behavior.
+- [x] 1.1 Synchronize with idle-session teardown. — bc25262c
+- [x] 1.2 Lock in the race behavior. — bc25262c
 
 ### Phase 2: Behavioral documentation
 
