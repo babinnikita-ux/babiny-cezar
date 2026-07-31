@@ -5,7 +5,7 @@ import type { RunRecord, RunStatus, StepState } from '@open-mercato/cezar-api-cl
 import { ApiError } from '@/api/client'
 import {
   askDeliveryMode,
-  IDLE_TEARDOWN_RETRY_LIMIT,
+  IDLE_TEARDOWN_RETRY_DELAYS_MS,
   resumeAfterIdleTeardown,
 } from './ask-answer'
 
@@ -75,6 +75,7 @@ describe('resumeAfterIdleTeardown', () => {
     await expect(resumeAfterIdleTeardown(resume, wait)).resolves.toEqual({ continued: true })
     expect(resume).toHaveBeenCalledTimes(2)
     expect(wait).toHaveBeenCalledTimes(1)
+    expect(wait).toHaveBeenCalledWith(IDLE_TEARDOWN_RETRY_DELAYS_MS[0])
   })
 
   it.each([
@@ -96,7 +97,8 @@ describe('resumeAfterIdleTeardown', () => {
     const wait = vi.fn().mockResolvedValue(undefined)
 
     await expect(resumeAfterIdleTeardown(resume, wait)).rejects.toBe(error)
-    expect(resume).toHaveBeenCalledTimes(IDLE_TEARDOWN_RETRY_LIMIT + 1)
-    expect(wait).toHaveBeenCalledTimes(IDLE_TEARDOWN_RETRY_LIMIT)
+    expect(resume).toHaveBeenCalledTimes(IDLE_TEARDOWN_RETRY_DELAYS_MS.length + 1)
+    expect(wait).toHaveBeenCalledTimes(IDLE_TEARDOWN_RETRY_DELAYS_MS.length)
+    expect(wait.mock.calls.map(([delayMs]) => delayMs)).toEqual(IDLE_TEARDOWN_RETRY_DELAYS_MS)
   })
 })

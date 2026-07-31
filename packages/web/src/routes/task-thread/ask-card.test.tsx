@@ -243,9 +243,13 @@ describe('AskCard — answering after the session has ended', () => {
 
   it('waits for idle teardown before retrying the continuation, without accepting a duplicate tap', async () => {
     mutateAsync.mockRejectedValueOnce(new ApiError(409, 'session closed'))
+    let resolveContinuation: ((value: { continued: true }) => void) | undefined
+    const continuation = new Promise<{ continued: true }>((resolve) => {
+      resolveContinuation = resolve
+    })
     continueAsync
       .mockRejectedValueOnce(new ApiError(409, 'run is still active'))
-      .mockResolvedValueOnce({ continued: true })
+      .mockReturnValueOnce(continuation)
     renderAsk(singleAsk, { ...activeRun, steps: [step({ sessionId: 'sess-1' })] })
 
     const option = screen.getByRole('button', { name: /date-fns/ })
@@ -258,6 +262,8 @@ describe('AskCard — answering after the session has ended', () => {
     expect(continueAsync).toHaveBeenNthCalledWith(1, { text: 'Library: date-fns' })
     expect(continueAsync).toHaveBeenNthCalledWith(2, { text: 'Library: date-fns' })
     expect(mutateAsync).toHaveBeenCalledTimes(1)
+    resolveContinuation?.({ continued: true })
+    await waitFor(() => expect((option as HTMLButtonElement).disabled).toBe(false))
     expect(screen.queryByRole('alert')).toBeNull()
   })
 

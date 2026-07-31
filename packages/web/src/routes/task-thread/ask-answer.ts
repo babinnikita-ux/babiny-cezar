@@ -33,11 +33,10 @@ export type AskBlockedReason = 'provider' | 'no-session'
  *  the run record and releasing its active-run entry. A stale ask card can therefore
  *  learn that `/messages` is closed, then reach `/continue` a few milliseconds too
  *  early. Retry only that exact transitional refusal; every other 409 is actionable. */
-export const IDLE_TEARDOWN_RETRY_DELAY_MS = 100
-export const IDLE_TEARDOWN_RETRY_LIMIT = 50
+export const IDLE_TEARDOWN_RETRY_DELAYS_MS = [50, 100, 200, 400, 800, 1_000, 1_000, 1_000, 1_000] as const
 
-const delayIdleTeardownRetry = () =>
-  new Promise<void>((resolve) => setTimeout(resolve, IDLE_TEARDOWN_RETRY_DELAY_MS))
+const delayIdleTeardownRetry = (delayMs: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, delayMs))
 
 function isIdleTeardownRefusal(error: unknown): error is ApiError {
   return error instanceof ApiError && error.status === 409 && error.message === 'run is still active'
@@ -47,14 +46,15 @@ function isIdleTeardownRefusal(error: unknown): error is ApiError {
  *  The injected wait keeps the bounded policy deterministic in unit tests. */
 export async function resumeAfterIdleTeardown<T>(
   resume: () => Promise<T>,
-  wait: () => Promise<void> = delayIdleTeardownRetry,
+  wait: (delayMs: number) => Promise<void> = delayIdleTeardownRetry,
 ): Promise<T> {
   for (let retries = 0; ; retries += 1) {
     try {
       return await resume()
     } catch (error) {
-      if (!isIdleTeardownRefusal(error) || retries >= IDLE_TEARDOWN_RETRY_LIMIT) throw error
-      await wait()
+      const delayMs = IDLE_TEARDOWN_RETRY_DELAYS_MS[retries]
+      if (!isIdleTeardownRefusal(error) || delayMs === undefined) throw error
+      await wait(delayMs)
     }
   }
 }

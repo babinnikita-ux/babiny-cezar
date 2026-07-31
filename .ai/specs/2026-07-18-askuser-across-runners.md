@@ -241,7 +241,8 @@ are real buttons (keyboard/enter, focus ring `--ring`), the card has
   teardown interval where `/messages` already reports `session closed` but the old
   run still occupies the RunManager's active map; during that interval the ask card
   keeps the answer single-flight and retries only the exact transient
-  `409 run is still active` continuation refusal for a bounded period. Other
+  `409 run is still active` continuation refusal with bounded, capped exponential
+  backoff for roughly five seconds. Other
   continuation failures surface immediately on the card. The original design
   ("the card renders resolved/closed") left a card whose chips silently failed —
   every tap posted to `POST /messages` and died on its `409 session closed`.
