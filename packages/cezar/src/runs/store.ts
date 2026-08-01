@@ -49,6 +49,12 @@ const stepStateSchema = z.object({
   sessionId: z.string().optional(),
   /** Backend that owns `sessionId`. Optional so pre-affinity runs.json files still parse. */
   backend: z.enum(['claude', 'codex', 'opencode']).optional(),
+  /** Agent profile (account) this step actually spawned under — `default`, or a stored profile
+   *  id (spec 2026-07-29-agent-profiles). Recorded rather than re-derived because a session id
+   *  only means something inside the config dir that created it: `sessionId` and `profileId` are
+   *  a PAIR. Without it, changing the project's account would silently make Continue resume
+   *  against the wrong account's session store. Absent = the discovered default. */
+  profileId: z.string().optional(),
   /** Dollar cost reported by the claude CLI for this step's turns. */
   costUsd: z.number().optional(),
 });
@@ -73,9 +79,19 @@ const runRecordSchema = z.object({
    *  `title` so edits always win). The UI shows `titleSummary ?? title`. */
   titleSummary: z.string().optional(),
   /** `git diff --shortstat` of the worktree vs its base, refreshed on every
-   *  turn-end (#389) — what the quick list / table shows without a git call. */
+   *  turn-end (#389) — what the quick list / table shows without a git call.
+   *  `repointed` (#751) is optional and only ever written as `true`: it marks the
+   *  runs whose numbers were narrowed to uncommitted work because the agent had
+   *  checked another branch out into the worktree. Optional is load-bearing here —
+   *  `runs.json` is `safeParse`d as one array, so a required addition would
+   *  silently drop every pre-existing run. */
   diffStat: z
-    .object({ adds: z.number(), dels: z.number(), files: z.number() })
+    .object({
+      adds: z.number(),
+      dels: z.number(),
+      files: z.number(),
+      repointed: z.boolean().optional(),
+    })
     .optional(),
   workflow: z.string(),
   task: z.string(),
@@ -97,6 +113,11 @@ const runRecordSchema = z.object({
   modelIdentity: z.string().optional(),
   /** Agent backend this run used — drives "open in CLI" resume command. */
   runner: z.enum(['claude', 'codex', 'opencode']).optional(),
+  /** Per-task agent-account override from the composer (spec 2026-07-29-agent-profiles), applying
+   *  to steps that run on `runner`. Steps on a DIFFERENT backend still resolve from the project's
+   *  own selection — an override for Claude says nothing about which Codex account a mixed
+   *  workflow's codex step should use. Absent = follow the project. */
+  agentProfile: z.string().optional(),
   /** Echo of the extra system prompt this run actually used (R2): the
    *  `POST /api/runs` override, or the `config.json` default it fell back to.
    *  Deliberately NOT the full composed prompt — skill bodies and the handoff
@@ -427,6 +448,8 @@ export class RunStore extends EventEmitter {
     task: string;
     model?: string;
     runner?: 'claude' | 'codex' | 'opencode';
+    /** Composer's per-task agent account (spec 2026-07-29-agent-profiles). */
+    agentProfile?: string;
     generateFollowups?: boolean;
     autonomous?: boolean;
     worktree?: false;
@@ -447,6 +470,7 @@ export class RunStore extends EventEmitter {
       task: input.task,
       model: input.model,
       runner: input.runner,
+      agentProfile: input.agentProfile,
       generateFollowups: input.generateFollowups,
       autonomous: input.autonomous,
       worktree: input.worktree,
