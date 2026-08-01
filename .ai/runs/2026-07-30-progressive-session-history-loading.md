@@ -2,6 +2,7 @@
 
 Source doc: `.ai/specs/2026-07-28-progressive-session-history-loading.md`
 Spec PR: #718 (design-only; the implementation ships separately)
+Follow-up issue: #761 (pre-paint task-thread scroll arrival)
 
 ## Goal
 
@@ -44,6 +45,12 @@ Render the newest 100 protocol-level session items quickly, page older history o
 10. Add a real-browser scenario for independent first-page readiness, intent-gated paging, five-page/DOM bounds, anchored prepends, live/current dock updates, fallback, and old-history-to-latest navigation.
 11. Run the full repository validation gate in order plus the real-browser suite, verify package/runtime dependency boundaries, and capture implementation screenshots for PR evidence.
 
+### Phase 4: Conflict refresh and deterministic route arrival
+
+12. Merge the latest `main`, preserving progressive paging while composing it with the shared session renderer introduced after the original implementation.
+13. Give the main task-thread route exclusive pre-paint ownership of cached-position or live-tail arrival while preserving the shell's generic top reset for every ordinary route.
+14. Add component and real-browser regressions for ordinary-route reset, cached and live-tail task destinations, task-to-task navigation without an intermediate near-zero frame, progressive paging, and mobile behavior; then rerun the full gate and authoritative review.
+
 ## Risks
 
 - Reverse projection can drift from the browser reducer around mixed v1/v2 twins and partial turns; shared golden fixtures and exact item-count assertions mitigate this.
@@ -51,6 +58,7 @@ Render the newest 100 protocol-level session items quickly, page older history o
 - Context compaction can make Plan/Agents stale or falsely current; compact-vs-full selector equivalence is required across settled, unsettled, nested, steering, and terminal cases.
 - Prepending can destabilize focus, open-card state, or scroll position in flat and virtual modes; stable identities plus pixel-anchor tests guard both paths.
 - The API/SSE surface is compatibility-sensitive; all shapes are schema-first, routes are chained/versioned, and the full-replay no-query path remains intact.
+- Route arrival can regress when the persistent shell scroller and task transcript both write during navigation; one explicit owner per route plus layout-effect and animation-frame assertions mitigate visible intermediate frames.
 
 ## Progress
 
@@ -77,3 +85,9 @@ PR: #739
 - [x] 3.1 Add long-session fixtures and deterministic bounded-reader/context instrumentation — 36197190
 - [x] 3.2 Add real-browser progressive-history coverage and screenshot scenarios — 36197190
 - [x] 3.3 Run the full validation/browser gates and verify package/runtime boundaries — 36197190
+
+### Phase 4: Conflict refresh and deterministic route arrival
+
+- [x] 4.1 Merge latest `main` and preserve progressive history through the shared session renderer — 765aa38a
+- [ ] 4.2 Add route-owned pre-paint cached/tail arrival with shell and scroller component regressions
+- [ ] 4.3 Add desktop/mobile two-thread browser proof and complete the full validation/review gates
