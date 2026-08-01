@@ -90,4 +90,4 @@ PR: #739
 
 - [x] 4.1 Merge latest `main` and preserve progressive history through the shared session renderer — 765aa38a
 - [x] 4.2 Add route-owned pre-paint cached/tail arrival with shell and scroller component regressions — cd79b089
-- [ ] 4.3 Add desktop/mobile two-thread browser proof and complete the full validation/review gates
+- [x] 4.3 Add desktop/mobile two-thread browser proof and complete the full validation/review gates — 5bd1ea3d
