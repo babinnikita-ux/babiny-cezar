@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { clearThreadScrollCaches } from './thread-scroll'
+import { clearThreadScrollCaches, saveThreadScroll } from './thread-scroll'
 import { ThreadRows, useThreadScroll, type ThreadRow } from './thread-scroller'
 
 beforeEach(() => {
@@ -110,5 +110,53 @@ describe('useThreadScroll — outside a shell scroller (jsdom, tests, storybook-
       await Promise.resolve()
     })
     expect(onLoadOlder).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('useThreadScroll — route arrival (#761)', () => {
+  function ArrivalHarness({ viewKey }: { viewKey: string }) {
+    const controls = useThreadScroll(viewKey)
+    return (
+      <main
+        ref={(element) => {
+          if (element) {
+            Object.defineProperties(element, {
+              scrollTop: { value: element.scrollTop, writable: true, configurable: true },
+              clientHeight: { value: 500, configurable: true },
+              scrollHeight: { value: 2_000, configurable: true },
+            })
+          }
+        }}
+        data-slot="main"
+      >
+        <div ref={controls.attachContent} />
+      </main>
+    )
+  }
+
+  it('restores an away-from-tail destination before passive effects observe it', () => {
+    saveThreadScroll('run-a:main', { top: 640, atBottom: false })
+
+    render(<ArrivalHarness viewKey="run-a:main" />)
+
+    expect((document.querySelector('[data-slot="main"]') as HTMLElement).scrollTop).toBe(640)
+  })
+
+  it('lands a live-tail destination at the bottom before passive effects observe it', () => {
+    saveThreadScroll('run-b:main', { top: 120, atBottom: true })
+
+    render(<ArrivalHarness viewKey="run-b:main" />)
+
+    expect((document.querySelector('[data-slot="main"]') as HTMLElement).scrollTop).toBe(1_500)
+  })
+
+  it('re-applies the destination owner when the task id changes in place', () => {
+    saveThreadScroll('run-a:main', { top: 640, atBottom: false })
+    saveThreadScroll('run-b:main', { top: 920, atBottom: false })
+    const view = render(<ArrivalHarness viewKey="run-a:main" />)
+
+    view.rerender(<ArrivalHarness viewKey="run-b:main" />)
+
+    expect((document.querySelector('[data-slot="main"]') as HTMLElement).scrollTop).toBe(920)
   })
 })

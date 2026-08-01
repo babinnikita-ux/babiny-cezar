@@ -184,7 +184,11 @@ export function useThreadScroll(
     })
   }, [onJumpToLatest])
 
-  useEffect(() => {
+  // Arrival is the route-owned pre-paint write. AppShell deliberately does not reset task
+  // routes, so a destination thread never exposes an intermediate top-of-transcript frame.
+  // Keep this separate from the long-lived event/observer effect below: route arrival has a
+  // stricter timing contract, while subscriptions only need to exist after paint.
+  useLayoutEffect(() => {
     const scroller = scrollElRef.current
     const content = contentEl
     if (!scroller || !content) return
@@ -203,6 +207,12 @@ export function useThreadScroll(
         toBottom()
       }
     }
+  }, [viewKey, contentEl, setOffset, toBottom])
+
+  useEffect(() => {
+    const scroller = scrollElRef.current
+    const content = contentEl
+    if (!scroller || !content) return
 
     // PINNING FOLLOWS INTENT, NOT POSITION. During replay/streaming the scroller's position
     // moves without the user's hand: this hook pins it, virtua re-measures rows and writes
