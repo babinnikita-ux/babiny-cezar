@@ -15,6 +15,8 @@
 #             imports as missing/unknown and a cached build cannot start without node_modules.
 #   2026-07-30 execute the compound preparation chain through sh -c and stop requiring an
 #             api-client dist artifact that this source-aliased workspace does not produce.
+#   2026-08-01 retry agent-browser with --no-sandbox when its doctor identifies a Linux
+#             environment without usable user namespaces; keeps browser QA available in containers.
 set -eu
 
 # ---- project-specific parameters -------------------------------------------
@@ -296,6 +298,11 @@ ensure_browser() {
   fi
 
   "$BROWSER_COMMAND" install >/dev/null 2>&1 || true
+  BROWSER_DOCTOR_OUTPUT=$("$BROWSER_COMMAND" doctor --json 2>&1 || true)
+  if printf '%s' "$BROWSER_DOCTOR_OUTPUT" | grep -q 'No usable sandbox'; then
+    AGENT_BROWSER_ARGS=${AGENT_BROWSER_ARGS:---no-sandbox}
+    export AGENT_BROWSER_ARGS
+  fi
   if ! "$BROWSER_COMMAND" doctor --json >/dev/null 2>&1; then
     # Linux Chrome libraries may need root; only try when it costs no prompt.
     if [ "$(uname -s 2>/dev/null || true)" = Linux ]; then
