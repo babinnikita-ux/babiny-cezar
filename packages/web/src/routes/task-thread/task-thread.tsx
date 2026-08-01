@@ -250,7 +250,7 @@ export function ThreadView({
   useKeyboardInsetVar(scroll.restickIfStuck)
 
   return (
-    <div data-route="task-thread" className="flex min-h-full flex-col">
+    <div data-route="task-thread" data-run-id={run.id} className="flex min-h-full flex-col">
       <RunHeader run={run} planTally={planTally} />
 
       {/* Row spacing lives on each thread row (pb-2.5, both render modes measure alike);

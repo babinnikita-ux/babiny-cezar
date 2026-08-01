@@ -92,15 +92,6 @@ export function useThreadScroll(
   /** virtua's handle while virtualized (VirtualRows fills it), null in flat mode. */
   const virtualizerRef = useRef<VirtualizerHandle | null>(null)
 
-  const attachContent = useCallback((el: HTMLElement | null) => {
-    setContentEl(el)
-    if (el) {
-      scrollElRef.current = el.closest<HTMLElement>(
-        surface === 'panel' ? '[data-slot="transcript-viewport"]' : '[data-slot="main"]',
-      )
-    }
-  }, [surface])
-
   // EVERY programmatic scroll goes through virtua's handle when virtualized. A raw
   // `scrollTop` write races virtua's own jump compensation (it also writes scrollTop, from
   // its internally tracked offset) — observed on the 1,000-row fixture as restores landing
@@ -117,6 +108,37 @@ export function useThreadScroll(
     const scroller = scrollElRef.current
     if (scroller) setOffset(scroller.scrollHeight - scroller.clientHeight)
   }, [setOffset])
+
+  const applyArrival = useCallback(() => {
+    const scroller = scrollElRef.current
+    if (!scroller) return
+    if (arrivedForRef.current !== viewKey) {
+      arrivedForRef.current = viewKey
+      const memory = readThreadScroll(viewKey)
+      if (memory && !memory.atBottom) {
+        stuckRef.current = false
+        pendingRestoreRef.current = memory.top
+      } else {
+        stuckRef.current = true
+        pendingRestoreRef.current = null
+      }
+    }
+    if (pendingRestoreRef.current !== null) setOffset(pendingRestoreRef.current)
+    else if (stuckRef.current) toBottom()
+  }, [viewKey, setOffset, toBottom])
+
+  // The callback ref runs in the destination commit itself. Applying arrival here closes the
+  // gap between the route render and the follow-up state update that installs subscriptions;
+  // the layout effect below re-applies once virtua's handle/content state are fully attached.
+  const attachContent = useCallback((el: HTMLElement | null) => {
+    setContentEl(el)
+    if (el) {
+      scrollElRef.current = el.closest<HTMLElement>(
+        surface === 'panel' ? '[data-slot="transcript-viewport"]' : '[data-slot="main"]',
+      )
+      applyArrival()
+    }
+  }, [surface, applyArrival])
 
   const restickIfStuck = useCallback(() => {
     if (stuckRef.current) toBottom()
@@ -192,22 +214,8 @@ export function useThreadScroll(
     const scroller = scrollElRef.current
     const content = contentEl
     if (!scroller || !content) return
-
-    // Arrival: cached position if the reader had one away from the tail, else the tail.
-    // Once per view — a container swap (threshold crossing) re-subscribes without re-arriving.
-    if (arrivedForRef.current !== viewKey) {
-      arrivedForRef.current = viewKey
-      const memory = readThreadScroll(viewKey)
-      if (memory && !memory.atBottom) {
-        stuckRef.current = false
-        pendingRestoreRef.current = memory.top
-        setOffset(memory.top)
-      } else {
-        stuckRef.current = true
-        toBottom()
-      }
-    }
-  }, [viewKey, contentEl, setOffset, toBottom])
+    applyArrival()
+  }, [contentEl, applyArrival])
 
   useEffect(() => {
     const scroller = scrollElRef.current

@@ -13,6 +13,7 @@ const repoRoot = resolve(import.meta.dirname, '../../..')
 const artifactsDir = resolve(repoRoot, '.ai/qa/artifacts_e2e')
 const sessionId = `e2e-progressive-history-${process.pid}`
 const RUN_ID = 'cccccccc-1111-4222-8333-dddddddddddd'
+const RUN_B_ID = 'eeeeeeee-1111-4222-8333-ffffffffffff'
 const RUN = {
   ...record,
   id: RUN_ID,
@@ -23,6 +24,13 @@ const RUN = {
   finishedAt: undefined,
   steps: [record.steps[0]],
   pullRequestUrl: undefined,
+}
+const RUN_B = {
+  ...RUN,
+  id: RUN_B_ID,
+  title: 'Restore a second long session without jumping',
+  titleSummary: 'Restore a second long session',
+  task: 'Keep a second long session at its cached reading position.',
 }
 
 const contextPrefix = [
@@ -96,15 +104,59 @@ function activateHistoryBoundary(): void {
   browser.press('Enter')
 }
 
+type ArrivalSample = { top: number; maxTop: number }
+
+/** Capture every destination-transcript animation frame around a client-side task switch. */
+function navigateAndSampleArrival(runId: string): ArrivalSample[] {
+  const href = `/p/${bootProject}/tasks/${runId}`
+  browser.evaluate(`(() => {
+    const link = document.querySelector(${JSON.stringify(`a[href="${href}"]`)})
+    if (!link) throw new Error('missing task navigation link: ${href}')
+    window.__cezArrivalSamples = []
+    let attempts = 0
+    const sample = () => {
+      attempts += 1
+      const main = document.querySelector('[data-slot="main"]')
+      const destination = document.querySelector(
+        ${JSON.stringify(`[data-route="task-thread"][data-run-id="${runId}"]`)},
+      )
+      const ready = destination?.querySelector('[data-slot="thread-rows"]')
+      if (main && ready) {
+        window.__cezArrivalSamples.push({
+          top: main.scrollTop,
+          maxTop: main.scrollHeight - main.clientHeight,
+        })
+      }
+      if (window.__cezArrivalSamples.length < 6 && attempts < 120) requestAnimationFrame(sample)
+    }
+    requestAnimationFrame(sample)
+    link.click()
+  })()`)
+  browser.waitForFunction(`window.__cezArrivalSamples?.length >= 6`)
+  return browser.evaluate(`window.__cezArrivalSamples`) as ArrivalSample[]
+}
+
+function parkCurrentThread(): number {
+  return Number(browser.evaluate(`(() => {
+    const main = document.querySelector('[data-slot="main"]')
+    main.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, bubbles: true }))
+    main.scrollTop = Math.max(160, Math.round((main.scrollHeight - main.clientHeight) / 2))
+    main.dispatchEvent(new Event('scroll', { bubbles: true }))
+    return main.scrollTop
+  })()`))
+}
+
 beforeAll(async () => {
   dataRoot = mkdtempSync(join(tmpdir(), 'cezar-e2e-progressive-history-'))
   mkdirSync(join(dataRoot, '.ai/cezar/runs'), { recursive: true })
-  writeFileSync(join(dataRoot, '.ai/cezar/runs.json'), JSON.stringify([RUN], null, 2), 'utf8')
-  writeFileSync(
-    join(dataRoot, '.ai/cezar/runs', `${RUN_ID}.ndjson`),
-    events.map((event) => JSON.stringify(event)).join('\n') + '\n',
-    'utf8',
-  )
+  writeFileSync(join(dataRoot, '.ai/cezar/runs.json'), JSON.stringify([RUN, RUN_B], null, 2), 'utf8')
+  for (const runId of [RUN_ID, RUN_B_ID]) {
+    writeFileSync(
+      join(dataRoot, '.ai/cezar/runs', `${runId}.ndjson`),
+      events.map((event) => JSON.stringify(event)).join('\n') + '\n',
+      'utf8',
+    )
+  }
   const port = await freePort()
   baseUrl = `http://localhost:${port}`
   server = spawn(
@@ -191,4 +243,44 @@ describe('progressive long-session history', () => {
       `document.querySelector('[data-slot="history-boundary"]')?.dataset.retainedPages === '1'`,
     )
   })
+
+  it('switches between cached and live-tail threads without a near-zero destination frame', () => {
+    // The preceding paging case deliberately visited the archive boundary. Establish the first
+    // run's departure state as an explicit live-tail cache entry before warming the second run.
+    browser.evaluate(`(() => {
+      const main = document.querySelector('[data-slot="main"]')
+      main.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, bubbles: true }))
+      main.scrollTop = main.scrollHeight - main.clientHeight
+      main.dispatchEvent(new Event('scroll', { bubbles: true }))
+    })()`)
+    browser.waitForFunction(
+      `(() => { const main = document.querySelector('[data-slot="main"]'); return main.scrollHeight - main.scrollTop - main.clientHeight < 80 })()`,
+    )
+
+    // Warm both query caches first. The destination transcript, not a loading placeholder, is
+    // the surface whose paint ordering this regression measures.
+    const firstTailArrival = navigateAndSampleArrival(RUN_B_ID)
+    expect(firstTailArrival.at(-1)!.maxTop - firstTailArrival.at(-1)!.top).toBeLessThan(80)
+    const parked = parkCurrentThread()
+    expect(parked).toBeGreaterThan(100)
+
+    const liveTailArrival = navigateAndSampleArrival(RUN_ID)
+    expect(Math.min(...liveTailArrival.map(({ top }) => top))).toBeGreaterThan(40)
+    expect(liveTailArrival.at(-1)!.maxTop - liveTailArrival.at(-1)!.top).toBeLessThan(80)
+
+    const cachedArrival = navigateAndSampleArrival(RUN_B_ID)
+    expect(Math.min(...cachedArrival.map(({ top }) => top))).toBeGreaterThan(40)
+    expect(Math.abs(cachedArrival[0]!.top - parked)).toBeLessThan(200)
+    expect(Math.abs(cachedArrival.at(-1)!.top - parked)).toBeLessThan(200)
+    browser.screenshot(join(artifactsDir, 'progressive-history-thread-switch.png'), { viewport: true })
+
+    browser.setViewport(390, 844)
+    const mobileTailArrival = navigateAndSampleArrival(RUN_ID)
+    expect(Math.min(...mobileTailArrival.map(({ top }) => top))).toBeGreaterThan(40)
+    expect(mobileTailArrival.at(-1)!.maxTop - mobileTailArrival.at(-1)!.top).toBeLessThan(80)
+    browser.screenshot(join(artifactsDir, 'progressive-history-thread-switch-mobile.png'), {
+      viewport: true,
+    })
+    browser.setViewport(1440, 900)
+  }, 90_000)
 })
