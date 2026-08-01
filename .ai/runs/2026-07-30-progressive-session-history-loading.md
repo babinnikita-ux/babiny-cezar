@@ -89,5 +89,5 @@ PR: #739
 ### Phase 4: Conflict refresh and deterministic route arrival
 
 - [x] 4.1 Merge latest `main` and preserve progressive history through the shared session renderer — 765aa38a
-- [ ] 4.2 Add route-owned pre-paint cached/tail arrival with shell and scroller component regressions
+- [x] 4.2 Add route-owned pre-paint cached/tail arrival with shell and scroller component regressions — cd79b089
 - [ ] 4.3 Add desktop/mobile two-thread browser proof and complete the full validation/review gates
