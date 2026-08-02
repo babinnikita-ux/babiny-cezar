@@ -119,12 +119,14 @@ The coordinator is demand-independent and must not use the WebSocket topic bus. 
 
 1. Server listens, then the workspace coordinator scans registered non-missing roots for the optional definitions file without instantiating unrelated full project contexts.
 2. With no enabled pending definition it owns no timer.
-3. Otherwise it arms one unref’d timer for the earliest `at` across projects. Definition/registry changes recompute it.
+3. Otherwise it arms one unref’d timer for the earliest `at` across projects. Definition/registry changes recompute it. Each arm caps its delay below Node’s `2^31-1` millisecond timer limit; when that horizon wakes before the real due instant, the coordinator re-reads definitions and arms the next bounded segment instead of treating the task as due.
 4. At or after due time, acquire `.ai/cezar/scheduled-task.lock` with PID/start-time stale recovery and re-read the definition.
 5. Append one `reserved` occurrence with key `${scheduledTaskId}:${revision}:${at}`.
-6. Launch through `RunManager.startRun` or `startVariants`; normal workspace/per-project capacity may make the new run queued.
+6. Launch through a scheduled-run creation option on `RunManager` that includes occurrence provenance in every run record at construction time. Persist and synchronously flush the single run or complete variant group before any manager pump can start an agent; normal workspace/per-project capacity may then leave the durable run queued.
 7. Finalize the occurrence with run/group id, set runtime status `completed`, publish one change event, and rearm.
 8. Shutdown clears timers and leaves any unresolved reservation for startup reconciliation; no other process remains.
+
+The project lease is also the serialization boundary for every definition or runtime-state mutation: create, edit, pause, resume, run-now, retry, and delete acquire it, re-read the latest files while held, apply `expectedRevision` to that refreshed definition, merge the mutation, and atomically rename. Lock contention returns a bounded busy/409 response rather than writing unlocked. Atomic rename prevents torn files; the lease plus re-read prevents two cezar processes from losing each other’s successful changes.
 
 Run/group records gain optional additive provenance:
 
@@ -143,6 +145,8 @@ Startup reconciliation handles the crash window:
 - reserved receipt plus matching run provenance → finalize without relaunch;
 - reserved receipt with no run → mark `launch-error` and offer explicit retry of that same occurrence;
 - a definition becomes completed only after the matching run is durably visible.
+
+The launch adapter must never patch `scheduledTask` provenance onto a run after `startRun` returns: the current manager can pump immediately and `RunStore` normally debounces `runs.json`. The scheduled creation option carries provenance into `createRun`, builds every variant record before enqueue, calls the run store’s synchronous flush, and only then makes the jobs pumpable. Receipt finalization occurs after that flush. This closes the crash window in which paid agent work exists but reconciliation cannot find its occurrence id.
 
 Editing increments `revision`; an already reserved/launched occurrence is immutable. `Run now` consumes the pending one-time definition: it reserves a manual occurrence, launches once, and marks the definition completed so the original time cannot launch later.
 
@@ -164,7 +168,7 @@ type ScheduledTaskDefinition = {
 }
 ```
 
-The file is `{version: 1, scheduledTasks: [], tombstones?: {}}`. Objects use `.passthrough()`; the loader salvages definitions entry by entry; unknown keys survive read-modify-write. Writes use atomic temporary-file rename and `0600` where supported. A one-time `at` must be at least one minute in the future on create/edit. Server validation confirms `timezone` is an IANA identifier and that formatting `at` in that zone matches the submitted local choice.
+The file is `{version: 1, scheduledTasks: [], tombstones?: {}}`. Objects use `.passthrough()`; the loader salvages definitions entry by entry; unknown keys survive read-modify-write. Writes are re-read/merge-writes under the shared project lease, then use atomic temporary-file rename and `0600` where supported. A one-time `at` must be at least one minute in the future on create or when timing changes; metadata/task edits to an already-overdue definition remain possible without silently moving its instant. Server validation confirms `timezone` is an IANA identifier and that formatting `at` in that zone matches the submitted local choice.
 
 ### `scheduled-task-state.json`
 
@@ -216,8 +220,9 @@ Define zod schemas first in `packages/contract`, infer all types, register one c
 
 ## Testing Strategy
 
-- Storage tests: missing/corrupt/read-only state, per-entry salvage, unknown-key preservation, atomic writes, tombstones, compaction, and receipt uniqueness.
-- Fake-clock scheduler tests: exact/late/early timer, server restart overdue launch, timer rearm after edits/registry changes, cross-process lease, stale recovery, Run now consumption, pause/resume, shutdown, and crash reconciliation.
+- Storage tests: missing/corrupt/read-only state, per-entry salvage, unknown-key preservation, atomic writes, tombstones, compaction, receipt uniqueness, concurrent unrelated creates, and stale/conflicting cross-process edits under the shared lease.
+- Fake-clock scheduler tests: exact/late/early timer, due instants beyond Node’s maximum timer delay, server restart overdue launch, timer rearm after edits/registry changes, cross-process lease, stale recovery, Run now consumption, pause/resume, shutdown, and crash reconciliation.
+- Durable-launch tests: crash after reservation, during single/group record creation, after the synchronous run-store flush, and before receipt finalization; no agent starts before flushed provenance and retry never duplicates an existing occurrence.
 - Task-template equality tests: scheduled serialization matches New task for workflow/skill/inline steps, profile, runner/model, variants, worktree, autonomy, and follow-ups while excluding images/todo id.
 - Server tests: middleware validation, 400/404/409 shapes, optimistic revision, origin guard, project disposal, versioned surface, route aliases/parity, contract parity in both directions, and typed bodies.
 - React tests: Now unchanged, Later draft/save/error states, timezone preview, Plan first save, attachment explanation, overdue/completed/history states, keyboard/accessibility, and responsive layout.
@@ -237,10 +242,10 @@ Add compaction/tombstone scale fixtures, multi-process and read-only/corruption 
 
 1. Add scheduled-task storage and wire schemas plus compatibility fixtures; keep the accepted timing union to `kind: 'once'`.
 2. Add `buildScheduledTaskTemplate` and server catalog-resolution/launch helpers with parity tests against New task serialization, without modifying GitHub Automations.
-3. Add definitions/state/occurrence store, atomic writes, per-entry salvage, lease/receipt primitives, compaction, and `ensureDataGitignore` entries.
+3. Add definitions/state/occurrence store, lease-serialized re-read/merge-writes, per-entry salvage, receipt primitives, compaction, cross-process lost-update tests, and `ensureDataGitignore` entries.
 4. Add the chained versioned route family and exact middleware validation, typed-body, contract-parity, route-parity, and compatibility-inventory tests.
-5. Add the post-listen workspace coordinator, earliest timer, lightweight project discovery, rescheduling, stale lease recovery, and clean shutdown under fake clocks.
-6. Add ordinary single/variant launch, additive run provenance, one-time completion, startup reconciliation, Run now, and retry behavior.
+5. Add the post-listen workspace coordinator, bounded earliest timer segments, lightweight project discovery, rescheduling, stale lease recovery, and clean shutdown under fake clocks.
+6. Add ordinary single/variant launch with provenance at record construction and a pre-pump synchronous flush, one-time completion, startup reconciliation, Run now, and retry behavior.
 7. Add the composer clock pill/Later form, authoritative preview, Plan first schedule-save path, attachment guard, and unchanged-Now regression tests.
 8. Add Scheduled navigation/list/detail/editor/history, SSE invalidation, run/group links, all degradation states, and accessibility/responsive tests.
 9. Run the configured validation gate and browser restart/crash journey; capture evidence and update user-facing docs.

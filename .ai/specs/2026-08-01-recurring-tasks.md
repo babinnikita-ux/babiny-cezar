@@ -106,9 +106,9 @@ The builder offers these version-1 patterns:
 
 - every N minutes, minimum 15 and maximum 1,440;
 - every N hours, minimum 1 and maximum 168;
-- daily every N days at a chosen `HH:mm`;
-- weekly every N weeks on one or more weekdays at `HH:mm`;
-- monthly every N months on day 1–28 at `HH:mm`.
+- every N days, minimum 1 and maximum 365, at a chosen `HH:mm`;
+- every N weeks, minimum 1 and maximum 260, on one or more weekdays at `HH:mm`;
+- every N months, minimum 1 and maximum 120, on day 1–28 at `HH:mm`.
 
 Day 29–31 and “last weekday” are excluded in version 1 because silent month skipping is surprising. The UI can add those later as new discriminants without changing existing definitions.
 
@@ -171,15 +171,17 @@ The scheduler is demand-independent because tasks must become due while no brows
 1. The HTTP server begins listening.
 2. A workspace coordinator scans registered, non-missing project roots for the optional definitions file without constructing unrelated full `ProjectContext`s.
 3. If no enabled pending definition exists, it owns no timer and performs no work.
-4. Otherwise it computes the earliest due instant across projects and arms one unref’d timer. Definition writes, project registry changes, manual runs, and occurrence completion recompute it.
+4. Otherwise it computes the earliest due instant across projects and arms one unref’d timer. Each arm is capped below Node’s `2^31-1` millisecond delay limit; a horizon wake re-reads and recomputes rather than observing an occurrence early. Definition writes, project registry changes, manual runs, and occurrence completion recompute it.
 5. At due time, acquire a project-local `.ai/cezar/scheduled-task.lock` using create-exclusive semantics with PID/start-time metadata and stale recovery.
 6. Re-read definitions under the lease, calculate every definition now due, and reduce each recurring definition to at most its latest missed occurrence.
-7. Skip and record an occurrence when the same schedule has a queued/running/waiting/review/monitoring run or unresolved reserved receipt. Terminal prior runs do not block.
+7. Skip and record an occurrence when the same schedule has a queued/running/waiting run (monitoring is `status: 'running'` with monitoring activity), an unresolved reserved receipt, or a run parked at the `review` gate. `review` is engine-terminal—the agent is done—but deliberately remains a schedule-level block until the user accepts/closes it, preventing a new autonomous occurrence while prior changes still await disposition. Other terminal prior runs do not block.
 8. Append a durable `reserved` occurrence receipt keyed by schedule id, definition revision, and scheduled time.
 9. Launch through `RunManager.startRun` or `startVariants`; the ordinary workspace semaphore decides when execution actually starts.
 10. Finalize the receipt with run/group id and update runtime state/next due.
 11. Publish one `scheduled-task-change`, release the lease, and arm the next earliest timer.
 12. On shutdown, clear timers and await only the bounded in-flight launch reservation; never leave another process or daemon.
+
+Create, edit, pause, resume, run-now, retry, delete, and scheduler state updates all use the foundation’s same project lease. Each operation re-reads definitions/state while holding the lease, applies optimistic revision checks to that refreshed value, and atomically merge-writes before release. A process that cannot acquire the lease returns a bounded busy/409 response; it never writes from a stale in-memory snapshot.
 
 ### Occurrence identity and reconciliation
 
@@ -190,7 +192,7 @@ occurrenceKey = `${scheduledTaskId}:${revision}:${scheduledFor}`
 manualKey     = `${scheduledTaskId}:${revision}:manual:${uuid}`
 ```
 
-The receipt is written before run creation. Every launched run carries optional additive provenance:
+The receipt is written before run creation. Every launched run carries optional additive provenance at record construction time:
 
 ```ts
 scheduledTask?: {
@@ -207,13 +209,15 @@ Variant occurrences share one receipt/group id and each run receives the same oc
 - matching run/group exists → finalize without relaunch;
 - no run exists → mark `launch-error`; a user may retry that same occurrence explicitly;
 
+Scheduled creation uses the foundation’s `RunManager` option that constructs every single/group record with provenance, synchronously flushes `runs.json`, and only then enqueues or pumps the jobs. Callers never attach provenance after `startRun` returns. Receipt finalization follows that durable flush, so a crash cannot leave an already-started agent invisible to reconciliation.
+
 Editing a definition increments `revision`; already reserved/launched occurrences keep their old revision and are never reinterpreted. Editing timing recomputes future due times from the edit instant. Pausing prevents new due observations but never cancels an ordinary run. Resuming calculates one bounded catch-up using the same policy as server restart.
 
 ### No-overlap semantics
 
-No-overlap is scoped to a scheduled definition, not the whole project. A prior occurrence blocks when any run in its group is nonterminal (`queued`, active agent states, waiting, review, or monitoring). At the next due time the scheduler records `skipped-overlap`, advances to the next future time, and never adds a replacement to a hidden backlog.
+No-overlap is scoped to a scheduled definition, not the whole project. A prior occurrence blocks while any run in its group is engine-active (`queued`, `running`, or `waiting`; monitoring is running activity) or parked at `review`. The review gate is the intentional exception to engine terminality: it blocks until the user accepts/closes the reviewed run because its changes remain unresolved. At the next due time the scheduler records `skipped-overlap`, links the blocking run, advances to the next future time, and never adds a replacement to a hidden backlog.
 
-Workspace capacity remains independent: a new occurrence may be created as an ordinary `queued` run when other schedules/tasks fill the semaphore. Because that queued run counts as the schedule’s active occurrence, later due times skip until it becomes terminal.
+Workspace capacity remains independent: a new occurrence may be created as an ordinary `queued` run when other schedules/tasks fill the semaphore. Because that queued run counts as the schedule’s active occurrence, later due times skip until it leaves the engine-active states; if it then parks at review, the explicit review block continues until acceptance/closure.
 
 ## Data Model and Persistence
 
@@ -236,7 +240,7 @@ type RecurringTiming = {
 
 `RecurringTiming` becomes one additive member of the foundation’s `ScheduledTaskDefinition.timing` discriminated union. Existing `{kind: 'once'}` definitions remain byte-compatible and retain their original lifecycle.
 
-The file is `{version: 1, scheduledTasks: [], tombstones?: {}}`. File objects and entries use `.passthrough()`; fields accept defaults only where absence has unambiguous old-reader behavior. The loader validates entries independently so one invalid timezone or cadence does not evict the rest. Writes are read-modify-write, atomic temp/rename, preserve unknown keys, and use `0600` where supported.
+The file is `{version: 1, scheduledTasks: [], tombstones?: {}}`. File objects and entries use `.passthrough()`; fields accept defaults only where absence has unambiguous old-reader behavior. The loader validates entries independently so one invalid timezone or cadence does not evict the rest. Writes re-read and merge under the shared project lease, preserve unknown keys, use atomic temp/rename, and use `0600` where supported.
 
 ### `scheduled-task-state.json`
 
@@ -283,7 +287,7 @@ The editor consumes existing workflow, skill, provider, model, profile, config, 
 ## Schedule Calculation Contract
 
 - All persisted instants are ISO-8601 UTC strings; local wall-clock fields always pair with an explicit validated IANA zone.
-- Recurring minimum cadence is 15 minutes; maximum interval bounds are enforced in both storage and request schemas.
+- Recurring interval bounds are exact and enforced in both storage and request schemas: minute 15–1,440, hour 1–168, day 1–365, week 1–260, and month 1–120.
 - Next occurrence calculation is deterministic over `(definition, afterInstant)` and never reads ambient process timezone.
 - A timer firing early recomputes and waits; firing late observes the persisted scheduled instant and applies catch-up rules.
 - Clock moving backward cannot repeat an occurrence because the receipt key contains the scheduled UTC instant. Clock moving forward yields at most one catch-up.
@@ -306,7 +310,7 @@ The editor consumes existing workflow, skill, provider, model, profile, config, 
 | Failure | Behavior |
 |---|---|
 | Cezar is closed across recurring times | Launch at most the latest missed occurrence as one catch-up, then schedule the next future time. |
-| Prior occurrence still nonterminal | Record `skipped-overlap`, show the blocking run, and advance without a replacement backlog. |
+| Prior occurrence engine-active or parked at review | Record `skipped-overlap`, show the blocking run, and advance without a replacement backlog. |
 | Workspace has no capacity | Create an ordinary queued run; later occurrences treat it as active and skip. |
 | Timer fires early/late or wall clock changes | Recompute from persisted UTC occurrence keys; never duplicate, burst, or trust timer precision. |
 | Crash after receipt reservation before run creation | Reconcile; absent run becomes launch-error and offers explicit retry of the same receipt. |
@@ -339,8 +343,9 @@ The editor consumes existing workflow, skill, provider, model, profile, config, 
 ## Testing Strategy
 
 - Calculator unit tests use a fake clock and pinned IANA zones for every cadence, interval bounds, next-five parity, month boundaries, leap years, DST gap/fold, timezone edits, early/late timers, and forward/backward clock jumps.
-- Storage tests cover missing/corrupt/read-only files, per-entry salvage, `.passthrough()` unknown-field preservation, atomic writes, tombstones, receipt uniqueness, compaction, and unresolved reservation retention.
-- Scheduler tests use fake timers and multiple stores/processes to prove zero definitions means zero timer, earliest-due rearming, post-listen startup, registry add/remove/gone-root behavior, one catch-up maximum, no overlap across every nonterminal run state, ordinary queueing, lease exclusion/stale recovery, crash reconciliation, run-now semantics, and clean shutdown.
+- Storage tests cover missing/corrupt/read-only files, per-entry salvage, `.passthrough()` unknown-field preservation, atomic writes, tombstones, receipt uniqueness, compaction, unresolved reservation retention, concurrent unrelated mutations, and conflicting revisions across processes.
+- Scheduler tests use fake timers and multiple stores/processes to prove zero definitions means zero timer, earliest-due rearming including instants beyond Node’s maximum delay, post-listen startup, registry add/remove/gone-root behavior, one catch-up maximum, no overlap across engine-active states plus the deliberate parked-review exception, ordinary queueing, lease exclusion/stale recovery, crash reconciliation, run-now semantics, and clean shutdown.
+- Launch-boundary tests prove single and variant run records contain occurrence provenance and reach `runs.json` before any agent pump; crashes before/after the flush reconcile without duplicate retry.
 - Foundation compatibility tests prove recurring definitions retain the same workflow/skill/runner/model/profile/variants/worktree/autonomy/follow-up values without accepting images or inbox provenance.
 - Server tests cover middleware validation, exact 400/404/409 responses, optimistic concurrency, origin guard inheritance, project context disposal, boot-project aliases, route parity, contract parity in both directions, and typed request bodies.
 - React tests cover Now/Later regression stability, Recurring draft persistence, Plan first schedule save, timezone fallback, recurrence validation/preview, cost summary, attachment explanation, list/history states, responsive layout, and keyboard/screen-reader behavior.
@@ -360,15 +365,15 @@ Add bounded minute, hour, and monthly cadences; complete the DST gap/fold matrix
 ## Implementation Plan
 
 1. Verify the postponed-task spec is implemented and its schemas, coordinator, routes, receipts, provenance, and UI regression suite are green; do not duplicate or bypass that foundation.
-2. Add the `recurring` timing discriminant and bounded daily/weekly cadence schemas in `packages/contract`, then extend the exact persisted union with per-entry salvage and unknown-field preservation.
+2. Add the `recurring` timing discriminant and the exact daily 1–365 / weekly 1–260 cadence bounds in `packages/contract`, then extend the persisted union with per-entry salvage and unknown-field preservation.
 3. Implement the pure timezone-aware calculator and authoritative next-five preview for daily/weekly rules, including DST gap/fold and clock-jump tests.
 4. Extend the existing chained route family with recurring create/update/preview behavior through middleware validators; update route/version/backward-compatibility inventories and parity tests.
 5. Add the Recurring clock-pill choice, daily/weekly builder, draft persistence, Plan first save path, cost summary, attachment explanation, and accessible preview states without changing Now or Later.
 6. Extend Scheduled list/detail/editor/history with recurring summaries, upcoming instants, catch-up/skipped-overlap results, and responsive/accessibility coverage.
-7. Extend the coordinator’s due selection to calculate recurring occurrences, at-most-one catch-up, fixed no-overlap, next-future advancement, run-now keys, and recurring state transitions under fake-clock/multi-process tests.
-8. Connect recurring receipts to the foundation’s ordinary single/variant launch and provenance path; prove crash reconciliation and bidirectional run/group links without introducing a second launch adapter.
+7. Extend the coordinator’s due selection to calculate recurring occurrences, bound long timer arms, apply at-most-one catch-up and fixed no-overlap (including the explicit parked-review policy), advance to the next future instant, and cover run-now/state transitions under fake-clock/multi-process tests.
+8. Connect recurring receipts to the foundation’s durable pre-pump single/variant launch and provenance path; prove crash reconciliation and bidirectional run/group links without introducing a second launch adapter.
 9. Complete the phase-1 daily/weekly real-browser journey and full configured validation gate before adding more cadence variants.
-10. Add bounded minute/hour/month cadences and their calculator, schema, UI, cost, history, and E2E matrices as a complete vertical extension.
+10. Add minute 15–1,440, hour 1–168, and month 1–120 cadences and their calculator, schema, UI, cost, history, boundary tests, and E2E matrices as a complete vertical extension.
 11. Harden missing catalogs/providers, corrupt/read-only state, compaction failure, shutdown races, and large history; prove no boot path rejects.
 12. Run the configured validation gate and final real-browser scenario; capture current/proposed evidence and document recurrence behavior in user-facing help.
 
