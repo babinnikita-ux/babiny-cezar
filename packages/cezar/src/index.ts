@@ -31,7 +31,7 @@ import { checkForUpdate } from './update-check.ts';
 import { printSkillsBanner } from './skills-banner.ts';
 import { loadWorkspaceConfig } from './workspace/config.ts';
 import { runMigrations } from './workspace/migrations.ts';
-import { registerProject, shouldRegisterProject } from './workspace/projects.ts';
+import { registerProject, shouldAutoRegisterProject } from './workspace/projects.ts';
 import { runProjectsCommand } from './workspace/projects-cli.ts';
 import { WorkspaceSemaphore } from './workspace/semaphore.ts';
 
@@ -171,9 +171,12 @@ async function main(): Promise<void> {
 /**
  * Boot-time workspace bookkeeping (spec 2026-07-20-multi-project-workspace,
  * "Boot flow"): run pending `~/.cezar` migrations first, then register the
- * boot repo in the per-user project registry. Registration is suppressed for
- * task worktrees and `$HOME` itself (`shouldRegisterProject`) — the process
- * still serves those folders normally. Strictly non-fatal: the zero-config
+ * boot repo in the per-user project registry — but only while that registry
+ * is still empty (`shouldAutoRegisterProject`). Once the user has projects,
+ * booting elsewhere serves the folder without adding it; adding is then an
+ * explicit gesture (`cezar projects add`, the cockpit's Add project dialog).
+ * Registration is also suppressed for task worktrees and `$HOME` itself — the
+ * process still serves those folders normally. Strictly non-fatal: the zero-config
  * law says a broken or read-only home degrades to a smaller cockpit, never a
  * failed boot, so any workspace error logs one warning and boot continues.
  *
@@ -186,7 +189,7 @@ async function main(): Promise<void> {
 async function initWorkspace(repoRoot: string): Promise<string | undefined> {
   try {
     await runMigrations({ bootRepoRoot: repoRoot });
-    if (await shouldRegisterProject(repoRoot)) return (await registerProject(repoRoot)).id;
+    if (await shouldAutoRegisterProject(repoRoot)) return (await registerProject(repoRoot)).id;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.warn(`[cez] workspace registry unavailable (${message}) — continuing without it`);

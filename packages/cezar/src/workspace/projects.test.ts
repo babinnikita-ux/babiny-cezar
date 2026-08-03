@@ -10,6 +10,7 @@ import {
   listProjects,
   registerProject,
   removeProject,
+  shouldAutoRegisterProject,
   shouldRegisterProject,
 } from './projects.ts';
 
@@ -265,6 +266,47 @@ describe('workspace projects', () => {
     it('suppresses the home directory itself, in any spelling', async () => {
       expect(await shouldRegisterProject(homedir())).toBe(false);
       expect(await shouldRegisterProject(`${homedir()}/`)).toBe(false);
+    });
+
+    it('keeps allowing an explicit add once the registry is populated', async () => {
+      await registerProject(makeRepo('first'));
+      // The path-shape guard is what `cezar projects add` and POST /api/projects
+      // ask — it must stay blind to how many projects already exist.
+      expect(await shouldRegisterProject(makeRepo('second'))).toBe(true);
+    });
+  });
+
+  describe('shouldAutoRegisterProject (boot seeding)', () => {
+    const env = (single?: boolean): NodeJS.ProcessEnv =>
+      single ? { CEZ_SINGLE_PROJECT: '1' } : {};
+
+    it('seeds the very first project', async () => {
+      expect(await shouldAutoRegisterProject(makeRepo('first'), env())).toBe(true);
+    });
+
+    it('suppresses an unknown root once any project is registered', async () => {
+      await registerProject(makeRepo('first'));
+      expect(await shouldAutoRegisterProject(makeRepo('second'), env())).toBe(false);
+      expect((await loadWorkspaceConfig()).projects).toHaveLength(1);
+    });
+
+    it('still allows a root that is already registered, in any spelling', async () => {
+      const root = makeRepo('known');
+      await registerProject(root);
+      await registerProject(makeRepo('other'));
+      expect(await shouldAutoRegisterProject(root, env())).toBe(true);
+      expect(await shouldAutoRegisterProject(`${root}/`, env())).toBe(true);
+    });
+
+    it('keeps the path-shape guards ahead of the seeding rule', async () => {
+      expect(await shouldAutoRegisterProject(homedir(), env())).toBe(false);
+      const worktree = makeDir('host', '.ai', 'cezar', 'worktrees', 'abc12345');
+      expect(await shouldAutoRegisterProject(worktree, env())).toBe(false);
+    });
+
+    it('exempts single-project mode, where the launch context is the project', async () => {
+      await registerProject(makeRepo('first'));
+      expect(await shouldAutoRegisterProject(makeRepo('served'), env(true))).toBe(true);
     });
   });
 });

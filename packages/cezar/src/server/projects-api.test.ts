@@ -540,12 +540,12 @@ describe('workspace projects API', () => {
       expect((await getProjects()).projects.map((p) => p.id)).toEqual([other.id]);
     });
 
-    it('refuses the boot project (and its `default` alias) — it re-registers itself at every start', async () => {
+    it('refuses the boot project (and its `default` alias) — this server is serving it', async () => {
       const boot = await registerProject(repoRoot);
       for (const id of [boot.id, 'default']) {
         const { status, body } = await del(id);
         expect(status, id).toBe(409);
-        expect(body.error, id).toContain('re-registers');
+        expect(body.error, id).toContain('is serving');
       }
       expect((await getProjects()).projects.map((p) => p.id)).toEqual([boot.id]);
     });

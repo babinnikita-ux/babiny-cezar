@@ -46,6 +46,12 @@
   and sandbox CSP as before.
 
 ## 🔧 Changed
+- **Starting cezar in a folder only registers it while you have no projects yet.** The first run
+  still seeds the registry from the current repo, and booting a project you already have keeps
+  bumping it to the top of the sidebar — but once anything is registered, running `cezar` somewhere
+  else serves that folder without quietly adding it to your project list. Adding a project stays an
+  explicit gesture: `cezar projects add <dir>` or **Add project** in the cockpit, both unchanged.
+  `CEZ_SINGLE_PROJECT=1` deployments are exempt, since there the launch folder *is* the project.
 - Every mutating route is now visible to the typed client, `POST /api/v1/todos/:id/start` included.
   Its body used to be parsed inside the handler to keep "unknown id 404s before the body is
   validated"; a small existence guard registered *before* the body validator keeps that status

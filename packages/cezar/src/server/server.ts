@@ -2394,14 +2394,16 @@ export function createApp(deps: ServerDeps) {
       }
       if (!entry) return c.json({ error: `unknown project: ${id}` }, 404);
 
-      // The boot project is refused, not removed: `cezar serve` re-registers the
-      // repo it was started in on every boot, so "removing" it would undo itself
-      // at the next restart while breaking this session's sidebar in the
-      // meantime. The pane disables the button and says the same thing.
+      // The boot project is refused, not removed: this server is serving that
+      // repo right now, and dropping its registry row would break the session's
+      // own sidebar while the process keeps running out of it. Offline removal
+      // is the honest gesture — `cezar projects remove` has no such refusal
+      // because it runs with no server. The pane disables the button and says
+      // the same thing.
       if (id === bootId) {
         return c.json(
           {
-            error: `cezar is serving ${entry.name} right now — it re-registers itself at every start, so it cannot be removed from here`,
+            error: `cezar is serving ${entry.name} right now — stop it and run \`cezar projects remove ${id}\` to drop the registry entry`,
           },
           409,
         );

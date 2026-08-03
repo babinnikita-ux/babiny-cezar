@@ -13,6 +13,9 @@ import {
  * Project registry operations over `~/.cezar/config.json` (spec
  * 2026-07-20-multi-project-workspace, "Project identity" + "Boot flow"):
  *
+ * - `shouldRegisterProject(root)` / `shouldAutoRegisterProject(root)` — the
+ *   path-shape guard every registration passes, and the stricter boot-time
+ *   guard that only seeds the registry while it is still empty.
  * - `registerProject(root)` — realpath-normalize, dedupe by realpath, allocate
  *   a human-readable slug from `basename(root)`. Registration is additive and
  *   goes through the read-modify-write merge, so the worst race outcome
@@ -115,6 +118,36 @@ export async function shouldRegisterProject(repoRoot: string): Promise<boolean> 
   if (isInsideTaskWorktree(real) || isInsideTaskWorktree(resolve(repoRoot))) return false;
   const home = await normalizeRoot(homedir());
   return real !== home;
+}
+
+/**
+ * The BOOT-time guard: `shouldRegisterProject` plus the "seed once" rule.
+ * Starting cezar inside a folder is only an implicit "this is my project"
+ * when the user has no projects yet — once the registry has any entry, the
+ * cwd is a place the cockpit is being *opened from*, not a project the user
+ * asked to add. Booting in an unregistered repo then serves it exactly as
+ * before; it just never lands in the sidebar behind the user's back. Adding
+ * a project stays an explicit gesture (`cezar projects add`, the cockpit's
+ * Add project dialog) — both go through `shouldRegisterProject` directly.
+ *
+ * An already-registered root still passes, so booting a known project keeps
+ * bumping its `lastOpenedAt` and keeps handing the server its registry id.
+ *
+ * Single-project mode is exempt: there the launch context IS the project
+ * (`cezar projects list` reads its identity back out of the registry), so
+ * suppressing the boot write would leave that deployment with no project at
+ * all.
+ */
+export async function shouldAutoRegisterProject(
+  repoRoot: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<boolean> {
+  if (!(await shouldRegisterProject(repoRoot))) return false;
+  if (env.CEZ_SINGLE_PROJECT === '1') return true;
+  const { projects } = await loadWorkspaceConfig();
+  if (projects.length === 0) return true;
+  const real = await normalizeRoot(repoRoot);
+  return projects.some((project) => project.root === real);
 }
 
 /**

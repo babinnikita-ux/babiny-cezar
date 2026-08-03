@@ -170,7 +170,7 @@ never shadow the alias or a route.
 cezar serve (in /Users/x/proj-b)
   ├─ runMigrations()                       # ~/.cezar schemaVersion → latest (idempotent)
   ├─ ws = loadWorkspaceConfig()            # degrade: unreadable → in-memory defaults
-  ├─ boot = registerProject(cwd-repoRoot)  # appends if unknown; bumps lastOpenedAt
+  ├─ boot = registerProject(cwd-repoRoot)  # only while the registry is empty (or the root is known); bumps lastOpenedAt
   ├─ contexts = ProjectContexts(ws)        # lazy — nothing instantiated yet
   ├─ context(boot.id)                      # boot project eagerly: recover(), pruneOrphans()
   ├─ startServer({contexts, bootId, …})    # one port, loopback, as today
@@ -183,6 +183,17 @@ serves the folder, it just doesn't pollute the registry) when the resolved
 worktrees and nested `cez` invocations — the same nesting reality the
 `CEZ_TODOS_FILE=''` guard in `run.ts:294-305` acknowledges), or the user's
 home directory itself. Headless `cezar run` applies the same guards.
+
+**Seed once** — boot registration is additionally suppressed once the registry
+holds ANY project and the boot root is not one of them. Booting in a folder is
+an implicit "this is my project" only for the very first run; after that the
+cwd is where the cockpit was *opened from*, and adding a project stays an
+explicit gesture (`cezar projects add`, the cockpit's Add project dialog —
+both keep using the path-shape guard alone). An unregistered boot root is
+served exactly as a suppressed one is: `resolveBootProject` falls back to its
+would-be slug, `/p/<slug>/` binds to the boot context, only the sidebar
+registry stays untouched. `CEZ_SINGLE_PROJECT=1` is exempt — there the launch
+context IS the project and its identity is read back out of the registry.
 
 Other registered projects get their `ProjectContext` on first API touch
 (sidebar expand, deep link). Recovery/pruning for a project runs when its

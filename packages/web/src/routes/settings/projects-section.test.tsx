@@ -357,8 +357,8 @@ describe('Global settings → Projects', () => {
     serve()
     renderProjects()
     await waitFor(() => expect(rows()).toHaveLength(3))
-    // The server refuses it too (it re-registers at every start); disabling explains it first.
+    // The server refuses it too (it is serving that repo); disabling explains it first.
     expect(removeButton('cezar')?.disabled).toBe(true)
-    expect(removeButton('cezar')?.title).toContain('re-registers')
+    expect(removeButton('cezar')?.title).toContain('is serving this project')
   })
 })

@@ -308,7 +308,7 @@ function RegistryTable({
             <AlertDialogDescription>
               This only unregisters the project — <strong>nothing on disk is deleted</strong>. The
               folder, its git history and its task history all stay exactly where they are, and
-              opening it again re-registers it with everything intact.
+              adding it back later finds everything intact.
               <span className="mt-1 block truncate font-mono text-[11px] text-foreground" title={confirming?.root}>
                 {confirming?.root}
               </span>
@@ -375,9 +375,9 @@ function ProjectRow({
           // Names the gesture precisely for a screen reader, where the row context that makes a
           // bare "Remove" safe-sounding isn't read out with it.
           aria-label={`Unregister ${project.name} (no files are deleted)`}
-          // The boot project is refused server-side too (it re-registers itself at every start);
+          // The boot project is refused server-side too (this server runs out of it);
           // disabling here means the user gets the explanation before the click, not after.
-          title={isBoot ? 'cezar is serving this project — it re-registers itself at every start' : undefined}
+          title={isBoot ? 'cezar is serving this project — stop it and use `cezar projects remove`' : undefined}
           disabled={disabled || isBoot}
           onClick={onRemove}
         >
