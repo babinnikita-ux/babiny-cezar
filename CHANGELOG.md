@@ -49,9 +49,14 @@
 - **Starting cezar in a folder only registers it while you have no projects yet.** The first run
   still seeds the registry from the current repo, and booting a project you already have keeps
   bumping it to the top of the sidebar — but once anything is registered, running `cezar` somewhere
-  else serves that folder without quietly adding it to your project list. Adding a project stays an
-  explicit gesture: `cezar projects add <dir>` or **Add project** in the cockpit, both unchanged.
-  `CEZ_SINGLE_PROJECT=1` deployments are exempt, since there the launch folder *is* the project.
+  else serves that folder without quietly adding it to your project list. Run it from a worktree or
+  a scratch checkout as often as you like; the list stays the one you curated. The folder you
+  started in is still fully usable: it leads the sidebar marked **not saved**, its tasks and panes
+  work exactly as a saved project's do, and **Global settings → Projects** shows it as
+  *not registered* with a one-click **Add project** — the only row there without Remove and a
+  per-project task cap, because there is no registry entry to edit. Adding is otherwise unchanged:
+  `cezar projects add <dir>` or the **+** button. `CEZ_SINGLE_PROJECT=1` deployments are exempt,
+  since there the launch folder *is* the project.
 - Every mutating route is now visible to the typed client, `POST /api/v1/todos/:id/start` included.
   Its body used to be parsed inside the handler to keep "unknown id 404s before the body is
   validated"; a small existence guard registered *before* the body validator keeps that status

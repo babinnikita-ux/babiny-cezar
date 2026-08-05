@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { putWorkspaceConfig } from '@/api/client'
 import {
   useProjects,
+  useRegisterProject,
   useRemoveProject,
   useUpdateProject,
   useWorkspaceConfig,
@@ -266,7 +267,7 @@ function RegistryTable({
   return (
     <SettingsField
       title="Registered projects"
-      hint={`Every folder cezar has run in, plus the ones added from the GUI. “Max parallel” caps how many of that project's tasks run at once; the workspace limit (${workspaceMax}) still applies as an overall ceiling, so a per-project value above it has no extra effect until the workspace limit is raised. Removing a project only unregisters it — no files on disk are deleted.`}
+      hint={`The folders you have added, plus the one cezar first ran in. A folder cezar is serving but has not saved is listed as “not registered” with an Add button — starting cezar somewhere new never registers it for you. “Max parallel” caps how many of that project's tasks run at once; the workspace limit (${workspaceMax}) still applies as an overall ceiling, so a per-project value above it has no extra effect until the workspace limit is raised. Removing a project only unregisters it — no files on disk are deleted.`}
     >
       {registry.projects.length === 0 ? (
         <p data-slot="projects-empty" className="text-[13px] text-soft-foreground">
@@ -358,33 +359,90 @@ function ProjectRow({
         >
           {STATUS_LABEL[project.status]}
         </span>
-        {project.status !== 'missing' ? (
+        {project.unregistered ? (
+          // Where `source` (how it got into the registry) would go — it is not in the registry,
+          // and this is the row's whole story, so it says that instead.
+          <span data-slot="project-unregistered" className="ml-1 text-[11px] text-soft-foreground">
+            · not registered
+          </span>
+        ) : project.status !== 'missing' ? (
           <span className="ml-1 text-[11px] text-soft-foreground">· {project.source}</span>
         ) : null}
       </td>
       <td className="px-3 py-2">
-        <MaxParallelSelect project={project} workspaceMax={workspaceMax} />
+        {/* Both registry edits are meaningless for a folder that has no registry row: the
+            per-project cap is stored ON the entry, and Remove would 404. The Add button in the
+            Actions cell is the only thing this row can honestly offer. */}
+        {project.unregistered ? (
+          <span className="text-[12px] text-soft-foreground">—</span>
+        ) : (
+          <MaxParallelSelect project={project} workspaceMax={workspaceMax} />
+        )}
       </td>
-      <td className="px-3 py-2 tabular-nums text-soft-foreground">{shortDate(project.addedAt)}</td>
+      <td className="px-3 py-2 tabular-nums text-soft-foreground">
+        {project.unregistered ? '—' : shortDate(project.addedAt)}
+      </td>
       <td className="px-3 py-2 text-right">
-        <Button
-          type="button"
-          variant="ghost"
-          size="sm"
-          data-action="project-remove"
-          // Names the gesture precisely for a screen reader, where the row context that makes a
-          // bare "Remove" safe-sounding isn't read out with it.
-          aria-label={`Unregister ${project.name} (no files are deleted)`}
-          // The boot project is refused server-side too (this server runs out of it);
-          // disabling here means the user gets the explanation before the click, not after.
-          title={isBoot ? 'cezar is serving this project — stop it and use `cezar projects remove`' : undefined}
-          disabled={disabled || isBoot}
-          onClick={onRemove}
-        >
-          Remove
-        </Button>
+        {project.unregistered ? (
+          <AddBootProjectButton root={project.root} name={project.name} disabled={disabled} />
+        ) : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            data-action="project-remove"
+            // Names the gesture precisely for a screen reader, where the row context that makes a
+            // bare "Remove" safe-sounding isn't read out with it.
+            aria-label={`Unregister ${project.name} (no files are deleted)`}
+            // The boot project is refused server-side too (this server runs out of it);
+            // disabling here means the user gets the explanation before the click, not after.
+            title={isBoot ? 'cezar is serving this project — stop it and use `cezar projects remove`' : undefined}
+            disabled={disabled || isBoot}
+            onClick={onRemove}
+          >
+            Remove
+          </Button>
+        )}
       </td>
     </tr>
+  )
+}
+
+/**
+ * The one gesture the unregistered boot row can offer: save the folder cezar is currently
+ * serving. It goes through the ordinary `POST /api/v1/projects` — same guards, same 409 on a
+ * folder already registered — so a root the server refuses (`$HOME`, a task worktree, which can
+ * also be boot roots) answers with its own explanation and this button surfaces it verbatim
+ * rather than pre-judging which folders qualify.
+ */
+function AddBootProjectButton({
+  root,
+  name,
+  disabled,
+}: {
+  root: string
+  name: string
+  disabled: boolean
+}) {
+  const register = useRegisterProject()
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      data-action="project-add-boot"
+      aria-label={`Add ${name} to your projects`}
+      title="cezar is serving this folder — save it to your projects"
+      disabled={disabled || register.isPending}
+      onClick={() =>
+        register.mutate(root, {
+          onSuccess: () => toast(`${name} added to your projects`),
+          onError: (error: Error) => toast(error.message, { tone: 'danger' }),
+        })
+      }
+    >
+      Add project
+    </Button>
   )
 }
 

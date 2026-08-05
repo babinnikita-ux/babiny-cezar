@@ -104,6 +104,16 @@ describe('workspace projects', () => {
       }
     });
 
+    it('keeps `reservedIds` out of the allocator, even though the registry is free of them', async () => {
+      // What a running server passes for its UNREGISTERED boot folder: that slug
+      // is a live URL the boot context answers, so a same-basename newcomer must
+      // not take it out from under an open tab.
+      expect((await registerProject(makeDir('one', 'web'), 'local', ['web'])).id).toBe('web-2');
+      // The registry still wins where the two overlap — reserving a taken id is a
+      // no-op, not a second reason to suffix.
+      expect((await registerProject(makeDir('two', 'web'), 'local', ['web'])).id).toBe('web-3');
+    });
+
     it('slugifies ugly basenames and keeps a checkout source', async () => {
       const entry = await registerProject(makeDir('My Repo!.git'), 'checkout');
       expect(entry.id).toBe('my-repo-git');

@@ -113,11 +113,14 @@ function isInsideTaskWorktree(path: string): boolean {
  * - the user's home directory itself (realpath-compared, so a symlinked
  *   `$HOME` still matches).
  */
-export async function shouldRegisterProject(repoRoot: string): Promise<boolean> {
-  const real = await normalizeRoot(repoRoot);
-  if (isInsideTaskWorktree(real) || isInsideTaskWorktree(resolve(repoRoot))) return false;
+async function isRegistrableRoot(real: string, spelled: string): Promise<boolean> {
+  if (isInsideTaskWorktree(real) || isInsideTaskWorktree(resolve(spelled))) return false;
   const home = await normalizeRoot(homedir());
   return real !== home;
+}
+
+export async function shouldRegisterProject(repoRoot: string): Promise<boolean> {
+  return isRegistrableRoot(await normalizeRoot(repoRoot), repoRoot);
 }
 
 /**
@@ -142,22 +145,31 @@ export async function shouldAutoRegisterProject(
   repoRoot: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<boolean> {
-  if (!(await shouldRegisterProject(repoRoot))) return false;
+  const real = await normalizeRoot(repoRoot);
+  if (!(await isRegistrableRoot(real, repoRoot))) return false;
   if (env.CEZ_SINGLE_PROJECT === '1') return true;
   const { projects } = await loadWorkspaceConfig();
-  if (projects.length === 0) return true;
-  const real = await normalizeRoot(repoRoot);
-  return projects.some((project) => project.root === real);
+  return projects.length === 0 || projects.some((project) => project.root === real);
 }
 
 /**
  * Register `root` in the workspace registry (idempotent). Known root (by
  * realpath) → bump its `lastOpenedAt` and return the existing entry, id and
  * all. Unknown → allocate a slug and append a new entry via merge-write.
+ *
+ * `reservedIds` keeps slugs the registry does not (yet) contain out of the
+ * allocator. A running server hands it the id its UNREGISTERED boot folder is
+ * being served under: that id is a live URL and the boot context answers it,
+ * so handing the same slug to a newly added `~/other/beta` would silently
+ * shadow the served folder. The registry file is the only cross-process truth,
+ * so this closes the collision for the server that knows about it, not for a
+ * concurrent `cezar projects add` — which is the same last-writer-wins window
+ * every registry write already lives with.
  */
 export async function registerProject(
   root: string,
   source: 'local' | 'checkout' = 'local',
+  reservedIds: Iterable<string> = [],
 ): Promise<WorkspaceProject> {
   const real = await normalizeRoot(root);
   const now = new Date().toISOString();
@@ -170,7 +182,7 @@ export async function registerProject(
       return;
     }
     entry = {
-      id: allocateProjectSlug(real, config.projects.map((p) => p.id)),
+      id: allocateProjectSlug(real, [...config.projects.map((p) => p.id), ...reservedIds]),
       root: real,
       name: basename(real),
       addedAt: now,
@@ -196,6 +208,10 @@ export interface ProjectListEntry extends WorkspaceProject {
    *  The sidebar gates each project group's GitHub tab on this, instead of on
    *  the boot folder's health-level forge answer. */
   forge?: ForgeKind;
+  /** Only ever set by `GET /api/v1/projects` on the synthetic entry for an
+   *  unregistered boot folder (see the route). Nothing in this module writes
+   *  it: a row that came out of the registry is registered by definition. */
+  unregistered?: true;
 }
 
 interface RootProbe {
