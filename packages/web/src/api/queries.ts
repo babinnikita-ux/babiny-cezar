@@ -77,7 +77,6 @@ import type {
   CreateAgentProfileInput,
   HealthResponse,
   MessageInput,
-  ModelDiscoveryRunner,
   Runner,
   PatchRunInput,
   ProviderId,
@@ -238,12 +237,16 @@ export const workspaceQueryKeys = {
  * cannot be called conditionally) skip the fetch when it definitely won't.
  */
 export function useRunnerModels(runner: Runner, enabled = true) {
-  const discovers = runnerDiscoversModels(runner)
   return useQuery({
     queryKey: workspaceQueryKeys.models(runner),
-    queryFn: ({ signal }) => getRunnerModels(runner as ModelDiscoveryRunner, { signal }),
+    // The narrowing IS the guard — the query is disabled for a runner with no host catalog, so
+    // this branch is unreachable rather than merely unlikely, and no cast is needed to say so.
+    queryFn: ({ signal }) =>
+      runnerDiscoversModels(runner)
+        ? getRunnerModels(runner, { signal })
+        : Promise.reject(new Error(`${runner} has no host model catalog`)),
     staleTime: 5 * 60 * 1_000,
-    enabled: enabled && discovers,
+    enabled: enabled && runnerDiscoversModels(runner),
   })
 }
 

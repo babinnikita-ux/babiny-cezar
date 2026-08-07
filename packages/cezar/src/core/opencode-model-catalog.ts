@@ -11,8 +11,8 @@ export interface OpencodeModelDiscoveryOptions {
 
 const DEFAULT_DISCOVERY_TIMEOUT_MS = 10_000;
 const MAX_MODELS = 500;
-/** Defensive cap on what we buffer from a misbehaving child (bytes of stdout). */
-const MAX_OUTPUT_BYTES = 512 * 1_024;
+/** Defensive cap on what we buffer from a misbehaving child (characters of stdout). */
+const MAX_OUTPUT_CHARS = 512 * 1_024;
 
 /**
  * One `provider/model` id per line — the shape `opencode models` prints (#794). Deliberately
@@ -67,7 +67,7 @@ export async function discoverOpencodeModels(
       child.stdout.on('data', (chunk: string) => {
         if (overflowed) return;
         stdout += chunk;
-        if (stdout.length > MAX_OUTPUT_BYTES) {
+        if (stdout.length > MAX_OUTPUT_CHARS) {
           overflowed = true;
           fail('OpenCode model discovery exceeded the output limit');
         }
