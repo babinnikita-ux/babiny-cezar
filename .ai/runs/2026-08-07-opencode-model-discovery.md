@@ -80,8 +80,8 @@ reports as authoritative) rather than mirroring vendor catalog knowledge.
 
 ### Phase 1: Host-local OpenCode discovery
 
-- [ ] 1.1 Add the `discoverOpencodeModels` adapter with unit tests
-- [ ] 1.2 Wire the adapter into `createApp` and widen the `/api/models` runner query
+- [x] 1.1 Add the `discoverOpencodeModels` adapter with unit tests — 9e64421b
+- [x] 1.2 Wire the adapter into `createApp` and widen the `/api/models` runner query — 2157bbc9
 
 ### Phase 2: Cross-runner preset guard
 
