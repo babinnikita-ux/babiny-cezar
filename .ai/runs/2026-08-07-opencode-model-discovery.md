@@ -85,13 +85,13 @@ reports as authoritative) rather than mirroring vendor catalog knowledge.
 
 ### Phase 2: Cross-runner preset guard
 
-- [ ] 2.1 Drop the stale OpenCode entries from `KNOWN_PRESETS_BY_RUNNER`
+- [x] 2.1 Drop the stale OpenCode entries from `KNOWN_PRESETS_BY_RUNNER` — 9749d074
 
 ### Phase 3: Cockpit picker
 
-- [ ] 3.1 Make the model-catalog client/query runner-scoped
-- [ ] 3.2 Reduce the OpenCode presets to `auto` and make the helpers discovery-aware
-- [ ] 3.3 Update the picker call sites and their tests
+- [x] 3.1 Make the model-catalog client/query runner-scoped — fba9d95a
+- [x] 3.2 Reduce the OpenCode presets to `auto` and make the helpers discovery-aware — fba9d95a
+- [x] 3.3 Update the picker call sites and their tests — fba9d95a
 
 ### Phase 4: Docs and gate
 
