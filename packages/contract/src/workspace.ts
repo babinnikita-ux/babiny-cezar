@@ -394,8 +394,9 @@ export const runnerModelOptionSchema = z.object({
 });
 export type RunnerModelOption = z.infer<typeof runnerModelOptionSchema>;
 
-/** `GET /api/v1/models?runner=codex` — discovered models, plus how fresh the answer is. Never an
- *  error: an unavailable CLI degrades to `source: 'unavailable'` with a `reason`. */
+/** `GET /api/v1/models?runner=codex|opencode` — the models discovered from that runner's own
+ *  host installation, plus how fresh the answer is. Never an error: an unavailable CLI degrades
+ *  to `source: 'unavailable'` with a `reason`. Claude has no host-local catalog and is rejected. */
 export const runnerModelCatalogResponseSchema = z.object({
   runner: runnerSchema,
   models: z.array(runnerModelOptionSchema),

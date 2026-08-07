@@ -39,6 +39,7 @@ import { detectEnvironment } from '../core/backend-detect.ts';
 import type { ContentBlock } from '../core/agent-runner.ts';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
 import { discoverCodexModels } from '../core/codex-model-catalog.ts';
+import { discoverOpencodeModels } from '../core/opencode-model-catalog.ts';
 import {
   PROVIDER_IDS,
   ProviderAuthService,
@@ -1069,7 +1070,10 @@ export function createApp(deps: ServerDeps) {
   const bootRoot = deps.repoRoot;
   const bootDataDir = join(bootRoot, '.ai/cezar');
   const modelCatalog = deps.modelCatalog ?? new RunnerModelCatalog({
-    adapters: { codex: { discover: () => discoverCodexModels({ cwd: bootRoot }) } },
+    adapters: {
+      codex: { discover: () => discoverCodexModels({ cwd: bootRoot }) },
+      opencode: { discover: () => discoverOpencodeModels({ cwd: bootRoot }) },
+    },
   });
   const providerAuth = deps.providerAuth ?? new ProviderAuthService();
   const workspaceConfig = deps.workspaceConfig ?? {
@@ -1656,7 +1660,10 @@ export function createApp(deps: ServerDeps) {
 
   // ---- chained family: host model catalog (workspace-level) ----
   const modelsRoutes = new Hono<ProjectApiEnv>()
-    .get('/models', queryZodValidator(z.object({ runner: z.union([z.string(), z.array(z.string()).transform((v) => v[0] as string)]).pipe(z.literal('codex')) }), { message: 'runner must be codex' }), async (c) => {
+    // Only the runners with an authoritative host-local catalog are answerable here: Codex
+    // through its app-server protocol, OpenCode through its own `models` listing (#794).
+    // Claude has no such source, so its picker stays on static presets and this 400s.
+    .get('/models', queryZodValidator(z.object({ runner: z.union([z.string(), z.array(z.string()).transform((v) => v[0] as string)]).pipe(z.enum(['codex', 'opencode'])) }), { message: 'runner must be codex or opencode' }), async (c) => {
       const query = { data: c.req.valid('query') };
       return c.json(await modelCatalog.get(query.data.runner));
     });
