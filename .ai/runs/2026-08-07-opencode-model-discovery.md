@@ -76,6 +76,8 @@ reports as authoritative) rather than mirroring vendor catalog knowledge.
 
 ## Progress
 
+PR: #799
+
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
 
 ### Phase 1: Host-local OpenCode discovery
@@ -95,5 +97,5 @@ reports as authoritative) rather than mirroring vendor catalog knowledge.
 
 ### Phase 4: Docs and gate
 
-- [ ] 4.1 Document the OpenCode discovery path
-- [ ] 4.2 Run the full validation gate
+- [x] 4.1 Document the OpenCode discovery path — 41ff0910
+- [x] 4.2 Run the full validation gate — (green: typecheck, test 5432, test:unit 36, build, test:package 12)
