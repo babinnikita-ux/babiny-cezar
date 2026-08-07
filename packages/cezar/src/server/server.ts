@@ -34,7 +34,7 @@ import type {
 } from '@open-mercato/cezar-contract';
 // A contract VALUE, like `workspaceUiStateSchema` in workspace/migrations.ts — the request
 // schema this route validates with is the same one the client compiles against.
-import { openProjectInSchema } from '@open-mercato/cezar-contract';
+import { modelDiscoveryRunnerSchema, openProjectInSchema } from '@open-mercato/cezar-contract';
 import { detectEnvironment } from '../core/backend-detect.ts';
 import type { ContentBlock } from '../core/agent-runner.ts';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
@@ -1660,10 +1660,10 @@ export function createApp(deps: ServerDeps) {
 
   // ---- chained family: host model catalog (workspace-level) ----
   const modelsRoutes = new Hono<ProjectApiEnv>()
-    // Only the runners with an authoritative host-local catalog are answerable here: Codex
-    // through its app-server protocol, OpenCode through its own `models` listing (#794).
-    // Claude has no such source, so its picker stays on static presets and this 400s.
-    .get('/models', queryZodValidator(z.object({ runner: z.union([z.string(), z.array(z.string()).transform((v) => v[0] as string)]).pipe(z.enum(['codex', 'opencode'])) }), { message: 'runner must be codex or opencode' }), async (c) => {
+    // `modelDiscoveryRunnerSchema` is the contract's own list of the runners with an
+    // authoritative host-local catalog (#794), so the client compiles against exactly what this
+    // validates. Claude has no such source: its picker stays on static presets and this 400s.
+    .get('/models', queryZodValidator(z.object({ runner: z.union([z.string(), z.array(z.string()).transform((v) => v[0] as string)]).pipe(modelDiscoveryRunnerSchema) }), { message: 'runner must be codex or opencode' }), async (c) => {
       const query = { data: c.req.valid('query') };
       return c.json(await modelCatalog.get(query.data.runner));
     });

@@ -23,9 +23,17 @@ describe('modelConflictsWithRunner', () => {
     expect(modelConflictsWithRunner('openai/gpt-5.4', 'codex')).toBe(false);
   });
 
-  it('rejects a bare id for OpenCode, which cannot route one', () => {
+  it('leaves an unfamiliar prefix alone — it may be the runner\'s configured gateway', () => {
+    // The run-time gate reads the runner's configured provider and can accept this; this
+    // synchronous guard cannot, so it must not pre-empt that decision.
+    expect(modelConflictsWithRunner('my-org/custom-tune', 'codex')).toBe(false);
+  });
+
+  it('never rejects a provider prefix for OpenCode, which serves every provider', () => {
+    expect(modelConflictsWithRunner('anthropic/claude-sonnet-5', 'opencode')).toBe(false);
+    expect(modelConflictsWithRunner('openai/gpt-5.4', 'opencode')).toBe(false);
+    // …while another runner's bare preset is still recognizably not an OpenCode id.
     expect(modelConflictsWithRunner('opus', 'opencode')).toBe(true);
-    expect(modelConflictsWithRunner('gpt-5.4', 'opencode')).toBe(true);
   });
 
   it('accepts every provider-qualified OpenCode id, including ones no release knows (#794)', () => {

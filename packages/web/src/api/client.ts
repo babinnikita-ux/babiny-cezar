@@ -76,6 +76,7 @@ import type {
   RunCommitsResponse,
   RepoResponse,
   Runner,
+  ModelDiscoveryRunner,
   RunnerModelCatalogResponse,
   RunRecord,
   RunsIndexResponse,
@@ -349,9 +350,13 @@ export async function getHealth(opts?: ReadOptions): Promise<HealthResponse> {
   return unwrap(await cez.api.v1.health.$get({}, init(opts)), '/health')
 }
 
-/** Host-local Codex catalog. Workspace-level: one CLI/account serves every project. */
-export async function getRunnerModels(opts?: ReadOptions): Promise<RunnerModelCatalogResponse> {
-  return unwrap(await cez.api.v1.models.$get({ query: { runner: 'codex' } }, init(opts)), '/models')
+/** Host-local catalog for one discovery runner (`codex`, `opencode` — #794). Workspace-level:
+ *  one CLI/account serves every project. */
+export async function getRunnerModels(
+  runner: ModelDiscoveryRunner,
+  opts?: ReadOptions,
+): Promise<RunnerModelCatalogResponse> {
+  return unwrap(await cez.api.v1.models.$get({ query: { runner } }, init(opts)), '/models')
 }
 
 /** Host-local authentication state shared by every project. */

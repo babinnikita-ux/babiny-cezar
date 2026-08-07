@@ -68,7 +68,7 @@ import {
   putAgentConfigFile,
   retryProviderAuth,
 } from './client'
-import { queryScope } from '@open-mercato/cezar-api-client'
+import { queryScope, runnerDiscoversModels } from '@open-mercato/cezar-api-client'
 import { useProjectScope } from './project-scope-context'
 import { githubRepoBase } from '@/lib/tasks-table'
 import type { ContinueOptions } from './client'
@@ -77,6 +77,8 @@ import type {
   CreateAgentProfileInput,
   HealthResponse,
   MessageInput,
+  ModelDiscoveryRunner,
+  Runner,
   PatchRunInput,
   ProviderId,
   OpenAgentAccountFileInput,
@@ -224,15 +226,41 @@ export const workspaceQueryKeys = {
     [...workspaceQueryKeys.fsBrowseRoot, path, showHidden] as const,
 }
 
-/** `enabled` lets a caller that only MIGHT render the model pills (the thread's Continue —
- *  hooks cannot be called conditionally) skip the fetch when it definitely won't. */
-export function useRunnerModels(enabled = true) {
+/**
+ * One runner's host-discovered catalog, cached per runner (#794 — this used to be hard-wired to
+ * Codex, which is why OpenCode had nothing but stale presets to show).
+ *
+ * A runner with no host catalog (claude) never fetches and never resolves data, so its picker
+ * falls back to static presets exactly as before — callers can pass any runner and read
+ * `data`/`isError` without checking first.
+ *
+ * `enabled` lets a caller that only MIGHT render the model pills (the thread's Continue — hooks
+ * cannot be called conditionally) skip the fetch when it definitely won't.
+ */
+export function useRunnerModels(runner: Runner, enabled = true) {
+  const discovers = runnerDiscoversModels(runner)
   return useQuery({
-    queryKey: workspaceQueryKeys.models('codex'),
-    queryFn: ({ signal }) => getRunnerModels({ signal }),
+    queryKey: workspaceQueryKeys.models(runner),
+    queryFn: ({ signal }) => getRunnerModels(runner as ModelDiscoveryRunner, { signal }),
     staleTime: 5 * 60 * 1_000,
-    enabled,
+    enabled: enabled && discovers,
   })
+}
+
+/**
+ * Every runner's catalog at once, keyed by runner — for the screens that render a row PER runner
+ * (the Settings default-model selects) rather than one for the runner the user picked.
+ *
+ * One `useRunnerModels` call per runner in a fixed order, so the hook count never varies and
+ * each catalog keeps its own cache entry, `enabled` state and error state.
+ */
+export function useRunnerModelCatalogs(
+  enabled = true,
+): Record<Runner, ReturnType<typeof useRunnerModels>> {
+  const claude = useRunnerModels('claude', enabled)
+  const codex = useRunnerModels('codex', enabled)
+  const opencode = useRunnerModels('opencode', enabled)
+  return { claude, codex, opencode }
 }
 
 export function useProviderStatus() {

@@ -1,5 +1,5 @@
 import type { RunnerId } from './agent-runner.ts';
-import { resolveModelIdentity } from './model-identity.ts';
+import { BACKEND_MODEL_MAP, KNOWN_PROVIDERS, parseModelIdentity } from './model-identity.ts';
 
 /**
  * The model-preset ids each runner's picker offers — the ids of the web composer's
@@ -30,22 +30,36 @@ export const KNOWN_PRESETS_BY_RUNNER: Record<RunnerId, readonly string[]> = {
   opencode: [],
 };
 
-/** True when `model` is recognizably a preset of a runner OTHER than `runner` (and not also
- *  one of `runner`'s own presets), or when `runner` cannot resolve it to a model identity at
- *  all — an `anthropic/…` id handed to codex, or a bare id handed to provider-spanning
- *  OpenCode. `''`/unknown/custom ids that the runner CAN serve never conflict. */
+/**
+ * True when the `provider/` prefix on `model` names a provider cezar knows that this
+ * single-provider runner does not serve — `anthropic/…` handed to codex.
+ *
+ * Deliberately narrower than the run-time gate in `model-identity.ts`: this check is
+ * synchronous and therefore cannot read the runner's `configuredProvider`, so an UNFAMILIAR
+ * prefix (`my-org/custom-tune`) is left alone — it may well be the user's own gateway, which
+ * the run-time gate accepts once it has read the config. Only a prefix naming another known
+ * vendor is evidence enough to refuse the pairing up front.
+ */
+function namesAnotherKnownProvider(model: string, runner: RunnerId): boolean {
+  const map = BACKEND_MODEL_MAP[runner];
+  // Nothing to contradict: OpenCode spans providers (no default of its own), and Claude Code
+  // accepts explicit gateway/custom provider ids by design.
+  if (map?.defaultProvider === undefined || map.allowExplicitProvider) return false;
+  const explicit = parseModelIdentity(model);
+  if (!explicit || explicit.provider === map.defaultProvider) return false;
+  return (KNOWN_PROVIDERS as readonly string[]).includes(explicit.provider);
+}
+
+/** True when `model` is recognizably a preset of a runner OTHER than `runner` (and not also one
+ *  of `runner`'s own presets), or when its provider prefix is one this runner is known not to
+ *  serve. `''`/unknown/custom ids never conflict. */
 export function modelConflictsWithRunner(model: string, runner: RunnerId): boolean {
   if (!model) return false;
   if (KNOWN_PRESETS_BY_RUNNER[runner]?.includes(model)) return false;
-  // Structural half of the guard: `resolveModelIdentity` is the same fail-loud gate the run
-  // wiring calls at start-up, so anything it refuses would have failed the run anyway. Catching
-  // it here turns "the run dies a minute later" into "the request is refused now", and — unlike
-  // a preset list — it keeps holding for models that do not exist yet.
-  try {
-    resolveModelIdentity(runner, model);
-  } catch {
-    return true;
-  }
+  // The provider half of the guard needs no vendor model knowledge, so — unlike the preset
+  // lists — it keeps holding for models that do not exist yet. That is what lets OpenCode's
+  // entry above be empty (#794) without losing the protection it used to provide.
+  if (namesAnotherKnownProvider(model, runner)) return true;
   return Object.entries(KNOWN_PRESETS_BY_RUNNER).some(
     ([other, presets]) => other !== runner && presets.includes(model),
   );
