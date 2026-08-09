@@ -91,4 +91,4 @@ Lock the new lifecycle and the new anchor in unit tests, then run the repo's ful
 
 - [x] 3.1 Update the auto-dismiss test for the two-phase lifecycle (closed, then gone) — 7e2558c3
 - [x] 3.2 Add regression tests for the top-right anchor and the open/closed animation state — 7e2558c3
-- [ ] 3.3 Run the full validation gate (`npm run typecheck`, `npm test`, `npm run test:unit`, `npm run build`, `npm run test:package`)
+- [x] 3.3 Run the full validation gate (`npm run typecheck`, `npm test`, `npm run test:unit`, `npm run build`, `npm run test:package`) — 2ea68071
