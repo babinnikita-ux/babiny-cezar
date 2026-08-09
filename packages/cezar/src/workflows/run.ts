@@ -1511,6 +1511,11 @@ export class RunManager {
     }
     this.armAutosave(state);
     if (record) seedHandoffFile(this.dataDir, record); // idempotent — normally already there
+    // Registry snapshot for `/skill` expansion. `execute` loads this for the workflow's own
+    // sessions; a continuation builds its OWN ActiveRun, and without this the resumed session
+    // expanded against an empty registry and leaked `/om-...` verbatim to the backend, which
+    // answered "Unknown skill" (#811). Best-effort — discovery must never break Continue.
+    state.skills = await discoverSkills(this.repoRoot).catch(() => [] as Skill[]);
 
     this.store.updateRun(runId, {
       status: 'running',
@@ -1686,6 +1691,11 @@ export class RunManager {
     const runner = createRunner(continueBackend);
     state.currentStepId = stepId;
     this.beginUsageInvocation(runId, state, stepId);
+    // A continuation's opening message becomes the session's `userPrompt` and never passes
+    // through `deliverMessage`, so it needs the SAME delivery-only `/skill` rewrite the
+    // live path applies (#811). Delivery-only: the `user-message` event above already
+    // persisted the user's original text, and the transcript must keep showing that.
+    const openingPrompt = expandRegistrySlashSkillText(prompt, state.skills ?? []);
     const session = runner.startSession(
       {
         // The Continue step is a fresh agent session on the same run — the
@@ -1695,7 +1705,9 @@ export class RunManager {
           record?.systemPrompt,
           generateFollowups ? HANDOFF_INSTRUCTIONS : HANDOFF_ONLY_INSTRUCTIONS,
         ),
-        userPrompt: attachments.length ? `${prompt}\n\n${pastedAttachmentsText(attachments)}` : prompt,
+        userPrompt: attachments.length
+          ? `${openingPrompt}\n\n${pastedAttachmentsText(attachments)}`
+          : openingPrompt,
         ...(openingImages.length ? { images: openingImages } : {}),
         cwd: state.cwd,
         allowedTools: DEFAULT_ALLOWED_TOOLS,
@@ -1885,6 +1897,8 @@ export class RunManager {
     if (seeded) seedHandoffFile(this.dataDir, seeded);
 
     const skills = await discoverSkills(this.repoRoot);
+    // Every ActiveRun construction site must carry the registry — `runContinuation` builds
+    // its own, and the one that skipped this leaked raw `/skill` text to the backend (#811).
     state.skills = skills;
     const retriesUsed = new Map<string, number>();
     let checkFailure: string | null = null;
@@ -2846,13 +2860,33 @@ export function skillSystemPrompt(
 }
 
 /**
- * Expand a registry-backed slash skill in a live chat message before it reaches
- * a backend. Claude otherwise intercepts an unknown leading slash command, and
+ * Expand a registry-backed slash skill in one prompt string before it reaches a
+ * backend. Claude otherwise intercepts an unknown leading slash command, and
  * Codex/OpenCode have no native slash-skill lookup at all (#676).
  *
- * Only the first text block is eligible, only at character zero, and unknown
- * commands pass through byte-for-byte. The caller persists the original user
- * content before applying this delivery-only rewrite.
+ * Only a match at character zero counts, and unknown commands pass through
+ * byte-for-byte — a backend's OWN slash commands must keep working. The caller
+ * persists the original user text before applying this delivery-only rewrite.
+ *
+ * Both delivery seams route through here: live-session messages via
+ * `expandRegistrySlashSkill`, and a continuation's opening prompt, which becomes
+ * the session's `userPrompt` and never passes through `deliverMessage` at all
+ * (#811).
+ */
+export function expandRegistrySlashSkillText(text: string, skills: readonly Skill[]): string {
+  const match = /^\/([A-Za-z0-9][A-Za-z0-9._-]*)(?=\s|$)/.exec(text);
+  if (!match) return text;
+  const skill = skills.find((candidate) => candidate.name === match[1]);
+  if (!skill) return text;
+
+  const request = text.slice(match[0].length).trim();
+  return request ? `${skillSystemPrompt(skill)}\n\nUser request:\n${request}` : skillSystemPrompt(skill);
+}
+
+/**
+ * `expandRegistrySlashSkillText` over a live chat message: only the first text
+ * block is eligible, and an unchanged block returns the caller's array
+ * identity untouched.
  */
 export function expandRegistrySlashSkill(
   content: ContentBlock[],
@@ -2862,17 +2896,10 @@ export function expandRegistrySlashSkill(
   if (textIndex < 0) return content;
   const block = content[textIndex];
   if (!block || block.type !== 'text') return content;
-  const match = /^\/([A-Za-z0-9][A-Za-z0-9._-]*)(?=\s|$)/.exec(block.text);
-  if (!match) return content;
-  const skill = skills.find((candidate) => candidate.name === match[1]);
-  if (!skill) return content;
+  const text = expandRegistrySlashSkillText(block.text, skills);
+  if (text === block.text) return content;
 
-  const request = block.text.slice(match[0].length).trim();
-  const replacement: ContentBlock = {
-    type: 'text',
-    text: request ? `${skillSystemPrompt(skill)}\n\nUser request:\n${request}` : skillSystemPrompt(skill),
-  };
   const expanded = [...content];
-  expanded[textIndex] = replacement;
+  expanded[textIndex] = { type: 'text', text };
   return expanded;
 }
