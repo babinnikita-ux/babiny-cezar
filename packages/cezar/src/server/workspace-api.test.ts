@@ -102,7 +102,8 @@ describe('the workspace settings API (step 2.7)', () => {
       resources: {
         maxParallel: 2,
         maxMonitoringSessions: 2,
-        monitoringWakeIntervalMinutes: null,
+        monitoringWakeIntervalMinutes: 5,
+        autoResumeOnUsageLimit: true,
         memoryLimitMb: null,
         worktreeRetentionDefault: 10,
       },
@@ -127,7 +128,13 @@ describe('the workspace settings API (step 2.7)', () => {
   it('PUT resources round-trips, persists to disk, and refreshes the semaphore cache', async () => {
     expect(semaphore.maxParallel()).toBe(2); // the pre-PUT snapshot
     const res = await putConfig({
-      resources: { maxParallel: 5, maxMonitoringSessions: 3, monitoringWakeIntervalMinutes: 5, memoryLimitMb: 2048 },
+      resources: {
+        maxParallel: 5,
+        maxMonitoringSessions: 3,
+        monitoringWakeIntervalMinutes: 5,
+        autoResumeOnUsageLimit: false,
+        memoryLimitMb: 2048,
+      },
     });
     expect(res.status).toBe(200);
     expect((await res.json()) as WorkspaceConfigResponse).toEqual({
@@ -145,6 +152,7 @@ describe('the workspace settings API (step 2.7)', () => {
         maxParallel: 5,
         maxMonitoringSessions: 3,
         monitoringWakeIntervalMinutes: 5,
+        autoResumeOnUsageLimit: false,
         memoryLimitMb: 2048,
         worktreeRetentionDefault: 10,
       },
@@ -159,7 +167,26 @@ describe('the workspace settings API (step 2.7)', () => {
     expect(semaphore.maxParallel()).toBe(5);
     expect(semaphore.maxMonitoringSessions()).toBe(3);
     expect(semaphore.monitoringWakeIntervalMinutes()).toBe(5);
+    // Default-ON, so the write worth pinning is the one that turns it OFF (spec
+    // 2026-08-03-auto-resume-after-usage-limit) — and it reaches the shared cache the engine
+    // asks, not just the file.
+    expect(semaphore.autoResumeOnUsageLimit()).toBe(false);
     expect(semaphore.memoryLimitMb()).toBe(2048);
+  });
+
+  /** #810 — the cadence now ships ON, so the write worth pinning is the one that turns it
+   *  OFF. `null` must survive the round-trip and reach the semaphore as `null`; re-defaulting
+   *  it to 5 would silently overrule an operator who chose "Park until resumed". */
+  it('PUT null parks monitoring and is never re-defaulted back to the shipped cadence', async () => {
+    expect(semaphore.monitoringWakeIntervalMinutes()).toBe(5); // the zero-config default
+    const res = await putConfig({ resources: { monitoringWakeIntervalMinutes: null } });
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as WorkspaceConfigResponse).resources.monitoringWakeIntervalMinutes).toBeNull();
+    expect(
+      ((await (await getConfig()).json()) as WorkspaceConfigResponse).resources.monitoringWakeIntervalMinutes,
+    ).toBeNull();
+    expect((rawConfig().resources as Record<string, unknown>).monitoringWakeIntervalMinutes).toBeNull();
+    expect(semaphore.monitoringWakeIntervalMinutes()).toBeNull();
   });
 
   it('partial updates leave the other keys untouched', async () => {
@@ -168,7 +195,8 @@ describe('the workspace settings API (step 2.7)', () => {
     expect(((await (await getConfig()).json()) as WorkspaceConfigResponse).resources).toEqual({
       maxParallel: 5,
       maxMonitoringSessions: 2,
-      monitoringWakeIntervalMinutes: null,
+      monitoringWakeIntervalMinutes: 5,
+      autoResumeOnUsageLimit: true,
       memoryLimitMb: null,
       worktreeRetentionDefault: 3,
     });

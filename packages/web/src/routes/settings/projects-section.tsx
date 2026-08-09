@@ -6,25 +6,15 @@ import { putWorkspaceConfig } from '@/api/client'
 import {
   useProjects,
   useRegisterProject,
-  useRemoveProject,
   useUpdateProject,
   useWorkspaceConfig,
   workspaceQueryKeys,
 } from '@/api/queries'
 import type { ProjectListEntry, ProjectsResponse, WorkspaceConfigResponse } from '@open-mercato/cezar-api-client'
 import { CenteredState } from '@/components/centered-state'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/components/ui/toaster'
+import { RemoveProjectDialog, useProjectRemoval } from './remove-project'
 import { SettingsField } from './settings-field'
 
 /**
@@ -61,8 +51,9 @@ const MAX_PARALLEL_MIN = 1
 const MAX_PARALLEL_MAX = 16
 
 /** Human wording for a registry status probe. `not-git` is fully usable (single-queue
- *  degraded mode), so it reads as a note rather than a fault; only `missing` is a problem. */
-const STATUS_LABEL: Record<ProjectListEntry['status'], string> = {
+ *  degraded mode), so it reads as a note rather than a fault; only `missing` is a problem.
+ *  Exported because the project's own General page states the same status about itself. */
+export const STATUS_LABEL: Record<ProjectListEntry['status'], string> = {
   ok: 'ok',
   'not-git': 'no git repo',
   missing: 'folder not found',
@@ -249,19 +240,13 @@ function RegistryTable({
   workspaceMax: number
 }) {
   const [confirming, setConfirming] = useState<Confirming>(null)
-  const remove = useRemoveProject()
+  const remove = useProjectRemoval()
 
   const confirmRemoval = () => {
     if (!confirming) return
-    const { id, name } = confirming
+    const project = confirming
     setConfirming(null)
-    remove.mutate(id, {
-      // "Removed from the workspace", not "Deleted": the toast is the last word the user reads
-      // about a button they may have pressed nervously.
-      onSuccess: () => toast(`${name} removed from the workspace — its files are untouched`),
-      // The 409s (running tasks, the boot project) explain themselves; show the server's words.
-      onError: (error: Error) => toast(error.message, { tone: 'danger' }),
-    })
+    remove.confirm(project)
   }
 
   return (
@@ -269,6 +254,10 @@ function RegistryTable({
       title="Registered projects"
       hint={`The folders you have added, plus the one cezar first ran in. A folder cezar is serving but has not saved is listed as “not registered” with an Add button — starting cezar somewhere new never registers it for you. “Max parallel” caps how many of that project's tasks run at once; the workspace limit (${workspaceMax}) still applies as an overall ceiling, so a per-project value above it has no extra effect until the workspace limit is raised. Removing a project only unregisters it — no files on disk are deleted.`}
     >
+      {/* Defensive: `GET /api/v1/projects` always names at least the folder this server is
+          serving (as a registry row or as the unregistered one), so today this branch cannot
+          render. Kept because an empty table with headers and no rows would be a worse answer
+          than a sentence if that ever changes. */}
       {registry.projects.length === 0 ? (
         <p data-slot="projects-empty" className="text-[13px] text-soft-foreground">
           No projects registered yet.
@@ -302,31 +291,11 @@ function RegistryTable({
         </div>
       )}
 
-      <AlertDialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove {confirming?.name} from the workspace?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This only unregisters the project — <strong>nothing on disk is deleted</strong>. The
-              folder, its git history and its task history all stay exactly where they are, and
-              adding it back later finds everything intact.
-              <span className="mt-1 block truncate font-mono text-[11px] text-foreground" title={confirming?.root}>
-                {confirming?.root}
-              </span>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep it</AlertDialogCancel>
-            <AlertDialogAction
-              data-action="projects-confirm-remove"
-              className="bg-danger text-danger-foreground hover:brightness-[0.96]"
-              onClick={confirmRemoval}
-            >
-              Remove from list
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <RemoveProjectDialog
+        project={confirming}
+        onOpenChange={(open) => !open && setConfirming(null)}
+        onConfirm={confirmRemoval}
+      />
     </SettingsField>
   )
 }
@@ -392,8 +361,10 @@ function ProjectRow({
             size="sm"
             data-action="project-remove"
             // Names the gesture precisely for a screen reader, where the row context that makes a
-            // bare "Remove" safe-sounding isn't read out with it.
-            aria-label={`Unregister ${project.name} (no files are deleted)`}
+            // bare "Remove" safe-sounding isn't read out with it — but LEADS with the button's own
+            // word, so the accessible name contains the visible one (WCAG 2.5.3 Label in Name) and
+            // speech input still reaches the control. Same shape as the General page's button.
+            aria-label={`Remove ${project.name} from the workspace — unregisters it, no files are deleted`}
             // The boot project is refused server-side too (this server runs out of it);
             // disabling here means the user gets the explanation before the click, not after.
             title={isBoot ? 'cezar is serving this project — stop it and use `cezar projects remove`' : undefined}
@@ -409,20 +380,23 @@ function ProjectRow({
 }
 
 /**
- * The one gesture the unregistered boot row can offer: save the folder cezar is currently
- * serving. It goes through the ordinary `POST /api/v1/projects` — same guards, same 409 on a
- * folder already registered — so a root the server refuses (`$HOME`, a task worktree, which can
- * also be boot roots) answers with its own explanation and this button surfaces it verbatim
- * rather than pre-judging which folders qualify.
+ * The one gesture an unregistered boot row can offer: save the folder cezar is currently serving.
+ * It goes through the ordinary `POST /api/v1/projects` — same guards, same 409 on a folder
+ * already registered — so a root the server refuses (`$HOME`, a task worktree, which can also be
+ * boot roots) answers with its own explanation and this button surfaces it verbatim rather than
+ * pre-judging which folders qualify.
+ *
+ * Exported for the project's own General page, which faces the same row and must not invent a
+ * second way to say this — the same reason `MaxParallelSelect` and `STATUS_LABEL` are shared.
  */
-function AddBootProjectButton({
+export function AddBootProjectButton({
   root,
   name,
-  disabled,
+  disabled = false,
 }: {
   root: string
   name: string
-  disabled: boolean
+  disabled?: boolean
 }) {
   const register = useRegisterProject()
   return (
@@ -455,7 +429,7 @@ function AddBootProjectButton({
  * hook invalidates the projects query so a success re-renders the row. The
  * workspace cap still clamps at runtime, which the section hint explains.
  */
-function MaxParallelSelect({
+export function MaxParallelSelect({
   project,
   workspaceMax,
 }: {

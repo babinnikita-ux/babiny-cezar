@@ -50,7 +50,13 @@ interface HealthBody {
   checks: unknown[];
   defaultRunner?: string;
   forge: unknown;
-  capabilities: { localHandoff: boolean; followups: boolean; singleProject: boolean; tokenMetrics: boolean };
+  capabilities: {
+    localHandoff: boolean;
+    followups: boolean;
+    singleProject: boolean;
+    automations: boolean;
+    tokenMetrics: boolean;
+  };
   projects: { id: string; name: string }[];
   bootProject: string;
 }
@@ -311,6 +317,35 @@ describe('workspace projects API', () => {
       const after = (await (await apiRequest(app, '/api/v1/projects')).json()) as ProjectsResponse;
       expect(after.bootProject).toBe(before.bootProject);
       expect(after.projects.map((p) => p.unregistered)).toEqual([undefined]);
+    });
+
+    it('yields the slug visibly when another process takes it, rather than shadowing that project', async () => {
+      const app = makeApp();
+      const first = (await (await apiRequest(app, '/api/v1/projects')).json()) as ProjectsResponse;
+      const bootId = first.bootProject;
+
+      // A same-basename folder registered OUT OF BAND — `cezar projects add` in a
+      // terminal, where this server's reservation cannot reach it.
+      const twin = join(otherRoot, basename(repoRoot));
+      mkdirSync(twin, { recursive: true });
+      const stolen = await registerProject(twin);
+      expect(stolen.id).toBe(bootId);
+
+      // The boot project moves to the suffixed slug instead of keeping an id the
+      // registry now points at another repo: the scope resolver binds
+      // `/p/<bootProject>/` to the boot context BEFORE consulting the registry, so
+      // holding on to the stolen slug would serve this folder under the other
+      // project's sidebar row.
+      const after = (await (await apiRequest(app, '/api/v1/projects')).json()) as ProjectsResponse;
+      expect(after.bootProject).not.toBe(bootId);
+      expect(after.projects.find((p) => p.unregistered)?.id).toBe(after.bootProject);
+
+      // …and the row that DID take the slug resolves to its own root.
+      const contexts = new ProjectContexts({ listProjects });
+      const scoped = await apiRequest(makeApp({ contexts }), `/api/v1/p/${bootId}/repo`);
+      expect(scoped.status).toBe(200);
+      expect(contexts.peek(bootId)?.root).toBe(await realpath(twin));
+      contexts.disposeAll();
     });
   });
 
@@ -800,6 +835,7 @@ describe('workspace projects API', () => {
         localHandoff: true,
         followups: false,
         singleProject: false,
+        automations: false,
         tokenMetrics: true,
         tokenUsageMetrics: true,
         costMetrics: true,
