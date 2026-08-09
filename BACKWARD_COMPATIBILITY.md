@@ -34,7 +34,7 @@ What is protected now: **the shape of each route under `/api/v1`**, the three-wa
 - `GET/PUT /api/v1/workspace/ui-state` — the global GUI-state twin of `/api/v1/ui-state`, backed by `~/.cezar/ui-state.json` (section 9): same `.passthrough()` + top-level key cap + shallow merge-on-write semantics as the per-repo route (one shared parse path in the code), so unknown keys survive round-trips; a bad body is `400 {error}` and never a partial write. The optional `lastLocation` object (bounded `{projectId, pathname, search?, hash?}`) and the `sidebar.collapsed` map are **legacy but still accepted**: both describe the browser rather than the workspace, so the cockpit moved them into localStorage — one shared answer meant the last client to navigate decided where every other client's next launch landed, and whose sidebar groups were shut. The keys stay named, bounded and round-tripped so a cockpit from before that change keeps working; nothing in the current cockpit reads or writes them, and a file that still carries them is untouched.
 - Skills: `GET /api/v1/skills`, `GET /api/v1/skills/importable`, `POST /api/v1/skills/refresh`
 - Workflows: `GET/POST /api/v1/workflows`, `DELETE /api/v1/workflows/:name`, `POST /api/v1/workflows/parse`, `POST /api/v1/plan`
-- Automations: `GET/POST /api/v1/automations`, `GET/PUT/DELETE /api/v1/automations/:id`, `POST /api/v1/automations/:id/{enable,pause,check}`, `GET /api/v1/automation-checks/:checkId`, `GET /api/v1/automation-log`, `POST /api/v1/automation-log/:receiptId/retry`
+- Automations: `GET/POST /api/v1/automations`, `GET/PUT/DELETE /api/v1/automations/:id`, `POST /api/v1/automations/:id/{enable,pause,check}`, `GET /api/v1/automation-checks/:checkId`, `GET /api/v1/automation-log`, `POST /api/v1/automation-log/:receiptId/retry` — present always, but **gated** on `CEZ_AUTOMATIONS=1` (#801, off by default): every route above answers `409` naming the flag, reads included. Unlike the inbox's `200 []` degradation, an off automations read refuses rather than answering empty — `{automations: []}` would read as "you have configured none", and a client would then offer to create one against a `409`ing POST. The routes themselves must keep existing and must behave exactly as before once the flag is on.
 - Runs: `GET/POST /api/v1/runs`, `GET /api/v1/runs/:id`, `PATCH /api/v1/runs/:id`, `PATCH/DELETE /api/v1/runs/:id/queued-messages/:msgId`, `POST /api/v1/runs/:id/{cancel,messages,finish,continue,open-in-cli,open-in,pr,archive,read,remove-worktree,git/commit,git/push}`, `POST /api/v1/runs/{archive-finished,read-all}`, `DELETE /api/v1/runs/:id`, `GET /api/v1/runs/:id/{handoff,diff,changes,files,commits,events}`, `GET /api/v1/runs/:id/commit/:sha`, `GET /api/v1/runs/:id/images/:file`
 - Worktrees: `GET /api/v1/worktrees`, `POST /api/v1/worktrees/reclaim`
 - Open-in: `GET /api/v1/open-targets`
@@ -206,6 +206,43 @@ an empty value, and an unset variable all preserve the default multi-project beh
 - **No deprecation alias**: no previously accepted input or default behavior changed. The explicit
   flag is the boundary authorizing the narrower protected surface, and removing it restores the
   protected default wholesale, so an old-spelling compatibility window would serve no purpose.
+
+## GitHub automations — opt-in gating (#801), 2026-08-07
+
+GitHub automations (spec `.ai/specs/2026-07-25-github-automations.md`) shipped gated only by forge
+availability, so every project with a GitHub remote saw the feature and there was no way to switch
+it off. `CEZ_AUTOMATIONS=1` makes the whole surface opt-in and **off by default**. Activation is
+strict: only the exact string `1` enables it; `true`, `yes`, an empty value, and an unset variable
+all keep it off. The flag is read at boot — the workspace scheduler starts once, on `listening` —
+so set it and restart, exactly like `CEZ_FOLLOWUPS`.
+
+This deliberately flips the *default* answers of section 2's automations routes, the same kind of
+break the "Follow-up inbox default flip (#471)" entry above documents, taken on an explicit
+instruction rather than silently.
+
+- **Broken**: the *default* answers of `GET/POST /api/v1/automations`,
+  `GET/PUT/DELETE /api/v1/automations/:id`, `POST /api/v1/automations/:id/{enable,pause,check}`,
+  `GET /api/v1/automation-checks/:checkId`, `GET /api/v1/automation-log` and
+  `POST /api/v1/automation-log/:receiptId/retry` — all now `409` with a reason naming the flag,
+  under every one of the three scope spellings. The default behavior of the workspace automation
+  scheduler also changes: it no longer starts, so a default cezar makes no GitHub requests on the
+  operator's behalf and launches no runs from them.
+- **Additive on health**: `capabilities.automations` is a new required boolean on the CORS-open
+  `GET /api/v1/health`. Every pre-existing field stays byte-identical, so a consumer that ignores
+  the key sees no change; it is what the cockpit's nav gate reads.
+- **Not broken**: every route still exists and behaves exactly as before under
+  `CEZ_AUTOMATIONS=1`; the storage formats of `automations.json`, the runtime-state files, the
+  receipts and the execution log are unchanged; `RunRecord.automation` provenance on already
+  launched runs is untouched, and the cockpit keeps showing it (as plain text rather than a link
+  into the disabled view). The per-automation `enabled` toggle, the no-backfill baseline, the
+  bounded filters and the polling caps are all unchanged — the flag wraps the feature, it does not
+  reshape it.
+- **Non-destructive rollback**: the gate never deletes, rewrites, or migrates automation
+  definitions, receipts, or frozen high-watermarks. Set `CEZ_AUTOMATIONS=1` and restart to get the
+  feature back exactly as it was; no manual repair or state migration is required.
+- **No deprecation alias**: the flag *is* the migration path — one env var restores the previous
+  behavior wholesale, which is what the "keep the old spelling for a minor release" rule exists to
+  provide.
 
 ## When in doubt
 
