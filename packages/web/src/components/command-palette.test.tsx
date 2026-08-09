@@ -62,7 +62,7 @@ function skill(overrides: Partial<Skill> & { name: string; source: Skill['source
 }
 
 /** Health with/without a working forge — what gates the Views group's GitHub row (R6 1.1). */
-function health(forgeAvailable: boolean): HealthResponse {
+function health(forgeAvailable: boolean, automations = false): HealthResponse {
   return {
     version: '0.0.0-test',
     projects: [],
@@ -72,7 +72,7 @@ function health(forgeAvailable: boolean): HealthResponse {
     checks: [],
     defaultRunner: 'claude',
     forge: forgeAvailable ? { kind: 'github', available: true } : null,
-    capabilities: { localHandoff: true, tokenMetrics: true, tokenUsageMetrics: true, costMetrics: true, followups: true, singleProject: false },
+    capabilities: { localHandoff: true, tokenMetrics: true, tokenUsageMetrics: true, costMetrics: true, followups: true, singleProject: false, automations },
   }
 }
 
@@ -98,16 +98,19 @@ function renderPalette({
   skills = [] as Skill[],
   theme,
   forge = true,
+  automations = false,
   uiState = {} as Record<string, unknown>,
 }: {
   runs?: RunRecord[]
   skills?: Skill[]
   theme?: Theme
   forge?: boolean
+  /** `capabilities.automations` (#801) — off by default, exactly as a default server reports. */
+  automations?: boolean
   uiState?: Record<string, unknown>
 } = {}) {
   if (theme) localStorage.setItem(THEME_STORAGE_KEY, theme)
-  serve({ '/api/v1/runs': runs, '/api/v1/skills': skills, '/api/v1/health': health(forge), '/api/v1/ui-state': uiState })
+  serve({ '/api/v1/runs': runs, '/api/v1/skills': skills, '/api/v1/health': health(forge, automations), '/api/v1/ui-state': uiState })
   render(
     <QueryClientProvider client={createQueryClient()}>
       <ThemeProvider>
@@ -184,7 +187,7 @@ describe('opening and closing', () => {
 
 describe('Views group', () => {
   it('lists the 8 nav destinations plus New task with its C hint', async () => {
-    renderPalette()
+    renderPalette({ automations: true })
     openWith({ metaKey: true })
     await screen.findByRole('dialog')
 
@@ -199,6 +202,22 @@ describe('Views group', () => {
     expect(views[8]?.textContent).toContain('New task')
     // The chip advertises `c` — ⌘N is browser-reserved and only fires in the desktop shell.
     expect(views[8]?.textContent).toContain('C')
+  })
+
+  // #801: the palette's Views group renders through the same `visibleNavItems` the sidebar does,
+  // so the two can never disagree about whether Automations exists.
+  it('omits Automations while the capability is off — the default', async () => {
+    renderPalette()
+    openWith({ metaKey: true })
+    await screen.findByRole('dialog')
+
+    await waitFor(() =>
+      expect(document.querySelectorAll('[data-slot="palette-view"]')).toHaveLength(8),
+    )
+    const views = [...document.querySelectorAll('[data-slot="palette-view"]')]
+    expect(views.map((view) => view.getAttribute('data-nav-to'))).toEqual([
+      '/', '/inbox', '/git', '/github', '/skills', '/workflows', '/settings', '/new',
+    ])
   })
 
   // R6 Step 1.1: the palette must not offer a GitHub view the sidebar honestly hides.

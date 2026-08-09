@@ -1,5 +1,77 @@
 # Unreleased
 
+# 0.9.3 (2026-08-09)
+
+Maintenance release on top of 0.9.2. Everything here is a cherry-pick from `main`; the larger
+0.9.x features (per-project agent accounts, workspace-wide ⌘K search, auto-resume after a usage
+limit, the project General settings page) stay on `main` for the next minor.
+
+## ✨ Features
+- ✨ **Advanced users can opt out of repository-root run serialization.** Set the exact value
+  `CEZ_DISABLE_REPO_LOCK=1` to let runs executing in the shared checkout overlap, including
+  explicit `worktree=false` runs, non-Git degradation, and continuations whose worktree cannot be
+  restored. The safe default is unchanged and isolated worktree runs are unaffected. This escape
+  hatch is intentionally dangerous: concurrent agents can overwrite each other's files or Git
+  state, so cezar emits a visible unsafe-mode note whenever it is active. (#762)
+- ✨ **GitHub Automations are now opt-in behind `CEZ_AUTOMATIONS=1`.** They shipped gated only by
+  forge availability, so any project with a GitHub remote had them on with no way to switch them
+  off. Off — the new default — nothing polls GitHub and no run is ever launched on your behalf:
+  the workspace scheduler never starts, every automations route answers `409` naming the flag, the
+  nav item drops out of the sidebar, the mobile drawer, ⌘K and every project group, the
+  `/automations*` routes render a disabled state instead of an editor whose requests would fail,
+  and the GitHub tab's "Set up automations" shortcut is gone. A task launched while automations
+  were on keeps its provenance chip forever; it just stops being a link. Nothing is destroyed —
+  definitions, receipts and high-watermarks are untouched, so setting the flag and restarting
+  brings the feature back exactly as it was. `GET /api/v1/health` gained
+  `capabilities.automations` so the cockpit and the server can never disagree about it. (#801,
+  #802)
+- ✨ **The sidebar quick-list reads like task names, not run ids.** Recent tasks in the sidebar
+  show the same readable title the Tasks table does, so you can find the run you mean without
+  opening it. (#789)
+
+## 🐛 Fixes
+- 🐛 **A task that parked on `monitoring` now re-checks its own work instead of waiting for you.**
+  A run that ended a turn with `CEZ:MONITORING` — waiting on CI, a long test command, a sub-agent —
+  had no timer at all: 0.9.2 removed the 15-minute idle timeout that used to bound a parked monitor
+  and replaced it with a re-check cadence that shipped switched off. Since cezar has no
+  process-exit callback, no CI webhook and no sub-agent-completion event, nothing could resume the
+  run, and tasks sat in `monitoring` for hours until someone typed into them. The cadence now
+  defaults to **5 minutes**, bounded by the existing 40-wakeup safety cap. Settings → Resources →
+  *Monitoring wake-up* → **Park until resumed** restores the old behaviour explicitly, and a
+  workspace that already chose it keeps it. (#810)
+- 🐛 **`/skill` typed into a finished task's reply box works again.** Registry slash skills were
+  expanded only for messages delivered into a live session, so a Reply into a finished run — and
+  every restart recovery, which takes the same path — handed the raw `/om-...` to the agent CLI,
+  which answered "Unknown skill". It looked intermittent because starting a new task worked. Both
+  the continuation's opening message and its follow-ups now expand against the same registry. (#811)
+- 🐛 **The composer follows the project you are in, not the folder cezar was started from.**
+  Launched from an umbrella workspace directory or any non-Git folder, every registered project
+  silently lost worktree isolation: the Worktree chip disappeared, parallel variants were stuck at
+  ×1, runs executed in the working tree, and Push went dark on the Changes tab — while the
+  `base:` pill in the same row listed the project's branches correctly. (#791, #792)
+- 🐛 **A task's diff stat counts that task's work again.** The number is now anchored at the
+  freshest base *and* at the branch the run found, so a review or QA run that repoints its
+  worktree onto the branch under review no longer attributes that whole branch's history to the
+  task. (#782)
+- 🐛 **Opening the cockpit on your phone no longer rearranges it on your desktop.** Which sidebar
+  project groups are collapsed, and which page a bare `/` restores, were stored workspace-wide in
+  `~/.cezar/ui-state.json` — so every open cockpit shared one answer: the last client to navigate
+  decided where the next launch landed on every other client, and a group collapsed on a narrow
+  screen collapsed everywhere. Both now live in each browser's own storage, which is also what they
+  always described. Each toggle costs zero requests, the sidebar paints its real state on the first
+  frame instead of after a fetch, and the bare-root restore no longer waits on the UI-state read.
+  The server keys stay accepted and round-tripped for older cockpits; existing collapse state and a
+  remembered location are workspace-wide values with no per-browser answer yet, so each browser
+  starts from the defaults once and remembers from there. (#786)
+
+## 🧹 Internal
+- The repository ships a root `LICENSE` file (MIT). Every manifest named the license but the repo
+  root had no license text; the published `@open-mercato/cezar` tarball already carried its own
+  copy and is unaffected. (#796)
+- Two run-lifecycle tests synchronize on the transition they are about instead of racing a timer:
+  the repository-root lease test (#800) and the continuation model-identity test, which polled for
+  a terminal status that the run still carried for a tick after Continue was pressed.
+
 # 0.9.2 (2026-08-04)
 
 ## ⚠️ Breaking
