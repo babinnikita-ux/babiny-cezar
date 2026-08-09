@@ -21,6 +21,8 @@ import type {
   AgentConfigListing,
   ApiRun,
   ArchiveFinishedResponse,
+  MarkAllReadResponse,
+  CancelAutoResumeResponse,
   CancelResponse,
   ChangesPayload,
   CheckoutProjectInput,
@@ -54,6 +56,7 @@ import type {
   MessageResponse,
   RemoveQueuedMessageResponse,
   OpenInCliResponse,
+  OpenProjectInResponse,
   OpenTargetsResponse,
   ParsedWorkflow,
   PatchRunInput,
@@ -77,6 +80,7 @@ import type {
   Runner,
   RunnerModelCatalogResponse,
   RunRecord,
+  RunsIndexResponse,
   WorktreeEntry,
   SaveWorkflowInput,
   SaveWorkflowResponse,
@@ -433,6 +437,13 @@ export async function getRuns(opts?: ReadOptions): Promise<ApiRun[]> {
  *  correct whatever scope is mounted. */
 export async function getProjectRuns(projectId: string, opts?: ReadOptions): Promise<ApiRun[]> {
   return unwrap(await cez.api.v1.p[':projectId'].runs.$get({ param: { projectId } }, init(opts)), '/runs')
+}
+
+/** The cross-project task index (`GET /api/v1/workspace/runs-index`) — what lets ⌘K find a task
+ *  without knowing which project it lives in. Workspace-level like the registry, so it has no
+ *  project-scoped spelling and never takes `queryScope()`. */
+export async function getRunsIndex(opts?: ReadOptions): Promise<RunsIndexResponse> {
+  return unwrap(await cez.api.v1.workspace['runs-index'].$get({}, init(opts)), '/workspace/runs-index')
 }
 
 export async function getRun(id: string, opts?: ReadOptions): Promise<ApiRun> {
@@ -993,6 +1004,18 @@ export async function archiveRun(id: string, archived = true): Promise<RunRecord
   )
 }
 
+/** Stop THIS task from resuming itself after a usage limit (spec
+ *  2026-08-03-auto-resume-after-usage-limit) — the per-task twin of the workspace setting.
+ *  Idempotent: a task with nothing scheduled answers the same way. */
+export async function cancelAutoResume(id: string): Promise<CancelAutoResumeResponse> {
+  return unwrap(
+    await cez.api.v1.p[':projectId'].runs[':id']['auto-resume'].$delete({
+      param: { projectId: queryScope(), id: encodeURIComponent(id) },
+    }),
+    runPath(id, '/auto-resume'),
+  )
+}
+
 /** Sweep every finished (done/failed/cancelled) active run into the archive in one call —
  *  the Tasks header's "Archive finished" button. */
 export async function archiveFinished(): Promise<ArchiveFinishedResponse> {
@@ -1001,6 +1024,39 @@ export async function archiveFinished(): Promise<ArchiveFinishedResponse> {
       param: { projectId: queryScope() },
     }),
     '/runs/archive-finished',
+  )
+}
+
+/** Read receipt (#unread-done-items): opening a task's thread marks it read. Bodyless —
+ *  the server stamps `seenAt = now` and answers with the updated record. */
+export async function markRunSeen(id: string): Promise<RunRecord> {
+  return unwrap(
+    await cez.api.v1.p[':projectId'].runs[':id'].read.$post({
+      param: { projectId: queryScope(), id: encodeURIComponent(id) },
+    }),
+    runPath(id, '/read'),
+  )
+}
+
+/** Put a finished task back to unread (#775): the inverse of `markRunSeen`. Bodyless — the
+ *  server CLEARS `seenAt` (an absent receipt is what every reader already treats as unread)
+ *  and answers with the updated record. */
+export async function markRunUnseen(id: string): Promise<RunRecord> {
+  return unwrap(
+    await cez.api.v1.p[':projectId'].runs[':id'].unread.$post({
+      param: { projectId: queryScope(), id: encodeURIComponent(id) },
+    }),
+    runPath(id, '/unread'),
+  )
+}
+
+/** "Mark all read": stamp every currently-unread finished run in one call. */
+export async function markAllRunsSeen(): Promise<MarkAllReadResponse> {
+  return unwrap(
+    await cez.api.v1.p[':projectId'].runs['read-all'].$post({
+      param: { projectId: queryScope() },
+    }),
+    '/runs/read-all',
   )
 }
 
@@ -1157,6 +1213,19 @@ export async function getOpenTargets(opts?: ReadOptions): Promise<OpenTargetsRes
       init(opts),
     ),
     '/open-targets',
+  )
+}
+
+/** Open the ACTIVE PROJECT's own folder in the chosen local app (Settings → "Project folder").
+ *  No path travels: the server opens the scoped project's registered root. 400 for an app this
+ *  machine does not have or a `cli:` handoff, 409 in hosted mode or when the launch failed. */
+export async function openProjectIn(target: string): Promise<OpenProjectInResponse> {
+  return unwrap(
+    await cez.api.v1.p[':projectId']['open-in'].$post({
+      param: { projectId: queryScope() },
+      json: { target },
+    }),
+    '/open-in',
   )
 }
 

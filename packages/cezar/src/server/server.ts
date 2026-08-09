@@ -29,7 +29,12 @@ import type {
   GroupResponse,
   GroupVariant,
   PickVariantResponse,
+  RunIndexEntry,
+  RunsIndexResponse,
 } from '@open-mercato/cezar-contract';
+// A contract VALUE, like `workspaceUiStateSchema` in workspace/migrations.ts — the request
+// schema this route validates with is the same one the client compiles against.
+import { openProjectInSchema } from '@open-mercato/cezar-contract';
 import { detectEnvironment } from '../core/backend-detect.ts';
 import type { ContentBlock } from '../core/agent-runner.ts';
 import { AGENT_MODELS_LOCKED_ERROR, agentModelsLocked } from '../core/agent-model-policy.ts';
@@ -69,6 +74,7 @@ import {
   readRunHistoryPage,
   validateLiveCursor,
 } from '../runs/event-history.ts';
+import { readRunIndexFromDisk } from '../runs/run-index.ts';
 import { isV2WireEventType } from '../runs/ui-event-sink.ts';
 import {
   runEventsQuerySchema,
@@ -404,6 +410,9 @@ export function projectRouteManifest(app: Hono): ProjectRouteInfo[] {
 /** 409 body for the inbox mutators while the follow-up inbox is off (#471). */
 const FOLLOWUPS_OFF = 'the follow-up inbox is disabled — set CEZ_FOLLOWUPS=1 to enable it';
 
+/** 409 body for every automations route while GitHub automations are off (#801). */
+const AUTOMATIONS_OFF = 'GitHub automations are disabled — set CEZ_AUTOMATIONS=1 to enable them';
+
 // ---- variant-compare response shapes (spec 010) ----------------------------
 // Named and exported so `api-types.test.ts` can drift-guard the cockpit's
 // hand-mirrored copies (`web/app/src/api/types.ts`) against the real thing.
@@ -469,6 +478,7 @@ export interface WorkspaceConfigResponse {
     maxParallel: number;
     maxMonitoringSessions: number;
     monitoringWakeIntervalMinutes: number | null;
+    autoResumeOnUsageLimit: boolean;
     memoryLimitMb: number | null;
     worktreeRetentionDefault: number;
   };
@@ -677,6 +687,12 @@ const workspaceUiStateSchema = z
     appearance: appearanceSchema.optional(),
     notifications: z.object({ enabled: z.boolean().optional() }).passthrough().optional(),
     dismissedProviderAuthFailures: providerAuthDismissalsSchema.optional(),
+    // LEGACY, like `sidebar` below: both moved into the browser's own
+    // localStorage (packages/web/src/lib/{last-location,sidebar-collapse}.ts),
+    // because one workspace-wide answer meant the last client to navigate — a
+    // phone, a second window — decided where every other client's next launch
+    // landed, and whose sidebar groups were shut. Kept named and bounded here
+    // so a cockpit from before that change still round-trips and validates.
     lastLocation: z
       .object({
         projectId: z.string().min(1).max(64),
@@ -2821,6 +2837,7 @@ export function createApp(deps: ServerDeps) {
       maxParallel: config.resources.maxParallel,
       maxMonitoringSessions: config.resources.maxMonitoringSessions,
       monitoringWakeIntervalMinutes: config.resources.monitoringWakeIntervalMinutes,
+      autoResumeOnUsageLimit: config.resources.autoResumeOnUsageLimit,
       memoryLimitMb: config.resources.memoryLimitMb,
       worktreeRetentionDefault: config.resources.worktreeRetentionDefault,
     },
@@ -2888,6 +2905,9 @@ export function createApp(deps: ServerDeps) {
           }
           if (resources?.monitoringWakeIntervalMinutes !== undefined) {
             config.resources.monitoringWakeIntervalMinutes = resources.monitoringWakeIntervalMinutes;
+          }
+          if (resources?.autoResumeOnUsageLimit !== undefined) {
+            config.resources.autoResumeOnUsageLimit = resources.autoResumeOnUsageLimit;
           }
           if (resources?.memoryLimitMb !== undefined) config.resources.memoryLimitMb = resources.memoryLimitMb;
           if (resources?.worktreeRetentionDefault !== undefined) {
@@ -2963,6 +2983,7 @@ export function createApp(deps: ServerDeps) {
         maxParallel: z.number().int().min(1).max(16).optional(),
         maxMonitoringSessions: z.number().int().min(0).max(16).optional(),
         monitoringWakeIntervalMinutes: z.number().int().min(1).max(60).nullable().optional(),
+        autoResumeOnUsageLimit: z.boolean().optional(),
         memoryLimitMb: z.number().int().min(0).max(1_048_576).nullable().optional(),
         worktreeRetentionDefault: z.number().int().min(0).max(1000).optional(),
       })
@@ -3196,12 +3217,35 @@ export function createApp(deps: ServerDeps) {
   };
   const manualChecks = new Map<string, ManualCheck>();
 
+  /**
+   * The automations gate (#801): with `CEZ_AUTOMATIONS` unset, every route of the feature
+   * answers 409 before touching a store, a lease or GitHub.
+   *
+   * Written as MIDDLEWARE rather than a line in each handler so the family cannot drift: a route
+   * added to either chain below inherits the gate from its path, where a per-handler check is one
+   * omission away from an ungated endpoint.
+   *
+   * Registered against EXPLICIT paths, never `use('*')`. Both chains are mounted with
+   * `.route('/', …)` alongside a dozen unrelated sub-apps, and `route()` re-registers a sub-app's
+   * middleware under the mount prefix — so a `'*'` here would gate the entire `/api/v1` surface,
+   * including `/health`. The two-line pairing (`/automations` and `/automations/*`) is what makes
+   * a path match both the collection and everything under it.
+   */
+  const requireAutomations = async (c: Context, next: Next) => {
+    if (!capabilities().automations) return c.json({ error: AUTOMATIONS_OFF }, 409);
+    await next();
+  };
+
   // ---- chained family: GitHub automations (project-scoped) ----
   // Every handler below reads `c.get('project')` — the definitions, their runtime state and the
   // execution log are per-project files — so the family is project-scoped and mounted with the
   // rest of the mirrored table. The one exception is the manual-check read, which touches no
   // project at all; it is its own workspace-level family below.
   const automationsRoutes = new Hono<ProjectApiEnv>()
+    .use('/automations', requireAutomations)
+    .use('/automations/*', requireAutomations)
+    .use('/automation-log', requireAutomations)
+    .use('/automation-log/*', requireAutomations)
     .get('/automations', async (c) => {
       const { root, automationStore } = c.get('project');
       const forge = resolveForge(await getRepoInfo(root));
@@ -3415,6 +3459,7 @@ export function createApp(deps: ServerDeps) {
   // above, keyed by an unguessable id that the project-scoped POST hands back. Mounting it under
   // `/api/v1/p/:projectId` too would be a second spelling of a lookup that consults no project.
   const automationChecksRoutes = new Hono()
+    .use('/automation-checks/*', requireAutomations)
     .get('/automation-checks/:checkId', (c) => {
       const check = manualChecks.get(c.req.param('checkId'));
       return check ? c.json(check) : c.json({ error: 'not found' }, 404);
@@ -3454,17 +3499,50 @@ export function createApp(deps: ServerDeps) {
   const runsRoutes = new Hono<ProjectApiEnv>()
     .get('/runs', (c) => c.json(c.get('project').store.listRuns().map(withUsage)))
 
-    // Registered before the `/:id/...` routes so "archive-finished" never
-    // matches as a run id.
+    // Registered before the `/:id/...` routes so "archive-finished" and "read-all"
+    // never match as a run id.
     .post('/runs/archive-finished', (c) => c.json({ archived: c.get('project').store.archiveFinished() }))
+
+    // The read-receipt sweep (#unread-done-items) — the mark-read twin of the archive
+    // sweep above, and under the same registration-order guard.
+    .post('/runs/read-all', (c) => c.json({ read: c.get('project').store.markAllRead() }))
 
     .post('/runs/:id/archive', jsonZodValidator(archiveSchema, { absent: ({}) }), async (c) => {
       const { store } = c.get('project');
       const id = c.req.param('id');
       // An empty/absent body archives (the common case); a malformed body degrades
       // to `{}` just as before, but a wrong-typed `archived` is now a 400 (#429).
+      // Archiving also retires any pending usage-limit resume, but that rule belongs to
+      // `setArchived` itself — the bulk sweep must obey it too (spec
+      // 2026-08-03-auto-resume-after-usage-limit).
       const parsed = { data: c.req.valid('json') };
       const run = store.setArchived(id, parsed.data.archived !== false);
+      return run ? c.json(run) : c.json({ error: 'not found' }, 404);
+    })
+
+    // The per-task off switch for that resume (the workspace setting is Settings → Resources).
+    // Idempotent: a run with nothing pending answers 200 too, because "this task will not
+    // resume itself" is equally true either way.
+    .delete('/runs/:id/auto-resume', (c) => {
+      const { store, manager } = c.get('project');
+      const id = c.req.param('id');
+      if (!store.getRun(id)) return c.json({ error: 'not found' }, 404);
+      manager.cancelAutoResume(id);
+      return c.json({ cancelled: true as const });
+    })
+
+    .post('/runs/:id/read', (c) => {
+      // No body: opening a thread marks it read, full stop. Stamps `seenAt = now` and
+      // returns the updated record (which also rides the `run` SSE via `touch`).
+      const run = c.get('project').store.setRead(c.req.param('id'));
+      return run ? c.json(run) : c.json({ error: 'not found' }, 404);
+    })
+
+    .post('/runs/:id/unread', (c) => {
+      // The mark-unread twin (#775) — bodyless like its read counterpart: clearing the
+      // receipt is the whole action, so there is nothing to say about it. Sits under
+      // `/runs/:id/`, so the `read-all` registration-order caveat above does not apply.
+      const run = c.get('project').store.setUnread(c.req.param('id'));
       return run ? c.json(run) : c.json({ error: 'not found' }, 404);
     })
 
@@ -3993,6 +4071,8 @@ export function createApp(deps: ServerDeps) {
       if (!workingDirectory) return c.json({ error: NO_WORKTREE }, 409);
       const result = await collectChanges(workingDirectory, run.baseBranch ?? 'HEAD', {
         taskBranch: run.branch,
+        // Anchors a repointed worktree at the branch as this run found it (#751).
+        runStartedAt: run.startedAt,
         // A read-only GET against the user's real checkout must never modify its index.
         intentToAdd: run.worktreePath ? undefined : false,
       });
@@ -4278,7 +4358,34 @@ export function createApp(deps: ServerDeps) {
 
   // ---- chained family: open-targets (project-scoped) ----
   const openTargetsRoutes = new Hono<ProjectApiEnv>()
-    .get('/open-targets', (c) => c.json({ targets: capabilities().localHandoff ? detectOpenTargets() : [] }));
+    .get('/open-targets', (c) => c.json({ targets: capabilities().localHandoff ? detectOpenTargets() : [] }))
+
+    // Open the PROJECT ROOT itself (Settings → "Project folder" → Open with). The run route
+    // above opens a task worktree and needs a run to name one; this is the repo the cockpit is
+    // scoped to, which the scope middleware has already resolved — so no path is accepted from
+    // the client and there is nothing to contain.
+    .post('/open-in', jsonZodValidator(openProjectInSchema), async (c) => {
+      const { root } = c.get('project');
+      if (!capabilities().localHandoff) {
+        return c.json(
+          { error: 'local handoff is disabled — this cockpit runs in hosted mode (CEZ_REMOTE)' },
+          409,
+        );
+      }
+      const { target } = c.req.valid('json');
+      // Refused here rather than left to the menu, on the same principle as the accounts route:
+      // a `cli:<runner>` handoff would START AN AGENT in the checkout everything else runs in a
+      // worktree to protect. Which app APPLIES is a property of the route, not of one client.
+      if (agentCliRunner(target) !== null) {
+        return c.json({ error: 'agent CLIs open a task worktree, not the project folder' }, 400);
+      }
+      if (!detectOpenTargets().some((candidate) => candidate.id === target)) {
+        return c.json({ error: `no such app on this machine: ${target}` }, 400);
+      }
+      const opened = await openInApp(target, root);
+      if (!opened) return c.json({ error: `could not open ${target}`, path: root }, 409);
+      return c.json({ opened: true as const, path: root });
+    });
 
   // Agent screenshots — image blocks the run manager persisted out of tool
   // results (persistImage). `basename` pins reads inside the run's own dir.
@@ -5136,6 +5243,88 @@ export function createApp(deps: ServerDeps) {
     .route('/', configRoutes)
     .route('/', agentConfigRoutes);
 
+  // ---- chained family: the cross-project run index (workspace-level) -------
+  /**
+   * How many runs each project may contribute, newest first. The index is a FINDER, not a
+   * listing: past the newest couple of hundred per project you are looking for something the
+   * project's own Tasks table answers better, and every extra row is a DOM node the palette's
+   * filter walks on each keystroke. `truncated` names the projects this bit, so a consumer never
+   * has to pretend the list is complete.
+   */
+  const RUNS_INDEX_PER_PROJECT = 200;
+
+  /** `RunRecord` → the wire row. Optional keys are spread CONDITIONALLY: writing
+   *  `titleSummary: run.titleSummary` types a key as always-present that `JSON.stringify` then
+   *  drops when it is undefined, which is exactly the drift the parity guard fails on. */
+  const runIndexEntry = (projectId: string, run: RunRecord): RunIndexEntry => ({
+    projectId,
+    id: run.id,
+    title: run.title,
+    ...(run.titleSummary !== undefined ? { titleSummary: run.titleSummary } : {}),
+    ...(run.titleOrigin !== undefined ? { titleOrigin: run.titleOrigin } : {}),
+    status: run.status,
+    ...(run.activity !== undefined ? { activity: run.activity } : {}),
+    createdAt: run.createdAt,
+    ...(run.finishedAt !== undefined ? { finishedAt: run.finishedAt } : {}),
+    ...(run.seenAt !== undefined ? { seenAt: run.seenAt } : {}),
+    archived: run.archived,
+    ...(run.autoResumeAt !== undefined ? { autoResumeAt: run.autoResumeAt } : {}),
+  });
+
+  /**
+   * `GET /workspace/runs-index` — every registered project's recent tasks in one slim answer, so
+   * ⌘K can find a task without knowing which project it lives in.
+   *
+   * Workspace-level and single-mount for the obvious reason: a project-scoped spelling of "all
+   * projects" is a contradiction. The per-project source is chosen the same way the automation
+   * coordinator's boot fan-out chooses it (`bootContext` for the boot project, `contexts.peek`
+   * for anything this process already owns, disk otherwise) — and never `contexts.context()`,
+   * which would build a context, prune worktrees and `recover()` running agents. Typing in a
+   * search box must not resume work; see `runs/run-index.ts`.
+   */
+  const runsIndexRoutes = new Hono()
+    .get('/workspace/runs-index', async (c) => {
+      let projects: ProjectListEntry[] = [];
+      try {
+        const selector = capabilities().singleProject
+          ? { projectId: await resolveBootProject() }
+          : undefined;
+        projects = await listProjects(selector);
+      } catch {
+        // unreadable workspace — an empty index, never a 500. The palette degrades to the
+        // active project's own run list, which it holds either way.
+      }
+      const bootId = await resolveBootProject(projects);
+      const runs: RunIndexEntry[] = [];
+      const truncated: string[] = [];
+      for (const project of projects) {
+        // No folder, no runs to read. `not-git` still has an `.ai/cezar` worth indexing.
+        if (project.status === 'missing') continue;
+        const owned = project.id === bootId ? bootContext : contexts.peek(project.id);
+        // `listRuns()` already sorts newest-first; the disk reader returns file order, so both
+        // paths get sorted below rather than trusting either.
+        //
+        // Archived runs are INCLUDED. The active project's rows reach the palette through
+        // `GET /runs`, which has always carried them, and excluding them here would mean a task
+        // is findable while you stand in its project and vanishes the moment you leave — the
+        // exact asymmetry a cross-project finder exists to remove.
+        const recent = (
+          owned ? owned.store.listRuns() : readRunIndexFromDisk(join(project.root, '.ai/cezar'))
+        ).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+        if (recent.length > RUNS_INDEX_PER_PROJECT) truncated.push(project.id);
+        for (const run of recent.slice(0, RUNS_INDEX_PER_PROJECT)) {
+          runs.push(runIndexEntry(project.id, run));
+        }
+      }
+      runs.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      const body: RunsIndexResponse = {
+        runs,
+        perProjectLimit: RUNS_INDEX_PER_PROJECT,
+        truncated,
+      };
+      return c.json(body);
+    });
+
   // Workspace-level families answer for the whole workspace, so they are single-mount: never a
   // project-scoped spelling, which would be a second surface to protect with no consumer.
   const workspaceV1 = new Hono()
@@ -5148,6 +5337,7 @@ export function createApp(deps: ServerDeps) {
     .route('/', workspaceConfigRoutes)
     .route('/', fsBrowseRoutes)
     .route('/', automationChecksRoutes)
+    .route('/', runsIndexRoutes)
     .route('/', workspaceEventsRoutes);
 
   // ---- mount ---------------------------------------------------------------
@@ -5192,6 +5382,11 @@ export function startServer(deps: ServerDeps, port: number): ServerType {
     semaphore: deps.semaphore,
     automationStore: (projectId, root) => automationCoordinator.store(projectId, root)!,
   });
+  // #801: GitHub automations are opt-in. Off, the flag must remove the BEHAVIOR and not merely
+  // the UI — no scheduler, no GitHub polling, no launched runs — so every entry point into the
+  // workspace scheduler below is gated on it. Read per call rather than captured, for the same
+  // reason `capabilities()` is inside `createApp`: tests flip the variable between apps.
+  const automationsEnabled = () => resolveCapabilities(process.env, deps.bindHost).automations;
   let rescheduleAutomations = () => {};
   const app = createApp({
     ...deps,
@@ -5245,7 +5440,13 @@ export function startServer(deps: ServerDeps, port: number): ServerType {
       };
     },
   });
-  rescheduleAutomations = () => { void automationScheduler.reschedule(); };
+  // The scheduler is inert until `start()` anyway (it constructs `stopped`), but the gate is
+  // stated here rather than inherited from that detail: a definition saved while the flag is off
+  // must not even ask the coordinator to refresh.
+  rescheduleAutomations = () => {
+    if (!automationsEnabled()) return;
+    void automationScheduler.reschedule();
+  };
   const unsubscribe = workspaceEvents.on((event, data) => {
     if (event === 'project-added') {
       const project = (data as { project?: { id?: unknown; root?: unknown; status?: unknown } }).project;
@@ -5254,7 +5455,7 @@ export function startServer(deps: ServerDeps, port: number): ServerType {
         void getRepoInfo(project.root).then((info) => {
           const parsed = parseRemote(info?.remote ?? '');
           if (parsed?.host === 'github.com') automationProjects.set(project.id as string, { root: project.root as string, owner: parsed.owner, repo: parsed.repo });
-          return automationScheduler.reschedule();
+          return rescheduleAutomations();
         });
       }
     } else if (event === 'project-removed') {
@@ -5263,7 +5464,7 @@ export function startServer(deps: ServerDeps, port: number): ServerType {
       if (typeof id === 'string') {
         automationCoordinator.remove(id);
         automationProjects.delete(id);
-        void automationScheduler.reschedule();
+        rescheduleAutomations();
       }
     }
   });
@@ -5272,6 +5473,10 @@ export function startServer(deps: ServerDeps, port: number): ServerType {
       const all = projects.some((project) => project.root === deps.repoRoot)
         ? projects : [{ id: deps.bootProjectId ?? 'default', root: deps.repoRoot, status: 'ok' as const }, ...projects];
       coordinator.start(all);
+      // #801: with automations off there is nothing to warm — no remote to resolve, no receipts
+      // to reconcile, and above all no scheduler to start. The skills-update coordinator above is
+      // a separate feature and starts either way.
+      if (!automationsEnabled()) return;
       void Promise.all(all.map(async (project) => {
         const parsed = parseRemote((await getRepoInfo(project.root))?.remote ?? '');
         if (parsed?.host === 'github.com') automationProjects.set(project.id, { root: project.root, owner: parsed.owner, repo: parsed.repo });
