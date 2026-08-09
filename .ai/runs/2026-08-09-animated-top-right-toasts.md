@@ -79,16 +79,16 @@ Lock the new lifecycle and the new anchor in unit tests, then run the repo's ful
 
 ### Phase 1: Two-phase dismissal in the store
 
-- [ ] 1.1 Add an `exiting` flag to `ToastItem` and re-publish instead of dropping at `TOAST_MS`
-- [ ] 1.2 Track pending timers so `resetToasts()` clears the queue and every scheduled handle
+- [x] 1.1 Add an `exiting` flag to `ToastItem` and re-publish instead of dropping at `TOAST_MS` — 7e2558c3
+- [x] 1.2 Track pending timers so `resetToasts()` clears the queue and every scheduled handle — 7e2558c3
 
 ### Phase 2: Top-right anchor and the enter/exit animation
 
-- [ ] 2.1 Re-anchor the toaster wrapper top-right with safe-area insets, `items-end`, and a raised z-layer
-- [ ] 2.2 Emit `data-state` and the `motion-safe:` enter/exit animation classes on each toast, preserving `data-slot`/`data-tone`/`role`
+- [x] 2.1 Re-anchor the toaster wrapper top-right with safe-area insets, `items-end`, and a raised z-layer — 7e2558c3
+- [x] 2.2 Emit `data-state` and the `motion-safe:` enter/exit animation classes on each toast, preserving `data-slot`/`data-tone`/`role` — 7e2558c3
 
 ### Phase 3: Tests and the validation gate
 
-- [ ] 3.1 Update the auto-dismiss test for the two-phase lifecycle (closed, then gone)
-- [ ] 3.2 Add regression tests for the top-right anchor and the open/closed animation state
+- [x] 3.1 Update the auto-dismiss test for the two-phase lifecycle (closed, then gone) — 7e2558c3
+- [x] 3.2 Add regression tests for the top-right anchor and the open/closed animation state — 7e2558c3
 - [ ] 3.3 Run the full validation gate (`npm run typecheck`, `npm test`, `npm run test:unit`, `npm run build`, `npm run test:package`)
