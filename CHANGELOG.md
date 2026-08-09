@@ -13,6 +13,18 @@ limit, the project General settings page) stay on `main` for the next minor.
   restored. The safe default is unchanged and isolated worktree runs are unaffected. This escape
   hatch is intentionally dangerous: concurrent agents can overwrite each other's files or Git
   state, so cezar emits a visible unsafe-mode note whenever it is active. (#762)
+- ✨ **GitHub Automations are now opt-in behind `CEZ_AUTOMATIONS=1`.** They shipped gated only by
+  forge availability, so any project with a GitHub remote had them on with no way to switch them
+  off. Off — the new default — nothing polls GitHub and no run is ever launched on your behalf:
+  the workspace scheduler never starts, every automations route answers `409` naming the flag, the
+  nav item drops out of the sidebar, the mobile drawer, ⌘K and every project group, the
+  `/automations*` routes render a disabled state instead of an editor whose requests would fail,
+  and the GitHub tab's "Set up automations" shortcut is gone. A task launched while automations
+  were on keeps its provenance chip forever; it just stops being a link. Nothing is destroyed —
+  definitions, receipts and high-watermarks are untouched, so setting the flag and restarting
+  brings the feature back exactly as it was. `GET /api/v1/health` gained
+  `capabilities.automations` so the cockpit and the server can never disagree about it. (#801,
+  #802)
 - ✨ **The sidebar quick-list reads like task names, not run ids.** Recent tasks in the sidebar
   show the same readable title the Tasks table does, so you can find the run you mean without
   opening it. (#789)
