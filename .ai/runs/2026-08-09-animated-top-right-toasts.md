@@ -69,11 +69,14 @@ Lock the new lifecycle and the new anchor in unit tests, then run the repo's ful
   toasts fired from inside a dialog, but it also means a toast now paints over a dialog's top
   edge. That is the accepted trade — a notification the user cannot see is worse than one that
   briefly overlaps a dialog corner — and it stays below the `z-[100]` image lightbox.
+- **Intermittent unrelated test.** `packages/cezar/src/server/open-in-app.test.ts` failed once across five full `npm test` runs on this branch (`ENOENT` on the stub call log its `waitFor` polls). The file is byte-identical to `main`, is server-side, and passes 10/10 in isolation — it loses a timing race only under full-suite load. Filed as #823 rather than fixed here, since touching an unrelated server test from a cockpit-UI PR would be scope creep.
 - **e2e contract drift.** `packages/web/e2e/{new-task,settings-skills,workflows}.e2e.ts` poll for
   `[data-slot="toast"]` / `[data-slot="toaster"]` text. Keeping those attributes unchanged is an
   explicit step, not a side effect.
 
 ## Progress
+
+PR: #820
 
 > Convention: `- [ ]` pending, `- [x]` done. Append ` — <commit sha>` when a step lands. Do not rename step titles.
 
@@ -86,9 +89,11 @@ Lock the new lifecycle and the new anchor in unit tests, then run the repo's ful
 
 - [x] 2.1 Re-anchor the toaster wrapper top-right with safe-area insets, `items-end`, and a raised z-layer — 7e2558c3
 - [x] 2.2 Emit `data-state` and the `motion-safe:` enter/exit animation classes on each toast, preserving `data-slot`/`data-tone`/`role` — 7e2558c3
+- [x] Post-review fix: clear the app shell's mobile header with a `md:` breakpoint pair — the flat 16px anchor covered the run status dot and kebab on phones — 69f27427
 
 ### Phase 3: Tests and the validation gate
 
 - [x] 3.1 Update the auto-dismiss test for the two-phase lifecycle (closed, then gone) — 7e2558c3
 - [x] 3.2 Add regression tests for the top-right anchor and the open/closed animation state — 7e2558c3
+- [x] Post-review fix: pin `motion-safe:duration-200` in the animation test so it cannot drift from `EXIT_MS` — 69f27427
 - [x] 3.3 Run the full validation gate (`npm run typecheck`, `npm test`, `npm run test:unit`, `npm run build`, `npm run test:package`) — 2ea68071
