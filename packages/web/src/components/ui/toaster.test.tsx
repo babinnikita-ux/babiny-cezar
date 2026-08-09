@@ -44,9 +44,13 @@ describe('Toaster', () => {
     const stack = document.querySelector('[data-slot="toaster"]')!
     const className = stack.className
     expect(className).toContain('fixed')
-    expect(className).toContain('top-[calc(16px+env(safe-area-inset-top))]')
+    expect(className).toContain('md:top-[calc(16px+env(safe-area-inset-top))]')
     expect(className).toContain('right-[calc(16px+env(safe-area-inset-right))]')
     expect(className).toContain('items-end')
+    // Below `md` the app shell renders its own 52px header whose right end holds the run
+    // status dot and kebab; anchoring at 16px there would cover the very controls #818 is
+    // about. The pair must stay a pair.
+    expect(className).toContain('top-[calc(61px+env(safe-area-inset-top))]')
     // The bottom-centre anchor this replaced must not linger — it is what put the toast on
     // top of the thread's action row (#818).
     expect(className).not.toContain('items-center')
@@ -64,6 +68,10 @@ describe('Toaster', () => {
     expect(item.className).toContain('motion-safe:slide-in-from-right-4')
     expect(item.className).toContain('motion-safe:data-[state=closed]:animate-out')
     expect(item.className).toContain('motion-safe:data-[state=closed]:slide-out-to-right-4')
+    // The animation duration and the store's EXIT_MS (200ms) remove the node together. Raise
+    // one without the other and the slide-out is unmounted mid-flight, so pin the class here:
+    // a failure points the editor straight at EXIT_MS in toaster.tsx.
+    expect(item.className).toContain('motion-safe:duration-200')
 
     act(() => vi.advanceTimersByTime(5000))
     expect(screen.getByRole('status').getAttribute('data-state')).toBe('closed')
