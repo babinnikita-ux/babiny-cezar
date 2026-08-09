@@ -1534,11 +1534,6 @@ export class RunManager {
     }
     this.armAutosave(state);
     if (record) seedHandoffFile(this.dataDir, record); // idempotent — normally already there
-    // Registry snapshot for `/skill` expansion. `execute` loads this for the workflow's own
-    // sessions; a continuation builds its OWN ActiveRun, and without this the resumed session
-    // expanded against an empty registry and leaked `/om-...` verbatim to the backend, which
-    // answered "Unknown skill" (#811). Best-effort — discovery must never break Continue.
-    state.skills = await discoverSkills(this.repoRoot).catch(() => [] as Skill[]);
 
     this.store.updateRun(runId, {
       status: 'running',
@@ -1555,6 +1550,17 @@ export class RunManager {
       backend,
     });
     this.store.appendEvent(runId, { type: 'step-start', stepId, name: 'Continue', kind: 'agent', iteration: 1 });
+    // Registry snapshot for `/skill` expansion. `execute` loads this for the workflow's own
+    // sessions; a continuation builds its OWN ActiveRun, and without this the resumed session
+    // expanded against an empty registry and leaked `/om-...` verbatim to the backend, which
+    // answered "Unknown skill" (#811). Best-effort — discovery must never break Continue.
+    //
+    // Loaded AFTER the run is marked `running`, not before: `continueRun` returns the moment it
+    // schedules this, so every await ahead of that write is a window in which the run still
+    // reads with its previous TERMINAL status. A directory scan there is long enough to be
+    // observed. Nothing between here and `startSession` reads `state.skills`, and no message can
+    // be delivered into a session that does not exist yet, so the invariant is unaffected.
+    state.skills = await discoverSkills(this.repoRoot).catch(() => [] as Skill[]);
     // Attachments pasted into the follow-up composer, on the same terms as a live-session
     // message (#357): persisted to the run's own image store so the thread renders the bubble's
     // images rather than a bare count, and handed to the agent BOTH as base64 blocks (so it can

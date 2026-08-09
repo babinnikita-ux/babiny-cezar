@@ -82,6 +82,29 @@ describe('model identity wiring (dry run)', () => {
     }
   }
 
+  /**
+   * Wait for a CONTINUATION to settle.
+   *
+   * `settle` alone cannot do it: `continueRun` returns as soon as it schedules
+   * `runContinuation`, whose first statement is an `await` — so for at least a tick the run
+   * still reads with the TERMINAL status it had before Continue was pressed, and a poll that
+   * starts by checking `TERMINAL.has(...)` returns on that stale value without ever observing
+   * the continuation. The old spelling passed only because the timing happened to work out;
+   * any change to what `runContinuation` awaits flipped it red.
+   *
+   * Synchronize on the transition instead of racing it (#800's lesson): the continuation's own
+   * step gains `startedAt` exactly once, monotonically, before the model is resolved — so it is
+   * a safe edge to wait on even when the turn then fails immediately.
+   */
+  async function settleContinuation(runId: string, stepId: string): Promise<void> {
+    const deadline = Date.now() + 20_000;
+    while (!store.getRun(runId)?.steps.find((s) => s.id === stepId)?.startedAt) {
+      if (Date.now() > deadline) throw new Error('continuation did not start in time');
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    await settle(runId);
+  }
+
   async function runToEnd(input: { task: string; model?: string }): Promise<string> {
     writeFileSync(argsFile, '', 'utf8'); // fresh capture per run
     const record = manager.startRun(workflow, input);
@@ -176,7 +199,7 @@ describe('model identity wiring (dry run)', () => {
     expect(manager.continueRun(id, { text: 'keep going', model: 'openrouter/some-model' })).toEqual({
       ok: true,
     });
-    await settle(id);
+    await settleContinuation(id, 'continue-1');
     const record = store.getRun(id);
     expect(record?.status).toBe('failed');
     expect(record?.error).toContain('openrouter');
