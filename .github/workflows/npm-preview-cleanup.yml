@@ -18,7 +18,7 @@ jobs:
     name: Remove pr-<N> dist-tag
     # Fork PRs never published a preview (see ci.yml publish-snapshot guard).
     if: github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, babiny-cezar]
     timeout-minutes: 5
 
     steps:
