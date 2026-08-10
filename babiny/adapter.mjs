@@ -521,8 +521,17 @@ export class BabinyAdapter {
       const delivery = boundedString(deliveryId, 128);
       if (!delivery) throw new AdapterError('missing GitHub delivery id', 'missing_delivery');
       const retry = candidate.labels.some((label) => RETRY_LABELS.has(label));
-      const key = taskKey(candidate.repository, candidate.number, delivery, retry && !this.state.tasks[`${candidate.repository}#${candidate.number}`]);
-      if (this.state.deliveries[delivery]) return { accepted: true, duplicate: true, task: publicTask(this.state.tasks[key] ?? {}) };
+      const baseKey = `${candidate.repository}#${candidate.number}`;
+      const existingBeforeDelivery = this.state.tasks[baseKey];
+      // A delivery is normally idempotent. If its first intake attempt was
+      // durably recorded as queued but never received a Cezar run (for
+      // example, a provider was unavailable or Cezar restarted), retry the
+      // same reconciliation/webhook delivery instead of parking it forever.
+      const retryableIntake = existingBeforeDelivery?.status === 'queued' && !existingBeforeDelivery.cezarRunId;
+      if (this.state.deliveries[delivery] && !retryableIntake) {
+        return { accepted: true, duplicate: true, task: publicTask(existingBeforeDelivery ?? {}) };
+      }
+      const key = taskKey(candidate.repository, candidate.number, delivery, retry && !existingBeforeDelivery);
       this.state.deliveries[delivery] = { at: this.now(), repository: candidate.repository, number: candidate.number };
       while (Object.keys(this.state.deliveries).length > MAX_DELIVERIES) {
         const oldest = Object.entries(this.state.deliveries).sort((a, b) => a[1].at - b[1].at)[0]?.[0];
