@@ -58,4 +58,32 @@ describe('a teardown cezar initiated (codex app-server)', () => {
     expect(events).toContainEqual({ type: 'error', message: 'model unavailable' });
     expect(events).toContainEqual({ type: 'turn-end' });
   }, 15_000);
+
+  it('keeps an active Codex turn alive beyond the default runner timeout', async () => {
+    const runner = new CodexAppServerRunner({ bin: mockBin, timeoutMs: 400 });
+    const events: AgentEvent[] = [];
+
+    const result = await runner.run(
+      { userPrompt: 'mock:periodic-activity', cwd: process.cwd() },
+      (event) => events.push(event),
+    );
+
+    expect(result.text).toContain('progress-5');
+    expect(events.some((event) => event.type === 'error')).toBe(false);
+    expect(events).toContainEqual({ type: 'turn-end' });
+  }, 15_000);
+
+  it('still terminates a silent Codex turn after the inactivity limit', async () => {
+    const runner = new CodexAppServerRunner({ bin: mockBin, timeoutMs: 100 });
+    const events: AgentEvent[] = [];
+
+    await runner.run(
+      { userPrompt: 'mock:silent-turn', cwd: process.cwd() },
+      (event) => events.push(event),
+    );
+
+    expect(events.some(
+      (event) => event.type === 'error' && event.message.includes('produced no activity'),
+    )).toBe(true);
+  }, 15_000);
 });

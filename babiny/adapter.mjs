@@ -279,6 +279,7 @@ function taskContext(candidate, spec) {
 }
 
 export function buildTaskSteps(candidate, spec, gateCommand = 'git diff --check') {
+  const gate = safeGateCommand(gateCommand);
   const context = taskContext(candidate, spec);
   const implementation = [
     'Implement the GitHub issue in the isolated Cezar worktree.',
@@ -289,8 +290,10 @@ export function buildTaskSteps(candidate, spec, gateCommand = 'git diff --check'
   ].join('\n');
   const review = [
     'Review the implementation in the current isolated worktree against the issue and repository conventions.',
-    'This is a read-only review: do not edit files, commit, push, deploy, or run commands.',
+    'This is a read-only review: do not edit files, commit, push, deploy, or run mutating commands.',
+    'You may use the local read-only file tools and, when available, read-only inspection commands such as pwd, ls, find, rg, sed, git status, git diff, git log, and git show to inspect the isolated worktree and exact diff. Do not use shell control operators or commands that write state.',
     'Report only concrete correctness, security, regression, and test gaps; if clean, say so explicitly.',
+    'For a clean final review, end the response with a line containing exactly CEZ:DONE. If you find a real issue, report it and do not emit CEZ:DONE.',
     context,
   ].join('\n');
   const fix = [
@@ -304,7 +307,7 @@ export function buildTaskSteps(candidate, spec, gateCommand = 'git diff --check'
       runner: spec.primary, model: modelFor(spec.primary), effort: effortFor(spec.primary), agentMode: 'implementation',
       allowedTools: implementationTools(), bashAllowlist: [...DEFAULT_BASH_ALLOWLIST],
     },
-    { id: 'gate-1', name: 'Repository local gate', command: gateCommand, onFail: { retry: 'implement', max: 2 } },
+    { id: 'gate-1', name: 'Repository local gate', command: gate, onFail: { retry: 'implement', max: 2 } },
     {
       id: 'review', name: 'Read-only review', prompt: review,
       runner: spec.reviewer, model: modelFor(spec.reviewer), effort: effortFor(spec.reviewer), agentMode: 'review',
@@ -315,7 +318,7 @@ export function buildTaskSteps(candidate, spec, gateCommand = 'git diff --check'
       runner: spec.primary, model: modelFor(spec.primary), effort: effortFor(spec.primary), agentMode: 'implementation',
       allowedTools: implementationTools(), bashAllowlist: [...DEFAULT_BASH_ALLOWLIST],
     },
-    { id: 'gate-2', name: 'Repository final gate', command: gateCommand, onFail: { retry: 'fix', max: 2 } },
+    { id: 'gate-2', name: 'Repository final gate', command: gate, onFail: { retry: 'fix', max: 2 } },
     {
       id: 'final-review', name: 'Final read-only review', prompt: review,
       runner: spec.reviewer, model: modelFor(spec.reviewer), effort: effortFor(spec.reviewer), agentMode: 'review',
@@ -324,13 +327,13 @@ export function buildTaskSteps(candidate, spec, gateCommand = 'git diff --check'
   ];
 }
 
-function safeGateCommand(command) {
+export function safeGateCommand(command) {
   if (typeof command !== 'string' || !command.trim()) return 'git diff --check';
   const value = command.trim();
   // Config is trusted, issue text is not. Keep the accepted surface to one
   // simple repository command and reject shell control operators.
   if (value.length > 240 || /[;&|`$<>\n\r]/.test(value)) return 'git diff --check';
-  if (!/^(git diff --check|npm (?:run )?(?:test|lint|typecheck|build)|pnpm (?:run )?(?:test|lint|typecheck|build)|pytest|cargo test|go test(?:\s+\S*)?|make test)$/.test(value)) {
+  if (!/^(git diff --check|npm (?:run )?(?:test|lint|typecheck|build)|pnpm (?:run )?(?:test|lint|typecheck|build)|PYTHONPATH=src python3 -m unittest discover -s tests -v|pytest|cargo test|go test(?:\s+\S*)?|make test)$/.test(value)) {
     return 'git diff --check';
   }
   return value;
@@ -519,8 +522,17 @@ export class BabinyAdapter {
       const delivery = boundedString(deliveryId, 128);
       if (!delivery) throw new AdapterError('missing GitHub delivery id', 'missing_delivery');
       const retry = candidate.labels.some((label) => RETRY_LABELS.has(label));
-      const key = taskKey(candidate.repository, candidate.number, delivery, retry && !this.state.tasks[`${candidate.repository}#${candidate.number}`]);
-      if (this.state.deliveries[delivery]) return { accepted: true, duplicate: true, task: publicTask(this.state.tasks[key] ?? {}) };
+      const baseKey = `${candidate.repository}#${candidate.number}`;
+      const existingBeforeDelivery = this.state.tasks[baseKey];
+      // A delivery is normally idempotent. If its first intake attempt was
+      // durably recorded as queued but never received a Cezar run (for
+      // example, a provider was unavailable or Cezar restarted), retry the
+      // same reconciliation/webhook delivery instead of parking it forever.
+      const retryableIntake = existingBeforeDelivery?.status === 'queued' && !existingBeforeDelivery.cezarRunId;
+      if (this.state.deliveries[delivery] && !retryableIntake) {
+        return { accepted: true, duplicate: true, task: publicTask(existingBeforeDelivery ?? {}) };
+      }
+      const key = taskKey(candidate.repository, candidate.number, delivery, retry && !existingBeforeDelivery);
       this.state.deliveries[delivery] = { at: this.now(), repository: candidate.repository, number: candidate.number };
       while (Object.keys(this.state.deliveries).length > MAX_DELIVERIES) {
         const oldest = Object.entries(this.state.deliveries).sort((a, b) => a[1].at - b[1].at)[0]?.[0];

@@ -133,9 +133,24 @@ test('workflow profile pins models, effort, read-only review, and bounded retrie
   assert.equal(steps[2].agentMode, 'review');
   assert.deepEqual(steps[2].allowedTools, ['Read', 'Grep', 'Glob']);
   assert.equal(steps[2].bashAllowlist, undefined);
+  assert.match(steps[2].prompt, /read-only inspection commands/);
+  assert.match(steps[2].prompt, /exactly CEZ:DONE/);
+  assert.doesNotMatch(steps[2].prompt, /do not .*run commands\./);
   assert.equal(steps[1].onFail.max, 2);
   assert.equal(steps[4].onFail.max, 2);
   assert.equal(JSON.stringify(steps).includes('danger-full-access'), false);
+});
+
+test('local gate allowlist supports the documented src-layout Python test command', () => {
+  const candidate = { repository: 'babinnikita-ux/babiny-agent-orchestrator', number: 35, title: 't', body: 'b' };
+  const spec = {
+    targetRepo: 'babinnikita-ux/babiny-agent-orchestrator', primary: 'codex', reviewer: 'claude',
+    baseBranch: 'main', mode: 'autopilot', deployPermission: 'none',
+  };
+  assert.equal(buildTaskSteps(candidate, spec, 'PYTHONPATH=src python3 -m unittest discover -s tests -v')[1].command,
+    'PYTHONPATH=src python3 -m unittest discover -s tests -v');
+  assert.equal(buildTaskSteps(candidate, spec, 'PYTHONPATH=/etc python3 -m unittest discover -s tests -v')[1].command,
+    'git diff --check');
 });
 
 test('status sanitization and progress never return raw agent details', () => {
@@ -179,6 +194,41 @@ test('webhook intake is idempotent and reconciliation can retry a missing delive
     assert.equal(status.tasks[0].taskId, 'run-42');
     assert.equal('prompt' in status.tasks[0], false);
     assert.equal('spec' in status.tasks[0], false);
+
+    // A transient Cezar/provider failure must not make the exact same
+    // delivery permanently idempotent: reconciliation can retry it after
+    // the prerequisite recovers, while successful deliveries stay duplicate.
+    const retryRoot = await mkdtemp(join(tmpdir(), 'babiny-adapter-retry-'));
+    try {
+      await writeFile(join(retryRoot, 'secret'), SECRET, { mode: 0o600 });
+      let failOnce = true;
+      let retryPosts = 0;
+      const retryFetch = async (url, init = {}) => {
+        const path = new URL(url).pathname;
+        if (path === '/api/v1/projects') return new Response(JSON.stringify({ projects: [{ id: 'family-bot', root: '/srv/babiny-cezar/projects/family-bot' }] }), { status: 200 });
+        if (path.endsWith('/runs') && init.method === 'POST') {
+          retryPosts += 1;
+          if (failOnce) {
+            failOnce = false;
+            return new Response(JSON.stringify({ error: 'provider unavailable' }), { status: 409 });
+          }
+          return new Response(JSON.stringify({ id: 'run-retried', status: 'queued', steps: [] }), { status: 201 });
+        }
+        if (path.endsWith('/runs/run-retried')) return new Response(JSON.stringify({ id: 'run-retried', status: 'queued', steps: [] }), { status: 200 });
+        return new Response(JSON.stringify({ error: 'unexpected' }), { status: 404 });
+      };
+      const retryAdapter = new BabinyAdapter({ ...config(retryRoot), stateFile: join(retryRoot, 'state.json'), webhookSecretFile: join(retryRoot, 'secret') }, { fetchImpl: retryFetch });
+      await retryAdapter.init();
+      const retryBody = JSON.stringify(webhookPayload());
+      const firstRetry = await retryAdapter.handleWebhook(signed(retryBody, 'transient-1'), retryBody);
+      const secondRetry = await retryAdapter.handleWebhook(signed(retryBody, 'transient-1'), retryBody);
+      assert.equal(firstRetry.task.status, 'queued');
+      assert.equal(secondRetry.duplicate, false);
+      assert.equal(retryPosts, 2);
+      assert.equal(retryAdapter.status().tasks[0].taskId, 'run-retried');
+    } finally {
+      await rm(retryRoot, { recursive: true, force: true });
+    }
 
     // Simulate a missed webhook with a fresh adapter state and let the
     // reconciler discover the same issue through GitHub search.

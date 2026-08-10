@@ -41,6 +41,12 @@ rl.on('line', (line) => {
       emit({ id: msg.id, error: { code: -32602, message: `expected ${expectedSandbox} auto permissions` } });
       return;
     }
+    if (process.env.MOCK_CODEX_EXPECT_ROOTS === '1'
+      && (!Array.isArray(msg.params?.runtimeWorkspaceRoots)
+        || !msg.params.runtimeWorkspaceRoots.includes('/tmp/mock-extra'))) {
+      emit({ id: msg.id, error: { code: -32602, message: 'expected bounded runtime workspace roots' } });
+      return;
+    }
     if (process.argv.includes('sandbox_workspace_write.network_access=true')) {
       emit({ id: msg.id, error: { code: -32602, message: 'workspace-write override is obsolete in full-access mode' } });
       return;
@@ -91,6 +97,21 @@ rl.on('line', (line) => {
       emit({ method: 'turn/completed', params: { threadId: 'th_mock_1', turn: { id: 'turn_mock_1', status: 'completed' } } });
       return;
     }
+    if (turnText.includes('mock:periodic-activity')) {
+      emit({ method: 'item/started', params: { threadId: 'th_mock_1', turnId: 'turn_mock_1', item: { type: 'agentMessage', id: 'item_progress', text: '' } } });
+      let ticks = 0;
+      const progress = setInterval(() => {
+        ticks += 1;
+        emit({ method: 'item/agentMessage/delta', params: { threadId: 'th_mock_1', turnId: 'turn_mock_1', itemId: 'item_progress', delta: `progress-${ticks} ` } });
+        if (ticks === 5) {
+          clearInterval(progress);
+          emit({ method: 'item/completed', params: { threadId: 'th_mock_1', turnId: 'turn_mock_1', item: { type: 'agentMessage', id: 'item_progress', text: 'progress-1 progress-2 progress-3 progress-4 progress-5' } } });
+          emit({ method: 'turn/completed', params: { turn: { id: 'turn_mock_1', status: 'completed' } } });
+        }
+      }, 150);
+      return;
+    }
+    if (turnText.includes('mock:silent-turn')) return;
     if (process.env.MOCK_CODEX_ASK === '1' || turnText.includes('mock:native-codex-ask')) {
       const questions = turnText.includes('multi free text')
         ? [{ id: 'first', header: 'First', question: 'First choice?', isOther: true, isSecret: false,

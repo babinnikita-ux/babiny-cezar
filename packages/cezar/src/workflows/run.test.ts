@@ -18,7 +18,7 @@ import { createWorktree } from '../git-worktree.ts';
 import { RunStore, type RunRecord, type StepState } from '../runs/store.ts';
 import { WorkspaceSemaphore } from '../workspace/semaphore.ts';
 import { parseTaskMarkers } from '../runs/task-markers.ts';
-import { appendTurnText, RunManager } from './run.ts';
+import { appendTurnText, firstIncompleteWorkflowStep, RunManager } from './run.ts';
 import type { WorkflowDef } from './types.ts';
 
 type UsageAccountingHarness = {
@@ -56,6 +56,29 @@ describe('appendTurnText', () => {
     expect(appendTurnText('', 'first')).toBe('first');
     expect(appendTurnText('first', '')).toBe('first');
     expect(appendTurnText(appendTurnText('', 'first'), 'second')).toBe('first\nsecond');
+  });
+});
+
+describe('workflow restart recovery', () => {
+  it('resumes at the first non-done step and never skips a failed review', () => {
+    const workflow: WorkflowDef = {
+      name: 'babiny-autopilot',
+      source: 'built-in',
+      steps: [
+        { id: 'implement', prompt: 'implement', agentMode: 'implementation' },
+        { id: 'gate', command: 'git diff --check' },
+        { id: 'review', prompt: 'review', agentMode: 'review' },
+        { id: 'fix', prompt: 'fix', agentMode: 'implementation' },
+      ],
+    };
+    expect(firstIncompleteWorkflowStep(workflow, [
+      { id: 'implement', status: 'done' },
+      { id: 'gate', status: 'done' },
+      { id: 'review', status: 'failed' },
+      { id: 'fix', status: 'pending' },
+    ])).toBe(2);
+    expect(firstIncompleteWorkflowStep(workflow, [])).toBe(0);
+    expect(firstIncompleteWorkflowStep(workflow, workflow.steps.map((step) => ({ id: step.id, status: 'done' })))).toBe(4);
   });
 });
 
