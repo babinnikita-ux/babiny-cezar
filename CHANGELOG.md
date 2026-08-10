@@ -53,6 +53,12 @@ limit, the project General settings page) stay on `main` for the next minor.
   freshest base *and* at the branch the run found, so a review or QA run that repoints its
   worktree onto the branch under review no longer attributes that whole branch's history to the
   task. (#782)
+- 🐛 **A task about another repository no longer links its issue into the project you are viewing.**
+  A run whose subject lives elsewhere — an `om-auto-fix-pr` started in one project for a PR in
+  another — picked up that repository's issue number from its own transcript, and the header chip
+  rebuilt it against the project on screen: `Issue #4143` pointed at `…/cezar/issues/4143`, an
+  issue that does not exist. The chip is now omitted when the number demonstrably belongs to
+  another repository; a wrong link is worse than none. The PR chip was always correct. (#819)
 - 🐛 **Opening the cockpit on your phone no longer rearranges it on your desktop.** Which sidebar
   project groups are collapsed, and which page a bare `/` restores, were stored workspace-wide in
   `~/.cezar/ui-state.json` — so every open cockpit shared one answer: the last client to navigate
@@ -71,6 +77,13 @@ limit, the project General settings page) stay on `main` for the next minor.
 - Two run-lifecycle tests synchronize on the transition they are about instead of racing a timer:
   the repository-root lease test (#800) and the continuation model-identity test, which polled for
   a terminal status that the run still carried for a tick after Continue was pressed.
+
+## 👥 Contributors
+
+- @pat-lewczuk
+- @dominikpalatynski
+- @patzick
+- @sapersky
 
 # 0.9.2 (2026-08-04)
 
@@ -145,6 +158,15 @@ limit, the project General settings page) stay on `main` for the next minor.
   HEAD was repointed onto another branch, the ± diff stat folded in that branch's whole history; it
   is now anchored at HEAD so it counts only the task's own changes, and the Changes tab says so when
   a repointed HEAD has narrowed what it shows.
+
+## 👥 Contributors
+
+- @pkarw
+- @pat-lewczuk
+- @patzick
+- @andrzejewsky
+- @sheeerth
+- @wojciechszyjka
 
 # 0.9.1 (2026-07-24)
 
