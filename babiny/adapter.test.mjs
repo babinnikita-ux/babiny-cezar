@@ -139,7 +139,7 @@ test('webhook intake is idempotent and reconciliation can retry a missing delive
     let run = { id: 'run-42', status: 'queued', steps: [] };
     const fetchImpl = async (url, init = {}) => {
       const path = new URL(url).pathname;
-      if (path === '/api/projects') return new Response(JSON.stringify({ projects: [{ id: 'family-bot', root: '/srv/babiny-cezar/projects/family-bot' }] }), { status: 200 });
+      if (path === '/api/v1/projects') return new Response(JSON.stringify({ projects: [{ id: 'family-bot', root: '/srv/babiny-cezar/projects/family-bot' }] }), { status: 200 });
       if (path.endsWith('/runs') && init.method === 'POST') {
         calls.post += 1;
         run = { id: 'run-42', status: 'queued', steps: [] };
