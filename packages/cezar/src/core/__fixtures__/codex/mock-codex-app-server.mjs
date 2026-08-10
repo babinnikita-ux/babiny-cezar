@@ -41,6 +41,12 @@ rl.on('line', (line) => {
       emit({ id: msg.id, error: { code: -32602, message: `expected ${expectedSandbox} auto permissions` } });
       return;
     }
+    if (process.env.MOCK_CODEX_EXPECT_ROOTS === '1'
+      && (!Array.isArray(msg.params?.runtimeWorkspaceRoots)
+        || !msg.params.runtimeWorkspaceRoots.includes('/tmp/mock-extra'))) {
+      emit({ id: msg.id, error: { code: -32602, message: 'expected bounded runtime workspace roots' } });
+      return;
+    }
     if (process.argv.includes('sandbox_workspace_write.network_access=true')) {
       emit({ id: msg.id, error: { code: -32602, message: 'workspace-write override is obsolete in full-access mode' } });
       return;

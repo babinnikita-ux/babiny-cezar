@@ -53,8 +53,10 @@ export interface CodexRunnerOptions {
  * Auth = the host's logged-in ChatGPT/Codex session (or CODEX_API_KEY). The
  * agent runs with an explicit per-run sandbox (`workspace-write` for
  * implementation and `read-only` for review) plus `approvalPolicy: never`.
- * Codex has no per-tool allowlist, so `spec.allowedTools` is ignored. There is
- * deliberately no environment-controlled danger-full-access fallback.
+ * Codex has no per-tool allowlist, so `spec.allowedTools` is ignored. The
+ * runner maps `additionalDirectories` to the app-server's bounded
+ * `runtimeWorkspaceRoots`; there is deliberately no environment-controlled
+ * danger-full-access fallback.
  */
 export class CodexAppServerRunner implements AgentRunner {
   readonly backend = 'codex' as const;
@@ -338,6 +340,10 @@ class CodexSession implements AgentSession {
     const overrides = {
       model: this.spec.model,
       cwd: this.spec.cwd,
+      // Claude receives these via --add-dir; Codex app-server needs explicit
+      // runtime roots. The sandbox mode still controls whether those roots are
+      // writable (review is always read-only).
+      runtimeWorkspaceRoots: runtimeWorkspaceRoots(this.spec),
       // Never infer host-wide access from an environment variable. Every run
       // has a bounded default and Babiny review steps pass read-only explicitly.
       sandbox: this.spec.accessMode ?? 'workspace-write',
@@ -597,6 +603,19 @@ function textOf(content: ContentBlock[]): string {
     .map((b) => b.text)
     .join('\n')
     .trim();
+}
+
+/**
+ * App-server roots must be absolute. `cwd` is the implicit root when the list
+ * is omitted; only add the extra roots when the caller supplied valid absolute
+ * paths, preserving normal behavior for lightweight callers and test fixtures
+ * that use a relative cwd.
+ */
+function runtimeWorkspaceRoots(spec: AgentRunSpec): string[] | undefined {
+  const roots = [spec.cwd, ...(spec.additionalDirectories ?? [])]
+    .filter((path): path is string => typeof path === 'string' && path.startsWith('/'));
+  const unique = [...new Set(roots)];
+  return unique.length > 1 ? unique : undefined;
 }
 
 /** Drop undefined values so we never send `"model": null` to the server. */

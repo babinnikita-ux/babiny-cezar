@@ -133,6 +133,9 @@ test('workflow profile pins models, effort, read-only review, and bounded retrie
   assert.equal(steps[2].agentMode, 'review');
   assert.deepEqual(steps[2].allowedTools, ['Read', 'Grep', 'Glob']);
   assert.equal(steps[2].bashAllowlist, undefined);
+  assert.match(steps[2].prompt, /read-only inspection commands/);
+  assert.match(steps[2].prompt, /exactly CEZ:DONE/);
+  assert.doesNotMatch(steps[2].prompt, /do not .*run commands\./);
   assert.equal(steps[1].onFail.max, 2);
   assert.equal(steps[4].onFail.max, 2);
   assert.equal(JSON.stringify(steps).includes('danger-full-access'), false);

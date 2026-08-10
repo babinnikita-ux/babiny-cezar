@@ -885,6 +885,28 @@ describe('CodexAppServerRunner v2 wiring (against the bundled mock app-server)',
     }
   }, 30_000);
 
+  it('passes additional directories as bounded runtime workspace roots', async () => {
+    const previous = process.env.MOCK_CODEX_EXPECT_ROOTS;
+    process.env.MOCK_CODEX_EXPECT_ROOTS = '1';
+    const runner = new CodexAppServerRunner({ bin: mockBin, timeoutMs: 60_000 });
+    const session = runner.startSession(
+      {
+        userPrompt: 'inspect the bounded workspace',
+        cwd: process.cwd(),
+        additionalDirectories: ['/tmp/mock-extra'],
+      },
+      undefined,
+      { autoEndAfterFirstTurn: true },
+    );
+
+    try {
+      await expect(session.result).resolves.toMatchObject({ sessionId: 'th_mock_1' });
+    } finally {
+      if (previous === undefined) delete process.env.MOCK_CODEX_EXPECT_ROOTS;
+      else process.env.MOCK_CODEX_EXPECT_ROOTS = previous;
+    }
+  }, 30_000);
+
   it('bridges native requestUserInput to ask.requested and answers the server request', async () => {
     const runner = new CodexAppServerRunner({ bin: mockBin, timeoutMs: 60_000 });
     const v2: UiEvent[] = [];

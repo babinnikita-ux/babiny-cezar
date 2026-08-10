@@ -66,6 +66,16 @@ import {
 const CHECK_OUTPUT_CAP = 20_000;
 const READ_ONLY_ALLOWED_TOOLS = ['Read', 'Grep', 'Glob'];
 
+/** Resume a persisted workflow from its first step that did not finish. */
+export function firstIncompleteWorkflowStep(
+  workflow: WorkflowDef,
+  persisted: Array<{ id: string; status?: string }>,
+): number {
+  const states = new Map(persisted.map((step) => [step.id, step.status]));
+  const index = workflow.steps.findIndex((step) => states.get(step.id) !== 'done');
+  return index < 0 ? workflow.steps.length : index;
+}
+
 function defaultEffortFor(backend: RunnerId): string {
   return backend === 'codex' ? 'max' : 'high';
 }
@@ -1115,19 +1125,39 @@ export class RunManager {
         finishedAt,
         currentStepId: undefined,
       });
-      const resumed = this.continueRun(
-        run.id,
-        {
-          text: RESTART_CONTINUATION_PROMPT,
-        },
-        true,
-      );
-      this.store.appendEvent(run.id, {
-        type: 'lifecycle',
-        message: resumed.ok
-          ? 'cezar restarted — resuming the interrupted task from its last session'
-          : `cezar restarted — could not resume the interrupted task (${resumed.error ?? 'unknown'})`,
-      });
+      const workflow = await this.reviveWorkflow(run);
+      // A synthetic Continue is appropriate for a normal one-step interactive
+      // task. Multi-step/Babiny workflows must re-enter their durable chain so
+      // recovery cannot skip fix, gates, or final review after an interruption.
+      const workflowRecovery = workflow !== null &&
+        (workflow.steps.length > 1 || workflow.steps.some((step) => step.agentMode !== undefined));
+      if (workflowRecovery) {
+        this.store.updateRun(run.id, {
+          status: 'queued',
+          error: undefined,
+          finishedAt: undefined,
+          currentStepId: undefined,
+        });
+        await this.reviveQueuedRun(this.store.getRun(run.id) ?? run, 'cezar restarted');
+        this.store.appendEvent(run.id, {
+          type: 'lifecycle',
+          message: 'cezar restarted — re-queued the interrupted workflow from its first incomplete step',
+        });
+      } else {
+        const resumed = this.continueRun(
+          run.id,
+          {
+            text: RESTART_CONTINUATION_PROMPT,
+          },
+          true,
+        );
+        this.store.appendEvent(run.id, {
+          type: 'lifecycle',
+          message: resumed.ok
+            ? 'cezar restarted — resuming the interrupted task from its last session'
+            : `cezar restarted — could not resume the interrupted task (${resumed.error ?? 'unknown'})`,
+        });
+      }
     }
     // Re-arm usage-limit resumes (spec 2026-08-03-auto-resume-after-usage-limit): the wait is
     // routinely longer than a cezar session, so the deadline is durable and the timer is rebuilt
@@ -2117,6 +2147,18 @@ export class RunManager {
     // invisible to the enforcer forever. Best-effort; falls back to repoRoot.
     await rematerializeReclaimedWorktree(this.repoRoot, this.store, runId);
     const record = this.store.getRun(runId);
+    const resumedSessionStep = sessionId
+      ? record?.steps.find((step) => step.sessionId === sessionId)
+      : undefined;
+    // Synthetic Continue steps do not belong to the workflow definition. Walk
+    // back to the original agent step so repeated Continue/recovery cycles keep
+    // its implementation-vs-review boundary instead of silently widening it.
+    const resumedSourceStep = resumedSessionStep?.id.startsWith('continue-')
+      ? [...(record?.steps ?? [])].reverse().find((step) => !step.id.startsWith('continue-') && step.sessionId)
+      : resumedSessionStep;
+    const resumedWorkflow = record ? await this.reviveWorkflow(record) : undefined;
+    const resumedSourceDef = resumedWorkflow?.steps.find((step) => step.id === resumedSourceStep?.id);
+    const readOnlyContinuation = resumedSourceDef?.agentMode === 'review';
     // The env is a live ceiling: a run created while the inbox was on must not keep writing
     // follow-ups after it is switched off.
     const generateFollowups = followupsEnabled() && record?.generateFollowups !== false;
@@ -2389,6 +2431,9 @@ export class RunManager {
         // run's extra system prompt (already resolved at execute time and
         // echoed on the record) rides along with the handoff contract.
         systemPrompt: composeSystemPrompt(
+          readOnlyContinuation
+            ? 'This is a read-only review continuation. Inspect the isolated worktree and report findings; do not edit files, commit, push, deploy, or run mutating commands. Use only read-only inspection.'
+            : undefined,
           record?.systemPrompt,
           generateFollowups ? HANDOFF_INSTRUCTIONS : HANDOFF_ONLY_INSTRUCTIONS,
         ),
@@ -2397,13 +2442,16 @@ export class RunManager {
           : openingPrompt,
         ...(openingImages.length ? { images: openingImages } : {}),
         cwd: state.cwd,
-        allowedTools: DEFAULT_ALLOWED_TOOLS,
-        bashAllowlist: DEFAULT_BASH_ALLOWLIST,
+        // Preserve the source step's security boundary across Continue and
+        // restart recovery. A review must never become workspace-write merely
+        // because the original session was interrupted.
+        allowedTools: readOnlyContinuation ? READ_ONLY_ALLOWED_TOOLS : DEFAULT_ALLOWED_TOOLS,
+        bashAllowlist: readOnlyContinuation ? undefined : DEFAULT_BASH_ALLOWLIST,
         additionalDirectories: agentDirectories(join(this.dataDir, 'runs'), continueProfile.env),
         env: continueProfile.env,
         model: continueModel,
-        effort: defaultEffortFor(continueBackend),
-        accessMode: 'workspace-write',
+        effort: resumedSourceDef?.effort ?? defaultEffortFor(continueBackend),
+        accessMode: readOnlyContinuation ? 'read-only' : 'workspace-write',
         sessionId,
         resume: sessionId !== undefined,
         timeoutMs: 0,
@@ -2640,7 +2688,13 @@ export class RunManager {
 
     const lastAgentIdx = findLastAgentStepIndex(workflow);
 
-    let i = 0;
+    // A restart can re-enter execute() with earlier steps already durable. Do
+    // not repeat completed implementation/gate steps or jump over the failed
+    // step: resume at the first non-done workflow step.
+    let i = firstIncompleteWorkflowStep(workflow, this.store.getRun(runId)?.steps ?? []);
+    if (i > 0 && i < workflow.steps.length) {
+      emit({ type: 'lifecycle', message: `workflow resumed at step "${workflow.steps[i]?.id}"` });
+    }
     while (i < workflow.steps.length) {
       if (state.cancelled) break;
       const step = workflow.steps[i] as WorkflowStepDef;

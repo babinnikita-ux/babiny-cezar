@@ -289,8 +289,10 @@ export function buildTaskSteps(candidate, spec, gateCommand = 'git diff --check'
   ].join('\n');
   const review = [
     'Review the implementation in the current isolated worktree against the issue and repository conventions.',
-    'This is a read-only review: do not edit files, commit, push, deploy, or run commands.',
+    'This is a read-only review: do not edit files, commit, push, deploy, or run mutating commands.',
+    'You may use the local read-only file tools and, when available, read-only inspection commands such as pwd, ls, find, rg, sed, git status, git diff, git log, and git show to inspect the isolated worktree and exact diff. Do not use shell control operators or commands that write state.',
     'Report only concrete correctness, security, regression, and test gaps; if clean, say so explicitly.',
+    'For a clean final review, end the response with a line containing exactly CEZ:DONE. If you find a real issue, report it and do not emit CEZ:DONE.',
     context,
   ].join('\n');
   const fix = [
