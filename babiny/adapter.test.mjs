@@ -80,6 +80,19 @@ test('task definition supports compatibility marker and manual routing without f
   assert.equal(parseJobSpec('target_repo: evil/not-allowlisted', parsed.spec, ['babinnikita-ux/family-bot']).ok, false);
 });
 
+test('task definition accepts the legacy BABINY_AGENT_JOB_V1 aliases', () => {
+  const body = '<!-- BABINY_AGENT_JOB_V1 {"target_repo":"babinnikita-ux/family-hub","primary_agent":"auto","reviewer_agent":"auto","base_branch":"main","deploy":"forbidden"} -->';
+  const parsed = parseJobSpec(body, {
+    targetRepo: 'babinnikita-ux/babiny-agent-orchestrator', primary: 'claude', reviewer: 'codex',
+    baseBranch: 'develop', mode: 'autopilot', deployPermission: 'none',
+  }, ['babinnikita-ux/babiny-agent-orchestrator', 'babinnikita-ux/family-hub']);
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.spec, {
+    targetRepo: 'babinnikita-ux/family-hub', primary: 'claude', reviewer: 'codex',
+    baseBranch: 'main', mode: 'autopilot', deployPermission: 'none',
+  });
+});
+
 test('workflow profile pins models, effort, read-only review, and bounded retries', () => {
   const steps = buildTaskSteps({ repository: 'babinnikita-ux/family-bot', number: 42, title: 't', body: 'b' }, {
     targetRepo: 'babinnikita-ux/family-bot', primary: 'claude', reviewer: 'codex', baseBranch: 'main', mode: 'autopilot', deployPermission: 'none',

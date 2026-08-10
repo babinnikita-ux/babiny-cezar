@@ -148,10 +148,26 @@ export function parseJobSpec(body, defaults, allowlistedRepos = Object.keys(defa
       return { ok: false, error: 'invalid BABINY_AGENT_JOB_V1 definition' };
     }
   }
-  const fields = ['target_repo', 'repo', 'mode', 'primary', 'reviewer', 'base_branch', 'deploy_permission'];
+  const fields = [
+    'target_repo', 'repo', 'mode', 'primary', 'primary_agent', 'reviewer', 'reviewer_agent',
+    'base_branch', 'deploy_permission', 'deploy',
+  ];
   for (const field of fields) {
     const match = text.match(new RegExp(`(?:^|\\n)\\s*(?:[-*]\\s*)?${field}\\s*[:=]\\s*([^\\n\\r]+)`, 'i'));
     if (match && overrides[field] === undefined) overrides[field] = match[1].trim().replace(/^['"]|['"]$/g, '');
+  }
+
+  // BABINY_AGENT_JOB_V1 used *_agent and deploy=forbidden before Cezar.
+  // "auto" means the allowlisted repository route, not a new provider.
+  if (overrides.primary === undefined && overrides.primary_agent !== undefined) {
+    if (String(overrides.primary_agent).trim().toLowerCase() !== 'auto') overrides.primary = overrides.primary_agent;
+  }
+  if (overrides.reviewer === undefined && overrides.reviewer_agent !== undefined) {
+    if (String(overrides.reviewer_agent).trim().toLowerCase() !== 'auto') overrides.reviewer = overrides.reviewer_agent;
+  }
+  if (overrides.deploy_permission === undefined && overrides.deploy !== undefined) {
+    const deploy = String(overrides.deploy).trim().toLowerCase();
+    overrides.deploy_permission = deploy === 'forbidden' || deploy === 'none' ? 'none' : overrides.deploy;
   }
 
   const targetRepo = cleanRepo(overrides.target_repo ?? overrides.repo) ?? defaults?.targetRepo;
