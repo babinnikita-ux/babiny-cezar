@@ -38,7 +38,8 @@ import {
 export interface CodexRunnerOptions {
   /** Override the binary name/path; defaults to `codex` on PATH. */
   bin?: string;
-  /** Wall-clock timeout for a run (ms); per-spec `timeoutMs` still wins. */
+  /** Maximum app-server inactivity (ms). Explicit per-spec `timeoutMs` remains
+   *  a wall-clock cap; `0` disables both limits for interactive sessions. */
   timeoutMs?: number;
 }
 
@@ -62,12 +63,12 @@ export class CodexAppServerRunner implements AgentRunner {
   readonly backend = 'codex' as const;
 
   private readonly bin: string;
-  private readonly timeoutMs: number;
+  private readonly inactivityTimeoutMs: number;
   private lastSession: CodexSession | null = null;
 
   constructor(opts: CodexRunnerOptions = {}) {
     this.bin = resolveCodexExecutable(opts.bin);
-    this.timeoutMs = opts.timeoutMs ?? DEFAULT_RUN_TIMEOUT_MS;
+    this.inactivityTimeoutMs = opts.timeoutMs ?? DEFAULT_RUN_TIMEOUT_MS;
   }
 
   run(spec: AgentRunSpec, onEvent?: (event: AgentEvent) => void): Promise<AgentRunResult> {
@@ -83,7 +84,7 @@ export class CodexAppServerRunner implements AgentRunner {
     onEvent?: (event: AgentEvent) => void,
     opts: SessionOptions = {},
   ): AgentSession {
-    const session = new CodexSession(this.bin, this.timeoutMs, spec, onEvent, opts);
+    const session = new CodexSession(this.bin, this.inactivityTimeoutMs, spec, onEvent, opts);
     this.lastSession = session;
     return session;
   }
@@ -132,7 +133,7 @@ class CodexSession implements AgentSession {
 
   constructor(
     private readonly bin: string,
-    timeoutMs: number,
+    inactivityTimeoutMs: number,
     private readonly spec: AgentRunSpec,
     private readonly onEvent: ((event: AgentEvent) => void) | undefined,
     private readonly opts: SessionOptions,
@@ -151,24 +152,46 @@ class CodexSession implements AgentSession {
     this.child.stderr.setEncoding('utf8');
     this.child.stderr.on('data', (chunk: string) => stderrChunks.push(chunk));
 
-    // Optional wall-clock kill switch (disabled for interactive sessions).
-    const limitMs = spec.timeoutMs ?? timeoutMs;
+    // Unattended Codex turns may legitimately run longer than the default
+    // safety window while they keep producing protocol activity. Preserve a
+    // bounded liveness guard for a silent app-server, and reserve wall-clock
+    // termination for callers that explicitly set spec.timeoutMs.
+    const wallClockLimitMs = spec.timeoutMs ?? 0;
+    const inactivityLimitMs = spec.timeoutMs === 0 ? 0 : inactivityTimeoutMs;
     let killTimer: NodeJS.Timeout | undefined;
-    let deadline: NodeJS.Timeout | undefined;
-    if (limitMs > 0) {
-      deadline = setTimeout(() => {
-        this.timedOut = true;
-        this.interrupt();
-        this.child.stdout.destroy();
-        killTimer = setTimeout(() => {
-          if (this.child.exitCode == null && !this.child.killed) {
-            this.terminatedByCezar = true;
-            this.child.kill('SIGKILL');
-          }
-        }, KILL_GRACE_MS);
-        killTimer.unref?.();
-      }, limitMs);
-      deadline.unref?.();
+    let wallClockDeadline: NodeJS.Timeout | undefined;
+    let inactivityDeadline: NodeJS.Timeout | undefined;
+    let timeoutKind: 'wall-clock' | 'inactivity' | undefined;
+    const terminateForTimeout = (kind: 'wall-clock' | 'inactivity'): void => {
+      if (timeoutKind) return;
+      timeoutKind = kind;
+      this.timedOut = true;
+      this.interrupt();
+      this.child.stdout.destroy();
+      killTimer = setTimeout(() => {
+        if (this.child.exitCode == null && !this.child.killed) {
+          this.terminatedByCezar = true;
+          this.child.kill('SIGKILL');
+        }
+      }, KILL_GRACE_MS);
+      killTimer.unref?.();
+    };
+    const armInactivityDeadline = (): void => {
+      if (inactivityLimitMs <= 0 || timeoutKind) return;
+      if (inactivityDeadline) clearTimeout(inactivityDeadline);
+      inactivityDeadline = setTimeout(
+        () => terminateForTimeout('inactivity'),
+        inactivityLimitMs,
+      );
+      inactivityDeadline.unref?.();
+    };
+    armInactivityDeadline();
+    if (wallClockLimitMs > 0) {
+      wallClockDeadline = setTimeout(
+        () => terminateForTimeout('wall-clock'),
+        wallClockLimitMs,
+      );
+      wallClockDeadline.unref?.();
     }
 
     // Handshake → thread → first turn. Kicked off concurrently with the read
@@ -187,6 +210,7 @@ class CodexSession implements AgentSession {
             } catch {
               continue; // not JSON-RPC — skip
             }
+            armInactivityDeadline();
             // A sub-agent child thread's turn lifecycle must reach neither channel (#600):
             // v1 would emit a bogus `turn-end`, and the v2 mapper — which carries no thread
             // identity — would record the child turn as the parent's, clearing its turn-scoped
@@ -210,7 +234,8 @@ class CodexSession implements AgentSession {
           this.end();
         }
       } finally {
-        if (deadline) clearTimeout(deadline);
+        if (wallClockDeadline) clearTimeout(wallClockDeadline);
+        if (inactivityDeadline) clearTimeout(inactivityDeadline);
         if (killTimer) clearTimeout(killTimer);
         if (this.autoEndTimer) clearTimeout(this.autoEndTimer);
         this.stdinOpen = false;
@@ -235,8 +260,12 @@ class CodexSession implements AgentSession {
       };
 
       if (this.timedOut) {
+        const limitMs = timeoutKind === 'wall-clock' ? wallClockLimitMs : inactivityLimitMs;
         const mins = Math.round((limitMs / 60_000) * 10) / 10;
-        this.emit({ type: 'error', message: `codex app-server timed out after ${mins}m and was killed` });
+        const message = timeoutKind === 'inactivity'
+          ? `codex app-server produced no activity for ${mins}m and was killed`
+          : `codex app-server timed out after ${mins}m and was killed`;
+        this.emit({ type: 'error', message });
         this.emit({ type: 'done' });
         return base;
       }
