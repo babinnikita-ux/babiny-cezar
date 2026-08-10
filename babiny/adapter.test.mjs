@@ -141,6 +141,18 @@ test('workflow profile pins models, effort, read-only review, and bounded retrie
   assert.equal(JSON.stringify(steps).includes('danger-full-access'), false);
 });
 
+test('local gate allowlist supports the documented src-layout Python test command', () => {
+  const candidate = { repository: 'babinnikita-ux/babiny-agent-orchestrator', number: 35, title: 't', body: 'b' };
+  const spec = {
+    targetRepo: 'babinnikita-ux/babiny-agent-orchestrator', primary: 'codex', reviewer: 'claude',
+    baseBranch: 'main', mode: 'autopilot', deployPermission: 'none',
+  };
+  assert.equal(buildTaskSteps(candidate, spec, 'PYTHONPATH=src python3 -m unittest discover -s tests -v')[1].command,
+    'PYTHONPATH=src python3 -m unittest discover -s tests -v');
+  assert.equal(buildTaskSteps(candidate, spec, 'PYTHONPATH=/etc python3 -m unittest discover -s tests -v')[1].command,
+    'git diff --check');
+});
+
 test('status sanitization and progress never return raw agent details', () => {
   const blocker = sanitizeBlocker('Error: /srv/babiny-cezar/state/runs/secret\nBearer ghp_abcdefghijklmnopqrstuvwxyz0123456789');
   assert.equal(blocker.includes('ghp_'), false);

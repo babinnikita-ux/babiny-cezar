@@ -279,6 +279,7 @@ function taskContext(candidate, spec) {
 }
 
 export function buildTaskSteps(candidate, spec, gateCommand = 'git diff --check') {
+  const gate = safeGateCommand(gateCommand);
   const context = taskContext(candidate, spec);
   const implementation = [
     'Implement the GitHub issue in the isolated Cezar worktree.',
@@ -306,7 +307,7 @@ export function buildTaskSteps(candidate, spec, gateCommand = 'git diff --check'
       runner: spec.primary, model: modelFor(spec.primary), effort: effortFor(spec.primary), agentMode: 'implementation',
       allowedTools: implementationTools(), bashAllowlist: [...DEFAULT_BASH_ALLOWLIST],
     },
-    { id: 'gate-1', name: 'Repository local gate', command: gateCommand, onFail: { retry: 'implement', max: 2 } },
+    { id: 'gate-1', name: 'Repository local gate', command: gate, onFail: { retry: 'implement', max: 2 } },
     {
       id: 'review', name: 'Read-only review', prompt: review,
       runner: spec.reviewer, model: modelFor(spec.reviewer), effort: effortFor(spec.reviewer), agentMode: 'review',
@@ -317,7 +318,7 @@ export function buildTaskSteps(candidate, spec, gateCommand = 'git diff --check'
       runner: spec.primary, model: modelFor(spec.primary), effort: effortFor(spec.primary), agentMode: 'implementation',
       allowedTools: implementationTools(), bashAllowlist: [...DEFAULT_BASH_ALLOWLIST],
     },
-    { id: 'gate-2', name: 'Repository final gate', command: gateCommand, onFail: { retry: 'fix', max: 2 } },
+    { id: 'gate-2', name: 'Repository final gate', command: gate, onFail: { retry: 'fix', max: 2 } },
     {
       id: 'final-review', name: 'Final read-only review', prompt: review,
       runner: spec.reviewer, model: modelFor(spec.reviewer), effort: effortFor(spec.reviewer), agentMode: 'review',
@@ -326,13 +327,13 @@ export function buildTaskSteps(candidate, spec, gateCommand = 'git diff --check'
   ];
 }
 
-function safeGateCommand(command) {
+export function safeGateCommand(command) {
   if (typeof command !== 'string' || !command.trim()) return 'git diff --check';
   const value = command.trim();
   // Config is trusted, issue text is not. Keep the accepted surface to one
   // simple repository command and reject shell control operators.
   if (value.length > 240 || /[;&|`$<>\n\r]/.test(value)) return 'git diff --check';
-  if (!/^(git diff --check|npm (?:run )?(?:test|lint|typecheck|build)|pnpm (?:run )?(?:test|lint|typecheck|build)|pytest|cargo test|go test(?:\s+\S*)?|make test)$/.test(value)) {
+  if (!/^(git diff --check|npm (?:run )?(?:test|lint|typecheck|build)|pnpm (?:run )?(?:test|lint|typecheck|build)|PYTHONPATH=src python3 -m unittest discover -s tests -v|pytest|cargo test|go test(?:\s+\S*)?|make test)$/.test(value)) {
     return 'git diff --check';
   }
   return value;
