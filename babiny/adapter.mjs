@@ -174,6 +174,8 @@ export function parseJobSpec(body, defaults, allowlistedRepos = Object.keys(defa
   if (overrides.reviewer === undefined && overrides.reviewer_agent !== undefined) {
     if (String(overrides.reviewer_agent).trim().toLowerCase() !== 'auto') overrides.reviewer = overrides.reviewer_agent;
   }
+  if (String(overrides.primary ?? '').trim().toLowerCase() === 'auto') delete overrides.primary;
+  if (String(overrides.reviewer ?? '').trim().toLowerCase() === 'auto') delete overrides.reviewer;
   if (overrides.deploy_permission === undefined && overrides.deploy !== undefined) {
     const deploy = String(overrides.deploy).trim().toLowerCase();
     overrides.deploy_permission = deploy === 'forbidden' || deploy === 'none' ? 'none' : overrides.deploy;

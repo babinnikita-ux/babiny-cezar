@@ -94,6 +94,18 @@ test('task definition accepts the legacy BABINY_AGENT_JOB_V1 aliases', () => {
   });
 });
 
+test('task definition accepts legacy reviewer=auto with implementation mode', () => {
+  const body = '<!-- BABINY_AGENT_JOB_V1 {"target_repo":"babinnikita-ux/babiny-agent-orchestrator","mode":"implement","primary_agent":"claude","reviewer":"auto","base_branch":"main","deploy":"forbidden"} -->';
+  const parsed = parseJobSpec(body, {
+    targetRepo: 'babinnikita-ux/family-bot', primary: 'codex', reviewer: 'claude', baseBranch: 'main', mode: 'autopilot', deployPermission: 'none',
+    routeDefaults: { 'babinnikita-ux/babiny-agent-orchestrator': { primary: 'codex', reviewer: 'claude', baseBranch: 'main', deployPermission: 'none' } },
+  }, ['babinnikita-ux/family-bot', 'babinnikita-ux/babiny-agent-orchestrator']);
+  assert.equal(parsed.ok, true);
+  assert.equal(parsed.spec.primary, 'claude');
+  assert.equal(parsed.spec.reviewer, 'claude');
+  assert.equal(parsed.spec.mode, 'implementation');
+});
+
 test('workflow profile pins models, effort, read-only review, and bounded retries', () => {
   const steps = buildTaskSteps({ repository: 'babinnikita-ux/family-bot', number: 42, title: 't', body: 'b' }, {
     targetRepo: 'babinnikita-ux/family-bot', primary: 'claude', reviewer: 'codex', baseBranch: 'main', mode: 'autopilot', deployPermission: 'none',
