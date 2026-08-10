@@ -81,15 +81,16 @@ test('task definition supports compatibility marker and manual routing without f
 });
 
 test('task definition accepts the legacy BABINY_AGENT_JOB_V1 aliases', () => {
-  const body = '<!-- BABINY_AGENT_JOB_V1 {"target_repo":"babinnikita-ux/family-hub","primary_agent":"auto","reviewer_agent":"auto","base_branch":"main","deploy":"forbidden"} -->';
+  const body = '<!-- BABINY_AGENT_JOB_V1 {"target_repo":"babinnikita-ux/family-hub","mode":"implement","primary_agent":"auto","reviewer_agent":"auto","base_branch":"main","deploy":"forbidden"} -->';
   const parsed = parseJobSpec(body, {
     targetRepo: 'babinnikita-ux/babiny-agent-orchestrator', primary: 'claude', reviewer: 'codex',
     baseBranch: 'develop', mode: 'autopilot', deployPermission: 'none',
+    routeDefaults: { 'babinnikita-ux/family-hub': { primary: 'codex', reviewer: 'claude', baseBranch: 'main', deployPermission: 'none' } },
   }, ['babinnikita-ux/babiny-agent-orchestrator', 'babinnikita-ux/family-hub']);
   assert.equal(parsed.ok, true);
   assert.deepEqual(parsed.spec, {
-    targetRepo: 'babinnikita-ux/family-hub', primary: 'claude', reviewer: 'codex',
-    baseBranch: 'main', mode: 'autopilot', deployPermission: 'none',
+    targetRepo: 'babinnikita-ux/family-hub', primary: 'codex', reviewer: 'claude',
+    baseBranch: 'main', mode: 'implementation', deployPermission: 'none',
   });
 });
 

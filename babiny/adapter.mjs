@@ -83,9 +83,10 @@ function cleanAgent(value) {
 }
 
 function cleanMode(value) {
-  return typeof value === 'string' && MODES.has(value.trim().toLowerCase())
-    ? value.trim().toLowerCase()
-    : undefined;
+  if (typeof value !== 'string') return undefined;
+  const mode = value.trim().toLowerCase();
+  if (mode === 'implement') return 'implementation';
+  return MODES.has(mode) ? mode : undefined;
 }
 
 function cleanDeployPermission(value) {
@@ -108,6 +109,14 @@ function isJobIssue(issue) {
   const labels = normalizeLabels(issue?.labels);
   const body = typeof issue?.body === 'string' ? issue.body : '';
   return labels.some((label) => JOB_LABELS.has(label)) || /BABINY_AGENT_JOB_V1/i.test(body);
+}
+
+function isReconciliationCandidate(issue) {
+  if (!isJobIssue(issue)) return false;
+  const labels = normalizeLabels(issue?.labels);
+  const retry = labels.some((label) => RETRY_LABELS.has(label));
+  const terminalFailure = labels.some((label) => ['status:failed', 'status:cancelled', 'status:done'].includes(label));
+  return !terminalFailure || retry;
 }
 
 function extractJsonObject(text) {
@@ -175,11 +184,12 @@ export function parseJobSpec(body, defaults, allowlistedRepos = Object.keys(defa
     return { ok: false, error: 'target repo is not allowlisted' };
   }
   const mode = overrides.mode === undefined ? (defaults?.mode ?? 'autopilot') : cleanMode(overrides.mode);
-  const primary = overrides.primary === undefined ? defaults?.primary : cleanAgent(overrides.primary);
-  const reviewer = overrides.reviewer === undefined ? defaults?.reviewer : cleanAgent(overrides.reviewer);
-  const baseBranch = overrides.base_branch === undefined ? defaults?.baseBranch : cleanBranch(overrides.base_branch);
+  const routeDefaults = defaults?.routeDefaults?.[targetRepo] ?? {};
+  const primary = overrides.primary === undefined ? (routeDefaults.primary ?? defaults?.primary) : cleanAgent(overrides.primary);
+  const reviewer = overrides.reviewer === undefined ? (routeDefaults.reviewer ?? defaults?.reviewer) : cleanAgent(overrides.reviewer);
+  const baseBranch = overrides.base_branch === undefined ? (routeDefaults.baseBranch ?? defaults?.baseBranch) : cleanBranch(overrides.base_branch);
   const deployPermission = overrides.deploy_permission === undefined
-    ? (defaults?.deployPermission ?? 'none')
+    ? (routeDefaults.deployPermission ?? defaults?.deployPermission ?? 'none')
     : cleanDeployPermission(overrides.deploy_permission);
   if (!mode || !primary || !reviewer || !baseBranch || !deployPermission) {
     return { ok: false, error: 'invalid task routing override' };
@@ -500,6 +510,9 @@ export class BabinyAdapter {
         reviewer: routeFromEvent.reviewer,
         baseBranch: routeFromEvent.baseBranch,
         deployPermission: routeFromEvent.deployPermission,
+        routeDefaults: Object.fromEntries(Object.entries(this.config.repos).map(([repo, route]) => [repo, {
+          primary: route.primary, reviewer: route.reviewer, baseBranch: route.baseBranch, deployPermission: route.deployPermission,
+        }])),
       }, Object.keys(this.config.repos));
       const delivery = boundedString(deliveryId, 128);
       if (!delivery) throw new AdapterError('missing GitHub delivery id', 'missing_delivery');
@@ -603,7 +616,7 @@ export class BabinyAdapter {
           const items = Array.isArray(parsed?.items) ? parsed.items.slice(0, 100) : [];
           for (const item of items) {
             const candidate = issueCandidate(item, repository);
-            if (!candidate || !isJobIssue(candidate)) continue;
+            if (!candidate || !isReconciliationCandidate(candidate)) continue;
             const delivery = `reconcile:${repository}:${candidate.number}:${candidate.updatedAt || 'unknown'}`;
             try { await this.acceptIssue(candidate, 'reconciliation', delivery); } catch (error) {
               if (!(error instanceof AdapterError) || error.code !== 'event_not_eligible') {
