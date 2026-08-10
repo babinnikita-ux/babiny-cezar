@@ -23,7 +23,7 @@ const MAX_BLOCKER_CHARS = 240;
 const DEFAULT_RECONCILE_MS = 120_000;
 const RECONCILE_JITTER_MS = 5_000;
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', 'localhost']);
-const ALLOWED_EVENTS = new Set(['issues']);
+const ALLOWED_EVENTS = new Set(['issues', 'ping']);
 const ALLOWED_ACTIONS = new Set(['opened', 'reopened', 'labeled']);
 const RETRY_LABELS = new Set(['agent-retry', 'babiny-retry']);
 const JOB_LABELS = new Set(['agent-job', 'babiny-agent']);
@@ -115,7 +115,7 @@ function isReconciliationCandidate(issue) {
   if (!isJobIssue(issue)) return false;
   const labels = normalizeLabels(issue?.labels);
   const retry = labels.some((label) => RETRY_LABELS.has(label));
-  const terminalFailure = labels.some((label) => ['status:failed', 'status:cancelled', 'status:done'].includes(label));
+  const terminalFailure = labels.some((label) => ['status:failed', 'status:blocked', 'status:cancelled', 'status:done'].includes(label));
   return !terminalFailure || retry;
 }
 
@@ -493,7 +493,7 @@ export class BabinyAdapter {
   }
 
   async findProject(route) {
-    const projects = await this.cezar('/api/projects');
+    const projects = await this.cezar('/api/v1/projects');
     const rows = Array.isArray(projects) ? projects : projects?.projects;
     if (!Array.isArray(rows)) throw new AdapterError('Cezar project registry unavailable', 'project_registry');
     const id = projectIdFor(route);
@@ -597,6 +597,9 @@ export class BabinyAdapter {
     if (!verifyGithubSignature(rawBody, headers['x-hub-signature-256'], secret)) throw new AdapterError('invalid signature', 'invalid_signature');
     let payload;
     try { payload = JSON.parse(rawBody); } catch { throw new AdapterError('invalid JSON payload', 'invalid_json'); }
+    // GitHub sends a signed ping when a hook is created. It is an allowlisted
+    // handshake only and can never enqueue a task because it has no issue.
+    if (event === 'ping') return { accepted: true, ping: true };
     const candidate = issueCandidate(payload);
     if (!candidate || !this.config.repos[candidate.repository]) throw new AdapterError('repository not allowlisted', 'repo_not_allowed');
     if (!ALLOWED_ACTIONS.has(payload.action) || !isJobIssue(payload.issue)) throw new AdapterError('issue event not eligible', 'event_not_eligible');

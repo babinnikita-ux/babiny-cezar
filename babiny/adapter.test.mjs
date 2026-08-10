@@ -68,6 +68,22 @@ test('GitHub signature validation is strict and constant-shape', () => {
   assert.equal(verifyGithubSignature(body, signature, 'short'), false);
 });
 
+test('signed GitHub ping is acknowledged without creating a task', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'babiny-adapter-ping-'));
+  try {
+    await writeFile(join(root, 'secret'), SECRET, { mode: 0o600 });
+    const adapter = new BabinyAdapter({ ...config(root), webhookSecretFile: join(root, 'secret') });
+    await adapter.init();
+    const body = JSON.stringify({ zen: 'keep it simple' });
+    const headers = { ...signed(body, 'ping-1'), 'x-github-event': 'ping' };
+    const result = await adapter.handleWebhook(headers, body);
+    assert.deepEqual(result, { accepted: true, ping: true });
+    assert.equal(adapter.status().tasks.length, 0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('task definition supports compatibility marker and manual routing without fallback', () => {
   const body = '<!-- BABINY_AGENT_JOB_V1 {"target_repo":"babinnikita-ux/family-hub","primary":"claude","reviewer":"codex","base_branch":"develop","deploy_permission":"none","mode":"autopilot"} -->';
   const parsed = parseJobSpec(body, {
