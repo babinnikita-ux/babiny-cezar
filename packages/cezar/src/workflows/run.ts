@@ -54,9 +54,21 @@ import { resolveProfileEnvForRoot } from '../workspace/agent-profiles.ts';
 import { WorkspaceSemaphore, type AccountHolds } from '../workspace/semaphore.ts';
 import { UiEventSink } from '../runs/ui-event-sink.ts';
 import type { UiEvent } from '../core/ui-events.ts';
-import { chainStepNote, DEFAULT_ALLOWED_TOOLS, stepKind, type WorkflowDef, type WorkflowStepDef } from './types.ts';
+import {
+  chainStepNote,
+  DEFAULT_ALLOWED_TOOLS,
+  DEFAULT_BASH_ALLOWLIST,
+  stepKind,
+  type WorkflowDef,
+  type WorkflowStepDef,
+} from './types.ts';
 
 const CHECK_OUTPUT_CAP = 20_000;
+const READ_ONLY_ALLOWED_TOOLS = ['Read', 'Grep', 'Glob'];
+
+function defaultEffortFor(backend: RunnerId): string {
+  return backend === 'codex' ? 'max' : 'high';
+}
 
 async function configuredModelProvider(
   backend: RunnerId,
@@ -2386,9 +2398,12 @@ export class RunManager {
         ...(openingImages.length ? { images: openingImages } : {}),
         cwd: state.cwd,
         allowedTools: DEFAULT_ALLOWED_TOOLS,
+        bashAllowlist: DEFAULT_BASH_ALLOWLIST,
         additionalDirectories: agentDirectories(join(this.dataDir, 'runs'), continueProfile.env),
         env: continueProfile.env,
         model: continueModel,
+        effort: defaultEffortFor(continueBackend),
+        accessMode: 'workspace-write',
         sessionId,
         resume: sessionId !== undefined,
         timeoutMs: 0,
@@ -2969,12 +2984,21 @@ export class RunManager {
           userPrompt,
           images,
           cwd: state.cwd,
-          allowedTools: step.allowedTools ?? DEFAULT_ALLOWED_TOOLS,
-          bashAllowlist: step.bashAllowlist,
+          // A review step is a hard read-only boundary, even if a malformed
+          // or hand-authored workflow asks for write tools. Implementation
+          // steps get the bounded shell defaults unless narrowed further.
+          allowedTools: step.agentMode === 'review'
+            ? READ_ONLY_ALLOWED_TOOLS
+            : step.allowedTools ?? DEFAULT_ALLOWED_TOOLS,
+          bashAllowlist: step.agentMode === 'review'
+            ? undefined
+            : step.bashAllowlist ?? DEFAULT_BASH_ALLOWLIST,
           // The handoff file lives outside the worktree — grant access.
           additionalDirectories: agentDirectories(join(this.dataDir, 'runs'), stepProfile.env),
           env: stepProfile.env,
           model: backendModel,
+          effort: step.effort ?? defaultEffortFor(stepBackend),
+          accessMode: step.agentMode === 'review' ? 'read-only' : 'workspace-write',
           sessionId,
           // Interactive sessions have no wall clock — the idle timer rules.
           timeoutMs: interactive ? 0 : undefined,

@@ -1,0 +1,161 @@
+import assert from 'node:assert/strict';
+import { createHmac } from 'node:crypto';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import test from 'node:test';
+
+import {
+  BabinyAdapter,
+  buildTaskSteps,
+  parseJobSpec,
+  progressForRun,
+  sanitizeBlocker,
+  verifyGithubSignature,
+} from './adapter.mjs';
+
+const SECRET = 'babiny-test-secret-with-enough-entropy';
+
+function config(root) {
+  return {
+    cezarBaseUrl: 'http://127.0.0.1:4321',
+    bindHost: '127.0.0.1',
+    port: 4371,
+    stateFile: join(root, 'state.json'),
+    webhookSecretFile: join(root, 'secret'),
+    repos: {
+      'babinnikita-ux/family-bot': {
+        projectId: 'family-bot', projectPath: '/srv/babiny-cezar/projects/family-bot',
+        primary: 'claude', reviewer: 'codex', baseBranch: 'main', gate: 'npm test',
+      },
+      'babinnikita-ux/family-hub': {
+        projectId: 'family-hub', projectPath: '/srv/babiny-cezar/projects/family-hub',
+        primary: 'claude', reviewer: 'codex', baseBranch: 'main', gate: 'git diff --check',
+      },
+    },
+  };
+}
+
+function webhookPayload(body = '<!-- BABINY_AGENT_JOB_V1 -->\nPlease fix the issue.') {
+  return {
+    action: 'opened',
+    repository: { full_name: 'babinnikita-ux/family-bot' },
+    issue: {
+      number: 42,
+      title: 'Disposable adapter test task',
+      body,
+      labels: [{ name: 'agent-job' }],
+      updated_at: '2026-08-10T09:00:00Z',
+      html_url: 'https://github.com/babinnikita-ux/family-bot/issues/42',
+    },
+  };
+}
+
+function signed(body, delivery = 'delivery-1') {
+  return {
+    'x-github-event': 'issues',
+    'x-github-delivery': delivery,
+    'x-hub-signature-256': `sha256=${createHmac('sha256', SECRET).update(body).digest('hex')}`,
+  };
+}
+
+test('GitHub signature validation is strict and constant-shape', () => {
+  const body = '{"ok":true}';
+  const signature = `sha256=${createHmac('sha256', SECRET).update(body).digest('hex')}`;
+  assert.equal(verifyGithubSignature(body, signature, SECRET), true);
+  assert.equal(verifyGithubSignature(body, `${signature.slice(0, -1)}0`, SECRET), false);
+  assert.equal(verifyGithubSignature(body, 'sha1=deadbeef', SECRET), false);
+  assert.equal(verifyGithubSignature(body, signature, 'short'), false);
+});
+
+test('task definition supports compatibility marker and manual routing without fallback', () => {
+  const body = '<!-- BABINY_AGENT_JOB_V1 {"target_repo":"babinnikita-ux/family-hub","primary":"claude","reviewer":"codex","base_branch":"develop","deploy_permission":"none","mode":"autopilot"} -->';
+  const parsed = parseJobSpec(body, {
+    targetRepo: 'babinnikita-ux/family-bot', primary: 'codex', reviewer: 'claude', baseBranch: 'main', mode: 'autopilot', deployPermission: 'none',
+  }, ['babinnikita-ux/family-bot', 'babinnikita-ux/family-hub']);
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.spec, {
+    targetRepo: 'babinnikita-ux/family-hub', primary: 'claude', reviewer: 'codex', baseBranch: 'develop', mode: 'autopilot', deployPermission: 'none',
+  });
+  assert.equal(parseJobSpec('target_repo: evil/not-allowlisted', parsed.spec, ['babinnikita-ux/family-bot']).ok, false);
+});
+
+test('workflow profile pins models, effort, read-only review, and bounded retries', () => {
+  const steps = buildTaskSteps({ repository: 'babinnikita-ux/family-bot', number: 42, title: 't', body: 'b' }, {
+    targetRepo: 'babinnikita-ux/family-bot', primary: 'claude', reviewer: 'codex', baseBranch: 'main', mode: 'autopilot', deployPermission: 'none',
+  }, 'npm test');
+  assert.equal(steps[0].model, 'claude-sonnet-5');
+  assert.equal(steps[0].effort, 'high');
+  assert.equal(steps[2].model, 'gpt-5.6-luna');
+  assert.equal(steps[2].effort, 'max');
+  assert.equal(steps[2].agentMode, 'review');
+  assert.deepEqual(steps[2].allowedTools, ['Read', 'Grep', 'Glob']);
+  assert.equal(steps[2].bashAllowlist, undefined);
+  assert.equal(steps[1].onFail.max, 2);
+  assert.equal(steps[4].onFail.max, 2);
+  assert.equal(JSON.stringify(steps).includes('danger-full-access'), false);
+});
+
+test('status sanitization and progress never return raw agent details', () => {
+  const blocker = sanitizeBlocker('Error: /srv/babiny-cezar/state/runs/secret\nBearer ghp_abcdefghijklmnopqrstuvwxyz0123456789');
+  assert.equal(blocker.includes('ghp_'), false);
+  assert.equal(blocker.includes('\n'), false);
+  assert.ok(blocker.length <= 240);
+  assert.deepEqual(progressForRun({ status: 'running', currentStepId: 'review' }), { stage: 'review', progress: 52 });
+  assert.deepEqual(progressForRun({ status: 'done' }), { stage: 'complete', progress: 100 });
+});
+
+test('webhook intake is idempotent and reconciliation can retry a missing delivery', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'babiny-adapter-'));
+  try {
+    await writeFile(join(root, 'secret'), SECRET, { mode: 0o600 });
+    const calls = { post: 0 };
+    let run = { id: 'run-42', status: 'queued', steps: [] };
+    const fetchImpl = async (url, init = {}) => {
+      const path = new URL(url).pathname;
+      if (path === '/api/projects') return new Response(JSON.stringify({ projects: [{ id: 'family-bot', root: '/srv/babiny-cezar/projects/family-bot' }] }), { status: 200 });
+      if (path.endsWith('/runs') && init.method === 'POST') {
+        calls.post += 1;
+        run = { id: 'run-42', status: 'queued', steps: [] };
+        return new Response(JSON.stringify(run), { status: 201 });
+      }
+      if (path.endsWith('/runs/run-42')) return new Response(JSON.stringify(run), { status: 200 });
+      return new Response(JSON.stringify({ error: 'unexpected' }), { status: 404 });
+    };
+    const adapter = new BabinyAdapter({ ...config(root), webhookSecretFile: join(root, 'secret') }, {
+      fetchImpl,
+      gh: async () => JSON.stringify({ items: [] }),
+    });
+    await adapter.init();
+    const payload = JSON.stringify(webhookPayload());
+    const first = await adapter.handleWebhook(signed(payload), payload);
+    const second = await adapter.handleWebhook(signed(payload), payload);
+    assert.equal(first.duplicate, false);
+    assert.equal(second.duplicate, true);
+    assert.equal(calls.post, 1);
+    const status = adapter.status();
+    assert.equal(status.tasks[0].taskId, 'run-42');
+    assert.equal('prompt' in status.tasks[0], false);
+    assert.equal('spec' in status.tasks[0], false);
+
+    // Simulate a missed webhook with a fresh adapter state and let the
+    // reconciler discover the same issue through GitHub search.
+    const missedRoot = await mkdtemp(join(tmpdir(), 'babiny-adapter-reconcile-'));
+    try {
+      await writeFile(join(missedRoot, 'secret'), SECRET, { mode: 0o600 });
+      const reconciler = new BabinyAdapter({ ...config(missedRoot), stateFile: join(missedRoot, 'state.json'), webhookSecretFile: join(missedRoot, 'secret') }, {
+        fetchImpl,
+        gh: async (args) => args[0] === 'api' && String(args[1]).startsWith('search/issues')
+          ? JSON.stringify({ items: [webhookPayload().issue] })
+          : JSON.stringify({ items: [] }),
+      });
+      await reconciler.init();
+      await reconciler.reconcileIssues();
+      assert.equal(calls.post, 2);
+    } finally {
+      await rm(missedRoot, { recursive: true, force: true });
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

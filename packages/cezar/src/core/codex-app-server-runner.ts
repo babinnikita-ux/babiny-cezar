@@ -51,11 +51,10 @@ export interface CodexRunnerOptions {
  * `thread/resume` to reopen a stored thread for "Continue".
  *
  * Auth = the host's logged-in ChatGPT/Codex session (or CODEX_API_KEY). The
- * agent runs autonomously via `sandbox: danger-full-access` +
- * `approvalPolicy: never`, matching cezar's default auto permission mode
- * (spec 2026-07-17-permission-modes). Codex has no per-tool allowlist, so
- * `spec.allowedTools` is ignored. `CEZ_CODEX_NETWORK=0` retains the previous
- * network-blocked `workspace-write` sandbox as an explicit restriction.
+ * agent runs with an explicit per-run sandbox (`workspace-write` for
+ * implementation and `read-only` for review) plus `approvalPolicy: never`.
+ * Codex has no per-tool allowlist, so `spec.allowedTools` is ignored. There is
+ * deliberately no environment-controlled danger-full-access fallback.
  */
 export class CodexAppServerRunner implements AgentRunner {
   readonly backend = 'codex' as const;
@@ -339,10 +338,9 @@ class CodexSession implements AgentSession {
     const overrides = {
       model: this.spec.model,
       cwd: this.spec.cwd,
-      // Full access is the `auto` preset shared by all backends. Besides avoiding prompts, this
-      // keeps container installs working when bubblewrap cannot create a UID map (#563).
-      // CEZ_CODEX_NETWORK=0 remains the backwards-compatible explicit sandbox opt-out.
-      sandbox: process.env.CEZ_CODEX_NETWORK === '0' ? 'workspace-write' : 'danger-full-access',
+      // Never infer host-wide access from an environment variable. Every run
+      // has a bounded default and Babiny review steps pass read-only explicitly.
+      sandbox: this.spec.accessMode ?? 'workspace-write',
       approvalPolicy: 'never',
     };
     if (this.spec.resume && this.spec.sessionId) {
@@ -386,6 +384,7 @@ class CodexSession implements AgentSession {
       threadId: this.threadId,
       input,
       summary: reasoningSummary(),
+      effort: this.spec.effort ?? 'max',
     });
     this.activeTurnId = turnIdOf(res) ?? this.activeTurnId;
   }

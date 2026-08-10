@@ -19,6 +19,10 @@ export const workflowStepSchema = z
     model: z.string().optional(),
     /** Per-step agent backend override (falls back to the task / config default). */
     runner: z.enum(['claude', 'codex', 'opencode']).optional(),
+    /** Babiny policy: implementation steps may write; review steps are read-only. */
+    agentMode: z.enum(['implementation', 'review']).optional(),
+    /** Provider-native reasoning/effort level (Claude: high, Codex: max in Babiny profiles). */
+    effort: z.string().trim().min(1).max(32).optional(),
     allowedTools: z.array(z.string()).optional(),
     bashAllowlist: z.array(z.string()).optional(),
     // check step
@@ -106,7 +110,7 @@ export function skillStackOf(steps: WorkflowStepDef[]): string[] | null {
     if (stepKind(s) !== 'agent' || !s.skill) return null;
     if (s.prompt !== undefined && s.prompt !== '{{task}}') return null;
     if (s.name !== undefined && s.name !== s.skill) return null;
-    if (s.model || s.runner || s.allowedTools || s.bashAllowlist || s.onFail) return null;
+    if (s.model || s.runner || s.agentMode || s.effort || s.allowedTools || s.bashAllowlist || s.onFail) return null;
     skills.push(s.skill);
   }
   return skills.length ? skills : null;
@@ -183,6 +187,23 @@ export function stepsIssue(steps: WorkflowStepDef[]): string | null {
 
 /** Tools an agent step gets when the workflow doesn't say otherwise. */
 export const DEFAULT_ALLOWED_TOOLS = ['Read', 'Edit', 'Write', 'Grep', 'Glob', 'Bash'];
+
+/** Default shell prefixes for unattended implementation runs. */
+export const DEFAULT_BASH_ALLOWLIST = [
+  'git',
+  'npm',
+  'npx',
+  'node',
+  'pnpm',
+  'yarn',
+  'python',
+  'python3',
+  'pytest',
+  'cargo',
+  'go',
+  'make',
+  './',
+];
 
 /** The zero-config workflow: one agent step that just does the task. */
 export const QUICK_TASK_WORKFLOW: WorkflowDef = {

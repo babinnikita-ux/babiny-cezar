@@ -319,6 +319,10 @@ export function buildChildEnv(opts: BuildChildEnvOptions): NodeJS.ProcessEnv {
   }
 
   const backendPrefixes = BACKEND_ALLOW_PREFIXES[opts.backend] ?? BACKEND_ALLOW_PREFIXES.claude;
+  // Cezar itself may need GitHub credentials to publish a draft PR, but
+  // unattended agents must not receive them. Babiny enables this boundary on
+  // the service; keeping it explicit makes it testable and fail-closed.
+  const allowGithubHandoff = !isTruthy(readVar(source, 'CEZ_AGENT_NO_GH'));
   const passthrough = upperSet(
     (readVar(source, 'CEZ_ENV_PASSTHROUGH') ?? '')
       .split(',')
@@ -358,7 +362,7 @@ export function buildChildEnv(opts: BuildChildEnvOptions): NodeJS.ProcessEnv {
     // toggle needs: forwarded even though they are secrets — the backend cannot
     // authenticate without them. They are still redacted before anything
     // reaches the on-disk NDJSON (see secret-redaction.ts).
-    if (GH_ALLOW_NAMES.has(key)) return true;
+    if (allowGithubHandoff && GH_ALLOW_NAMES.has(key)) return true;
     if (matchesPrefix(key, backendPrefixes)) return true;
     if (cloudNames.has(key) || matchesPrefix(key, cloudPrefixes)) return true;
     // Explicit opt-in passthrough.

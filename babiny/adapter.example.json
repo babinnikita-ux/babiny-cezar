@@ -1,0 +1,31 @@
+{
+  "cezarBaseUrl": "http://127.0.0.1:4321",
+  "bindHost": "127.0.0.1",
+  "port": 4370,
+  "stateFile": "/srv/babiny-cezar/state/adapter.json",
+  "webhookSecretFile": "/etc/babiny-cezar/webhook.secret",
+  "githubOwner": "babinnikita-ux",
+  "reconcileSeconds": 120,
+  "repos": {
+    "babinnikita-ux/family-bot": {
+      "projectId": "family-bot",
+      "projectPath": "/srv/babiny-cezar/projects/family-bot",
+      "primary": "claude",
+      "reviewer": "codex",
+      "baseBranch": "main",
+      "deployPermission": "none",
+      "gate": "npm test",
+      "ciRequired": true
+    },
+    "babinnikita-ux/family-hub": {
+      "projectId": "family-hub",
+      "projectPath": "/srv/babiny-cezar/projects/family-hub",
+      "primary": "claude",
+      "reviewer": "codex",
+      "baseBranch": "main",
+      "deployPermission": "none",
+      "gate": "npm test",
+      "ciRequired": true
+    }
+  }
+}

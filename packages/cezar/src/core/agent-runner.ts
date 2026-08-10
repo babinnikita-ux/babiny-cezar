@@ -29,10 +29,7 @@ export interface AgentRunSpec {
   images?: ContentBlock[];
   /** The directory the agent runs in — also the only writable root. */
   cwd: string;
-  /** Tool allowlist; the CLI is default-deny for anything not listed — but
-   *  the zero-config default (`DEFAULT_ALLOWED_TOOLS`) includes `Bash`
-   *  unrestricted unless `bashAllowlist` is set, so treat the default as
-   *  full shell access in `cwd`, not a sandboxed allowlist (#430). */
+  /** Tool allowlist; the CLI is default-deny for anything not listed. */
   allowedTools?: string[];
   /** When `Bash` is allowed, restrict it to commands starting with one of these. */
   bashAllowlist?: string[];
@@ -42,6 +39,10 @@ export interface AgentRunSpec {
    *  e.g. CEZ_HANDOFF_FILE / CEZ_TODOS_FILE / CEZ_TASK_ID (spec 007). */
   env?: Record<string, string>;
   model?: string;
+  /** Provider-native effort/reasoning level. */
+  effort?: string;
+  /** Codex sandbox policy; never escalates to host-wide access implicitly. */
+  accessMode?: 'read-only' | 'workspace-write';
   /** Wall-clock kill switch for the run (ms). */
   timeoutMs?: number;
   /**

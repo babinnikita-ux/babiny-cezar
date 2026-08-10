@@ -29,6 +29,10 @@ export const workflowStepDefSchema = z
     model: z.string().optional(),
     /** Per-step agent backend override (falls back to the task / config default). */
     runner: runnerSchema.optional(),
+    /** Babiny policy: implementation steps may write; review steps are read-only. */
+    agentMode: z.enum(['implementation', 'review']).optional(),
+    /** Provider-native reasoning/effort level. */
+    effort: z.string().trim().min(1).max(32).optional(),
     allowedTools: z.array(z.string()).optional(),
     bashAllowlist: z.array(z.string()).optional(),
     // check step

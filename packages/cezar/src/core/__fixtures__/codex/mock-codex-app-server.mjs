@@ -36,7 +36,7 @@ rl.on('line', (line) => {
   } else if (msg.method === 'initialize') {
     emit({ id: msg.id, result: { userAgent: 'mock-codex/0.0.0' } });
   } else if (msg.method === 'thread/start' || msg.method === 'thread/resume') {
-    const expectedSandbox = process.env.CEZ_CODEX_NETWORK === '0' ? 'workspace-write' : 'danger-full-access';
+    const expectedSandbox = process.env.MOCK_CODEX_SANDBOX || 'workspace-write';
     if (msg.params?.sandbox !== expectedSandbox || msg.params?.approvalPolicy !== 'never') {
       emit({ id: msg.id, error: { code: -32602, message: `expected ${expectedSandbox} auto permissions` } });
       return;
@@ -55,6 +55,10 @@ rl.on('line', (line) => {
       emit({ id: msg.id, result: { thread: { id: msg.params?.threadId } } });
     }
   } else if (msg.method === 'turn/start') {
+    if (msg.params?.effort !== (process.env.MOCK_CODEX_EFFORT || 'max')) {
+      emit({ id: msg.id, error: { code: -32602, message: `expected effort ${process.env.MOCK_CODEX_EFFORT || 'max'}` } });
+      return;
+    }
     emit({ id: msg.id, result: { turn: { id: 'turn_mock_1' } } });
     emit({ method: 'turn/started', params: { turn: { id: 'turn_mock_1', status: 'inProgress', items: [] } } });
     const turnText = msg.params?.input?.map?.((part) => part.text ?? '').join('\n') ?? '';

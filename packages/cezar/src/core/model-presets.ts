@@ -20,7 +20,7 @@ export const KNOWN_PRESETS_BY_RUNNER: Record<RunnerId, readonly string[]> = {
     'claude-sonnet-5',
     'claude-haiku-4-5',
   ],
-  codex: ['gpt-5.1-codex', 'gpt-5.1-codex-mini', 'gpt-5-codex'],
+  codex: ['gpt-5.1-codex', 'gpt-5.1-codex-mini', 'gpt-5-codex', 'gpt-5.6-luna'],
   opencode: [
     'anthropic/claude-opus-4-8',
     'anthropic/claude-sonnet-5',
