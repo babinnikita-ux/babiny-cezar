@@ -11,6 +11,7 @@ import {
   parseJobSpec,
   progressForRun,
   sanitizeBlocker,
+  verifyBearerAuthorization,
   verifyGithubSignature,
 } from './adapter.mjs';
 
@@ -77,6 +78,28 @@ test('status API requires the dedicated bearer token while health stays public',
     assert.equal(aliasWithoutToken.status, 401);
   } finally {
     await adapter?.stop();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('status bearer parser rejects malformed credentials', () => {
+  assert.equal(verifyBearerAuthorization(`Bearer ${STATUS_TOKEN}`, STATUS_TOKEN), true);
+  assert.equal(verifyBearerAuthorization(`bearer ${STATUS_TOKEN}`, STATUS_TOKEN), true);
+  assert.equal(verifyBearerAuthorization(`Bearer  ${STATUS_TOKEN}`, STATUS_TOKEN), false);
+  assert.equal(verifyBearerAuthorization(`Bearer ${STATUS_TOKEN} trailing`, STATUS_TOKEN), false);
+  assert.equal(verifyBearerAuthorization(`Basic ${STATUS_TOKEN}`, STATUS_TOKEN), false);
+  assert.equal(verifyBearerAuthorization('Bearer too-short', STATUS_TOKEN), false);
+  assert.equal(verifyBearerAuthorization(undefined, STATUS_TOKEN), false);
+});
+
+test('adapter fails closed before listening when the status token is unavailable', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'babiny-adapter-status-missing-'));
+  const adapter = new BabinyAdapter({ ...config(root), port: 4380, reconcileSeconds: 300 });
+  try {
+    await writeFile(join(root, 'secret'), SECRET, { mode: 0o600 });
+    await assert.rejects(adapter.start(), { code: 'bad_status_token' });
+  } finally {
+    await adapter.stop();
     await rm(root, { recursive: true, force: true });
   }
 });
