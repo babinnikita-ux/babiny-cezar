@@ -228,6 +228,14 @@ test('versioned family-bot route is Python-only and bootstraps an isolated venv'
   assert.deepEqual(safeSetupCommands(route.setupCommands), route.setupCommands);
 });
 
+test('family-bot runtime config fails closed instead of accepting a Node gate', () => {
+  const bad = config('/tmp/babiny-cezar-bad-route');
+  bad.repos['babinnikita-ux/family-bot'] = {
+    ...bad.repos['babinnikita-ux/family-bot'], setupCommands: [], gate: 'npm test',
+  };
+  assert.throws(() => new BabinyAdapter(bad), { code: 'bad_route' });
+});
+
 test('family-bot setup runs before implementation and local gate', () => {
   const steps = buildTaskSteps({ repository: 'babinnikita-ux/family-bot', number: 19, title: 't', body: 'b' }, {
     targetRepo: 'babinnikita-ux/family-bot', primary: 'claude', reviewer: 'codex', baseBranch: 'main', mode: 'autopilot', deployPermission: 'none',
@@ -257,6 +265,35 @@ test('safe status profile exposes only allowlisted active agent/model/role', () 
   assert.deepEqual(activeProfileForRun({ status: 'done', currentStepId: 'final-review' }, {
     primary: 'claude', reviewer: 'codex',
   }), {});
+});
+
+test('status API carries the active profile but no run internals', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'babiny-adapter-active-profile-'));
+  try {
+    await writeFile(join(root, 'secret'), SECRET, { mode: 0o600 });
+    await writeFile(join(root, 'status-token'), STATUS_TOKEN, { mode: 0o600 });
+    const adapter = new BabinyAdapter({ ...config(root), reconcileSeconds: 300 }, {
+      fetchImpl: async () => new Response(JSON.stringify({
+        status: 'running', currentStepId: 'review', steps: [], prompt: 'private', sessionId: 'private',
+      }), { status: 200 }),
+    });
+    await adapter.init();
+    adapter.state.tasks['babinnikita-ux/family-bot#19'] = {
+      taskId: 'run-19', issueNumber: 19, title: 't', targetRepo: 'babinnikita-ux/family-bot',
+      status: 'running', stage: 'review', progress: 52, projectId: 'family-bot', cezarRunId: 'run-19',
+      spec: { primary: 'claude', reviewer: 'codex' }, ciState: 'unknown',
+    };
+    await adapter.pollTasks();
+    const task = adapter.status().tasks[0];
+    assert.deepEqual({ activeAgent: task.activeAgent, activeModel: task.activeModel, activeRole: task.activeRole }, {
+      activeAgent: 'codex', activeModel: 'gpt-5.6-luna', activeRole: 'review',
+    });
+    assert.equal('sessionId' in task, false);
+    assert.equal('prompt' in task, false);
+    assert.equal('spec' in task, false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test('local gate allowlist supports the documented src-layout Python test command', () => {

@@ -32,12 +32,19 @@ const AGENTS = new Set(['claude', 'codex']);
 const DEPLOY_PERMISSIONS = new Set(['none', 'review-only']);
 const MODEL_BY_AGENT = Object.freeze({ claude: 'claude-sonnet-5', codex: 'gpt-5.6-luna' });
 const EFFORT_BY_AGENT = Object.freeze({ claude: 'high', codex: 'max' });
+const FAMILY_BOT_REPOSITORY = 'babinnikita-ux/family-bot';
+const FAMILY_BOT_GATE = '.venv/bin/python -m pytest -q';
+const FAMILY_BOT_SETUP_COMMANDS = Object.freeze([
+  'python3 -m venv .venv',
+  '.venv/bin/python -m pip install --disable-pip-version-check --no-input --timeout 60 --retries 2 -e ".[dev]"',
+]);
 const DEFAULT_BASH_ALLOWLIST = Object.freeze([
   'git', 'npm', 'npx', 'node', 'pnpm', 'yarn', 'python', 'python3', 'pytest', 'cargo', 'go', 'make', './',
 ]);
 const PUBLIC_KEYS = Object.freeze([
   'taskId', 'issueNumber', 'title', 'targetRepo', 'status', 'stage', 'progress',
   'startedAt', 'updatedAt', 'prNumber', 'prUrl', 'ciState', 'blocker',
+  'activeAgent', 'activeModel', 'activeRole',
 ]);
 
 export const DEFAULT_CONFIG = Object.freeze({
@@ -240,12 +247,13 @@ export function progressForRun(run) {
   if (run.status === 'done') return { stage: 'complete', progress: 100 };
   if (run.status === 'failed') return { stage: 'blocked', progress: 0 };
   if (run.status === 'cancelled') return { stage: 'cancelled', progress: 0 };
-  const ids = ['implement', 'gate-1', 'review', 'fix', 'gate-2', 'final-review'];
+  const ids = ['setup-1', 'setup-2', 'implement', 'gate-1', 'review', 'fix', 'gate-2', 'final-review'];
   const labels = {
+    'setup-1': 'setup', 'setup-2': 'setup',
     implement: 'implementation', 'gate-1': 'local-gate', review: 'review', fix: 'fix',
     'gate-2': 'local-gate', 'final-review': 'final-review',
   };
-  const weights = { implement: 12, 'gate-1': 30, review: 52, fix: 68, 'gate-2': 82, 'final-review': 94 };
+  const weights = { 'setup-1': 3, 'setup-2': 6, implement: 12, 'gate-1': 30, review: 52, fix: 68, 'gate-2': 82, 'final-review': 94 };
   const current = typeof run.currentStepId === 'string' ? run.currentStepId : undefined;
   if (current) {
     const id = ids.find((candidate) => current === candidate || current.startsWith(`${candidate}-`));
@@ -262,6 +270,20 @@ export function progressForRun(run) {
 function modelFor(agent) {
   if (!AGENTS.has(agent)) throw new AdapterError('unsupported agent', 'bad_agent');
   return MODEL_BY_AGENT[agent];
+}
+
+export function activeProfileForRun(run, spec) {
+  if (!run || run.status !== 'running' || typeof run.currentStepId !== 'string') return {};
+  const step = run.currentStepId;
+  const activeRole = /^(implement|fix)(?:-|$)/.test(step)
+    ? 'implementation'
+    : /^(review|final-review)(?:-|$)/.test(step)
+      ? 'review'
+      : undefined;
+  if (!activeRole) return {};
+  const activeAgent = cleanAgent(activeRole === 'implementation' ? spec?.primary : spec?.reviewer);
+  if (!activeAgent) return {};
+  return { activeAgent, activeModel: MODEL_BY_AGENT[activeAgent], activeRole };
 }
 
 function effortFor(agent) {
@@ -288,8 +310,9 @@ function taskContext(candidate, spec) {
   ].join('\n');
 }
 
-export function buildTaskSteps(candidate, spec, gateCommand = 'git diff --check') {
+export function buildTaskSteps(candidate, spec, gateCommand = 'git diff --check', setupCommands = []) {
   const gate = safeGateCommand(gateCommand);
+  const setup = safeSetupCommands(setupCommands);
   const context = taskContext(candidate, spec);
   const implementation = [
     'Implement the GitHub issue in the isolated Cezar worktree.',
@@ -311,7 +334,11 @@ export function buildTaskSteps(candidate, spec, gateCommand = 'git diff --check'
     'Do not deploy, access production data, use sudo/Docker/SSH, or push directly.',
     context,
   ].join('\n');
+  const setupSteps = setup.map((command, index) => ({
+    id: `setup-${index + 1}`, name: 'Repository dependency setup', command,
+  }));
   return [
+    ...setupSteps,
     {
       id: 'implement', name: 'Claude/Codex implementation', prompt: implementation,
       runner: spec.primary, model: modelFor(spec.primary), effort: effortFor(spec.primary), agentMode: 'implementation',
@@ -343,10 +370,22 @@ export function safeGateCommand(command) {
   // Config is trusted, issue text is not. Keep the accepted surface to one
   // simple repository command and reject shell control operators.
   if (value.length > 240 || /[;&|`$<>\n\r]/.test(value)) return 'git diff --check';
-  if (!/^(git diff --check|npm (?:run )?(?:test|lint|typecheck|build)|pnpm (?:run )?(?:test|lint|typecheck|build)|PYTHONPATH=src python3 -m unittest discover -s tests -v|pytest|cargo test|go test(?:\s+\S*)?|make test)$/.test(value)) {
+  if (!/^(git diff --check|npm (?:run )?(?:test|lint|typecheck|build)|pnpm (?:run )?(?:test|lint|typecheck|build)|PYTHONPATH=src python3 -m unittest discover -s tests -v|(?:\.venv\/bin\/)?python(?:3(?:\.\d+)?)? -m pytest(?: -q)?|pytest|cargo test|go test(?:\s+\S*)?|make test)$/.test(value)) {
     return 'git diff --check';
   }
   return value;
+}
+
+export function safeSetupCommands(commands) {
+  if (commands === undefined) return [];
+  if (!Array.isArray(commands) || commands.length > FAMILY_BOT_SETUP_COMMANDS.length) {
+    throw new AdapterError('invalid setup commands', 'bad_route');
+  }
+  const normalized = commands.map((command) => typeof command === 'string' ? command.trim() : '');
+  if (normalized.some((command) => !FAMILY_BOT_SETUP_COMMANDS.includes(command))) {
+    throw new AdapterError('unsupported setup command', 'bad_route');
+  }
+  return normalized;
 }
 
 function projectIdFor(route) {
@@ -378,10 +417,15 @@ function validateConfig(input) {
     const reviewer = cleanAgent(raw.reviewer) ?? 'claude';
     const baseBranch = cleanBranch(raw.baseBranch) ?? 'main';
     const deployPermission = cleanDeployPermission(raw.deployPermission) ?? 'none';
+    const setupCommands = safeSetupCommands(raw.setupCommands);
+    const gate = safeGateCommand(raw.gate);
+    if (repo === FAMILY_BOT_REPOSITORY && (gate !== FAMILY_BOT_GATE || JSON.stringify(setupCommands) !== JSON.stringify(FAMILY_BOT_SETUP_COMMANDS))) {
+      throw new AdapterError('family-bot requires isolated Python setup and pytest gate', 'bad_route');
+    }
     repos[repo] = {
       projectId: projectIdFor({ projectId: raw.projectId ?? repo.split('/')[1] }),
       projectPath, primary, reviewer, baseBranch, deployPermission,
-      gate: safeGateCommand(raw.gate),
+      setupCommands, gate,
       ciRequired: raw.ciRequired !== false,
     };
   }
@@ -589,7 +633,7 @@ export class BabinyAdapter {
           method: 'POST',
           body: {
             task: taskContext({ ...candidate, repository: candidate.repository }, spec),
-            steps: buildTaskSteps(candidate, spec, route.gate),
+            steps: buildTaskSteps(candidate, spec, route.gate, route.setupCommands),
             runner: spec.primary,
             worktree: true,
             autonomous: false,
@@ -679,6 +723,8 @@ export class BabinyAdapter {
         task.stage = progress.stage;
         task.progress = progress.progress;
         task.blocker = sanitizeBlocker(run?.error);
+        for (const key of ['activeAgent', 'activeModel', 'activeRole']) delete task[key];
+        Object.assign(task, activeProfileForRun(run, task.spec));
         if (typeof run?.pullRequestUrl === 'string') {
           task.prUrl = run.pullRequestUrl.slice(0, 500);
           task.prNumber = parsePrNumber(task.prUrl);

@@ -15,7 +15,11 @@
       "reviewer": "codex",
       "baseBranch": "main",
       "deployPermission": "none",
-      "gate": "npm test",
+      "setupCommands": [
+        "python3 -m venv .venv",
+        ".venv/bin/python -m pip install --disable-pip-version-check --no-input --timeout 60 --retries 2 -e \".[dev]\""
+      ],
+      "gate": ".venv/bin/python -m pytest -q",
       "ciRequired": true
     },
     "babinnikita-ux/family-hub": {
