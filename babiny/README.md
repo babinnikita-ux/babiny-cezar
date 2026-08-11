@@ -14,8 +14,13 @@ The adapter provides:
   local gate → final read-only review;
 - draft-PR handoff and exact-PR-head CI polling;
 - loopback-only `/api/status` and `/healthz` responses containing only the
-  public status contract.
+  public status contract; `/api/status` and its `/status` alias require the
+  dedicated `Authorization: Bearer <token>` credential while `/healthz`
+  remains unauthenticated for local service health checks.
 
-The webhook secret and runtime JSON are deployment files, never repository
-files. The adapter has no generic command endpoint and does not proxy raw Cezar
-run records, prompts, diffs, transcripts, environment values, or credentials.
+The webhook secret, status token, and runtime JSON are deployment files, never
+repository files. Configure `statusTokenFile` as an absolute path readable only
+by the adapter service account. The adapter fails closed before listening when
+that token is missing or invalid. It has no generic command endpoint and does
+not proxy raw Cezar run records, prompts, diffs, transcripts, environment
+values, or credentials.

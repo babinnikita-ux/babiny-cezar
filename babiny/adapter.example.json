@@ -4,6 +4,7 @@
   "port": 4370,
   "stateFile": "/srv/babiny-cezar/state/adapter.json",
   "webhookSecretFile": "/etc/babiny-cezar/webhook.secret",
+  "statusTokenFile": "/etc/babiny-cezar/status.token",
   "githubOwner": "babinnikita-ux",
   "reconcileSeconds": 120,
   "repos": {

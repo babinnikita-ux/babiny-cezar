@@ -11,10 +11,12 @@ import {
   parseJobSpec,
   progressForRun,
   sanitizeBlocker,
+  verifyBearerAuthorization,
   verifyGithubSignature,
 } from './adapter.mjs';
 
 const SECRET = 'babiny-test-secret-with-enough-entropy';
+const STATUS_TOKEN = 'babiny-status-test-token-with-enough-entropy';
 
 function config(root) {
   return {
@@ -23,6 +25,7 @@ function config(root) {
     port: 4371,
     stateFile: join(root, 'state.json'),
     webhookSecretFile: join(root, 'secret'),
+    statusTokenFile: join(root, 'status-token'),
     repos: {
       'babinnikita-ux/family-bot': {
         projectId: 'family-bot', projectPath: '/srv/babiny-cezar/projects/family-bot',
@@ -35,6 +38,71 @@ function config(root) {
     },
   };
 }
+
+test('status API requires the dedicated bearer token while health stays public', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'babiny-adapter-status-auth-'));
+  let adapter;
+  try {
+    await writeFile(join(root, 'secret'), SECRET, { mode: 0o600 });
+    await writeFile(join(root, 'status-token'), STATUS_TOKEN, { mode: 0o600 });
+    adapter = new BabinyAdapter({ ...config(root), port: 4379, reconcileSeconds: 300 }, {
+      gh: async () => JSON.stringify({ items: [] }),
+    });
+    await adapter.start();
+
+    const baseUrl = 'http://127.0.0.1:4379';
+    const health = await fetch(`${baseUrl}/healthz`);
+    assert.equal(health.status, 200);
+
+    const anonymous = await fetch(`${baseUrl}/api/status`);
+    assert.equal(anonymous.status, 401);
+    assert.deepEqual(await anonymous.json(), { error: 'unauthorized' });
+
+    const wrong = await fetch(`${baseUrl}/api/status`, {
+      headers: { authorization: 'Bearer definitely-wrong-status-token' },
+    });
+    assert.equal(wrong.status, 401);
+
+    const wrongScheme = await fetch(`${baseUrl}/api/status`, {
+      headers: { authorization: `Basic ${STATUS_TOKEN}` },
+    });
+    assert.equal(wrongScheme.status, 401);
+
+    const authorized = await fetch(`${baseUrl}/api/status`, {
+      headers: { authorization: `Bearer ${STATUS_TOKEN}` },
+    });
+    assert.equal(authorized.status, 200);
+    assert.deepEqual(await authorized.json(), { tasks: [] });
+
+    const aliasWithoutToken = await fetch(`${baseUrl}/status`);
+    assert.equal(aliasWithoutToken.status, 401);
+  } finally {
+    await adapter?.stop();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('status bearer parser rejects malformed credentials', () => {
+  assert.equal(verifyBearerAuthorization(`Bearer ${STATUS_TOKEN}`, STATUS_TOKEN), true);
+  assert.equal(verifyBearerAuthorization(`bearer ${STATUS_TOKEN}`, STATUS_TOKEN), true);
+  assert.equal(verifyBearerAuthorization(`Bearer  ${STATUS_TOKEN}`, STATUS_TOKEN), false);
+  assert.equal(verifyBearerAuthorization(`Bearer ${STATUS_TOKEN} trailing`, STATUS_TOKEN), false);
+  assert.equal(verifyBearerAuthorization(`Basic ${STATUS_TOKEN}`, STATUS_TOKEN), false);
+  assert.equal(verifyBearerAuthorization('Bearer too-short', STATUS_TOKEN), false);
+  assert.equal(verifyBearerAuthorization(undefined, STATUS_TOKEN), false);
+});
+
+test('adapter fails closed before listening when the status token is unavailable', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'babiny-adapter-status-missing-'));
+  const adapter = new BabinyAdapter({ ...config(root), port: 4380, reconcileSeconds: 300 });
+  try {
+    await writeFile(join(root, 'secret'), SECRET, { mode: 0o600 });
+    await assert.rejects(adapter.start(), { code: 'bad_status_token' });
+  } finally {
+    await adapter.stop();
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 function webhookPayload(body = '<!-- BABINY_AGENT_JOB_V1 -->\nPlease fix the issue.') {
   return {

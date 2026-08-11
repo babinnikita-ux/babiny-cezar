@@ -46,6 +46,7 @@ export const DEFAULT_CONFIG = Object.freeze({
   port: 4370,
   stateFile: '/srv/babiny-cezar/state/adapter.json',
   webhookSecretFile: '/etc/babiny-cezar/webhook.secret',
+  statusTokenFile: '/etc/babiny-cezar/status.token',
   githubOwner: 'babinnikita-ux',
   reconcileSeconds: 120,
   maxIssueBodyChars: MAX_ISSUE_BODY_CHARS,
@@ -211,6 +212,15 @@ export function verifyGithubSignature(body, signature, secret) {
   return expected.length === actual.length && timingSafeEqual(expected, actual);
 }
 
+export function verifyBearerAuthorization(authorization, secret) {
+  if (typeof authorization !== 'string' || typeof secret !== 'string' || secret.length < 16 || secret.length > 512) return false;
+  const match = authorization.match(/^Bearer ([A-Za-z0-9._~+/=-]{16,512})$/i);
+  if (!match) return false;
+  const expected = createHmac('sha256', secret).update(secret).digest();
+  const actual = createHmac('sha256', secret).update(match[1]).digest();
+  return timingSafeEqual(expected, actual);
+}
+
 /** The status contract deliberately exposes at most one sanitized first line. */
 export function sanitizeBlocker(value) {
   if (typeof value !== 'string' || !value.trim()) return undefined;
@@ -355,7 +365,9 @@ function validateConfig(input) {
     throw new AdapterError('adapter must bind to loopback', 'bad_bind_host');
   }
   if (!Number.isInteger(config.port) || config.port < 1024 || config.port > 65535) throw new AdapterError('invalid adapter port', 'bad_port');
-  if (!isAbsolute(config.stateFile) || !isAbsolute(config.webhookSecretFile)) throw new AdapterError('state and secret paths must be absolute', 'bad_path');
+  if (!isAbsolute(config.stateFile) || !isAbsolute(config.webhookSecretFile) || !isAbsolute(config.statusTokenFile)) {
+    throw new AdapterError('state and secret paths must be absolute', 'bad_path');
+  }
   if (!config.repos || typeof config.repos !== 'object' || Array.isArray(config.repos)) throw new AdapterError('repos config missing', 'bad_repos');
   const repos = {};
   for (const [repo, raw] of Object.entries(config.repos)) {
@@ -376,9 +388,14 @@ function validateConfig(input) {
   return { ...config, repos, reconcileSeconds: Math.max(60, Math.min(300, Number(config.reconcileSeconds) || DEFAULT_RECONCILE_MS / 1000)) };
 }
 
-async function readSecret(path) {
-  const secret = (await readFile(path, 'utf8')).trim();
-  if (secret.length < 16 || secret.length > 512) throw new AdapterError('webhook secret has invalid length', 'bad_secret');
+async function readSecret(path, label = 'webhook secret', code = 'bad_secret') {
+  let secret;
+  try {
+    secret = (await readFile(path, 'utf8')).trim();
+  } catch {
+    throw new AdapterError(`${label} unavailable`, code);
+  }
+  if (secret.length < 16 || secret.length > 512) throw new AdapterError(`${label} has invalid length`, code);
   return secret;
 }
 
@@ -442,6 +459,7 @@ export class BabinyAdapter {
     this.state = emptyState();
     this.server = undefined;
     this.timer = undefined;
+    this.statusToken = undefined;
     this.lock = Promise.resolve();
   }
 
@@ -750,11 +768,17 @@ export class BabinyAdapter {
 
   async start() {
     await this.init();
+    this.statusToken = await readSecret(this.config.statusTokenFile, 'status token', 'bad_status_token');
     this.server = createServer(async (request, response) => {
       try {
         const url = new URL(request.url ?? '/', `http://${this.config.bindHost}:${this.config.port}`);
         if (request.method === 'GET' && url.pathname === '/healthz') return this.send(response, 200, this.health());
-        if (request.method === 'GET' && (url.pathname === '/api/status' || url.pathname === '/status')) return this.send(response, 200, this.status());
+        if (request.method === 'GET' && (url.pathname === '/api/status' || url.pathname === '/status')) {
+          if (!verifyBearerAuthorization(request.headers.authorization, this.statusToken)) {
+            return this.send(response, 401, { error: 'unauthorized' });
+          }
+          return this.send(response, 200, this.status());
+        }
         if (request.method === 'POST' && url.pathname === '/github/webhook') {
           const raw = await readRequestBody(request);
           const headers = Object.fromEntries(Object.entries(request.headers).map(([key, value]) => [key.toLowerCase(), Array.isArray(value) ? value[0] : value ?? '']));
@@ -783,9 +807,14 @@ export class BabinyAdapter {
 
   async stop() {
     if (this.timer) clearInterval(this.timer);
-    if (!this.server) return;
+    this.timer = undefined;
+    if (!this.server) {
+      this.statusToken = undefined;
+      return;
+    }
     await new Promise((resolvePromise) => this.server.close(() => resolvePromise()));
     this.server = undefined;
+    this.statusToken = undefined;
   }
 
   send(response, status, payload) {
