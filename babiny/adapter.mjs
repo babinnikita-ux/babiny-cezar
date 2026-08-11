@@ -44,7 +44,6 @@ const DEFAULT_BASH_ALLOWLIST = Object.freeze([
 const PUBLIC_KEYS = Object.freeze([
   'taskId', 'issueNumber', 'title', 'targetRepo', 'status', 'stage', 'progress',
   'startedAt', 'updatedAt', 'prNumber', 'prUrl', 'ciState', 'blocker',
-  'activeAgent', 'activeModel', 'activeRole',
 ]);
 
 export const DEFAULT_CONFIG = Object.freeze({
@@ -270,20 +269,6 @@ export function progressForRun(run) {
 function modelFor(agent) {
   if (!AGENTS.has(agent)) throw new AdapterError('unsupported agent', 'bad_agent');
   return MODEL_BY_AGENT[agent];
-}
-
-export function activeProfileForRun(run, spec) {
-  if (!run || run.status !== 'running' || typeof run.currentStepId !== 'string') return {};
-  const step = run.currentStepId;
-  const activeRole = /^(implement|fix)(?:-|$)/.test(step)
-    ? 'implementation'
-    : /^(review|final-review)(?:-|$)/.test(step)
-      ? 'review'
-      : undefined;
-  if (!activeRole) return {};
-  const activeAgent = cleanAgent(activeRole === 'implementation' ? spec?.primary : spec?.reviewer);
-  if (!activeAgent) return {};
-  return { activeAgent, activeModel: MODEL_BY_AGENT[activeAgent], activeRole };
 }
 
 function effortFor(agent) {
@@ -714,7 +699,6 @@ export class BabinyAdapter {
   async pollTasks() {
     for (const task of Object.values(this.state.tasks)) {
       if (!task.cezarRunId || !task.projectId) continue;
-      for (const key of ['activeAgent', 'activeModel', 'activeRole']) delete task[key];
       try {
         const run = await this.cezar(`/api/v1/p/${encodeURIComponent(task.projectId)}/runs/${encodeURIComponent(task.cezarRunId)}`);
         task.status = typeof run?.status === 'string' ? run.status : task.status;
@@ -724,7 +708,6 @@ export class BabinyAdapter {
         task.stage = progress.stage;
         task.progress = progress.progress;
         task.blocker = sanitizeBlocker(run?.error);
-        Object.assign(task, activeProfileForRun(run, task.spec));
         if (typeof run?.pullRequestUrl === 'string') {
           task.prUrl = run.pullRequestUrl.slice(0, 500);
           task.prNumber = parsePrNumber(task.prUrl);

@@ -21,12 +21,6 @@ The adapter provides:
   dedicated `Authorization: Bearer <token>` credential while `/healthz`
   remains unauthenticated for local service health checks.
 
-The status contract may additionally expose only the allowlisted active profile
-fields `activeAgent`, `activeModel`, and `activeRole`. It never exposes session
-IDs, prompts, transcripts, environment values, or credentials. Before a PR
-exists, `ciState` remains `unknown`; after a PR exists it is derived from the
-exact PR head checks.
-
 The webhook secret, status token, and runtime JSON are deployment files, never
 repository files. Configure `statusTokenFile` as an absolute path readable only
 by the adapter service account. The adapter fails closed before listening when
