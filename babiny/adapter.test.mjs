@@ -1,15 +1,17 @@
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 
 import {
   BabinyAdapter,
+  activeProfileForRun,
   buildTaskSteps,
   parseJobSpec,
   progressForRun,
+  safeSetupCommands,
   sanitizeBlocker,
   verifyBearerAuthorization,
   verifyGithubSignature,
@@ -29,7 +31,12 @@ function config(root) {
     repos: {
       'babinnikita-ux/family-bot': {
         projectId: 'family-bot', projectPath: '/srv/babiny-cezar/projects/family-bot',
-        primary: 'claude', reviewer: 'codex', baseBranch: 'main', gate: 'npm test',
+        primary: 'claude', reviewer: 'codex', baseBranch: 'main',
+        setupCommands: [
+          'python3 -m venv .venv',
+          '.venv/bin/python -m pip install --disable-pip-version-check --no-input --timeout 60 --retries 2 -e ".[dev]"',
+        ],
+        gate: '.venv/bin/python -m pytest -q',
       },
       'babinnikita-ux/family-hub': {
         projectId: 'family-hub', projectPath: '/srv/babiny-cezar/projects/family-hub',
@@ -207,6 +214,49 @@ test('workflow profile pins models, effort, read-only review, and bounded retrie
   assert.equal(steps[1].onFail.max, 2);
   assert.equal(steps[4].onFail.max, 2);
   assert.equal(JSON.stringify(steps).includes('danger-full-access'), false);
+});
+
+test('versioned family-bot route is Python-only and bootstraps an isolated venv', async () => {
+  const example = JSON.parse(await readFile(new URL('./adapter.example.json', import.meta.url), 'utf8'));
+  const route = example.repos['babinnikita-ux/family-bot'];
+  assert.equal(route.gate, '.venv/bin/python -m pytest -q');
+  assert.deepEqual(route.setupCommands, [
+    'python3 -m venv .venv',
+    '.venv/bin/python -m pip install --disable-pip-version-check --no-input --timeout 60 --retries 2 -e ".[dev]"',
+  ]);
+  assert.notEqual(route.gate, 'npm test');
+  assert.deepEqual(safeSetupCommands(route.setupCommands), route.setupCommands);
+});
+
+test('family-bot setup runs before implementation and local gate', () => {
+  const steps = buildTaskSteps({ repository: 'babinnikita-ux/family-bot', number: 19, title: 't', body: 'b' }, {
+    targetRepo: 'babinnikita-ux/family-bot', primary: 'claude', reviewer: 'codex', baseBranch: 'main', mode: 'autopilot', deployPermission: 'none',
+  }, '.venv/bin/python -m pytest -q', [
+    'python3 -m venv .venv',
+    '.venv/bin/python -m pip install --disable-pip-version-check --no-input --timeout 60 --retries 2 -e ".[dev]"',
+  ]);
+  assert.deepEqual(steps.slice(0, 2).map(({ id, command }) => ({ id, command })), [
+    { id: 'setup-1', command: 'python3 -m venv .venv' },
+    { id: 'setup-2', command: '.venv/bin/python -m pip install --disable-pip-version-check --no-input --timeout 60 --retries 2 -e ".[dev]"' },
+  ]);
+  assert.equal(steps[2].id, 'implement');
+  assert.equal(steps[3].command, '.venv/bin/python -m pytest -q');
+  assert.equal(steps[3].onFail.max, 2);
+});
+
+test('safe status profile exposes only allowlisted active agent/model/role', () => {
+  assert.deepEqual(activeProfileForRun({ status: 'running', currentStepId: 'implement' }, {
+    primary: 'claude', reviewer: 'codex',
+  }), { activeAgent: 'claude', activeModel: 'claude-sonnet-5', activeRole: 'implementation' });
+  assert.deepEqual(activeProfileForRun({ status: 'running', currentStepId: 'final-review' }, {
+    primary: 'claude', reviewer: 'codex',
+  }), { activeAgent: 'codex', activeModel: 'gpt-5.6-luna', activeRole: 'review' });
+  assert.deepEqual(activeProfileForRun({ status: 'running', currentStepId: 'gate-1' }, {
+    primary: 'claude', reviewer: 'codex',
+  }), {});
+  assert.deepEqual(activeProfileForRun({ status: 'done', currentStepId: 'final-review' }, {
+    primary: 'claude', reviewer: 'codex',
+  }), {});
 });
 
 test('local gate allowlist supports the documented src-layout Python test command', () => {
