@@ -714,6 +714,7 @@ export class BabinyAdapter {
   async pollTasks() {
     for (const task of Object.values(this.state.tasks)) {
       if (!task.cezarRunId || !task.projectId) continue;
+      for (const key of ['activeAgent', 'activeModel', 'activeRole']) delete task[key];
       try {
         const run = await this.cezar(`/api/v1/p/${encodeURIComponent(task.projectId)}/runs/${encodeURIComponent(task.cezarRunId)}`);
         task.status = typeof run?.status === 'string' ? run.status : task.status;
@@ -723,7 +724,6 @@ export class BabinyAdapter {
         task.stage = progress.stage;
         task.progress = progress.progress;
         task.blocker = sanitizeBlocker(run?.error);
-        for (const key of ['activeAgent', 'activeModel', 'activeRole']) delete task[key];
         Object.assign(task, activeProfileForRun(run, task.spec));
         if (typeof run?.pullRequestUrl === 'string') {
           task.prUrl = run.pullRequestUrl.slice(0, 500);
